@@ -2,6 +2,36 @@
 
 Toolkit for annotation
 
+## In this repo
+
+### anno.py
+
+### support_files
+
+- alignscore.txt (used in run_genblast_align)
+
+### support_classes (should be moved to https://github.com/Ensembl/ensembl-genes-api)
+
+- exon.py
+- gene.py
+- gtf_adapter.py
+- intron.py
+- sequence.py
+- transcript.py
+
+### support_scripts
+
+- subsample_fastq.py
+
+### support_scripts_perl (should be re-written in python, when API has enough functionality, and added to support_scripts)
+
+- clean_geneset.pl
+- clean_utrs_and_lncRNAs.pl
+- finalise_geneset.pl
+- gtf_to_seq.pl
+- load_gtf_ensembl.pl
+- select_best_transcripts.pl
+
 ## Dependencies
 
 ### Software
@@ -21,6 +51,9 @@ Toolkit for annotation
 
 | Repository name | branch | URL|
 |-----------------|--------|----|
+| ensembl | default | https://github.com/Ensembl/ensembl.git |
+| ensembl-analysis | experimental/gbiab | https://github.com/Ensembl/ensembl-analysis.git | (need to make sure depencies are on main and update this to main/default for branch)
+| ensembl-variation | default | https://github.com/Ensembl/ensembl-variation.git |
 
 
 ### Python virtual environment
@@ -102,22 +135,29 @@ Includes:
 ```
 | Analysis | Software | Input | Output |
 |----------|----------|-------|--------|
-| --run_cpg | cpg | | |
-| --run_eponine | eponine | | |
+| --run_cpg | cpg | genome_file, cpg_path, work_dir, num_threads | <work_dir>/cpg_output/<seq_region_name>.cpg.gtf (per region) |
+| --run_eponine | eponine | genome_file, java_path, eponine_path, work_dir, num_threads | <work_dir>/cpg_output/<seq_region_name>.epo.gtf (per region) |
 
 ```
 --run_sncrnas
 ```
 | Analysis | Software | Input | Output |
 |----------|----------|-------|--------|
-| --run_trnascan | trnascan | | |
-| --run_cmsearch* | cmsearch | | |
+| --run_trnascan | trnascan | genome_file, trnascan_path, trnascan_filter_path, work_dir, num_threads | <work_dir>/trnascan_output/<seq_region_name>.trna.gtf (per region) |
+| --run_cmsearch* | cmsearch | genome_file, cmsearch_path, rfam_cm_db_path, rfam_seeds_file_path, rfam_accession_file, work_dir, num_threads | <work_dir>/rfam_output/<seq_region_name>.rfam.gtf (per region) |
 
 *requires --rfam_accessions_file, will skip if missing
 
 ```
 --run_transcriptomic
 ```
+**short-read data**
+
+| Analysis | Software | Input | Output |
+|----------|----------|-------|--------|
+
+**long-read data**
+
 | Analysis | Software | Input | Output |
 |----------|----------|-------|--------|
 
