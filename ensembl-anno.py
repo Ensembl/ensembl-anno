@@ -370,9 +370,9 @@ def multiprocess_load_records_to_ensembl_db(
         loading_cmd.extend(
             [
                 "-protein_coding_biotype",
-                "gbiab_protein_coding",
+                "anno_protein_coding",
                 "-non_coding_biotype",
-                "gbiab_lncRNA",
+                "anno_lncRNA",
             ]
         )
 
@@ -2388,7 +2388,7 @@ def run_genblast_align(
             [
                 "cp",
                 os.environ["ENSCODE"]
-                + "/ensembl-analysis/scripts/genebuild/gbiab/support_files/alignscore.txt",
+                + "/ensembl-anno/support_files/alignscore.txt",
                 "./",
             ]
         )
@@ -5326,7 +5326,7 @@ if __name__ == "__main__":
     parser.add_argument("--stringtie_path", help="Path to Stringtie", required=False)
     parser.add_argument("--scallop_path", help="Path to Scallop", required=False)
     parser.add_argument(
-        "--subsample_script_path", help="Path to gbiab subsampling script", required=False
+        "--subsample_script_path", help="Path to ensembl-anno subsampling script", required=False
     )
     parser.add_argument(
         "--samtools_path", help="Path to subsampling script", required=False
