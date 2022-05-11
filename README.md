@@ -4,7 +4,7 @@ Toolkit for annotation
 
 ## In this repo
 
-### anno.py
+### ensembl_anno.py
 
 ### support_files
 
@@ -62,7 +62,7 @@ Toolkit for annotation
 ## Running Anno
 
 ```
-python3 gbiab.py -h
+python3 ensembl_anno.py -h
 
 		[-h] [--output_dir OUTPUT_DIR] --genome_file GENOME_FILE
                 [--num_threads NUM_THREADS] [--run_masking RUN_MASKING]
