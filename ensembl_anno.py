@@ -5263,249 +5263,247 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--output_dir",
+        type=str,
         help="Path where the output and temp files will write to. Uses current dir by default",
-        required=False,
     )
     parser.add_argument(
-        "--genome_file", help="Path to the fasta genome file", required=True
+        "--genome_file", type=str, help="Path to the fasta genome file", required=True
     )
     parser.add_argument(
-        "--num_threads", type=int, help="Number of threads to use", required=False
+        "--num_threads", type=int, default=1, help="Number of threads to use"
     )
     parser.add_argument(
         "--run_masking",
+        action="store_true",
         help="Run Red to find repeats and softmask the genome. Otherwise provide a softmasked genome",
-        required=False,
     )
     parser.add_argument(
         "--red_path",
+        type=str,
         help="Path to Red executable. See http://toolsmith.ens.utulsa.edu",
-        required=False,
     )
     parser.add_argument(
         "--genblast_path",
+        type=str,
         help="Path to GenBlast executable. See http://genome.sfu.ca/genblast/download.html",
-        required=False,
     )
     parser.add_argument(
         "--convert2blastmask_path",
+        type=str,
         help="Path to convert2blastmask executable",
-        required=False,
     )
     parser.add_argument(
-        "--makeblastdb_path", help="Path to makeblastdb executable", required=False
+        "--makeblastdb_path", type=str, help="Path to makeblastdb executable"
     )
     parser.add_argument(
-        "--run_genblast", help="Run GenBlast to align protein sequences", required=False
+        "--run_genblast",
+        action="store_true",
+        help="Run GenBlast to align protein sequences",
     )
     parser.add_argument(
         "--run_busco",
+        action="store_true",
         help="Run GenBlast to align BUSCO protein sequences",
-        required=False,
     )
     parser.add_argument(
         "--protein_file",
+        type=str,
         help="Path to a fasta file with protein sequences",
-        required=False,
     )
     parser.add_argument(
         "--busco_protein_file",
+        type=str,
         help="Path to a fasta file with BUSCO protein sequences",
-        required=False,
     )
     parser.add_argument(
         "--rfam_accessions_file",
+        type=str,
         help="Path to a file with Rfam CM accessions, one accession per line, to use with cmsearch",
-        required=False,
     )
     parser.add_argument(
-        "--run_star", help="Run Star for short read alignment", required=False
+        "--run_star", action="store_true", help="Run Star for short read alignment"
     )
     parser.add_argument(
-        "--star_path", help="Path to Star for short read alignment", required=False
+        "--star_path", type=str, help="Path to Star for short read alignment"
     )
     parser.add_argument(
         "--max_reads_per_sample",
         nargs="?",
-        const=0,
         type=int,
+        default=0,
         help="The maximum number of reads to use per sample. Default=0 (unlimited)",
-        required=False,
     )
     parser.add_argument(
         "--max_total_reads",
         nargs="?",
-        const=0,
         type=int,
+        default=0,
         help="The maximum total number of reads. Default=0 (unlimited)",
-        required=False,
     )
     parser.add_argument(
         "--short_read_fastq_dir",
         help="Path to short read fastq dir for running with Star",
-        required=False,
     )
     parser.add_argument(
         "--max_intron_length",
         nargs="?",
-        const=100000,
         type=int,
+        default=100000,
         help="The maximum intron size for alignments. Default=100000",
-        required=False,
     )
     parser.add_argument(
-        "--run_minimap2", help="Run minimap2 for long read alignment", required=False
+        "--run_minimap2",
+        action="store_true",
+        help="Run minimap2 for long read alignment",
     )
     parser.add_argument(
         "--minimap2_path",
+        type=str,
         help="Path to minimap2 for long read alignment",
-        required=False,
     )
     parser.add_argument(
         "--paftools_path",
+        type=str,
         help="Path to paftools for SAM to BED conversion",
-        required=False,
     )
     parser.add_argument(
         "--long_read_fastq_dir",
+        type=str,
         help="Path to long read fastq dir for running with minimap2",
-        required=False,
     )
     parser.add_argument(
         "--run_augustus",
+        action="store_true",
         help="Run Augustus with hints for gene/transcript prediction",
-        required=False,
     )
-    parser.add_argument("--augustus_path", help="Path to Augustus", required=False)
+    parser.add_argument("--augustus_path", type=str, help="Path to Augustus")
     parser.add_argument(
         "--run_stringtie",
+        action="store_true",
         help="Run Stringtie on the results from the STAR alignments",
-        required=False,
     )
     parser.add_argument(
         "--run_scallop",
+        action="store_true",
         help="Run Scallop on the results from the STAR alignments",
-        required=False,
     )
-    parser.add_argument("--stringtie_path", help="Path to Stringtie", required=False)
-    parser.add_argument("--scallop_path", help="Path to Scallop", required=False)
+    parser.add_argument("--stringtie_path", type=str, help="Path to Stringtie")
+    parser.add_argument("--scallop_path", type=str, help="Path to Scallop")
     parser.add_argument(
         "--subsample_script_path",
+        type=str,
         help="Path to ensembl-anno subsampling script",
-        required=False,
     )
-    parser.add_argument(
-        "--samtools_path", help="Path to subsampling script", required=False
-    )
+    parser.add_argument("--samtools_path", type=str, help="Path to subsampling script")
     parser.add_argument(
         "--finalise_geneset",
+        action="store_true",
         help="Used to finalise the gene set from the various GTF files generated",
-        required=False,
     )
     parser.add_argument(
         "--db_details",
-        help="A comma separated stinrg of dbname,host,port,user,pass",
-        required=False,
+        type=str,
+        help="A comma separated string of dbname,host,port,user,pass",
     )
     parser.add_argument(
         "--run_cmsearch",
+        action="store_true",
         help="Search for sncRNA structures using Rfam and cmsearch",
-        required=False,
     )
     parser.add_argument(
-        "--run_trf", help="Run TRF to find tandem repeats", required=False
+        "--run_trf", action="store_true", help="Run TRF to find tandem repeats"
     )
-    parser.add_argument("--trf_path", help="Path to TRF", required=False)
+    parser.add_argument("--trf_path", type=str, help="Path to TRF")
     parser.add_argument(
-        "--run_dust", help="Run Dust to find low complexity regions", required=False
+        "--run_dust",
+        action="store_true",
+        help="Run Dust to find low complexity regions",
     )
-    parser.add_argument("--dust_path", help="Path to Dust", required=False)
+    parser.add_argument("--dust_path", type=str, help="Path to Dust")
     parser.add_argument(
         "--run_repeatmasker",
+        action="store_true",
         help="Run RepeatMasker to find repeat regions",
-        required=False,
     )
     parser.add_argument(
-        "--repeatmasker_path", help="Path to RepeatMasker", required=False
+        "--repeatmasker_path", action="store_true", help="Path to RepeatMasker"
     )
     parser.add_argument(
-        "--run_trnascan", help="Run tRNAscan-SE to find tRNAs", required=False
+        "--run_trnascan", action="store_true", help="Run tRNAscan-SE to find tRNAs"
     )
-    parser.add_argument("--trnascan_path", help="Path to tRNAscan-SE", required=False)
+    parser.add_argument("--trnascan_path", type=str, help="Path to tRNAscan-SE")
     parser.add_argument(
         "--trnascan_filter_path",
+        type=str,
         help="Path to tRNAscan-SE high confidence filter",
-        required=False,
     )
     parser.add_argument(
-        "--run_cpg", help="Run cpg_lh to find CpG islands", required=False
+        "--run_cpg", action="store_true", help="Run cpg_lh to find CpG islands"
     )
-    parser.add_argument("--cpg_path", help="Path to cpg_lh", required=False)
+    parser.add_argument("--cpg_path", type=str, help="Path to cpg_lh")
     parser.add_argument(
         "--run_eponine",
+        action="store_true",
         help="Run Eponine to find transcription start sites",
-        required=False,
     )
+    parser.add_argument("--eponine_path", type=str, help="Path to Eponine jar file")
     parser.add_argument(
-        "--eponine_path", help="Path to Eponine jar file", required=False
-    )
-    parser.add_argument(
-        "--java_path", help="Path to Java for use with Eponine", required=False
+        "--java_path", type=str, help="Path to Java for use with Eponine"
     )
     parser.add_argument(
         "--run_full_annotation",
+        action="store_true",
         help="Run a full annotation, will automatically check for input data and run tools based on that",
-        required=False,
     )
-    parser.add_argument("--run_repeats", help="Run Red, Dust, TRF", required=False)
+    parser.add_argument("--run_repeats", action="store_true", help="Run Red, Dust, TRF")
     parser.add_argument(
-        "--run_simple_features", help="Run CpG, Eponine", required=False
+        "--run_simple_features", action="store_true", help="Run CpG, Eponine"
     )
-    parser.add_argument("--run_sncrnas", help="Run Rfam, tRNAscan-SE", required=False)
+    parser.add_argument(
+        "--run_sncrnas", action="store_true", help="Run Rfam, tRNAscan-SE"
+    )
     parser.add_argument(
         "--run_transcriptomic",
+        action="store_true",
         help="Run STAR, Stringtie2, Scallop, minimap2 (if short_read_fastq_dir and/or long_read_fastq_dir are provided)",
-        required=False,
     )
     parser.add_argument(
         "--run_proteins",
+        action="store_true",
         help="Run GenBlast if protein_file and/or busco_protein_file",
-        required=False,
     )
     parser.add_argument(
         "--diamond_validation_db",
+        type=str,
         help="Use a Diamond db with blastp mode to help validate cds sequences",
-        required=False,
     )
     parser.add_argument(
         "--validation_type",
+        type=str,
         help='The strength of evidence needed to validate and ORF as protein coding, can be "relaxed" or "moderate"',
-        required=False,
     )
     parser.add_argument(
         "--load_to_ensembl_db",
+        action="store_true",
         help="Load results to an Ensembl db, must also provide the db_details flag",
-        required=False,
     )
     parser.add_argument(
         "--trim_fastq",
+        action="store_true",
         help="Trim the short read files using Trim Galore",
-        required=False,
     )
     parser.add_argument(
         "--delete_pre_trim_fastq",
+        action="store_true",
         help="Delete the original fastq files after trimming",
-        required=False,
     )
     parser.add_argument(
-        "--repeatmasker_library",
-        help="Specify library for repeatmasker ",
-        required=False,
+        "--repeatmasker_library", type=str, help="Specify library for repeatmasker"
     )
     parser.add_argument(
         "--repeatmasker_species",
-        help="Specify species for repeatmasker (default homo) ",
-        required=False,
+        type=str,
+        help="Specify species for repeatmasker (default homo)",
     )
     args = parser.parse_args()
 
@@ -5588,49 +5586,46 @@ if __name__ == "__main__":
         logging.info("Work dir does not exist, will create")
         create_dir(work_dir, None)
 
-    if not num_threads:
-        logging.info(
-            "No thread count specified, so defaulting to 1. This might be slow"
-        )
-        num_threads = 1
+    if num_threads == 1:
+        logging.info("Thread count is set to the default value 1; this might be slow.")
 
     # If the run_full_annotation flag is set then we want to set a standardised set of analyses
     if run_full_annotation:
-        run_repeats = 1
-        run_simple_features = 1
-        run_sncrnas = 1
-        run_transcriptomic = 1
-        run_proteins = 1
-        finalise_geneset = 1
+        run_repeats = True
+        run_simple_features = True
+        run_sncrnas = True
+        run_transcriptomic = True
+        run_proteins = True
+        finalise_geneset = True
 
     # These are subsets of the analyses that can be run, group by type
     if run_repeats:
-        run_masking = 1
-        run_dust = 1
-        run_trf = 1
+        run_masking = True
+        run_dust = True
+        run_trf = True
 
     if run_simple_features:
-        run_cpg = 1
-        run_eponine = 1
+        run_cpg = True
+        run_eponine = True
 
     if run_sncrnas:
         if rfam_accessions_file:
-            run_cmsearch = 1
-        run_trnascan = 1
+            run_cmsearch = True
+        run_trnascan = True
 
     if run_transcriptomic:
         if short_read_fastq_dir:
-            run_star = 1
-            run_scallop = 1
-            run_stringtie = 1
+            run_star = True
+            run_scallop = True
+            run_stringtie = True
         if long_read_fastq_dir:
-            run_minimap2 = 1
+            run_minimap2 = True
 
     if run_proteins:
         if protein_file:
-            run_genblast = 1
+            run_genblast = True
         if busco_protein_file:
-            run_busco = 1
+            run_busco = True
 
     # Collect a list of seq region names, most useful for multiprocessing regions
     seq_region_names = seq_region_names(genome_file)
