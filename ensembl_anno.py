@@ -106,7 +106,9 @@ def load_results_to_ensembl_db(
             + annotation_results_gtf_file
         )
 
-    rfam_results_gtf_file = os.path.join(main_output_dir, "rfam_output", "annotation.gtf")
+    rfam_results_gtf_file = os.path.join(
+        main_output_dir, "rfam_output", "annotation.gtf"
+    )
     if os.path.exists(rfam_results_gtf_file):
         logging.info("Loading Rfam-based sncRNA genes to db")
         batch_size = 500
@@ -160,7 +162,9 @@ def load_results_to_ensembl_db(
             + trnascan_results_gtf_file
         )
 
-    dust_results_gtf_file = os.path.join(main_output_dir, "dust_output", "annotation.gtf")
+    dust_results_gtf_file = os.path.join(
+        main_output_dir, "dust_output", "annotation.gtf"
+    )
     if os.path.exists(dust_results_gtf_file):
         logging.info("Loading Dust repeats to db")
         batch_size = 500
@@ -473,7 +477,9 @@ def run_find_orfs(genome_file, main_output_dir):
     seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
     for region_name in seq_region_lengths:
         region_length = seq_region_lengths[region_name]
-        seq = get_sequence(region_name, 1, region_length, 1, genome_file, orf_output_dir)
+        seq = get_sequence(
+            region_name, 1, region_length, 1, genome_file, orf_output_dir
+        )
         for phase in range(0, 6):
             find_orf_phased_region(
                 region_name, seq, phase, min_orf_length, orf_output_dir
@@ -605,7 +611,9 @@ def run_repeatmasker_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(repeatmasker_output_dir, ".rm.gtf", 1, "repeat_id", "repeatmask")
+    slice_output_to_gtf(
+        repeatmasker_output_dir, ".rm.gtf", 1, "repeat_id", "repeatmask"
+    )
 
 
 def multiprocess_repeatmasker(
@@ -628,7 +636,9 @@ def multiprocess_repeatmasker(
 
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
-    region_fasta_file_path = os.path.join(repeatmasker_output_dir, region_fasta_file_name)
+    region_fasta_file_path = os.path.join(
+        repeatmasker_output_dir, region_fasta_file_name
+    )
     region_fasta_out = open(region_fasta_file_path, "w+")
     region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
     region_fasta_out.close()
@@ -780,7 +790,9 @@ def run_eponine_regions(
     slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
 
 
-def multiprocess_eponine(generic_eponine_cmd, slice_id, genome_file, eponine_output_dir):
+def multiprocess_eponine(
+    generic_eponine_cmd, slice_id, genome_file, eponine_output_dir
+):
 
     region_name = slice_id[0]
     start = slice_id[1]
@@ -805,7 +817,9 @@ def multiprocess_eponine(generic_eponine_cmd, slice_id, genome_file, eponine_out
     region_fasta_out.close()
 
     region_results_file_name = slice_file_name + ".epo.gtf"
-    region_results_file_path = os.path.join(eponine_output_dir, region_results_file_name)
+    region_results_file_path = os.path.join(
+        eponine_output_dir, region_results_file_name
+    )
 
     eponine_output_file_path = region_fasta_file_path + ".epo"
     eponine_out = open(eponine_output_file_path, "w+")
@@ -1063,7 +1077,11 @@ def run_trnascan_regions(
 
 
 def multiprocess_trnascan(
-    generic_trnascan_cmd, slice_id, genome_file, trnascan_filter_path, trnascan_output_dir
+    generic_trnascan_cmd,
+    slice_id,
+    genome_file,
+    trnascan_filter_path,
+    trnascan_output_dir,
 ):
 
     region_name = slice_id[0]
@@ -1088,7 +1106,9 @@ def multiprocess_trnascan(
     region_fasta_out.close()
 
     region_results_file_name = slice_file_name + ".trna.gtf"
-    region_results_file_path = os.path.join(trnascan_output_dir, region_results_file_name)
+    region_results_file_path = os.path.join(
+        trnascan_output_dir, region_results_file_name
+    )
 
     trnascan_output_file_path = region_fasta_file_path + ".trna"
     trnascan_ss_output_file_path = trnascan_output_file_path + ".ss"
@@ -1141,7 +1161,9 @@ def multiprocess_trnascan(
     logging.info(" ".join(filter_cmd))
     subprocess.run(filter_cmd)
 
-    create_trnascan_gtf(region_results_file_path, trnascan_filter_file_path, region_name)
+    create_trnascan_gtf(
+        region_results_file_path, trnascan_filter_file_path, region_name
+    )
     if os.path.exists(trnascan_output_file_path):
         os.remove(trnascan_output_file_path)
     if os.path.exists(trnascan_ss_output_file_path):
@@ -1156,7 +1178,9 @@ def multiprocess_trnascan(
         os.remove(region_fasta_file_path)
 
 
-def create_trnascan_gtf(region_results_file_path, trnascan_filter_file_path, region_name):
+def create_trnascan_gtf(
+    region_results_file_path, trnascan_filter_file_path, region_name
+):
 
     trna_in = open(trnascan_filter_file_path, "r")
     trna_out = open(region_results_file_path, "w+")
@@ -1808,9 +1832,9 @@ def extract_rfam_metrics(rfam_selected_models_file):
 
                 description_match = re.search(r"^DESC\s+(\S+)", line)
                 if description_match:
-                    parsed_cm_data[model_name]["-description"] = description_match.group(
-                        1
-                    )
+                    parsed_cm_data[model_name][
+                        "-description"
+                    ] = description_match.group(1)
                     continue
 
                 length_match = re.search(r"^CLEN\s+(\d+)", line)
@@ -2179,7 +2203,9 @@ def slice_output_to_gtf(
                         full_transcript_id_string = match_gene_type.group(3)
                         current_transcript_id = match_gene_type.group(4)
                         gene_id_key = gtf_file_name + "." + str(current_gene_id)
-                        transcript_id_key = gene_id_key + "." + str(current_transcript_id)
+                        transcript_id_key = (
+                            gene_id_key + "." + str(current_transcript_id)
+                        )
                         if gene_id_key not in gene_id_index:
                             new_gene_id = "gene" + str(gene_counter)
                             gene_id_index[gene_id_key] = new_gene_id
@@ -2391,8 +2417,7 @@ def run_genblast_align(
         subprocess.run(
             [
                 "cp",
-                os.environ["ENSCODE"]
-                + "/ensembl-anno/support_files/alignscore.txt",
+                os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt",
                 "./",
             ]
         )
@@ -2716,7 +2741,9 @@ def run_trimming(
         )
         if delete_pre_trim_fastq:
             for file_path in fastq_files:
-                logging.info("Removing original fastq file post trimming:\n" + file_path)
+                logging.info(
+                    "Removing original fastq file post trimming:\n" + file_path
+                )
                 subprocess.run(["rm", file_path])
 
     pool.close()
@@ -2915,7 +2942,9 @@ def run_star_align(
         junctions_file_path = os.path.join(star_dir, (fastq_file_name + ".sj.tab"))
         sam_file_name = os.path.basename(sam_file_path)
         sam_temp_file_path = os.path.join(star_dir, (sam_file_name + ".tmp"))
-        bam_sort_file_path = os.path.join(star_dir, re.sub(".sam", ".bam", sam_file_name))
+        bam_sort_file_path = os.path.join(
+            star_dir, re.sub(".sam", ".bam", sam_file_name)
+        )
 
         if (
             os.path.isfile(bam_sort_file_path)
@@ -2962,7 +2991,9 @@ def run_star_align(
 
         subprocess.run(star_command)
         subprocess.run(["mv", os.path.join(star_dir, "Aligned.out.sam"), sam_file_path])
-        subprocess.run(["mv", os.path.join(star_dir, "SJ.out.tab"), junctions_file_path])
+        subprocess.run(
+            ["mv", os.path.join(star_dir, "SJ.out.tab"), junctions_file_path]
+        )
 
         logging.info("Converting samfile into sorted bam file. Bam file:")
         logging.info(bam_sort_file_path)
@@ -3289,7 +3320,8 @@ def bed_to_gff(input_dir, hints_file):
 
     sorted_hints_out = open((hints_file + ".srt"), "w+")
     subprocess.run(
-        ["sort", "-k1,1", "-k7,7", "-k4,4", "-k5,5", hints_file], stdout=sorted_hints_out
+        ["sort", "-k1,1", "-k7,7", "-k4,4", "-k5,5", hints_file],
+        stdout=sorted_hints_out,
     )
     sorted_hints_out.close()
 
@@ -3301,7 +3333,9 @@ def bed_to_exons(block_sizes, block_starts, offset):
         block_end = block_start + int(block_sizes[i]) - 1
 
         if block_end < block_start:
-            logging.warning("Warning: block end is less than block start, skipping exon")
+            logging.warning(
+                "Warning: block end is less than block start, skipping exon"
+            )
             continue
 
         exon_coords = [str(block_start), str(block_end)]
@@ -3451,12 +3485,16 @@ def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
     gtf_out.close()
 
 
-def run_augustus_predict(augustus_path, main_output_dir, masked_genome_file, num_threads):
+def run_augustus_predict(
+    augustus_path, main_output_dir, masked_genome_file, num_threads
+):
 
     min_seq_length = 1000
 
     if not augustus_path:
-        augustus_path = "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus"
+        augustus_path = (
+            "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus"
+        )
 
     bam2hints_path = "/homes/fergal/bin/bam2hints"
     bam2wig_path = "/homes/fergal/bin/bam2wig"
@@ -4137,7 +4175,9 @@ def run_finalise_geneset(
     scallop_annotation_raw = os.path.join(
         main_output_dir, "scallop_output", "annotation.gtf"
     )
-    busco_annotation_raw = os.path.join(main_output_dir, "busco_output", "annotation.gtf")
+    busco_annotation_raw = os.path.join(
+        main_output_dir, "busco_output", "annotation.gtf"
+    )
 
     transcript_selector_script = os.path.join(
         main_script_dir, "support_scripts_perl", "select_best_transcripts.pl"
@@ -4200,7 +4240,12 @@ def run_finalise_geneset(
         )
 
     gtf_files = ["transcriptomic_raw.gtf", "protein_raw.gtf", "busco_raw.gtf"]
-    generic_select_cmd = ["perl", transcript_selector_script, "-genome_file", genome_file]
+    generic_select_cmd = [
+        "perl",
+        transcript_selector_script,
+        "-genome_file",
+        genome_file,
+    ]
     pool = multiprocessing.Pool(int(num_threads))
     for seq_region_name in seq_region_names:
         # The selection script needs different params depending on whether the seqs are from transcriptomic data or not
@@ -4240,7 +4285,9 @@ def run_finalise_geneset(
 
         if os.path.exists(busco_annotation_raw):
             logging.info("Finalising BUSCO data for: " + seq_region_name)
-            busco_annotation_select = re.sub("_raw.gtf", "_sel.gtf", busco_annotation_raw)
+            busco_annotation_select = re.sub(
+                "_raw.gtf", "_sel.gtf", busco_annotation_raw
+            )
             cmd = generic_select_cmd.copy()
             cmd.extend(
                 [
@@ -4305,7 +4352,12 @@ def run_finalise_geneset(
     fully_merged_gtf_out.close()
 
     # Now collapse the gene set
-    generic_finalise_cmd = ["perl", finalise_geneset_script, "-genome_file", genome_file]
+    generic_finalise_cmd = [
+        "perl",
+        finalise_geneset_script,
+        "-genome_file",
+        genome_file,
+    ]
 
     pool = multiprocessing.Pool(int(num_threads))
     for seq_region_name in seq_region_names:
@@ -4355,7 +4407,9 @@ def run_finalise_geneset(
         file_out.write(line)
     file_out.close()
 
-    cleaned_initial_gtf_file = os.path.join(final_annotation_dir, ("cleaned_pre_utr.gtf"))
+    cleaned_initial_gtf_file = os.path.join(
+        final_annotation_dir, ("cleaned_pre_utr.gtf")
+    )
     cleaned_utr_gtf_file = os.path.join(final_annotation_dir, ("annotation.gtf"))
 
     logging.info("Cleaning initial set")
@@ -4957,7 +5011,9 @@ def merge_finalise_output_files(
                 cdna_out.write(new_header + cdna_seq_index[transcript_id])
 
                 if transcript_id in amino_acid_seq_index:
-                    amino_acid_out.write(new_header + amino_acid_seq_index[transcript_id])
+                    amino_acid_out.write(
+                        new_header + amino_acid_seq_index[transcript_id]
+                    )
 
     gtf_out.close()
     cdna_out.close()
@@ -5116,7 +5172,9 @@ def slice_genome(genome_file, target_dir, target_slice_size):
         if len(seq) >= min_seq_length:
             file_name = "genome_file_" + str(file_number)
             file_out = open(os.path.join(file_name), "w+")
-            file_out.write(">" + header + "_sli" + str(seq_iterator) + "\n" + seq + "\n")
+            file_out.write(
+                ">" + header + "_sli" + str(seq_iterator) + "\n" + seq + "\n"
+            )
             file_out.close()
             file_number += 1
             file_name = "genome_file_" + str(file_number)
@@ -5299,7 +5357,9 @@ if __name__ == "__main__":
         "--run_minimap2", help="Run minimap2 for long read alignment", required=False
     )
     parser.add_argument(
-        "--minimap2_path", help="Path to minimap2 for long read alignment", required=False
+        "--minimap2_path",
+        help="Path to minimap2 for long read alignment",
+        required=False,
     )
     parser.add_argument(
         "--paftools_path",
@@ -5330,7 +5390,9 @@ if __name__ == "__main__":
     parser.add_argument("--stringtie_path", help="Path to Stringtie", required=False)
     parser.add_argument("--scallop_path", help="Path to Scallop", required=False)
     parser.add_argument(
-        "--subsample_script_path", help="Path to ensembl-anno subsampling script", required=False
+        "--subsample_script_path",
+        help="Path to ensembl-anno subsampling script",
+        required=False,
     )
     parser.add_argument(
         "--samtools_path", help="Path to subsampling script", required=False
@@ -5384,7 +5446,9 @@ if __name__ == "__main__":
         help="Run Eponine to find transcription start sites",
         required=False,
     )
-    parser.add_argument("--eponine_path", help="Path to Eponine jar file", required=False)
+    parser.add_argument(
+        "--eponine_path", help="Path to Eponine jar file", required=False
+    )
     parser.add_argument(
         "--java_path", help="Path to Java for use with Eponine", required=False
     )
@@ -5394,7 +5458,9 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument("--run_repeats", help="Run Red, Dust, TRF", required=False)
-    parser.add_argument("--run_simple_features", help="Run CpG, Eponine", required=False)
+    parser.add_argument(
+        "--run_simple_features", help="Run CpG, Eponine", required=False
+    )
     parser.add_argument("--run_sncrnas", help="Run Rfam, tRNAscan-SE", required=False)
     parser.add_argument(
         "--run_transcriptomic",
@@ -5422,7 +5488,9 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--trim_fastq", help="Trim the short read files using Trim Galore", required=False
+        "--trim_fastq",
+        help="Trim the short read files using Trim Galore",
+        required=False,
     )
     parser.add_argument(
         "--delete_pre_trim_fastq",
@@ -5430,7 +5498,9 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument(
-        "--repeatmasker_library", help="Specify library for repeatmasker ", required=False
+        "--repeatmasker_library",
+        help="Specify library for repeatmasker ",
+        required=False,
     )
     parser.add_argument(
         "--repeatmasker_species",
@@ -5519,7 +5589,9 @@ if __name__ == "__main__":
         create_dir(work_dir, None)
 
     if not num_threads:
-        logging.info("No thread count specified, so defaulting to 1. This might be slow")
+        logging.info(
+            "No thread count specified, so defaulting to 1. This might be slow"
+        )
         num_threads = 1
 
     # If the run_full_annotation flag is set then we want to set a standardised set of analyses
