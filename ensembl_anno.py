@@ -5579,7 +5579,7 @@ if __name__ == "__main__":
     file_handler.setFormatter(logging_formatter_time_message)
     logger.addHandler(file_handler)
 
-    logger.info(f"work directory: {work_dir}")
+    logger.info("work directory: %s" % work_dir)
 
     if not os.path.exists(work_dir):
         logger.info("Work dir does not exist, will create")
