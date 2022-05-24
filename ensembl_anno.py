@@ -51,27 +51,23 @@ logger.addHandler(console_handler)
 
 
 def create_dir(main_output_dir, dir_name):
+    main_output_dir_path = pathlib.Path(main_output_dir)
 
     if dir_name:
-        target_dir = os.path.join(main_output_dir, dir_name)
+        target_dir = main_output_dir / dir_name
     else:
         target_dir = main_output_dir
 
-    if os.path.exists(target_dir):
-        logger.warning("Directory already exists, will not create again")
+    if target_dir.is_dir():
+        logger.debug("%s directory already exists" % target_dir)
         return target_dir
 
-    logger.info("Attempting to create target dir: %s" % target_dir)
-
     try:
-        os.mkdir(target_dir)
-
+        target_dir.mkdir()
     except OSError:
-        logger.error("Creation of the dir failed, path used: %s" % target_dir)
+        logger.error("%s directory creation failed" % target_dir)
     else:
-        logger.info(
-            "Successfully created the dir on the following path: %s" % target_dir
-        )
+        logger.info("%s directory successfully created" % target_dir)
 
     return target_dir
 
@@ -625,7 +621,7 @@ def run_repeatmasker_regions(
     pool.close()
     pool.join()
     slice_output_to_gtf(
-        repeatmasker_output_dir, ".rm.gtf", 1, "repeat_id", "repeatmask"
+        repeatmasker_output_dir, 1, "repeat_id", "repeatmask", ".rm.gtf"
     )
 
 
@@ -747,17 +743,14 @@ def create_repeatmasker_gtf(
 
 
 def run_eponine_regions(
-    genome_file, java_path, eponine_path, main_output_dir, num_threads
+    genome_file,
+    main_output_dir,
+    num_threads,
+    java_path="java",
+    eponine_path="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar",
 ):
-
-    if not java_path:
-        java_path = "java"
-
-    if not eponine_path:
-        eponine_path = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar"
-
-    check_file(eponine_path)
-    check_exe(java_path)
+    # check_file(eponine_path)
+    # check_exe(java_path)
 
     eponine_output_dir = create_dir(main_output_dir, "eponine_output")
 
@@ -800,24 +793,21 @@ def run_eponine_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
+    slice_output_to_gtf(eponine_output_dir, 1, "feature_id", "eponine", ".epo.gtf")
 
 
 def multiprocess_eponine(
     generic_eponine_cmd, slice_id, genome_file, eponine_output_dir
 ):
-
     region_name = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find transcription start sites with Eponine: "
-        + region_name
-        + ":"
-        + str(start)
-        + ":"
-        + str(end)
+        "Processing slice to find transcription start sites with Eponine: %s:%s:%s"
+        % region_name,
+        start,
+        end,
     )
     seq = get_sequence(region_name, start, end, 1, genome_file, eponine_output_dir)
 
@@ -850,55 +840,34 @@ def multiprocess_eponine(
 
 
 def create_eponine_gtf(eponine_output_file_path, region_results_file_path, region_name):
-
-    eponine_in = open(eponine_output_file_path, "r")
-    eponine_out = open(region_results_file_path, "w+")
-
-    line = eponine_in.readline()
-    feature_count = 1
-    while line:
-        result_match = re.search(r"^" + region_name, line)
-
-        if result_match:
-            results = line.split()
-            start = int(results[3])
-            end = int(results[4])
-            score = float(results[5])
-            strand = results[6]
-
-            # There's a one base offset on the reverse strand
-            if strand == "-":
-                start -= 1
-                end -= 1
-
-            gtf_line = (
-                region_name
-                + "\tEponine\tsimple_feature\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + strand
-                + "\t.\t"
-                + 'feature_id "'
-                + str(feature_count)
-                + '"; score "'
-                + str(score)
-                + '";\n'
-            )
-            eponine_out.write(gtf_line)
+    with open(eponine_output_file_path, "r") as eponine_in, open(
+        region_results_file_path, "w+"
+    ) as eponine_out:
+        feature_count = 0
+        for line in eponine_in:
             feature_count += 1
-        line = eponine_in.readline()
-    eponine_in.close()
-    eponine_out.close()
+            result_match = re.search(r"^" + region_name, line)
+
+            if result_match:
+                results = line.split()
+                start = int(results[3])
+                end = int(results[4])
+                score = float(results[5])
+                strand = results[6]
+
+                # There's a one base offset on the reverse strand
+                if strand == "-":
+                    start -= 1
+                    end -= 1
+
+                gtf_line = '{}\tEponine\tsimple_feature\t{}\t{}\t.\t{}\t.\tfeature_id "{}"; score "{}";\n'.format(
+                    region_name, start, end, strand, feature_count, score
+                )
+                eponine_out.write(gtf_line)
 
 
-def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
-
-    if not cpg_path:
-        cpg_path = "cpg_lh"
-
-    check_exe(cpg_path)
+def run_cpg_regions(genome_file, main_output_dir, num_threads, cpg_path="cpg_lh"):
+    # check_exe(cpg_path)
     cpg_output_dir = create_dir(main_output_dir, "cpg_output")
 
     logger.info("Skip analysis if the gtf file already exists")
@@ -931,22 +900,18 @@ def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(cpg_output_dir, ".cpg.gtf", 1, "feature_id", "cpg")
+    slice_output_to_gtf(cpg_output_dir, 1, "feature_id", "cpg", ".cpg.gtf")
 
 
 def multiprocess_cpg(cpg_path, slice_id, genome_file, cpg_output_dir):
-
     region_name = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find CpG islands with cpg_lh: "
-        + region_name
-        + ":"
-        + str(start)
-        + ":"
-        + str(end)
+        "Processing slice to find CpG islands with cpg_lh: %s:%s:%s" % region_name,
+        start,
+        end,
     )
     seq = get_sequence(region_name, start, end, 1, genome_file, cpg_output_dir)
 
@@ -975,54 +940,41 @@ def multiprocess_cpg(cpg_path, slice_id, genome_file, cpg_output_dir):
 
 
 def create_cpg_gtf(cpg_output_file_path, region_results_file_path, region_name):
-
     cpg_min_length = 400
     cpg_min_gc_content = 50
     cpg_min_oe = 0.6
 
-    cpg_in = open(cpg_output_file_path, "r")
-    cpg_out = open(region_results_file_path, "w+")
-    line = cpg_in.readline()
-    feature_count = 1
-    while line:
-        result_match = re.search(r"^" + region_name, line)
-        if result_match:
-            results = line.split()
-            start = int(results[1])
-            end = int(results[2])
-            length = end - start + 1
-            score = float(results[3])
-            gc_content = float(results[6])
-            oe = results[7]
+    feature_count = 0
+    with open(cpg_output_file_path, "r") as cpg_in, open(
+        region_results_file_path, "w+"
+    ) as cpg_out:
+        feature_count += 1
+        for line in cpg_in:
+            result_match = re.search(r"^" + region_name, line)
+            if result_match:
+                results = line.split()
+                start = int(results[1])
+                end = int(results[2])
+                length = end - start + 1
+                score = float(results[3])
+                gc_content = float(results[6])
+                oe = results[7]
 
-            if oe == "-" or oe == "inf":
-                oe = 0
-            else:
-                oe = float(oe)
+                if oe == "-" or oe == "inf":
+                    oe = 0
+                else:
+                    oe = float(oe)
 
-            if (
-                length >= cpg_min_length
-                and gc_content >= cpg_min_gc_content
-                and oe >= cpg_min_oe
-            ):
-                gtf_line = (
-                    region_name
-                    + "\tCpG\tsimple_feature\t"
-                    + str(start)
-                    + "\t"
-                    + str(end)
-                    + "\t.\t+\t.\t"
-                    + 'feature_id "'
-                    + str(feature_count)
-                    + '"; score "'
-                    + str(score)
-                    + '";\n'
-                )
-                cpg_out.write(gtf_line)
-                feature_count += 1
-        line = cpg_in.readline()
-    cpg_in.close()
-    cpg_out.close()
+                if (
+                    length >= cpg_min_length
+                    and gc_content >= cpg_min_gc_content
+                    and oe >= cpg_min_oe
+                ):
+                    gtf_line = '{}\tCpG\tsimple_feature\t{}\t{}\t.\t+\t.\tfeature_id "{}"; score "{}";\n'.format(
+                        region_name, start, end, feature_count, score
+                    )
+                    # gtf_line = f'{region_name}\tCpG\tsimple_feature\t{start}\t{end}\t.\t+\t.\tfeature_id "{feature_count}"; score "{score}";\n'
+                    cpg_out.write(gtf_line)
 
 
 def run_trnascan_regions(
@@ -1086,7 +1038,7 @@ def run_trnascan_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(trnascan_output_dir, ".trna.gtf", 1, None, None)
+    slice_output_to_gtf(trnascan_output_dir, 1, None, None, ".trna.gtf")
 
 
 def multiprocess_trnascan(
@@ -1303,7 +1255,7 @@ def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads):
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(dust_output_dir, ".dust.gtf", 1, "repeat_id", "dust")
+    slice_output_to_gtf(dust_output_dir, 1, "repeat_id", "dust", ".dust.gtf")
 
 
 def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
@@ -1452,7 +1404,7 @@ def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads):
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(trf_output_dir, ".trf.gtf", 1, "repeat_id", "trf")
+    slice_output_to_gtf(trf_output_dir, 1, "repeat_id", "trf", ".trf.gtf")
 
 
 def multiprocess_trf(
@@ -1674,7 +1626,7 @@ def run_cmsearch_regions(
     pool.close()
     pool.join()
 
-    slice_output_to_gtf(rfam_output_dir, ".rfam.gtf", 1, None, None)
+    slice_output_to_gtf(rfam_output_dir, 1, None, None, ".rfam.gtf")
 
 
 def prlimit_command(command_list, virtual_memory_limit):
@@ -2158,9 +2110,8 @@ def check_rnafold_structure(seq, rfam_output_dir):
 
 
 def slice_output_to_gtf(
-    output_dir, extension, unique_ids, feature_id_label, new_id_prefix
+    output_dir, unique_ids, feature_id_label, new_id_prefix, extension=".gtf"
 ):
-
     # Note that this does not make unique ids at the moment
     # In many cases this is fine because the ids are unique by seq region, but in cases like batching it can cause problems
     # So will add in a helper method to make ids unique
@@ -2181,8 +2132,6 @@ def slice_output_to_gtf(
     feature_counter = 1
 
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
-    if not extension:
-        extension = ".gtf"
     gtf_files = glob.glob(output_dir + "/*" + extension)
     gtf_file_path = os.path.join(output_dir, "annotation.gtf")
     gtf_out = open(gtf_file_path, "w+")
@@ -3575,20 +3524,11 @@ def run_augustus_predict(
     augustus_output_to_gtf(augustus_dir, augustus_genome_dir)
 
 
-def create_slice_ids(seq_region_lengths, slice_size, overlap, min_length):
-    if not slice_size:
-        slice_size = 1000000
-
-    if not overlap:
-        overlap = 0
-
-    if not min_length:
-        min_length = 0
-
+def create_slice_ids(seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=0):
     slice_ids = []
 
     for region in seq_region_lengths:
-        region_length = int(seq_region_lengths[region])
+        region_length = seq_region_lengths[region]
         if region_length < min_length:
             continue
 
@@ -4121,26 +4061,24 @@ def split_genome(genome_file, target_dir, min_seq_length):
 
 
 def get_seq_region_lengths(genome_file, min_seq_length):
+    breakpoint()
     current_header = ""
     current_seq = ""
 
     seq_regions = {}
-    file_in = open(genome_file)
-    line = file_in.readline()
-    while line:
-        match = re.search(r">(.+)$", line)
-        if match and current_header:
-            if len(current_seq) > min_seq_length:
-                seq_regions[current_header] = len(current_seq)
+    with open(genome_file) as file_in:
+        for line in file_in:
+            match = re.search(r">(.+)$", line)
+            if match and current_header:
+                if len(current_seq) > min_seq_length:
+                    seq_regions[current_header] = len(current_seq)
 
-            current_seq = ""
-            current_header = match.group(1)
-        elif match:
-            current_header = match.group(1)
-        else:
-            current_seq += line.rstrip()
-
-        line = file_in.readline()
+                current_seq = ""
+                current_header = match.group(1)
+            elif match:
+                current_header = match.group(1)
+            else:
+                current_seq += line.rstrip()
 
     if len(current_seq) > min_seq_length:
         seq_regions[current_header] = len(current_seq)
@@ -5073,10 +5011,11 @@ def multiprocess_finalise_geneset(cmd):
     subprocess.run(cmd)
 
 
-def get_sequence(seq_region, start, end, strand, fasta_file, output_dir):
-    start = int(start)
-    end = int(end)
-    strand = int(strand)
+def get_sequence(seq_region, start: int, end: int, strand: int, fasta_file, output_dir):
+    assert isinstance(start, int)
+    assert isinstance(end, int)
+    assert isinstance(strand, int)
+
     start -= 1
     bedtools_path = "bedtools"
 
@@ -5087,8 +5026,7 @@ def get_sequence(seq_region, start, end, strand, fasta_file, output_dir):
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=output_dir
     ) as bed_temp_file:
-        bed_temp_file.writelines(seq_region + "\t" + str(start) + "\t" + str(end))
-        bed_temp_file.close()
+        bed_temp_file.writelines(f"{seq_region}\t{start}\t{end}")
 
     bedtools_command = [
         bedtools_path,
@@ -5564,13 +5502,11 @@ if __name__ == "__main__":
     species = args.repeatmasker_species
 
     main_script_dir = os.path.dirname(os.path.realpath(__file__))
-    # work_dir=glob.glob(work_dir)
     if not os.path.exists(genome_file):
         raise IOError("File does not exist: %s" % genome_file)
 
     if not work_dir:
         work_dir = os.getcwd()
-        # work_dir=glob.glob(work_dir)
 
     # create file handler and add to logger
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
@@ -5661,7 +5597,7 @@ if __name__ == "__main__":
     #################################
     if run_cpg:
         logger.info("Annotating CpG islands")
-        run_cpg_regions(genome_file, cpg_path, work_dir, num_threads)
+        run_cpg_regions(genome_file, work_dir, num_threads, cpg_path)
 
     if run_eponine:
         logger.info("Running Eponine to find transcription start sites")
