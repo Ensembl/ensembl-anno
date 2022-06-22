@@ -27,6 +27,7 @@ import pathlib
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -2523,11 +2524,15 @@ def multiprocess_genblast(
     ]
 
     logger.info(" ".join(genblast_cmd))
+    # Using the child process termination as described here: 
+    # https://alexandra-zaharia.github.io/posts/kill-subprocess-and-its-children-on-timeout-python/
     try:
-        subprocess.run(genblast_cmd, timeout=genblast_timeout_secs)
+        p = subprocess.Popen(genblast_cmd, start_new_session=True)
+        p.wait(timeout=genblast_timeout_secs)
     except subprocess.TimeoutExpired:
         logger.error("Timeout reached for file:\n" + batched_protein_file)
         subprocess.run(["touch", (batched_protein_file + ".except")])
+        os.killpg(os.getpgid(p.pid), signal.SIGTERM)
 
     files_to_delete = glob.glob(batched_protein_file + "*msk.blast*")
     files_to_delete.append(batched_protein_file)
