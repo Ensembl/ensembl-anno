@@ -27,6 +27,7 @@ import pathlib
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -2390,9 +2391,8 @@ def run_genblast_align(
     masked_genome_file,
     max_intron_length,
     num_threads,
+    genblast_timeout_secs,
 ):
-
-    genblast_timeout_secs = 10800
 
     if not genblast_path:
         genblast_path = "genblast"
@@ -2523,11 +2523,15 @@ def multiprocess_genblast(
     ]
 
     logger.info(" ".join(genblast_cmd))
+    # Using the child process termination as described here: 
+    # https://alexandra-zaharia.github.io/posts/kill-subprocess-and-its-children-on-timeout-python/
     try:
-        subprocess.run(genblast_cmd, timeout=genblast_timeout_secs)
+        p = subprocess.Popen(genblast_cmd, start_new_session=True)
+        p.wait(timeout=genblast_timeout_secs)
     except subprocess.TimeoutExpired:
         logger.error("Timeout reached for file:\n" + batched_protein_file)
         subprocess.run(["touch", (batched_protein_file + ".except")])
+        os.killpg(os.getpgid(p.pid), signal.SIGTERM)
 
     files_to_delete = glob.glob(batched_protein_file + "*msk.blast*")
     files_to_delete.append(batched_protein_file)
@@ -5294,6 +5298,12 @@ if __name__ == "__main__":
         help="Run GenBlast to align protein sequences",
     )
     parser.add_argument(
+        "--genblast_timeout",
+        type=int,
+        help="GenBlast timeout in seconds",
+        default=10800,
+    )
+    parser.add_argument(
         "--run_busco",
         action="store_true",
         help="Run GenBlast to align BUSCO protein sequences",
@@ -5510,6 +5520,7 @@ if __name__ == "__main__":
     convert2blastmask_path = args.convert2blastmask_path
     makeblastdb_path = args.makeblastdb_path
     run_genblast = args.run_genblast
+    genblast_timeout = args.genblast_timeout
     run_busco = args.run_busco
     protein_file = args.protein_file
     busco_protein_file = args.busco_protein_file
@@ -5748,6 +5759,7 @@ if __name__ == "__main__":
             masked_genome_file,
             max_intron_length,
             num_threads,
+            genblast_timeout,
         )
 
     # Run GenBlast on BUSCO set, gives higher priority when creating the final genes in cases where transcriptomic data are missing or fragmented
@@ -5762,6 +5774,7 @@ if __name__ == "__main__":
             masked_genome_file,
             max_intron_length,
             num_threads,
+            genblast_timeout,
         )
 
     #################################
