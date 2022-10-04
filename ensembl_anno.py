@@ -14,6 +14,7 @@
 # limitations under the License.
 
 
+# standard library
 import argparse
 import errno
 import gc
@@ -34,6 +35,9 @@ import tempfile
 
 from pathlib import Path
 
+# project imports
+from utils import create_dir
+
 
 # logging formats
 logging_formatter_time_message = logging.Formatter(
@@ -49,32 +53,6 @@ console_handler = logging.StreamHandler(sys.stderr)
 console_handler.setLevel(logging.DEBUG)
 console_handler.setFormatter(logging_formatter_time_message)
 logger.addHandler(console_handler)
-
-
-def create_dir(main_output_dir, dir_name):
-
-    if dir_name:
-        target_dir = os.path.join(main_output_dir, dir_name)
-    else:
-        target_dir = main_output_dir
-
-    if os.path.exists(target_dir):
-        logger.warning("Directory already exists, will not create again")
-        return target_dir
-
-    logger.info("Attempting to create target dir: %s" % target_dir)
-
-    try:
-        os.mkdir(target_dir)
-
-    except OSError:
-        logger.error("Creation of the dir failed, path used: %s" % target_dir)
-    else:
-        logger.info(
-            "Successfully created the dir on the following path: %s" % target_dir
-        )
-
-    return target_dir
 
 
 def load_results_to_ensembl_db(
@@ -2523,7 +2501,7 @@ def multiprocess_genblast(
     ]
 
     logger.info(" ".join(genblast_cmd))
-    # Using the child process termination as described here: 
+    # Using the child process termination as described here:
     # https://alexandra-zaharia.github.io/posts/kill-subprocess-and-its-children-on-timeout-python/
     try:
         p = subprocess.Popen(genblast_cmd, start_new_session=True)
