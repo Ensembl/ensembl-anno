@@ -20,7 +20,6 @@ import errno
 import gc
 import glob
 import io
-import logging
 import math
 import multiprocessing
 import os
@@ -30,29 +29,12 @@ import re
 import shutil
 import signal
 import subprocess
-import sys
 import tempfile
 
 from pathlib import Path
 
 # project imports
-from utils import create_dir
-
-
-# logging formats
-logging_formatter_time_message = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-# set up base logger
-logger = logging.getLogger("main_logger")
-logger.setLevel(logging.DEBUG)
-logger.propagate = False
-# create console handler and add to logger
-console_handler = logging.StreamHandler(sys.stderr)
-console_handler.setLevel(logging.DEBUG)
-console_handler.setFormatter(logging_formatter_time_message)
-logger.addHandler(console_handler)
+from utils import add_log_file_handler, create_dir, logger
 
 
 def load_results_to_ensembl_db(
@@ -2387,7 +2369,7 @@ def run_genblast_align(
 
     check_exe(makeblastdb_path)
 
-    create_dir(genblast_dir, None)
+    create_dir(genblast_dir)
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(genblast_dir, "annotation.gtf")
@@ -2604,7 +2586,7 @@ def split_protein_file(protein_file, protein_output_dir, batch_size):
     batched_protein_files = []
 
     for i in range(0, 10):
-        create_dir(protein_output_dir, ("bin_" + str(i)))
+        create_dir(protein_output_dir, f"bin_{i}")
 
     file_in = open(protein_file)
     line = file_in.readline()
@@ -5561,18 +5543,15 @@ if __name__ == "__main__":
         work_dir = os.getcwd()
         # work_dir=glob.glob(work_dir)
 
-    # create file handler and add to logger
+    # save log to a file
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
-    file_handler = logging.FileHandler(log_file_path, mode="a+")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging_formatter_time_message)
-    logger.addHandler(file_handler)
+    add_log_file_handler(logger, log_file_path)
 
     logger.info("work directory: %s" % work_dir)
 
     if not os.path.exists(work_dir):
         logger.info("Work dir does not exist, will create")
-        create_dir(work_dir, None)
+        create_dir(work_dir)
 
     if num_threads == 1:
         logger.info("Thread count is set to the default value 1; this might be slow.")
