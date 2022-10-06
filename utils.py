@@ -15,8 +15,12 @@
 
 
 # standard library
+import errno
 import logging
+import os
 import pathlib
+import re
+import shutil
 import sys
 
 from typing import Union
@@ -53,6 +57,16 @@ def add_log_file_handler(
     logger.addHandler(file_handler)
 
 
+def check_exe(exe_path):
+    if not shutil.which(exe_path):
+        raise OSError('Executable file not found at "%s"' % exe_path)
+
+
+def check_file(file_path):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
+
+
 def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
     """
     Create directory or subdirectory and log operations.
@@ -81,3 +95,58 @@ def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
         logger.info('Successfully created directory "%s"' % target_dir)
 
     return target_dir
+
+
+def create_paired_paths(fastq_file_paths):
+    path_dict = {}
+    final_list = []
+
+    for path in fastq_file_paths:
+        match = re.search(r"(.+)_\d+\.(fastq|fq)", path)
+        if not match:
+            logger.error(
+                "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired:"
+            )
+            logger.error(path)
+            final_list.append([path])
+            continue
+
+        prefix = match.group(1)
+        if prefix in path_dict:
+            # path_dict[prefix] = path_dict[prefix] + ',' + path
+            path_dict[prefix].append(path)
+        else:
+            path_dict[prefix] = [path]
+
+    for pair in path_dict:
+        final_list.append(path_dict[pair])
+
+    return final_list
+
+
+def get_seq_region_lengths(genome_file, min_seq_length):
+    current_header = ""
+    current_seq = ""
+
+    seq_regions = {}
+    file_in = open(genome_file)
+    line = file_in.readline()
+    while line:
+        match = re.search(r">(.+)$", line)
+        if match and current_header:
+            if len(current_seq) > min_seq_length:
+                seq_regions[current_header] = len(current_seq)
+
+            current_seq = ""
+            current_header = match.group(1)
+        elif match:
+            current_header = match.group(1)
+        else:
+            current_seq += line.rstrip()
+
+        line = file_in.readline()
+
+    if len(current_seq) > min_seq_length:
+        seq_regions[current_header] = len(current_seq)
+
+    return seq_regions

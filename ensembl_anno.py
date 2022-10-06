@@ -16,7 +16,6 @@
 
 # standard library
 import argparse
-import errno
 import gc
 import glob
 import io
@@ -31,11 +30,17 @@ import signal
 import subprocess
 import tempfile
 
-from pathlib import Path
-
 # project imports
 from tasks import run_star_align
-from utils import add_log_file_handler, create_dir, logger
+from utils import (
+    add_log_file_handler,
+    check_exe,
+    check_file,
+    create_dir,
+    create_paired_paths,
+    get_seq_region_lengths,
+    logger,
+)
 
 
 def load_results_to_ensembl_db(
@@ -1236,7 +1241,7 @@ def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads):
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(dust_output_dir, "annotation.gtf")
     logger.info(output_file)
-    if Path(output_file).is_file():
+    if pathlib.Path(output_file).is_file():
         transcript_count = check_gtf_content(output_file, "repeat")
         if transcript_count > 0:
             logger.info("Dust gtf file exists")
@@ -2761,63 +2766,6 @@ def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_files, trim_dir):
     subprocess.run(trim_galore_cmd)
 
 
-def run_subsample_script(fastq_file, fastq_file_pair, subsample_script_path):
-
-    if fastq_file_pair:
-        subprocess.run(
-            [
-                "python3",
-                subsample_script_path,
-                "--fastq_file",
-                fastq_file,
-                "--fastq_file_pair",
-                fastq_file_pair,
-            ]
-        )
-    else:
-        subprocess.run(["python3", subsample_script_path, "--fastq_file", fastq_file])
-
-
-def check_for_fastq_subsamples(fastq_file_list):
-    # This should probably removed at some point as it is needlessly complicated
-    # Would be better to just build into the previous step
-    # Mainly just about making sure that if you have subsamples they're used and if you have pairs they're paired
-    for idx, fastq_files in enumerate(fastq_file_list):
-        fastq_file = fastq_files[0]
-        subsample_file = fastq_file + ".sub"
-
-        fastq_file_pair = ""
-        subsample_file_pair = ""
-        if len(fastq_files) == 2:
-            fastq_file_pair = fastq_files[1]
-            subsample_file_pair = fastq_file_pair + ".sub"
-
-        # This bit will replace the list entry with a string, don't need a list after this function for each pair/file
-        if os.path.exists(subsample_file):
-            logger.info(
-                "Found a subsampled file extension, will use that instead of the original file. Path:"
-            )
-            logger.info(subsample_file)
-            fastq_file_list[idx] = subsample_file
-        else:
-            fastq_file_list[idx] = fastq_file
-
-        # This bit just concats the paired file (or subsampled paired file) if it exists
-        if os.path.exists(subsample_file_pair):
-            logger.info(
-                "Found a subsampled paired file extension, will use that instead of the original file. Path:"
-            )
-            logger.info(subsample_file_pair)
-            fastq_file_list[idx] = subsample_file + "," + subsample_file_pair
-        elif fastq_file_pair:
-            fastq_file_list[idx] = fastq_file + "," + fastq_file_pair
-
-        logger.info("Entry at current index:")
-        logger.info(fastq_file_list[idx])
-
-    return fastq_file_list
-
-
 def run_minimap2_align(
     minimap2_path,
     paftools_path,
@@ -3230,7 +3178,6 @@ def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
 def run_augustus_predict(
     augustus_path, main_output_dir, masked_genome_file, num_threads
 ):
-
     min_seq_length = 1000
 
     if not augustus_path:
@@ -3354,7 +3301,6 @@ def generate_hints(
     star_dir,
     num_threads,
 ):
-
     pool = multiprocessing.Pool(int(num_threads))
     for bam_file in glob.glob(star_dir + "/*.bam"):
         pool.apply_async(
@@ -3560,7 +3506,7 @@ def run_stringtie_assemble(
     # Now need to merge
     logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
     gtf_list_out = open(stringtie_merge_input_file, "w+")
-    for gtf_file in glob.glob(stringtie_dir + "/*.stringtie.gtf"):
+    for gtf_file in glob.glob(str(stringtie_dir / "*.stringtie.gtf")):
         transcript_count = check_gtf_content(gtf_file, "transcript")
         if transcript_count > 0:
             gtf_list_out.write(gtf_file + "\n")
@@ -3663,7 +3609,7 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
     logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
 
     gtf_list_out = open(stringtie_merge_input_file, "w+")
-    for gtf_file in glob.glob(scallop_dir + "/*.scallop.gtf"):
+    for gtf_file in glob.glob(str(scallop_dir / "*.scallop.gtf")):
         transcript_count = check_gtf_content(gtf_file, "transcript")
         if transcript_count > 0:
             gtf_list_out.write(gtf_file + "\n")
@@ -3851,34 +3797,6 @@ def split_genome(genome_file, target_dir, min_seq_length):
             logger.info(file_out_name)
 
     file_in.close()
-
-
-def get_seq_region_lengths(genome_file, min_seq_length):
-    current_header = ""
-    current_seq = ""
-
-    seq_regions = {}
-    file_in = open(genome_file)
-    line = file_in.readline()
-    while line:
-        match = re.search(r">(.+)$", line)
-        if match and current_header:
-            if len(current_seq) > min_seq_length:
-                seq_regions[current_header] = len(current_seq)
-
-            current_seq = ""
-            current_header = match.group(1)
-        elif match:
-            current_header = match.group(1)
-        else:
-            current_seq += line.rstrip()
-
-        line = file_in.readline()
-
-    if len(current_seq) > min_seq_length:
-        seq_regions[current_header] = len(current_seq)
-
-    return seq_regions
 
 
 def run_finalise_geneset(
@@ -4850,7 +4768,7 @@ def reverse_complement(sequence):
     return sequence.translate(rev_matrix)[::-1]
 
 
-def seq_region_names(genome_file):
+def get_seq_region_names(genome_file):
     region_list = []
 
     file_in = open(genome_file)
@@ -4922,45 +4840,6 @@ def slice_genome(genome_file, target_dir, target_slice_size):
             file_name = "genome_file_" + str(file_number)
 
 
-def create_paired_paths(fastq_file_paths):
-    path_dict = {}
-    final_list = []
-
-    for path in fastq_file_paths:
-        match = re.search(r"(.+)_\d+\.(fastq|fq)", path)
-        if not match:
-            logger.error(
-                "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired:"
-            )
-            logger.error(path)
-            final_list.append([path])
-            continue
-
-        prefix = match.group(1)
-        if prefix in path_dict:
-            #      path_dict[prefix] = path_dict[prefix] + ',' + path
-            path_dict[prefix].append(path)
-        else:
-            path_dict[prefix] = [path]
-
-    for pair in path_dict:
-        final_list.append(path_dict[pair])
-
-    return final_list
-
-
-def check_exe(exe_path):
-
-    if not shutil.which(exe_path):
-        raise OSError("Exe does not exist. Path checked: %s" % exe_path)
-
-
-def check_file(file_path):
-
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
-
-
 def coallate_results(main_output_dir):
 
     results_dir = create_dir(main_output_dir, "results")
@@ -4984,8 +4863,10 @@ def coallate_results(main_output_dir):
             subprocess.run(cpy_cmd)
 
 
-if __name__ == "__main__":
-
+def main():
+    """
+    main function
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--output_dir",
@@ -5364,9 +5245,8 @@ if __name__ == "__main__":
             run_busco = True
 
     # Collect a list of seq region names, most useful for multiprocessing regions
-    seq_region_names = seq_region_names(genome_file)
-    for i in seq_region_names:
-        logger.info(i)
+    seq_region_names = get_seq_region_names(genome_file)
+    logger.debug("seq region names:\n%s" % seq_region_names)
 
     #################################
     # Repeat analyses
@@ -5374,8 +5254,7 @@ if __name__ == "__main__":
     if run_masking:
         logger.info("Running masking via Red")
         masked_genome_file = run_red(red_path, work_dir, genome_file)
-        logger.info("Masked genome file: " + masked_genome_file)
-
+        logger.info("Masked genome file: %s" % masked_genome_file)
     else:
         logger.info("Not running masking, presuming the genome file is softmasked")
 
@@ -5428,7 +5307,7 @@ if __name__ == "__main__":
 
     # Run STAR
     if run_star:
-        logger.info("Running Star")
+        logger.info("Running STAR")
         run_star_align(
             star_path,
             trim_fastq,
@@ -5449,7 +5328,7 @@ if __name__ == "__main__":
 
     # Run Stringtie
     if run_stringtie:
-        logger.info("Running Stringtie")
+        logger.info("Running StringTie")
         run_stringtie_assemble(
             stringtie_path, samtools_path, work_dir, genome_file, num_threads
         )
@@ -5537,6 +5416,13 @@ if __name__ == "__main__":
             num_threads,
         )
 
-#  coallate_results(work_dir)
+    # coallate_results(work_dir)
 
-#  run_find_orfs(genome_file,work_dir)
+    # run_find_orfs(genome_file,work_dir)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("Interrupted with CTRL-C, exiting...")
