@@ -624,9 +624,8 @@ def multiprocess_repeatmasker(
     region_fasta_file_path = os.path.join(
         repeatmasker_output_dir, region_fasta_file_name
     )
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_results_file_path = region_fasta_file_path + ".rm.gtf"
     repeatmasker_output_file_path = region_fasta_file_path + ".out"
@@ -797,9 +796,8 @@ def multiprocess_eponine(
     region_fasta_file_name = slice_file_name + ".fa"
     region_fasta_file_path = os.path.join(eponine_output_dir, region_fasta_file_name)
 
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_results_file_name = slice_file_name + ".epo.gtf"
     region_results_file_path = os.path.join(
@@ -926,9 +924,8 @@ def multiprocess_cpg(cpg_path, slice_id, genome_file, cpg_output_dir):
     region_fasta_file_name = slice_file_name + ".fa"
     region_fasta_file_path = os.path.join(cpg_output_dir, region_fasta_file_name)
 
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_results_file_name = slice_file_name + ".cpg.gtf"
     region_results_file_path = os.path.join(cpg_output_dir, region_results_file_name)
@@ -1086,9 +1083,8 @@ def multiprocess_trnascan(
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
     region_fasta_file_path = os.path.join(trnascan_output_dir, region_fasta_file_name)
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_results_file_name = slice_file_name + ".trna.gtf"
     region_results_file_path = os.path.join(
@@ -1297,9 +1293,8 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
     region_fasta_file_path = os.path.join(dust_output_dir, region_fasta_file_name)
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_results_file_name = slice_file_name + ".dust.gtf"
     region_results_file_path = os.path.join(dust_output_dir, region_results_file_name)
@@ -1448,9 +1443,8 @@ def multiprocess_trf(
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
     region_fasta_file_path = os.path.join(trf_output_dir, region_fasta_file_name)
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_results_file_name = slice_file_name + ".trf.gtf"
     region_results_file_path = os.path.join(trf_output_dir, region_results_file_name)
@@ -1693,9 +1687,8 @@ def multiprocess_cmsearch(
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
     region_fasta_file_path = os.path.join(rfam_output_dir, region_fasta_file_name)
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_tblout_file_name = slice_file_name + ".tblout"
     region_tblout_file_path = os.path.join(rfam_output_dir, region_tblout_file_name)
@@ -2614,9 +2607,9 @@ def split_protein_file(protein_file, protein_output_dir, batch_size):
                 ("bin_" + str(random.randint(0, 9))),
                 (str(batch_count) + ".fa"),
             )
-            file_out = open(file_out_name, "w+")
-            file_out.write(current_record)
-            file_out.close()
+            with open(file_out_name, "w+") as file_out:
+                file_out.write(current_record)
+
             batch_count += 1
             seq_count += 1
             current_record = line
@@ -2636,9 +2629,8 @@ def split_protein_file(protein_file, protein_output_dir, batch_size):
             ("bin_" + str(random.randint(0, 9))),
             (str(batch_count) + ".fa"),
         )
-        file_out = open(file_out_name, "w+")
-        file_out.write(current_record)
-        file_out.close()
+        with open(file_out_name, "w+") as file_out:
+            file_out.write(current_record)
         batched_protein_files.append(file_out_name)
 
     return batched_protein_files
@@ -3372,9 +3364,8 @@ def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir)
         output_dir, (region_fasta_file_name + ".aug")
     )
 
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region + "\n" + seq + "\n")
-    region_fasta_out.close()
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
     region_hints_file = create_slice_hints_file(
         region, start, end, hints_file, region_fasta_file_path
@@ -3510,16 +3501,15 @@ def run_stringtie_assemble(
 
     # Now need to merge
     logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
-    gtf_list_out = open(stringtie_merge_input_file, "w+")
-    for gtf_file in glob.glob(str(stringtie_dir / "*.stringtie.gtf")):
-        transcript_count = check_gtf_content(gtf_file, "transcript")
-        if transcript_count > 0:
-            gtf_list_out.write(gtf_file + "\n")
-        else:
-            logger.warning(
-                "Warning, skipping file with no transcripts. Path:\n" + gtf_file
-            )
-    gtf_list_out.close()
+    with open(stringtie_merge_input_file, "w+") as gtf_list_out:
+        for gtf_file in glob.glob(str(stringtie_dir / "*.stringtie.gtf")):
+            transcript_count = check_gtf_content(gtf_file, "transcript")
+            if transcript_count > 0:
+                gtf_list_out.write(gtf_file + "\n")
+            else:
+                logger.warning(
+                    "Warning, skipping file with no transcripts. Path:\n" + gtf_file
+                )
 
     logger.info("Merging Stringtie results. Writing to the following file:")
     logger.info(stringtie_merge_output_file)
@@ -3613,16 +3603,15 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
     # Now need to merge
     logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
 
-    gtf_list_out = open(stringtie_merge_input_file, "w+")
-    for gtf_file in glob.glob(str(scallop_dir / "*.scallop.gtf")):
-        transcript_count = check_gtf_content(gtf_file, "transcript")
-        if transcript_count > 0:
-            gtf_list_out.write(gtf_file + "\n")
-        else:
-            logger.warning(
-                "Warning, skipping file with no transcripts. Path:\n" + gtf_file
-            )
-    gtf_list_out.close()
+    with open(stringtie_merge_input_file, "w+") as gtf_list_out:
+        for gtf_file in glob.glob(str(scallop_dir / "*.scallop.gtf")):
+            transcript_count = check_gtf_content(gtf_file, "transcript")
+            if transcript_count > 0:
+                gtf_list_out.write(gtf_file + "\n")
+            else:
+                logger.warning(
+                    "Warning, skipping file with no transcripts. Path:\n" + gtf_file
+                )
 
     logger.info("Merging Scallop results. Writing to the following file:")
     logger.info(stringtie_merge_output_file)
@@ -3769,9 +3758,8 @@ def split_genome(genome_file, target_dir, min_seq_length):
             if len(current_seq) > min_seq_length:
                 file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
                 if not os.path.exists(file_out_name):
-                    file_out = open(file_out_name, "w+")
-                    file_out.write(">" + current_header + "\n" + current_seq + "\n")
-                    file_out.close()
+                    with open(file_out_name, "w+") as file_out:
+                        file_out.write(f">{current_header}\n{current_seq}\n")
 
                 else:
                     print(
@@ -3791,9 +3779,8 @@ def split_genome(genome_file, target_dir, min_seq_length):
     if len(current_seq) > min_seq_length:
         file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
         if not os.path.exists(file_out_name):
-            file_out = open(file_out_name, "w+")
-            file_out.write(">" + current_header + "\n" + current_seq + "\n")
-            file_out.close()
+            with open(file_out_name, "w+") as file_out:
+                file_out.write(f">{current_header}\n{current_seq}\n")
 
         else:
             logger.info(
@@ -3863,26 +3850,22 @@ def run_finalise_geneset(
     transcriptomic_annotation_raw = os.path.join(
         final_annotation_dir, "transcriptomic_raw.gtf"
     )
-    file_out = open(transcriptomic_annotation_raw, "w+")
-    for transcriptomic_file in [
-        minimap2_annotation_raw,
-        scallop_annotation_raw,
-        stringtie_annotation_raw,
-    ]:
+    with open(transcriptomic_annotation_raw, "w+") as file_out:
+        for transcriptomic_file in [
+            minimap2_annotation_raw,
+            scallop_annotation_raw,
+            stringtie_annotation_raw,
+        ]:
+            if not os.path.exists(transcriptomic_file):
+                logger.info(
+                    'No annotation.gtf file found in "%s", skipping'
+                    % transcriptomic_file
+                )
+                continue
 
-        if not os.path.exists(transcriptomic_file):
-            logger.info(
-                "No annotation.gtf file found in " + transcriptomic_file + ", skipping"
-            )
-            continue
-
-        file_in = open(transcriptomic_file)
-        line = file_in.readline()
-        while line:
-            print(line.rstrip(), file=file_out)
-            line = file_in.readline()
-        file_in.close()
-    file_out.close()
+            with open(transcriptomic_file) as file_in:
+                for line in file_in:
+                    file_out.write(line.rstrip())
 
     # Copy the raw files into the annotation dir, this is not needed as such, but collecting them in one place and relabelling is
     # helpful for a user
@@ -4067,10 +4050,9 @@ def run_finalise_geneset(
         num_threads,
     )
     postvalidation_gtf_file = os.path.join(final_annotation_dir, ("postvalidation.gtf"))
-    file_out = open(postvalidation_gtf_file, "w+")
-    for line in updated_gtf_lines:
-        file_out.write(line)
-    file_out.close()
+    with open(postvalidation_gtf_file, "w+") as file_out:
+        for line in updated_gtf_lines:
+            file_out.write(line)
 
     cleaned_initial_gtf_file = os.path.join(
         final_annotation_dir, ("cleaned_pre_utr.gtf")
@@ -4435,91 +4417,72 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
 
 
 def read_rnasamba_results(file_path):
-
     results = []
+    with open(file_path) as file_in:
+        for line in file_in:
+            line = line.rstrip()
+            match = re.search(r"^sequence_name", line)
+            if match:
+                continue
 
-    file_in = open(file_path)
-    line = file_in.readline()
-    while line:
-        line = line.rstrip()
-        match = re.search(r"^sequence_name", line)
-        if match:
-            line = file_in.readline()
-            continue
+            eles = line.split("\t")
+            if not len(eles) == 3:
+                continue
 
-        eles = line.split("\t")
-        if not len(eles) == 3:
-            line = file_in.readline()
-            continue
-
-        transcript_id = eles[0]
-        coding_probability = eles[1]
-        coding_potential = eles[2]
-        results.append([transcript_id, coding_probability, coding_potential])
-        line = file_in.readline()
-    file_in.close()
+            transcript_id = eles[0]
+            coding_probability = eles[1]
+            coding_potential = eles[2]
+            results.append([transcript_id, coding_probability, coding_potential])
 
     return results
 
 
 def read_cpc2_results(file_path):
-
     results = []
+    with open(file_path) as file_in:
+        for line in file_in:
+            line = line.rstrip()
+            match = re.search(r"^#ID", line)
+            if match:
+                continue
 
-    file_in = open(file_path)
-    line = file_in.readline()
-    while line:
-        line = line.rstrip()
-        match = re.search(r"^#ID", line)
-        if match:
-            line = file_in.readline()
-            continue
+            eles = line.split("\t")
+            if not len(eles) == 9:
+                continue
 
-        eles = line.split("\t")
-        if not len(eles) == 9:
-            line = file_in.readline()
-            continue
-
-        transcript_id = eles[0]
-        transcript_length = eles[1]
-        peptide_length = eles[2]
-        coding_probability = eles[7]
-        coding_potential = eles[8]
-        results.append(
-            [
-                transcript_id,
-                coding_probability,
-                coding_potential,
-                transcript_length,
-                peptide_length,
-            ]
-        )
-        line = file_in.readline()
-    file_in.close()
+            transcript_id = eles[0]
+            transcript_length = eles[1]
+            peptide_length = eles[2]
+            coding_probability = eles[7]
+            coding_potential = eles[8]
+            results.append(
+                [
+                    transcript_id,
+                    coding_probability,
+                    coding_potential,
+                    transcript_length,
+                    peptide_length,
+                ]
+            )
 
     return results
 
 
 def read_diamond_results(diamond_output_dir):
-
     results = []
     diamond_files = glob.glob(diamond_output_dir + "/*.dmdout")
-    for file_path in diamond_files:
-        file_in = open(file_path)
-        line = file_in.readline()
-        while line:
-            line = line.rstrip()
+    for diamond_file in diamond_files:
+        with open(diamond_file) as file_in:
+            for line in file_in:
+                line = line.rstrip()
 
-            eles = line.split("\t")
-            if not len(eles) == 12:
-                line = file_in.readline()
-                continue
+                eles = line.split("\t")
+                if not len(eles) == 12:
+                    continue
 
-            transcript_id = eles[0]
-            e_value = eles[10]
-            results.append([transcript_id, e_value])
-            line = file_in.readline()
-    file_in.close()
+                transcript_id = eles[0]
+                e_value = eles[10]
+                results.append([transcript_id, e_value])
 
     return results
 
@@ -4623,12 +4586,10 @@ def merge_finalise_output_files(
         amino_acid_seq_index = {}
         cdna_file = gtf_file + ".cdna"
         amino_acid_file = gtf_file + ".prot"
-        cdna_in = open(cdna_file)
-        amino_acid_in = open(amino_acid_file)
-        cdna_seq_index = fasta_to_dict(cdna_in.readlines())
-        amino_acid_seq_index = fasta_to_dict(amino_acid_in.readlines())
-        cdna_in.close()
-        amino_acid_in.close()
+        with open(cdna_file) as cdna_in:
+            cdna_seq_index = fasta_to_dict(cdna_in.readlines())
+        with open(amino_acid_file) as amino_acid_in:
+            amino_acid_seq_index = fasta_to_dict(amino_acid_in.readlines())
 
         current_gene_id = ""
         gtf_in = open(gtf_file)
@@ -4823,12 +4784,9 @@ def slice_genome(genome_file, target_dir, target_slice_size):
         seq = seq_dict[header]
 
         while len(seq) > target_seq_length:
-            file_out = open(os.path.join(target_dir, file_name), "w+")
-            subseq = seq[0:target_seq_length]
-            file_out.write(
-                ">" + header + "_sli" + str(seq_iterator) + "\n" + subseq + "\n"
-            )
-            file_out.close()
+            with open(os.path.join(target_dir, file_name), "w+") as file_out:
+                subseq = seq[0:target_seq_length]
+                file_out.write(f">{header}_sli{seq_iterator}\n{subseq}\n")
             seq = seq[target_seq_length:]
             seq_iterator += 1
             file_number += 1
@@ -4836,11 +4794,8 @@ def slice_genome(genome_file, target_dir, target_slice_size):
 
         if len(seq) >= min_seq_length:
             file_name = "genome_file_" + str(file_number)
-            file_out = open(os.path.join(file_name), "w+")
-            file_out.write(
-                ">" + header + "_sli" + str(seq_iterator) + "\n" + seq + "\n"
-            )
-            file_out.close()
+            with open(os.path.join(file_name), "w+") as file_out:
+                file_out.write(f">{header}_sli{seq_iterator}\n{seq}\n")
             file_number += 1
             file_name = "genome_file_" + str(file_number)
 
