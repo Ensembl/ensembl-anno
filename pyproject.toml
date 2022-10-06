@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "ensembl-anno"
+version = "0.1.0"
+description = "Toolkit for annotation"
+authors = ["Ensembl at EMBL-EBI <dev@ensembl.org>"]
+license = "Apache-2.0"
+readme = "README.md"
+packages = [{include = "ensembl_anno"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+lines_after_imports = 2
+lines_between_types = 1
