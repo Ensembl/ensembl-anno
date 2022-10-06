@@ -49,7 +49,7 @@ def load_results_to_ensembl_db(
     genome_file,
     main_output_dir,
     db_details,
-    num_threads,
+    num_threads: int,
 ):
 
     db_loading_script = os.path.join(
@@ -288,10 +288,10 @@ def generic_load_records_to_ensembl_db(
     load_type,
     analysis_name,
     gtf_records,
-    num_threads,
+    num_threads: int,
 ):
 
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for record_batch in gtf_records:
         pool.apply_async(
             multiprocess_load_records_to_ensembl_db,
@@ -511,7 +511,12 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
 
 
 def run_repeatmasker_regions(
-    genome_file, repeatmasker_path, library, species, main_output_dir, num_threads
+    genome_file,
+    repeatmasker_path,
+    library,
+    species,
+    main_output_dir,
+    num_threads: int,
 ):
 
     if not repeatmasker_path:
@@ -576,7 +581,7 @@ def run_repeatmasker_regions(
         ]
 
     logger.info("Running RepeatMasker")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
@@ -714,7 +719,7 @@ def create_repeatmasker_gtf(
 
 
 def run_eponine_regions(
-    genome_file, java_path, eponine_path, main_output_dir, num_threads
+    genome_file, java_path, eponine_path, main_output_dir, num_threads: int
 ):
 
     if not java_path:
@@ -752,7 +757,7 @@ def run_eponine_regions(
         "-seq",
     ]
     logger.info("Running Eponine")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
@@ -860,7 +865,7 @@ def create_eponine_gtf(eponine_output_file_path, region_results_file_path, regio
     eponine_out.close()
 
 
-def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
+def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads: int):
 
     if not cpg_path:
         cpg_path = "cpg_lh"
@@ -883,7 +888,7 @@ def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
     slice_ids = create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
 
     logger.info("Running CpG")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
@@ -993,7 +998,7 @@ def create_cpg_gtf(cpg_output_file_path, region_results_file_path, region_name):
 
 
 def run_trnascan_regions(
-    genome_file, trnascan_path, trnascan_filter_path, main_output_dir, num_threads
+    genome_file, trnascan_path, trnascan_filter_path, main_output_dir, num_threads: int
 ):
 
     if not trnascan_path:
@@ -1037,7 +1042,7 @@ def run_trnascan_regions(
         "-Q",
     ]
     logger.info("Running tRNAscan-SE")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
@@ -1230,7 +1235,7 @@ def create_trnascan_gtf(
     trna_out.close()
 
 
-def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads):
+def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads: int):
 
     if not dust_path:
         dust_path = "dustmasker"
@@ -1255,7 +1260,7 @@ def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads):
 
     generic_dust_cmd = [dust_path, "-in"]
     logger.info("Running Dust")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
@@ -1341,7 +1346,7 @@ def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name
     dust_out.close()
 
 
-def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads):
+def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads: int):
 
     if not trf_path:
         trf_path = "trf"
@@ -1403,7 +1408,7 @@ def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads):
         "-h",
     ]
     logger.info("Running TRF")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
@@ -1513,7 +1518,7 @@ def run_cmsearch_regions(
     rfam_seeds_file_path,
     rfam_accession_file,
     main_output_dir,
-    num_threads,
+    num_threads: int,
 ):
 
     if not cmsearch_path:
@@ -1587,7 +1592,7 @@ def run_cmsearch_regions(
         "--tblout",
     ]
     logger.info("Running Rfam")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     results = []
     failed_slice_ids = []
     memory_limit = 3 * 1024**3
@@ -2356,7 +2361,7 @@ def run_genblast_align(
     protein_file,
     masked_genome_file,
     max_intron_length,
-    num_threads,
+    num_threads: int,
     genblast_timeout_secs,
 ):
 
@@ -2419,7 +2424,7 @@ def run_genblast_align(
 
     batched_protein_files = split_protein_file(protein_file, genblast_dir, 20)
 
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for batched_protein_file in batched_protein_files:
         pool.apply_async(
             multiprocess_genblast,
@@ -2683,7 +2688,7 @@ def run_makeblastdb(makeblastdb_path, masked_genome_file, asnb_file):
 
 
 def run_trimming(
-    main_output_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads
+    main_output_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads: int
 ):
 
     trim_galore_path = "trim_galore"
@@ -2712,7 +2717,7 @@ def run_trimming(
         trim_dir,
     ]
 
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for fastq_files in fastq_file_list:
         pool.apply_async(
             multiprocess_trim_galore,
@@ -2773,7 +2778,7 @@ def run_minimap2_align(
     long_read_fastq_dir,
     genome_file,
     max_intron_length,
-    num_threads,
+    num_threads: int,
 ):
 
     if not minimap2_path:
@@ -3176,7 +3181,7 @@ def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
 
 
 def run_augustus_predict(
-    augustus_path, main_output_dir, masked_genome_file, num_threads
+    augustus_path, main_output_dir, masked_genome_file, num_threads: int
 ):
     min_seq_length = 1000
 
@@ -3234,7 +3239,7 @@ def run_augustus_predict(
         ),
     ]
 
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
 
     for slice_id in slice_ids:
@@ -3299,9 +3304,9 @@ def generate_hints(
     wig2hints_path,
     augustus_hints_dir,
     star_dir,
-    num_threads,
+    num_threads: int,
 ):
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for bam_file in glob.glob(star_dir + "/*.bam"):
         pool.apply_async(
             multiprocess_augustus_hints,
@@ -3431,7 +3436,7 @@ def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_pa
 
 
 def run_stringtie_assemble(
-    stringtie_path, samtools_path, main_output_dir, genome_file, num_threads
+    stringtie_path, samtools_path, main_output_dir, genome_file, num_threads: int
 ):
 
     if not stringtie_path:
@@ -3806,7 +3811,7 @@ def run_finalise_geneset(
     seq_region_names,
     validation_type,
     diamond_validation_db,
-    num_threads,
+    num_threads: int,
 ):
 
     if validation_type is None:
@@ -3906,7 +3911,7 @@ def run_finalise_geneset(
         "-genome_file",
         genome_file,
     ]
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for seq_region_name in seq_region_names:
         # The selection script needs different params depending on whether the seqs are from transcriptomic data or not
         region_details = (
@@ -4019,7 +4024,7 @@ def run_finalise_geneset(
         genome_file,
     ]
 
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for seq_region_name in seq_region_names:
         region_details = (
             seq_region_name + ".rs1" + ".re" + str(seq_region_lengths[seq_region_name])
@@ -4095,7 +4100,7 @@ def run_finalise_geneset(
         "-input_gtf_file",
         cleaned_initial_gtf_file,
     ]
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for seq_region_name in seq_region_names:
         region_details = (
             seq_region_name + ".rs1" + ".re" + str(seq_region_lengths[seq_region_name])
@@ -4152,7 +4157,7 @@ def validate_coding_transcripts(
     validation_type,
     diamond_validation_db,
     gtf_file,
-    num_threads,
+    num_threads: int,
 ):
 
     logger.info("Running CDS validation with RNAsamba and CPC2")
@@ -4219,12 +4224,12 @@ def validate_coding_transcripts(
 
 
 def diamond_validation(
-    diamond_validation_db, amino_acid_file, diamond_output_dir, num_threads
+    diamond_validation_db, amino_acid_file, diamond_output_dir, num_threads: int
 ):
 
     batched_protein_files = split_protein_file(amino_acid_file, diamond_output_dir, 100)
 
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     for batched_protein_file in batched_protein_files:
         pool.apply_async(
             multiprocess_diamond,
