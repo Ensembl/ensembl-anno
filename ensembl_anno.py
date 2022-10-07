@@ -376,75 +376,63 @@ def multiprocess_load_records_to_ensembl_db(
 
 
 def batch_gtf_records(input_gtf_file, batch_size, output_dir, record_type):
-
     records = []
-    gtf_in = open(input_gtf_file)
-    if record_type == "gene":
+    with open(input_gtf_file) as gtf_in:
+        if record_type == "gene":
+            # NOTE that the neverending variations on GTF reading/writing/merging is becoming very messy
+            # need to create a set of utility methods outside of this script
+            # This one assumes the file has unique ids for the parent features. It then batches them into
+            # sets of records based on the batch size passed in
+            record_counter = 0
+            current_record_batch = []
+            current_gene_id = ""
+            for line in gtf_in:
+                if re.search(r"^#", line):
+                    continue
 
-        # NOTE that the neverending variations on GTF reading/writing/merging is becoming very messy
-        # need to create a set of utility methods outside of this script
-        # This one assumes the file has unique ids for the parent features. It then batches them into
-        # sets of records based on the batch size passed in
-        record_counter = 0
-        current_record_batch = []
-        current_gene_id = ""
-        line = gtf_in.readline()
-        while line:
-            if re.search(r"^#", line):
-                line = gtf_in.readline()
-                continue
+                eles = line.split("\t")
+                if not len(eles) == 9:
+                    continue
 
-            eles = line.split("\t")
-            if not len(eles) == 9:
-                line = gtf_in.readline()
-                continue
+                match = re.search(r'gene_id "([^"]+)"', line)
+                gene_id = match.group(1)
 
-            match = re.search(r'gene_id "([^"]+)"', line)
-            gene_id = match.group(1)
+                if not current_gene_id:
+                    record_counter += 1
+                    current_gene_id = gene_id
 
-            if not current_gene_id:
+                if not gene_id == current_gene_id:
+                    record_counter += 1
+                    if record_counter % batch_size == 0:
+                        records.append(current_record_batch)
+                        current_record_batch = []
+                    current_gene_id = gene_id
+
+                current_record_batch.append(line)
+
+            records.append(current_record_batch)
+
+        elif record_type == "single_line_feature":
+            record_counter = 0
+            current_record_batch = []
+            current_gene_id = ""
+            for line in gtf_in:
+                if re.search(r"^#", line):
+                    continue
+
+                eles = line.split("\t")
+                if not len(eles) == 9:
+                    continue
+
                 record_counter += 1
-                current_gene_id = gene_id
 
-            if not gene_id == current_gene_id:
-                record_counter += 1
                 if record_counter % batch_size == 0:
                     records.append(current_record_batch)
                     current_record_batch = []
-                current_gene_id = gene_id
 
-            current_record_batch.append(line)
-            line = gtf_in.readline()
+                current_record_batch.append(line)
 
-        records.append(current_record_batch)
-
-    elif record_type == "single_line_feature":
-        record_counter = 0
-        current_record_batch = []
-        current_gene_id = ""
-        line = gtf_in.readline()
-        while line:
-            if re.search(r"^#", line):
-                line = gtf_in.readline()
-                continue
-
-            eles = line.split("\t")
-            if not len(eles) == 9:
-                line = gtf_in.readline()
-                continue
-
-            record_counter += 1
-
-            if record_counter % batch_size == 0:
-                records.append(current_record_batch)
-                current_record_batch = []
-
-            current_record_batch.append(line)
-            line = gtf_in.readline()
-
-        records.append(current_record_batch)
-
-    gtf_in.close()
+            records.append(current_record_batch)
 
     return records
 
@@ -467,7 +455,6 @@ def run_find_orfs(genome_file, main_output_dir):
 
 
 def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_dir):
-
     current_index = phase
     orf_counter = 1
     if phase > 2:
@@ -477,37 +464,33 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
     orf_file_path = os.path.join(
         orf_output_dir, (region_name + ".phase" + str(phase) + ".orf.fa")
     )
-    orf_out = open(orf_file_path, "w+")
+    with open(orf_file_path, "w+") as orf_out:
+        while current_index < len(seq):
+            codon = seq[current_index : current_index + 3]
+            if codon == "ATG":
+                orf_seq = codon
+                for j in range(current_index + 3, len(seq), 3):
+                    next_codon = seq[j : j + 3]
+                    if (
+                        next_codon == "TAA"
+                        or next_codon == "TAG"
+                        or next_codon == "TGA"
+                    ):
+                        orf_seq += next_codon
+                        if len(orf_seq) >= min_orf_length:
+                            orf_out.write(
+                                f">{region_name}_phase{phase}_orf{orf_counter}\n"
+                            )
+                            orf_out.write(orf_seq + "\n")
+                            orf_counter += 1
+                            orf_seq = ""
+                            break
 
-    while current_index < len(seq):
-        codon = seq[current_index : current_index + 3]
-        if codon == "ATG":
-            orf_seq = codon
-            for j in range(current_index + 3, len(seq), 3):
-                next_codon = seq[j : j + 3]
-                if next_codon == "TAA" or next_codon == "TAG" or next_codon == "TGA":
+                    # If there's another met in phase, then put i to the start of the codon after j so that only the longest ORF is found
+                    if next_codon == "ATG":
+                        current_index = j + 3
                     orf_seq += next_codon
-                    if len(orf_seq) >= min_orf_length:
-                        orf_out.write(
-                            ">"
-                            + region_name
-                            + "_phase"
-                            + str(phase)
-                            + "_orf"
-                            + str(orf_counter)
-                            + "\n"
-                        )
-                        orf_out.write(orf_seq + "\n")
-                        orf_counter += 1
-                        orf_seq = ""
-                        break
-
-                # If there's another met in phase, then put i to the start of the codon after j so that only the longest ORF is found
-                if next_codon == "ATG":
-                    current_index = j + 3
-                orf_seq += next_codon
-        current_index += 3
-    orf_out.close()
+            current_index += 3
 
 
 def run_repeatmasker_regions(
@@ -659,62 +642,37 @@ def multiprocess_repeatmasker(
 def create_repeatmasker_gtf(
     repeatmasker_output_file_path, region_results_file_path, region_name
 ):
+    with open(repeatmasker_output_file_path, "r") as repeatmasker_in, open(
+        region_results_file_path, "w+"
+    ) as repeatmasker_out:
+        repeat_count = 1
+        for line in repeatmasker_in:
+            result_match = re.search(r"^\s*\d+\s+", line)
+            if result_match:
+                results = line.split()
+                if results[-1] == "*":
+                    results.pop()
+                if not len(results) == 15:
+                    continue
 
-    repeatmasker_in = open(repeatmasker_output_file_path, "r")
-    repeatmasker_out = open(region_results_file_path, "w+")
-    line = repeatmasker_in.readline()
-    repeat_count = 1
-    while line:
-        result_match = re.search(r"^\s*\d+\s+", line)
-        if result_match:
-            results = line.split()
-            if results[-1] == "*":
-                results.pop()
-            if not len(results) == 15:
-                continue
+                score = results[0]
+                start = results[5]
+                end = results[6]
+                strand = results[8]
+                repeat_name = results[9]
+                repeat_class = results[10]
+                if strand == "+":
+                    repeat_start = results[11]
+                    repeat_end = results[12]
+                else:
+                    repeat_start = results[13]
+                    repeat_end = results[12]
+                    strand = "-"
 
-            score = results[0]
-            start = results[5]
-            end = results[6]
-            strand = results[8]
-            repeat_name = results[9]
-            repeat_class = results[10]
-            if strand == "+":
-                repeat_start = results[11]
-                repeat_end = results[12]
-            else:
-                repeat_start = results[13]
-                repeat_end = results[12]
-                strand = "-"
+                gtf_line = f'{region_name}\tRepeatMasker\trepeat\t{start}\t{end}\t.\t{strand}\t.\trepeat_id "{repeat_count}"; repeat_name "{repeat_name}"; repeat_class "{repeat_class}"; repeat_start "{repeat_start}"; repeat_end "{repeat_end}"; score "{score}";\n'
 
-            gtf_line = (
-                region_name
-                + "\tRepeatMasker\trepeat\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + strand
-                + "\t.\t"
-                + 'repeat_id "'
-                + str(repeat_count)
-                + '"; repeat_name "'
-                + repeat_name
-                + '"; repeat_class "'
-                + repeat_class
-                + '"; repeat_start "'
-                + str(repeat_start)
-                + '"; repeat_end "'
-                + str(repeat_end)
-                + '"; score "'
-                + str(score)
-                + '";\n'
-            )
-            repeatmasker_out.write(gtf_line)
-            repeat_count += 1
-        line = repeatmasker_in.readline()
-    repeatmasker_in.close()
-    repeatmasker_out.close()
+                repeatmasker_out.write(gtf_line)
+                repeat_count += 1
 
 
 def run_eponine_regions(
@@ -820,47 +778,28 @@ def multiprocess_eponine(
 
 
 def create_eponine_gtf(eponine_output_file_path, region_results_file_path, region_name):
+    with open(eponine_output_file_path, "r") as eponine_in, open(
+        region_results_file_path, "w+"
+    ) as eponine_out:
+        feature_count = 1
+        for line in eponine_in:
+            result_match = re.search(r"^" + region_name, line)
 
-    eponine_in = open(eponine_output_file_path, "r")
-    eponine_out = open(region_results_file_path, "w+")
+            if result_match:
+                results = line.split()
+                start = int(results[3])
+                end = int(results[4])
+                score = float(results[5])
+                strand = results[6]
 
-    line = eponine_in.readline()
-    feature_count = 1
-    while line:
-        result_match = re.search(r"^" + region_name, line)
+                # There's a one base offset on the reverse strand
+                if strand == "-":
+                    start -= 1
+                    end -= 1
 
-        if result_match:
-            results = line.split()
-            start = int(results[3])
-            end = int(results[4])
-            score = float(results[5])
-            strand = results[6]
-
-            # There's a one base offset on the reverse strand
-            if strand == "-":
-                start -= 1
-                end -= 1
-
-            gtf_line = (
-                region_name
-                + "\tEponine\tsimple_feature\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + strand
-                + "\t.\t"
-                + 'feature_id "'
-                + str(feature_count)
-                + '"; score "'
-                + str(score)
-                + '";\n'
-            )
-            eponine_out.write(gtf_line)
-            feature_count += 1
-        line = eponine_in.readline()
-    eponine_in.close()
-    eponine_out.close()
+                gtf_line = f'{region_name}\tEponine\tsimple_feature\t{start}\t{end}\t.\t{strand}\t.\tfeature_id "{feature_count}"; score "{score}";\n'
+                eponine_out.write(gtf_line)
+                feature_count += 1
 
 
 def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads: int):
@@ -944,54 +883,38 @@ def multiprocess_cpg(cpg_path, slice_id, genome_file, cpg_output_dir):
 
 
 def create_cpg_gtf(cpg_output_file_path, region_results_file_path, region_name):
-
     cpg_min_length = 400
     cpg_min_gc_content = 50
     cpg_min_oe = 0.6
 
-    cpg_in = open(cpg_output_file_path, "r")
-    cpg_out = open(region_results_file_path, "w+")
-    line = cpg_in.readline()
-    feature_count = 1
-    while line:
-        result_match = re.search(r"^" + region_name, line)
-        if result_match:
-            results = line.split()
-            start = int(results[1])
-            end = int(results[2])
-            length = end - start + 1
-            score = float(results[3])
-            gc_content = float(results[6])
-            oe = results[7]
+    with open(cpg_output_file_path, "r") as cpg_in, open(
+        region_results_file_path, "w+"
+    ) as cpg_out:
+        feature_count = 1
+        for line in cpg_in:
+            result_match = re.search(r"^" + region_name, line)
+            if result_match:
+                results = line.split()
+                start = int(results[1])
+                end = int(results[2])
+                length = end - start + 1
+                score = float(results[3])
+                gc_content = float(results[6])
+                oe = results[7]
 
-            if oe == "-" or oe == "inf":
-                oe = 0
-            else:
-                oe = float(oe)
+                if oe == "-" or oe == "inf":
+                    oe = 0
+                else:
+                    oe = float(oe)
 
-            if (
-                length >= cpg_min_length
-                and gc_content >= cpg_min_gc_content
-                and oe >= cpg_min_oe
-            ):
-                gtf_line = (
-                    region_name
-                    + "\tCpG\tsimple_feature\t"
-                    + str(start)
-                    + "\t"
-                    + str(end)
-                    + "\t.\t+\t.\t"
-                    + 'feature_id "'
-                    + str(feature_count)
-                    + '"; score "'
-                    + str(score)
-                    + '";\n'
-                )
-                cpg_out.write(gtf_line)
-                feature_count += 1
-        line = cpg_in.readline()
-    cpg_in.close()
-    cpg_out.close()
+                if (
+                    length >= cpg_min_length
+                    and gc_content >= cpg_min_gc_content
+                    and oe >= cpg_min_oe
+                ):
+                    gtf_line = f'{region_name}\tCpG\tsimple_feature\t{start}\t{end}\t.\t+\t.\tfeature_id "{feature_count}"; score "{score}";\n'
+                    cpg_out.write(gtf_line)
+                    feature_count += 1
 
 
 def run_trnascan_regions(
@@ -1162,73 +1085,37 @@ def multiprocess_trnascan(
 def create_trnascan_gtf(
     region_results_file_path, trnascan_filter_file_path, region_name
 ):
+    with open(trnascan_filter_file_path, "r") as trna_in, open(
+        region_results_file_path, "w+"
+    ) as trna_out:
+        gene_counter = 1
+        for line in trna_in:
+            result_match = re.search(r"^" + region_name, line)
+            if result_match:
+                results = line.split()
+                start = int(results[2])
+                end = int(results[3])
+                trna_type = results[4]
+                score = results[8]
 
-    trna_in = open(trnascan_filter_file_path, "r")
-    trna_out = open(region_results_file_path, "w+")
-    line = trna_in.readline()
-    gene_counter = 1
-    while line:
-        result_match = re.search(r"^" + region_name, line)
-        if result_match:
-            results = line.split()
-            start = int(results[2])
-            end = int(results[3])
-            trna_type = results[4]
-            score = results[8]
+                strand = "+"
+                if start > end:
+                    strand = "-"
+                    temp_end = start
+                    start = end
+                    end = temp_end
 
-            strand = "+"
-            if start > end:
-                strand = "-"
-                temp_end = start
-                start = end
-                end = temp_end
+                biotype = "tRNA_pseudogene"
+                high_confidence_match = re.search(r"high confidence set", line)
+                if high_confidence_match:
+                    biotype = "tRNA"
 
-            biotype = "tRNA_pseudogene"
-            high_confidence_match = re.search(r"high confidence set", line)
-            if high_confidence_match:
-                biotype = "tRNA"
+                transcript_string = f'{region_name}\ttRNAscan\ttranscript\t{start}\t{end}\t.\t{strand}\t.\tgene_id "{gene_counter}"; transcript_id "{gene_counter}"; biotype "{biotype}";\n'
+                exon_string = f'{region_name}\ttRNAscan\texon\t{start}\t{end}\t.\t{strand}\t.\tgene_id "{gene_counter}"; transcript_id "{gene_counter}"; exon_number "1"; biotype "{biotype}";\n'
 
-            transcript_string = (
-                region_name
-                + "\ttRNAscan\ttranscript\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + strand
-                + "\t.\t"
-                + 'gene_id "'
-                + str(gene_counter)
-                + '"; transcript_id "'
-                + str(gene_counter)
-                + '"; biotype "'
-                + biotype
-                + '";\n'
-            )
-            exon_string = (
-                region_name
-                + "\ttRNAscan\texon\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + strand
-                + "\t.\t"
-                + 'gene_id "'
-                + str(gene_counter)
-                + '"; transcript_id "'
-                + str(gene_counter)
-                + '"; exon_number "1"; biotype "'
-                + biotype
-                + '";\n'
-            )
-
-            trna_out.write(transcript_string)
-            trna_out.write(exon_string)
-            gene_counter += 1
-        line = trna_in.readline()
-    trna_in.close()
-    trna_out.close()
+                trna_out.write(transcript_string)
+                trna_out.write(exon_string)
+                gene_counter += 1
 
 
 def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads: int):
@@ -1313,32 +1200,18 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
 
 
 def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name):
-
-    dust_in = open(dust_output_file_path, "r")
-    dust_out = open(region_results_file_path, "w+")
-    line = dust_in.readline()
-    repeat_count = 1
-    while line:
-        result_match = re.search(r"(\d+)\ - (\d+)", line)
-        if result_match:
-            start = int(result_match.group(1)) + 1
-            end = int(result_match.group(2)) + 1
-            gtf_line = (
-                region_name
-                + "\tDust\trepeat\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t+\t.\t"
-                + 'repeat_id "'
-                + str(repeat_count)
-                + '";\n'
-            )
-            dust_out.write(gtf_line)
-            repeat_count += 1
-        line = dust_in.readline()
-    dust_in.close()
-    dust_out.close()
+    with open(dust_output_file_path, "r") as dust_in, open(
+        region_results_file_path, "w+"
+    ) as dust_out:
+        repeat_count = 1
+        for line in dust_in:
+            result_match = re.search(r"(\d+)\ - (\d+)", line)
+            if result_match:
+                start = int(result_match.group(1)) + 1
+                end = int(result_match.group(2)) + 1
+                gtf_line = f'{region_name}\tDust\trepeat\t{start}\t{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'
+                dust_out.write(gtf_line)
+                repeat_count += 1
 
 
 def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads: int):
@@ -1462,47 +1335,32 @@ def multiprocess_trf(
 
 
 def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
-
-    trf_in = open(trf_output_file_path, "r")
-    trf_out = open(region_results_file_path, "w+")
-    line = trf_in.readline()
-    repeat_count = 1
-    while line:
-        result_match = re.search(r"^\d+", line)
-        if result_match:
-            results = line.split()
-            if not len(results) == 15:
-                continue
-            start = results[0]
-            end = results[1]
-            period = float(results[2])
-            copy_number = float(results[3])
-            percent_matches = float(results[5])
-            score = float(results[7])
-            repeat_consensus = results[13]
-            if (
-                score < 50 and percent_matches >= 80 and copy_number > 2 and period < 10
-            ) or (copy_number >= 2 and percent_matches >= 70 and score >= 50):
-                gtf_line = (
-                    region_name
-                    + "\tTRF\trepeat\t"
-                    + str(start)
-                    + "\t"
-                    + str(end)
-                    + "\t.\t+\t.\t"
-                    + 'repeat_id "'
-                    + str(repeat_count)
-                    + '"; score "'
-                    + str(score)
-                    + '"; repeat_consensus "'
-                    + repeat_consensus
-                    + '";\n'
-                )
-                trf_out.write(gtf_line)
-                repeat_count += 1
-        line = trf_in.readline()
-    trf_in.close()
-    trf_out.close()
+    with open(trf_output_file_path, "r") as trf_in, open(
+        region_results_file_path, "w+"
+    ) as trf_out:
+        repeat_count = 1
+        for line in trf_in:
+            result_match = re.search(r"^\d+", line)
+            if result_match:
+                results = line.split()
+                if not len(results) == 15:
+                    continue
+                start = results[0]
+                end = results[1]
+                period = float(results[2])
+                copy_number = float(results[3])
+                percent_matches = float(results[5])
+                score = float(results[7])
+                repeat_consensus = results[13]
+                if (
+                    score < 50
+                    and percent_matches >= 80
+                    and copy_number > 2
+                    and period < 10
+                ) or (copy_number >= 2 and percent_matches >= 70 and score >= 50):
+                    gtf_line = f'{region_name}\tTRF\trepeat\t{start}\t{end}\t.\t+\t.\trepeat_id "{repeat_count}"; score "{score}"; repeat_consensus "{repeat_consensus}";\n'
+                    trf_out.write(gtf_line)
+                    repeat_count += 1
 
 
 def run_cmsearch_regions(
@@ -1557,17 +1415,15 @@ def run_cmsearch_regions(
         rfam_data = rfam_cm_in.read()
 
     rfam_models = rfam_data.split("//\n")
-    rfam_cm_out = open(rfam_selected_models_file, "w+")
-
-    for model in rfam_models:
-        # The Rfam.cm file has INFERNAL and HMMR models, both are needed at this point
-        # Later we just want the INFERNAL ones for looking at thresholds
-        match = re.search(r"(RF\d+)", model)
-        if match:
-            model_accession = match.group(1)
-            if model_accession in rfam_accessions:
-                rfam_cm_out.write(model + "//\n")
-    rfam_cm_out.close()
+    with open(rfam_selected_models_file, "w+") as rfam_cm_out:
+        for model in rfam_models:
+            # The Rfam.cm file has INFERNAL and HMMR models, both are needed at this point
+            # Later we just want the INFERNAL ones for looking at thresholds
+            match = re.search(r"(RF\d+)", model)
+            if match:
+                model_accession = match.group(1)
+                if model_accession in rfam_accessions:
+                    rfam_cm_out.write(model + "//\n")
 
     seed_descriptions = get_rfam_seed_descriptions(rfam_seeds_file_path)
     cv_models = extract_rfam_metrics(rfam_selected_models_file)
@@ -1719,17 +1575,14 @@ def multiprocess_cmsearch(
         # tiny pipe that is used by the workers to send info back. That would mean that it would eventually just be one
         # worked running at a time
         logger.error(
-            "Issue processing the following region with cmsearch: "
-            + region_name
-            + " "
-            + str(start)
-            + "-"
-            + str(end)
+            "Issue processing the following region with cmsearch: %s %s-%s. Return value: %s"
+            % region_name,
+            start,
+            end,
+            return_value,
         )
-        logger.error("Return value: " + str(return_value))
-        exception_out = open(exception_results_file_path, "w+")
-        exception_out.write(region_name + " " + str(start) + " " + str(end) + "\n")
-        exception_out.close()
+        with open(exception_results_file_path, "w+") as exception_out:
+            exception_out.write(f"{region_name} {start} {end}\n")
         os.remove(region_fasta_file_path)
         os.remove(region_tblout_file_path)
         return
@@ -1992,113 +1845,83 @@ def create_rfam_gtf(
     genome_file,
     rfam_output_dir,
 ):
-
     if not filtered_results:
         return
 
-    rfam_gtf_out = open(region_results_file_path, "w+")
-    gene_counter = 1
-    for structure in filtered_results:
-        query = structure["query_name"]
-        accession = structure["accession"]
-        if query in cm_models:
-            model = cm_models[query]
-            if accession in descriptions:
-                description = descriptions[accession]
-                if "type" in description:
-                    rfam_type = description["type"]
+    with open(region_results_file_path, "w+") as rfam_gtf_out:
+        gene_counter = 1
+        for structure in filtered_results:
+            query = structure["query_name"]
+            accession = structure["accession"]
+            if query in cm_models:
+                model = cm_models[query]
+                if accession in descriptions:
+                    description = descriptions[accession]
+                    if "type" in description:
+                        rfam_type = description["type"]
+                    else:
+                        description = None
+                        rfam_type = "misc_RNA"
+                domain = structure["query_name"]
+                padding = model["-length"]
+                #      rfam_type = description['type']
+                gtf_strand = structure["strand"]
+                rnafold_strand = structure["strand"]
+                if gtf_strand == 1:
+                    start = structure["start"]
+                    end = structure["end"]
+                    gtf_strand = "+"
                 else:
-                    description = None
-                    rfam_type = "misc_RNA"
-            domain = structure["query_name"]
-            padding = model["-length"]
-            #      rfam_type = description['type']
-            gtf_strand = structure["strand"]
-            rnafold_strand = structure["strand"]
-            if gtf_strand == 1:
-                start = structure["start"]
-                end = structure["end"]
-                gtf_strand = "+"
-            else:
-                start = structure["end"]
-                end = structure["start"]
-                score = structure["score"]
-                gtf_strand = "-"
-                rnafold_strand = -1
+                    start = structure["end"]
+                    end = structure["start"]
+                    score = structure["score"]
+                    gtf_strand = "-"
+                    rnafold_strand = -1
 
-            biotype = "misc_RNA"
-            if re.match(r"^snRNA;", rfam_type):
-                biotype = "snRNA"
-            if re.match(r"^snRNA; snoRNA", rfam_type):
-                biotype = "snoRNA"
-            if re.match(r"^snRNA; snoRNA; scaRNA;", rfam_type):
-                biotype = "scaRNA"
-            if re.match(r"rRNA;", rfam_type):
-                biotype = "rRNA"
-            if re.match(r"antisense;", rfam_type):
-                biotype = "antisense"
-            if re.match(r"antitoxin;", rfam_type):
-                biotype = "antitoxin"
-            if re.match(r"ribozyme;", rfam_type):
-                biotype = "ribozyme"
-            if re.match(r"" + domain, rfam_type):
-                biotype = domain
-            if re.match(r"" + domain, rfam_type):
-                biotype = "Vault_RNA"
-            if re.match(r"" + domain, rfam_type):
-                biotype = "Y_RNA"
+                biotype = "misc_RNA"
+                if re.match(r"^snRNA;", rfam_type):
+                    biotype = "snRNA"
+                if re.match(r"^snRNA; snoRNA", rfam_type):
+                    biotype = "snoRNA"
+                if re.match(r"^snRNA; snoRNA; scaRNA;", rfam_type):
+                    biotype = "scaRNA"
+                if re.match(r"rRNA;", rfam_type):
+                    biotype = "rRNA"
+                if re.match(r"antisense;", rfam_type):
+                    biotype = "antisense"
+                if re.match(r"antitoxin;", rfam_type):
+                    biotype = "antitoxin"
+                if re.match(r"ribozyme;", rfam_type):
+                    biotype = "ribozyme"
+                if re.match(r"" + domain, rfam_type):
+                    biotype = domain
+                if re.match(r"" + domain, rfam_type):
+                    biotype = "Vault_RNA"
+                if re.match(r"" + domain, rfam_type):
+                    biotype = "Y_RNA"
 
-            rna_seq = get_sequence(
-                region_name, start, end, rnafold_strand, genome_file, rfam_output_dir
-            )
-            valid_structure = check_rnafold_structure(rna_seq, rfam_output_dir)
+                rna_seq = get_sequence(
+                    region_name,
+                    start,
+                    end,
+                    rnafold_strand,
+                    genome_file,
+                    rfam_output_dir,
+                )
+                valid_structure = check_rnafold_structure(rna_seq, rfam_output_dir)
 
-            if not valid_structure:
-                continue
+                if not valid_structure:
+                    continue
 
-            transcript_string = (
-                region_name
-                + "\tRfam\ttranscript\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + gtf_strand
-                + "\t.\t"
-                + 'gene_id "'
-                + str(gene_counter)
-                + '"; transcript_id "'
-                + str(gene_counter)
-                + '"; biotype "'
-                + biotype
-                + '";\n'
-            )
-            exon_string = (
-                region_name
-                + "\tRfam\texon\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + gtf_strand
-                + "\t.\t"
-                + 'gene_id "'
-                + str(gene_counter)
-                + '"; transcript_id "'
-                + str(gene_counter)
-                + '"; exon_number "1"; biotype "'
-                + biotype
-                + '";\n'
-            )
+                transcript_string = f'{region_name}\tRfam\ttranscript\t{start}\t{end}\t.\t{gtf_strand}\t.\tgene_id "{gene_counter}"; transcript_id "{gene_counter}"; biotype "{biotype}";\n'
+                exon_string = f'{region_name}\tRfam\texon\t{start}\t{end}\t.\t{gtf_strand}\t.\tgene_id "{gene_counter}"; transcript_id "{gene_counter}"; exon_number "1"; biotype "{biotype}";\n'
 
-            rfam_gtf_out.write(transcript_string)
-            rfam_gtf_out.write(exon_string)
-            gene_counter += 1
-    rfam_gtf_out.close()
+                rfam_gtf_out.write(transcript_string)
+                rfam_gtf_out.write(exon_string)
+                gene_counter += 1
 
 
 def check_rnafold_structure(seq, rfam_output_dir):
-
     # Note there's some extra code in the RNAfold Perl module for encoding the structure into an attrib
     # Could consider implementing this when running for loading into an Ensembl db
     structure = 0
@@ -2125,7 +1948,6 @@ def check_rnafold_structure(seq, rfam_output_dir):
 def slice_output_to_gtf(
     output_dir, extension, unique_ids, feature_id_label, new_id_prefix
 ):
-
     # Note that this does not make unique ids at the moment
     # In many cases this is fine because the ids are unique by seq region, but in cases like batching it can cause problems
     # So will add in a helper method to make ids unique
@@ -2150,109 +1972,105 @@ def slice_output_to_gtf(
         extension = ".gtf"
     gtf_files = glob.glob(output_dir + "/*" + extension)
     gtf_file_path = os.path.join(output_dir, "annotation.gtf")
-    gtf_out = open(gtf_file_path, "w+")
-    for gtf_file_path in gtf_files:
-        if os.stat(gtf_file_path).st_size == 0:
-            logger.info("File is empty, will skip:\n" + gtf_file_path)
-            continue
+    with open(gtf_file_path, "w+") as gtf_out:
+        for gtf_file_path in gtf_files:
+            if os.stat(gtf_file_path).st_size == 0:
+                logger.info("File is empty, will skip:\n" + gtf_file_path)
+                continue
 
-        gtf_file_name = os.path.basename(gtf_file_path)
-        match = re.search(r"\.rs(\d+)\.re(\d+)\.", gtf_file_name)
-        start_offset = int(match.group(1))
-        gtf_in = open(gtf_file_path, "r")
-        line = gtf_in.readline()
-        while line:
-            values = line.split("\t")
-            if len(values) == 9 and (values[2] in feature_types):
-                values[3] = str(int(values[3]) + (start_offset - 1))
-                values[4] = str(int(values[4]) + (start_offset - 1))
-                if unique_ids:
-                    # Maybe make a unique id based on the feature type
-                    # Basically region/feature id should be unique at this point, so could use region_id and current_id is key, value is the unique id that is incremented
-                    attribs = values[8]
+            gtf_file_name = os.path.basename(gtf_file_path)
+            match = re.search(r"\.rs(\d+)\.re(\d+)\.", gtf_file_name)
+            start_offset = int(match.group(1))
+            with open(gtf_file_path, "r") as gtf_in:
+                for line in gtf_in:
+                    values = line.split("\t")
+                    if len(values) == 9 and (values[2] in feature_types):
+                        values[3] = str(int(values[3]) + (start_offset - 1))
+                        values[4] = str(int(values[4]) + (start_offset - 1))
+                        if unique_ids:
+                            # Maybe make a unique id based on the feature type
+                            # Basically region/feature id should be unique at this point, so could use region_id and current_id is key, value is the unique id that is incremented
+                            attribs = values[8]
 
-                    # This bit assigns unique gene/transcript ids if the line contains gene_id/transcript_id
-                    match_gene_type = re.search(
-                        r'(gene_id +"([^"]+)").+(transcript_id +"([^"]+)")', line
-                    )
-                    if match_gene_type:
-                        full_gene_id_string = match_gene_type.group(1)
-                        current_gene_id = match_gene_type.group(2)
-                        full_transcript_id_string = match_gene_type.group(3)
-                        current_transcript_id = match_gene_type.group(4)
-                        gene_id_key = gtf_file_name + "." + str(current_gene_id)
-                        transcript_id_key = (
-                            gene_id_key + "." + str(current_transcript_id)
-                        )
-                        if gene_id_key not in gene_id_index:
-                            new_gene_id = "gene" + str(gene_counter)
-                            gene_id_index[gene_id_key] = new_gene_id
-                            attribs = re.sub(
-                                full_gene_id_string,
-                                'gene_id "' + new_gene_id + '"',
-                                attribs,
+                            # This bit assigns unique gene/transcript ids if the line contains gene_id/transcript_id
+                            match_gene_type = re.search(
+                                r'(gene_id +"([^"]+)").+(transcript_id +"([^"]+)")',
+                                line,
                             )
-                            transcript_id_count_index[gene_id_key] = 1
-                            gene_counter += 1
-                        else:
-                            new_gene_id = gene_id_index[gene_id_key]
-                            attribs = re.sub(
-                                full_gene_id_string,
-                                'gene_id "' + new_gene_id + '"',
-                                attribs,
-                            )
-                        if transcript_id_key not in gene_transcript_id_index:
-                            new_transcript_id = (
-                                gene_id_index[gene_id_key]
-                                + ".t"
-                                + str(transcript_id_count_index[gene_id_key])
-                            )
-                            gene_transcript_id_index[
-                                transcript_id_key
-                            ] = new_transcript_id
-                            attribs = re.sub(
-                                full_transcript_id_string,
-                                'transcript_id "' + new_transcript_id + '"',
-                                attribs,
-                            )
-                            transcript_id_count_index[gene_id_key] += 1
-                        else:
-                            new_transcript_id = gene_transcript_id_index[
-                                transcript_id_key
-                            ]
-                            attribs = re.sub(
-                                full_transcript_id_string,
-                                'transcript_id "' + new_transcript_id + '"',
-                                attribs,
-                            )
-                        values[8] = attribs
+                            if match_gene_type:
+                                full_gene_id_string = match_gene_type.group(1)
+                                current_gene_id = match_gene_type.group(2)
+                                full_transcript_id_string = match_gene_type.group(3)
+                                current_transcript_id = match_gene_type.group(4)
+                                gene_id_key = gtf_file_name + "." + str(current_gene_id)
+                                transcript_id_key = (
+                                    gene_id_key + "." + str(current_transcript_id)
+                                )
+                                if gene_id_key not in gene_id_index:
+                                    new_gene_id = "gene" + str(gene_counter)
+                                    gene_id_index[gene_id_key] = new_gene_id
+                                    attribs = re.sub(
+                                        full_gene_id_string,
+                                        'gene_id "' + new_gene_id + '"',
+                                        attribs,
+                                    )
+                                    transcript_id_count_index[gene_id_key] = 1
+                                    gene_counter += 1
+                                else:
+                                    new_gene_id = gene_id_index[gene_id_key]
+                                    attribs = re.sub(
+                                        full_gene_id_string,
+                                        'gene_id "' + new_gene_id + '"',
+                                        attribs,
+                                    )
+                                if transcript_id_key not in gene_transcript_id_index:
+                                    new_transcript_id = (
+                                        gene_id_index[gene_id_key]
+                                        + ".t"
+                                        + str(transcript_id_count_index[gene_id_key])
+                                    )
+                                    gene_transcript_id_index[
+                                        transcript_id_key
+                                    ] = new_transcript_id
+                                    attribs = re.sub(
+                                        full_transcript_id_string,
+                                        'transcript_id "' + new_transcript_id + '"',
+                                        attribs,
+                                    )
+                                    transcript_id_count_index[gene_id_key] += 1
+                                else:
+                                    new_transcript_id = gene_transcript_id_index[
+                                        transcript_id_key
+                                    ]
+                                    attribs = re.sub(
+                                        full_transcript_id_string,
+                                        'transcript_id "' + new_transcript_id + '"',
+                                        attribs,
+                                    )
+                                values[8] = attribs
 
-                    # If you don't match a gene line, try a feature line
+                            # If you don't match a gene line, try a feature line
+                            else:
+                                match_feature_type = re.search(
+                                    r"(" + feature_id_label + ' +"([^"]+)")', line
+                                )
+                                if match_feature_type:
+                                    full_feature_id_string = match_feature_type.group(1)
+                                    current_feature_id = match_feature_type.group(2)
+                                    new_feature_id = f"{new_id_prefix}{feature_counter}"
+                                    attribs = re.sub(
+                                        full_feature_id_string,
+                                        feature_id_label + ' "' + new_feature_id + '"',
+                                        attribs,
+                                    )
+                                    feature_counter += 1
+                                    values[8] = attribs
+
+                        gtf_out.write("\t".join(values))
                     else:
-                        match_feature_type = re.search(
-                            r"(" + feature_id_label + ' +"([^"]+)")', line
+                        logger.info(
+                            "Feature type not recognised, will skip: %s" % values[2]
                         )
-                        if match_feature_type:
-                            full_feature_id_string = match_feature_type.group(1)
-                            current_feature_id = match_feature_type.group(2)
-                            new_feature_id = new_id_prefix + str(feature_counter)
-                            attribs = re.sub(
-                                full_feature_id_string,
-                                feature_id_label + ' "' + new_feature_id + '"',
-                                attribs,
-                            )
-                            feature_counter += 1
-                            values[8] = attribs
-
-                gtf_out.write("\t".join(values))
-                line = gtf_in.readline()
-            else:
-                logger.info(
-                    "Feature type not recognised, will skip. Feature type: " + values[2]
-                )
-                line = gtf_in.readline()
-        gtf_in.close()
-    gtf_out.close()
 
 
 def run_red(red_path, main_output_dir, genome_file):
@@ -2316,34 +2134,18 @@ def run_red(red_path, main_output_dir, genome_file):
 
 
 def create_red_gtf(repeat_coords_file, gtf_output_file_path):
-
-    red_in = open(repeat_coords_file, "r")
-    red_out = open(gtf_output_file_path, "w+")
-    line = red_in.readline()
-    repeat_id = 1
-    while line:
-        result_match = re.search(r"^\>(.+)\:(\d+)\-(\d+)", line)
-        if result_match:
-            region_name = result_match.group(1)
-            # Note that Red is 0-based, so add 1
-            start = int(result_match.group(2)) + 1
-            end = int(result_match.group(3)) + 1
-            gtf_line = (
-                region_name
-                + "\tRed\trepeat\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t+\t.\t"
-                + 'repeat_id "'
-                + str(repeat_id)
-                + '";\n'
-            )
-            red_out.write(gtf_line)
-            repeat_id += 1
-        line = red_in.readline()
-    red_in.close()
-    red_out.close()
+    with open(repeat_coords_file, "r") as red_in, open(
+        gtf_output_file_path, "w+"
+    ) as red_out:
+        for repeat_id, line in enumerate(red_in, start=1):
+            result_match = re.search(r"^\>(.+)\:(\d+)\-(\d+)", line)
+            if result_match:
+                region_name = result_match.group(1)
+                # Note that Red is 0-based, so add 1
+                start = int(result_match.group(2)) + 1
+                end = int(result_match.group(3)) + 1
+                gtf_line = f'{region_name}\tRed\trepeat\t{start}\t{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'
+                red_out.write(gtf_line)
 
 
 def run_genblast_align(
@@ -2524,28 +2326,23 @@ def generate_genblast_gtf(genblast_dir):
 
 def convert_gff_to_gtf(gff_file):
     gtf_string = ""
-    file_in = open(gff_file)
-    line = file_in.readline()
-    while line:
-        #    match = re.search(r"genBlastG",line)
-        #    if match:
-        results = line.split()
-        if not len(results) == 9:
-            line = file_in.readline()
-            continue
-        if results[2] == "coding_exon":
-            results[2] = "exon"
-        attributes = set_attributes(results[8], results[2])
-        results[8] = attributes
-        converted_line = "\t".join(results)
-        gtf_string += converted_line + "\n"
-        line = file_in.readline()
-    file_in.close()
+    with open(gff_file) as file_in:
+        for line in file_in:
+            # match = re.search(r"genBlastG",line)
+            # if match:
+            results = line.split()
+            if not len(results) == 9:
+                continue
+            if results[2] == "coding_exon":
+                results[2] = "exon"
+            attributes = set_attributes(results[8], results[2])
+            results[8] = attributes
+            converted_line = "\t".join(results)
+            gtf_string += converted_line + "\n"
     return gtf_string
 
 
 def set_attributes(attributes, feature_type):
-
     converted_attributes = ""
     split_attributes = attributes.split(";")
     if feature_type == "transcript":
@@ -2583,45 +2380,39 @@ def set_attributes(attributes, feature_type):
 # 5       genBlastG       coding_exon     69461131        69461741        .       +       .       ID=259454-R1-1-A1-E2;Parent=259454-R1-1-A1
 
 
-def split_protein_file(protein_file, protein_output_dir, batch_size):
-    if batch_size is None:
-        batch_size = 20
-
+def split_protein_file(protein_file, protein_output_dir, batch_size=20):
     batched_protein_files = []
 
     for i in range(0, 10):
         create_dir(protein_output_dir, f"bin_{i}")
 
-    file_in = open(protein_file)
-    line = file_in.readline()
-    seq_count = 0
-    batch_count = 0
-    current_record = ""
-    initial_seq = 1
-    while line:
-        num_dir = random.randint(0, 9)
-        match = re.search(r">(.+)$", line)
-        if match and not initial_seq and seq_count % batch_size == 0:
-            file_out_name = os.path.join(
-                protein_output_dir,
-                ("bin_" + str(random.randint(0, 9))),
-                (str(batch_count) + ".fa"),
-            )
-            with open(file_out_name, "w+") as file_out:
-                file_out.write(current_record)
+    with open(protein_file) as file_in:
+        seq_count = 0
+        batch_count = 0
+        current_record = ""
+        initial_seq = 1
+        for line in file_in:
+            num_dir = random.randint(0, 9)
+            match = re.search(r">(.+)$", line)
+            if match and not initial_seq and seq_count % batch_size == 0:
+                file_out_name = os.path.join(
+                    protein_output_dir,
+                    ("bin_" + str(random.randint(0, 9))),
+                    (str(batch_count) + ".fa"),
+                )
+                with open(file_out_name, "w+") as file_out:
+                    file_out.write(current_record)
 
-            batch_count += 1
-            seq_count += 1
-            current_record = line
-            batched_protein_files.append(file_out_name)
-        elif match:
-            current_record += line
-            initial_seq = 0
-            seq_count += 1
-        else:
-            current_record += line
-        line = file_in.readline()
-    file_in.close()
+                batch_count += 1
+                seq_count += 1
+                current_record = line
+                batched_protein_files.append(file_out_name)
+            elif match:
+                current_record += line
+                initial_seq = 0
+                seq_count += 1
+            else:
+                current_record += line
 
     if current_record:
         file_out_name = os.path.join(
@@ -2815,7 +2606,7 @@ def run_minimap2_align(
         # would be to put in another analysis into the Ensembl pipeline to construct this commandline after the transcriptomic
         # data has been searched for
         return
-    #    raise IndexError('The list of fastq files is empty. Fastq dir:\n%s' % long_read_fastq_dir)
+        # raise IndexError('The list of fastq files is empty. Fastq dir:\n%s' % long_read_fastq_dir)
 
     if not os.path.exists(minimap2_index_file):
         logger.info("Did not find an index file for minimap2. Will create now")
@@ -2872,140 +2663,133 @@ def run_minimap2_align(
 
 
 def bed_to_gtf(minimap2_output_dir):
-
     gtf_file_path = os.path.join(minimap2_output_dir, "annotation.gtf")
-    gtf_out = open(gtf_file_path, "w+")
-    exons_dict = {}
-    gene_id = 1
-    for bed_file in glob.glob(minimap2_output_dir + "/*.bed"):
-        logger.info("Converting bed to GTF:")
-        logger.info(bed_file)
-        bed_in = open(bed_file)
-        bed_lines = bed_in.readlines()
-        for line in bed_lines:
-            line = line.rstrip()
-            elements = line.split("\t")
-            seq_region_name = elements[0]
-            offset = int(elements[1])
-            hit_name = elements[3]
-            strand = elements[5]
-            block_sizes = elements[10].split(",")
-            block_sizes = list(filter(None, block_sizes))
-            block_starts = elements[11].split(",")
-            block_starts = list(filter(None, block_starts))
-            exons = bed_to_exons(block_sizes, block_starts, offset)
-            transcript_line = [
-                seq_region_name,
-                "minimap",
-                "transcript",
-                0,
-                0,
-                ".",
-                strand,
-                ".",
-                'gene_id "minimap_'
-                + str(gene_id)
-                + '"; '
-                + 'transcript_id "minimap_'
-                + str(gene_id)
-                + '"',
-            ]
-            transcript_start = None
-            transcript_end = None
-            exon_records = []
-            for i, exon_coords in enumerate(exons):
-                if transcript_start is None or exon_coords[0] < transcript_start:
-                    transcript_start = exon_coords[0]
+    with open(gtf_file_path, "w+") as gtf_out:
+        exons_dict = {}
+        gene_id = 1
+        for bed_file in glob.glob(minimap2_output_dir + "/*.bed"):
+            logger.info("Converting bed to GTF:\n%s" % bed_file)
+            with open(bed_file) as bed_in:
+                for line in bed_in:
+                    line = line.rstrip()
+                    elements = line.split("\t")
+                    seq_region_name = elements[0]
+                    offset = int(elements[1])
+                    hit_name = elements[3]
+                    strand = elements[5]
+                    block_sizes = elements[10].split(",")
+                    block_sizes = list(filter(None, block_sizes))
+                    block_starts = elements[11].split(",")
+                    block_starts = list(filter(None, block_starts))
+                    exons = bed_to_exons(block_sizes, block_starts, offset)
+                    transcript_line = [
+                        seq_region_name,
+                        "minimap",
+                        "transcript",
+                        0,
+                        0,
+                        ".",
+                        strand,
+                        ".",
+                        'gene_id "minimap_'
+                        + str(gene_id)
+                        + '"; '
+                        + 'transcript_id "minimap_'
+                        + str(gene_id)
+                        + '"',
+                    ]
+                    transcript_start = None
+                    transcript_end = None
+                    exon_records = []
+                    for i, exon_coords in enumerate(exons):
+                        if (
+                            transcript_start is None
+                            or exon_coords[0] < transcript_start
+                        ):
+                            transcript_start = exon_coords[0]
 
-                if transcript_end is None or exon_coords[1] > transcript_end:
-                    transcript_end = exon_coords[1]
+                        if transcript_end is None or exon_coords[1] > transcript_end:
+                            transcript_end = exon_coords[1]
 
-                exon_line = [
-                    seq_region_name,
-                    "minimap",
-                    "exon",
-                    str(exon_coords[0]),
-                    str(exon_coords[1]),
-                    ".",
-                    strand,
-                    ".",
-                    'gene_id "minimap_'
-                    + str(gene_id)
-                    + '"; '
-                    + 'transcript_id "minimap_'
-                    + str(gene_id)
-                    + '"; exon_number "'
-                    + str(i + 1)
-                    + '";',
-                ]
+                        exon_line = [
+                            seq_region_name,
+                            "minimap",
+                            "exon",
+                            str(exon_coords[0]),
+                            str(exon_coords[1]),
+                            ".",
+                            strand,
+                            ".",
+                            'gene_id "minimap_'
+                            + str(gene_id)
+                            + '"; '
+                            + 'transcript_id "minimap_'
+                            + str(gene_id)
+                            + '"; exon_number "'
+                            + str(i + 1)
+                            + '";',
+                        ]
 
-                exon_records.append(exon_line)
+                        exon_records.append(exon_line)
 
-            transcript_line[3] = str(transcript_start)
-            transcript_line[4] = str(transcript_end)
+                    transcript_line[3] = str(transcript_start)
+                    transcript_line[4] = str(transcript_end)
 
-            gtf_out.write("\t".join(transcript_line) + "\n")
-            for exon_line in exon_records:
-                gtf_out.write("\t".join(exon_line) + "\n")
+                    gtf_out.write("\t".join(transcript_line) + "\n")
+                    for exon_line in exon_records:
+                        gtf_out.write("\t".join(exon_line) + "\n")
 
-            gene_id += 1
-
-    gtf_out.close()
+                    gene_id += 1
 
 
 def bed_to_gff(input_dir, hints_file):
+    with open(hints_file, "w+") as gff_out:
+        exons_dict = {}
+        for bed_file in glob.glob(input_dir + "/*.bed"):
+            logger.info("Processing file for hints:\n%s" % bed_file)
+            with open(bed_file) as bed_in:
+                for line in bed_in:
+                    line = line.rstrip()
+                    elements = line.split("\t")
+                    seq_region_name = elements[0]
+                    offset = int(elements[1])
+                    hit_name = elements[3]
+                    strand = elements[5]
+                    block_sizes = elements[10].split(",")
+                    block_sizes = list(filter(None, block_sizes))
+                    block_starts = elements[11].split(",")
+                    block_starts = list(filter(None, block_starts))
+                    exons = bed_to_exons(block_sizes, block_starts, offset)
+                    for i, element in enumerate(exons):
+                        exon_coords = exons[i]
+                        exon_key = (
+                            seq_region_name
+                            + ":"
+                            + exon_coords[0]
+                            + ":"
+                            + exon_coords[1]
+                            + ":"
+                            + strand
+                        )
+                        if exon_key in exons_dict:
+                            exons_dict[exon_key][5] += 1
+                        else:
+                            gff_list = [
+                                seq_region_name,
+                                "CDNA",
+                                "exon",
+                                exon_coords[0],
+                                exon_coords[1],
+                                1.0,
+                                strand,
+                                ".",
+                            ]
+                            exons_dict[exon_key] = gff_list
 
-    gff_out = open(hints_file, "w+")
-    exons_dict = {}
-    for bed_file in glob.glob(input_dir + "/*.bed"):
-        logger.info("Processing file for hints:")
-        logger.info(bed_file)
-        bed_in = open(bed_file)
-        bed_lines = bed_in.readlines()
-        for line in bed_lines:
-            line = line.rstrip()
-            elements = line.split("\t")
-            seq_region_name = elements[0]
-            offset = int(elements[1])
-            hit_name = elements[3]
-            strand = elements[5]
-            block_sizes = elements[10].split(",")
-            block_sizes = list(filter(None, block_sizes))
-            block_starts = elements[11].split(",")
-            block_starts = list(filter(None, block_starts))
-            exons = bed_to_exons(block_sizes, block_starts, offset)
-            for i, element in enumerate(exons):
-                exon_coords = exons[i]
-                exon_key = (
-                    seq_region_name
-                    + ":"
-                    + exon_coords[0]
-                    + ":"
-                    + exon_coords[1]
-                    + ":"
-                    + strand
-                )
-                if exon_key in exons_dict:
-                    exons_dict[exon_key][5] += 1
-                else:
-                    gff_list = [
-                        seq_region_name,
-                        "CDNA",
-                        "exon",
-                        exon_coords[0],
-                        exon_coords[1],
-                        1.0,
-                        strand,
-                        ".",
-                    ]
-                    exons_dict[exon_key] = gff_list
-
-    for exon_key, gff_list in exons_dict.items():
-        gff_list[5] = str(gff_list[5])
-        gff_line = "\t".join(gff_list) + "\tsrc=W;mul=" + gff_list[5] + ";\n"
-        gff_out.write(gff_line)
-
-    gff_out.close()
+        for exon_key, gff_list in exons_dict.items():
+            gff_list[5] = str(gff_list[5])
+            gff_line = "\t".join(gff_list) + "\tsrc=W;mul=" + gff_list[5] + ";\n"
+            gff_out.write(gff_line)
 
     sorted_hints_out = open((hints_file + ".srt"), "w+")
     subprocess.run(
@@ -3107,69 +2891,65 @@ def check_transcriptomic_output(main_output_dir):
 
 
 def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
-
     gtf_file_path = os.path.join(augustus_output_dir, "annotation.gtf")
-    gtf_out = open(gtf_file_path, "w+")
-    record_count = 1
-    for gff_file_path in glob.glob(augustus_genome_dir + "/*.aug"):
-        gff_file_name = os.path.basename(gff_file_path)
-        match = re.search(r"\.rs(\d+)\.re(\d+)\.", gff_file_name)
-        start_offset = int(match.group(1))
+    with open(gtf_file_path, "w+") as gtf_out:
+        record_count = 1
+        for gff_file_path in glob.glob(augustus_genome_dir + "/*.aug"):
+            gff_file_name = os.path.basename(gff_file_path)
+            match = re.search(r"\.rs(\d+)\.re(\d+)\.", gff_file_name)
+            start_offset = int(match.group(1))
 
-        exon_number = 1
-        current_exon_hints_total = 0
-        current_exon_hints_match = 0
-        current_intron_hints_total = 0
-        current_intron_hints_match = 0
-        current_record = []
-        gff_in = open(gff_file_path, "r")
-        line = gff_in.readline()
-        while line:
-            match = re.search(r"# CDS exons\: (\d+)\/(\d+)", line)
-            if match:
-                current_exon_hints_match = match.group(1)
-                current_exon_hints_total = match.group(2)
+            exon_number = 1
+            current_exon_hints_total = 0
+            current_exon_hints_match = 0
+            current_intron_hints_total = 0
+            current_intron_hints_match = 0
+            current_record = []
+            with open(gff_file_path, "r") as gff_in:
+                for line in gff_in:
+                    match = re.search(r"# CDS exons\: (\d+)\/(\d+)", line)
+                    if match:
+                        current_exon_hints_match = match.group(1)
+                        current_exon_hints_total = match.group(2)
 
-            match = re.search(r"# CDS introns\: (\d+)\/(\d+)", line)
-            if match:
-                current_introns_hints_match = match.group(1)
-                current_introns_hints_total = match.group(2)
+                    match = re.search(r"# CDS introns\: (\d+)\/(\d+)", line)
+                    if match:
+                        current_introns_hints_match = match.group(1)
+                        current_introns_hints_total = match.group(2)
 
-            if re.search(r"# end gene", line):
-                for output_line in current_record:
-                    gtf_out.write(output_line)
-                current_record = []
-                current_exon_hints_total = 0
-                current_exon_hints_match = 0
-                current_intron_hints_total = 0
-                current_intron_hints_match = 0
-                record_count += 1
-                exon_number = 1
+                    if re.search(r"# end gene", line):
+                        for output_line in current_record:
+                            gtf_out.write(output_line)
+                        current_record = []
+                        current_exon_hints_total = 0
+                        current_exon_hints_match = 0
+                        current_intron_hints_total = 0
+                        current_intron_hints_match = 0
+                        record_count += 1
+                        exon_number = 1
 
-            values = line.split("\t")
-            if (
-                len(values) == 9
-                and values[1] == "AUGUSTUS"
-                and (values[2] == "transcript" or values[2] == "exon")
-            ):
-                values[3] = str(int(values[3]) + (start_offset - 1))
-                values[4] = str(int(values[4]) + (start_offset - 1))
-                values[8] = (
-                    'gene_id "aug'
-                    + str(record_count)
-                    + '"; transcript_id "aug'
-                    + str(record_count)
-                    + '";'
-                )
-                if values[2] == "exon":
-                    values[8] = values[8] + ' exon_number "' + str(exon_number) + '";'
-                    exon_number += 1
-                values[8] = values[8] + "\n"
-                current_record.append("\t".join(values))
-
-            line = gff_in.readline()
-        gff_in.close()
-    gtf_out.close()
+                    values = line.split("\t")
+                    if (
+                        len(values) == 9
+                        and values[1] == "AUGUSTUS"
+                        and (values[2] == "transcript" or values[2] == "exon")
+                    ):
+                        values[3] = str(int(values[3]) + (start_offset - 1))
+                        values[4] = str(int(values[4]) + (start_offset - 1))
+                        values[8] = (
+                            'gene_id "aug'
+                            + str(record_count)
+                            + '"; transcript_id "aug'
+                            + str(record_count)
+                            + '";'
+                        )
+                        if values[2] == "exon":
+                            values[8] = (
+                                values[8] + ' exon_number "' + str(exon_number) + '";'
+                            )
+                            exon_number += 1
+                        values[8] = values[8] + "\n"
+                        current_record.append("\t".join(values))
 
 
 def run_augustus_predict(
@@ -3208,15 +2988,11 @@ def run_augustus_predict(
             star_dir,
             num_threads,
         )
-        hints_out = open(augustus_hints_file, "w+")
-        for gff_file in glob.glob(augustus_hints_dir + "/*.bam.hints.gff"):
-            gff_in = open(gff_file, "r")
-            line = gff_in.readline()
-            while line:
-                hints_out.write(line)
-                line = gff_in.readline()
-            gff_in.close()
-        hints_out.close()
+        with open(augustus_hints_file, "w+") as hints_out:
+            for gff_file in glob.glob(augustus_hints_dir + "/*.bam.hints.gff"):
+                with open(gff_file, "r") as gff_in:
+                    for line in gff_in:
+                        hints_out.write(line)
 
     seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
     slice_ids = create_slice_ids(seq_region_lengths, 1000000, 100000, 5000)
@@ -3331,28 +3107,25 @@ def multiprocess_augustus_hints(
     logger.info("bam2hints command:\n" + " ".join(bam2hints_cmd))
     subprocess.run(bam2hints_cmd)
 
+    # bam2wig_cmd = [bam2wig_path,'-D',augustus_hints_dir,bam_file]
+    # print("bam2wig command:\n" + ' '.join(bam2wig_cmd))
+    # subprocess.run(bam2wig_cmd)
 
-#  bam2wig_cmd = [bam2wig_path,'-D',augustus_hints_dir,bam_file]
-#  print("bam2wig command:\n" + ' '.join(bam2wig_cmd))
-#  subprocess.run(bam2wig_cmd)
-
-
-# wig2hints is odd in that it runs directly off STDIN and then just prints to STDOUT,
-# so the code below is implemented in steps as it's not good practice to use pipes and
-# redirects in a subprocess command
-#  wig_file_name = re.sub('.bam','.wig',bam_file_name)
-#  wig_file_path = os.path.join(augustus_hints_dir,wig_file_name)
-#  wig_hints_file_name = (wig_file_name + '.hints.gff')
-#  wig_hints_file_path =  os.path.join(augustus_hints_dir,wig_hints_file_name)
-#  print("Writing wig file info to hints file:\n" + wig_hints_file_name)
-#  wig2hints_out = open(wig_hints_file_path,'w+')
-#  wigcat = subprocess.Popen(('cat',wig_file_path), stdout=subprocess.PIPE)
-#  subprocess.run(wig2hints_path, stdin=wigcat.stdout, stdout=wig2hints_out)
-#  wig2hints_out.close()
+    # wig2hints is odd in that it runs directly off STDIN and then just prints to STDOUT,
+    # so the code below is implemented in steps as it's not good practice to use pipes and
+    # redirects in a subprocess command
+    # wig_file_name = re.sub('.bam','.wig',bam_file_name)
+    # wig_file_path = os.path.join(augustus_hints_dir,wig_file_name)
+    # wig_hints_file_name = (wig_file_name + '.hints.gff')
+    # wig_hints_file_path =  os.path.join(augustus_hints_dir,wig_hints_file_name)
+    # print("Writing wig file info to hints file:\n" + wig_hints_file_name)
+    # wig2hints_out = open(wig_hints_file_path,'w+')
+    # wigcat = subprocess.Popen(('cat',wig_file_path), stdout=subprocess.PIPE)
+    # subprocess.run(wig2hints_path, stdin=wigcat.stdout, stdout=wig2hints_out)
+    # wig2hints_out.close()
 
 
 def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir):
-
     region = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
@@ -3389,7 +3162,6 @@ def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir)
 
 
 def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_path):
-
     # Note this is trying to be memory and file efficient at the cost of speed
     # So files are only created as needed and the hints are being read line by line as written as needed
     # This comes with the downside of being slow, but it's only a very small amount of time relative
@@ -3397,31 +3169,24 @@ def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_pa
     # as possible here is not a bad thing even if it's adding in an overhead by continuously reading the hints file
 
     region_hints_file_path = region_fasta_file_path + ".gff"
-    hints_in = open(hints_file)
-    hints_out = open(region_hints_file_path, "w+")
-    hint_line = hints_in.readline()
-    while hint_line:
-        hint_line_values = hint_line.split("\t")
-        if not len(hint_line_values) == 9:
-            hint_line = hints_in.readline()
-            continue
+    with open(hints_file) as hints_in, open(region_hints_file_path, "w+") as hints_out:
+        for hint_line in hints_in:
+            hint_line_values = hint_line.split("\t")
+            if not len(hint_line_values) == 9:
+                continue
 
-        hint_region = hint_line_values[0]
-        hint_region_start = int(hint_line_values[3])
-        hint_region_end = int(hint_line_values[4])
+            hint_region = hint_line_values[0]
+            hint_region_start = int(hint_line_values[3])
+            hint_region_end = int(hint_line_values[4])
 
-        if (
-            hint_region == region
-            and hint_region_start >= start
-            and hint_region_end <= end
-        ):
-            hint_line_values[3] = str(int(hint_line_values[3]) - (start - 1))
-            hint_line_values[4] = str(int(hint_line_values[4]) - (start - 1))
-            hints_out.write("\t".join(hint_line_values))
-
-        hint_line = hints_in.readline()
-    hints_in.close()
-    hints_out.close()
+            if (
+                hint_region == region
+                and hint_region_start >= start
+                and hint_region_end <= end
+            ):
+                hint_line_values[3] = str(int(hint_line_values[3]) - (start - 1))
+                hint_line_values[4] = str(int(hint_line_values[4]) - (start - 1))
+                hints_out.write("\t".join(hint_line_values))
 
     return region_hints_file_path
 
@@ -3630,112 +3395,98 @@ def check_gtf_content(gtf_file, content_obj):
     logger.info("check gtf transcript function")
     # This just checks how many transcript lines are in a GTF
     transcript_count = 0
-    gtf_in = open(gtf_file)
-    line = gtf_in.readline()
-    while line:
-        eles = line.split("\t")
-        if not len(eles) == 9:
-            line = gtf_in.readline()
-            continue
-        if eles[2] == content_obj:
-            transcript_count += 1
-        line = gtf_in.readline()
-    gtf_in.close()
-    logger.info(transcript_count)
+    with open(gtf_file) as gtf_in:
+        for line in gtf_in:
+            eles = line.split("\t")
+            if not len(eles) == 9:
+                continue
+            if eles[2] == content_obj:
+                transcript_count += 1
+    logger.info("transcript_count: %s" % transcript_count)
     return transcript_count
 
 
 def splice_junction_to_gff(input_dir, hints_file):
+    with open(hints_file, "w+") as sjf_out:
+        for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
+            with open(sj_tab_file) as sjf_in:
+                for line in sjf_in:
+                    elements = line.split("\t")
+                    strand = "+"
+                    # If the strand is undefined then skip, Augustus expects a strand
+                    if elements[3] == "0":
+                        continue
+                    elif elements[3] == "2":
+                        strand = "-"
 
-    sjf_out = open(hints_file, "w+")
+                    junction_length = int(elements[2]) - int(elements[1]) + 1
+                    if junction_length < 100:
+                        continue
 
-    for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
-        sjf_in = open(sj_tab_file)
-        sjf_lines = sjf_in.readlines()
-        for line in sjf_lines:
-            elements = line.split("\t")
-            strand = "+"
-            # If the strand is undefined then skip, Augustus expects a strand
-            if elements[3] == "0":
-                continue
-            elif elements[3] == "2":
-                strand = "-"
+                    if not elements[4] and elements[7] < 10:
+                        continue
 
-            junction_length = int(elements[2]) - int(elements[1]) + 1
-            if junction_length < 100:
-                continue
-
-            if not elements[4] and elements[7] < 10:
-                continue
-
-            # For the moment treat multimapping and single mapping things as a combined score
-            score = float(elements[6]) + float(elements[7])
-            score = str(score)
-            output_line = [
-                elements[0],
-                "RNASEQ",
-                "intron",
-                elements[1],
-                elements[2],
-                score,
-                strand,
-                ".",
-                ("src=W;mul=" + score + ";"),
-            ]
-            sjf_out.write("\t".join(output_line) + "\n")
-
-    sjf_out.close()
+                    # For the moment treat multimapping and single mapping things as a combined score
+                    score = float(elements[6]) + float(elements[7])
+                    score = str(score)
+                    output_line = [
+                        elements[0],
+                        "RNASEQ",
+                        "intron",
+                        elements[1],
+                        elements[2],
+                        score,
+                        strand,
+                        ".",
+                        ("src=W;mul=" + score + ";"),
+                    ]
+                    sjf_out.write("\t".join(output_line) + "\n")
 
 
 def model_builder(work_dir):
-
     star_output_dir = os.path.join(work_dir, "star_output")
 
     all_junctions_file = os.path.join(star_output_dir, "all_junctions.sj")
-    sjf_out = open(all_junctions_file, "w+")
+    with open(all_junctions_file, "w+") as sjf_out:
+        for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
+            with open(sj_tab_file) as sjf_in:
+                for line in sjf_in:
+                    elements = line.split("\t")
+                    strand = "+"
 
-    for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
-        sjf_in = open(sj_tab_file)
-        sjf_lines = sjf_in.readlines()
-        for line in sjf_lines:
-            elements = line.split("\t")
-            strand = "+"
+                    # my $slice_name = $eles[0];
+                    # my $start = $eles[1];
+                    # my $end = $eles[2];
+                    # my $strand = $eles[3];
 
-            #    my $slice_name = $eles[0];
-            #    my $start = $eles[1];
-            #    my $end = $eles[2];
-            #    my $strand = $eles[3];
+                    # If the strand is undefined then skip, Augustus expects a strand
+                    if elements[3] == "0":
+                        continue
+                    elif elements[3] == "2":
+                        strand = "-"
 
-            # If the strand is undefined then skip, Augustus expects a strand
-            if elements[3] == "0":
-                continue
-            elif elements[3] == "2":
-                strand = "-"
+                    junction_length = int(elements[2]) - int(elements[1]) + 1
+                    if junction_length < 100:
+                        continue
 
-            junction_length = int(elements[2]) - int(elements[1]) + 1
-            if junction_length < 100:
-                continue
+                    if not elements[4] and elements[7] < 10:
+                        continue
 
-            if not elements[4] and elements[7] < 10:
-                continue
-
-            # For the moment treat multimapping and single mapping things as a combined score
-            score = float(elements[6]) + float(elements[7])
-            score = str(score)
-            output_line = [
-                elements[0],
-                "RNASEQ",
-                "intron",
-                elements[1],
-                elements[2],
-                score,
-                strand,
-                ".",
-                ("src=W;mul=" + score + ";"),
-            ]
-            sjf_out.write("\t".join(output_line) + "\n")
-
-    sjf_out.close()
+                    # For the moment treat multimapping and single mapping things as a combined score
+                    score = float(elements[6]) + float(elements[7])
+                    score = str(score)
+                    output_line = [
+                        elements[0],
+                        "RNASEQ",
+                        "intron",
+                        elements[1],
+                        elements[2],
+                        score,
+                        strand,
+                        ".",
+                        ("src=W;mul=" + score + ";"),
+                    ]
+                    sjf_out.write("\t".join(output_line) + "\n")
 
 
 def split_genome(genome_file, target_dir, min_seq_length):
@@ -3750,45 +3501,41 @@ def split_genome(genome_file, target_dir, min_seq_length):
     current_header = ""
     current_seq = ""
 
-    file_in = open(genome_file)
-    line = file_in.readline()
-    while line:
-        match = re.search(r">(.+)$", line)
-        if match and current_header:
-            if len(current_seq) > min_seq_length:
-                file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
-                if not os.path.exists(file_out_name):
-                    with open(file_out_name, "w+") as file_out:
-                        file_out.write(f">{current_header}\n{current_seq}\n")
-
-                else:
-                    print(
-                        "Found an existing split file, so will not overwrite. File found:"
+    with open(genome_file) as file_in:
+        for line in file_in:
+            match = re.search(r">(.+)$", line)
+            if match and current_header:
+                if len(current_seq) > min_seq_length:
+                    file_out_name = os.path.join(
+                        target_dir, (current_header + ".split.fa")
                     )
-                    print(file_out_name)
+                    if not os.path.exists(file_out_name):
+                        with open(file_out_name, "w+") as file_out:
+                            file_out.write(f">{current_header}\n{current_seq}\n")
 
-            current_seq = ""
-            current_header = match.group(1)
-        elif match:
-            current_header = match.group(1)
-        else:
-            current_seq += line.rstrip()
+                    else:
+                        logger.info(
+                            "Existing split file found, will not overwrite: %s"
+                            % file_out_name
+                        )
 
-        line = file_in.readline()
+                current_seq = ""
+                current_header = match.group(1)
+            elif match:
+                current_header = match.group(1)
+            else:
+                current_seq += line.rstrip()
 
-    if len(current_seq) > min_seq_length:
-        file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
-        if not os.path.exists(file_out_name):
-            with open(file_out_name, "w+") as file_out:
-                file_out.write(f">{current_header}\n{current_seq}\n")
+        if len(current_seq) > min_seq_length:
+            file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
+            if not os.path.exists(file_out_name):
+                with open(file_out_name, "w+") as file_out:
+                    file_out.write(f">{current_header}\n{current_seq}\n")
 
-        else:
-            logger.info(
-                "Found an existing split file, so will not overwrite. File found:"
-            )
-            logger.info(file_out_name)
-
-    file_in.close()
+            else:
+                logger.info(
+                    "Existing split file found, will not overwrite:\n%s" % file_out_name
+                )
 
 
 def run_finalise_geneset(
@@ -3867,8 +3614,8 @@ def run_finalise_geneset(
                 for line in file_in:
                     file_out.write(line.rstrip())
 
-    # Copy the raw files into the annotation dir, this is not needed as such, but collecting them in one place and relabelling is
-    # helpful for a user
+    # Copy the raw files into the annotation dir, this is not needed as such,
+    # but collecting them in one place and relabelling is helpful for a user
     if os.path.exists(busco_annotation_raw):
         subprocess.run(
             [
@@ -4523,35 +4270,29 @@ def combine_results(rnasamba_results, cpc2_results, diamond_results):
 
 
 def read_gtf_genes(gtf_file):
-
     gtf_genes = {}
-    gtf_in = open(gtf_file)
-    line = gtf_in.readline()
-    while line:
-        eles = line.split("\t")
-        if not len(eles) == 9:
-            line = gtf_in.readline()
-            continue
+    with open(gtf_file) as gtf_in:
+        for line in gtf_in:
+            eles = line.split("\t")
+            if not len(eles) == 9:
+                continue
 
-        match = re.search(r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line)
+            match = re.search(r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line)
 
-        if not match:
-            line = gtf_in.readline()
-            continue
+            if not match:
+                continue
 
-        gene_id = match.group(1)
-        transcript_id = match.group(2)
-        feature_type = eles[2]
-        if gene_id not in gtf_genes:
-            gtf_genes[gene_id] = {}
-        if feature_type == "transcript":
-            gtf_genes[gene_id][transcript_id] = {}
-            gtf_genes[gene_id][transcript_id]["transcript"] = line
-            gtf_genes[gene_id][transcript_id]["exons"] = []
-        elif feature_type == "exon":
-            gtf_genes[gene_id][transcript_id]["exons"].append(line)
-        line = gtf_in.readline()
-    gtf_in.close()
+            gene_id = match.group(1)
+            transcript_id = match.group(2)
+            feature_type = eles[2]
+            if gene_id not in gtf_genes:
+                gtf_genes[gene_id] = {}
+            if feature_type == "transcript":
+                gtf_genes[gene_id][transcript_id] = {}
+                gtf_genes[gene_id][transcript_id]["transcript"] = line
+                gtf_genes[gene_id][transcript_id]["exons"] = []
+            elif feature_type == "exon":
+                gtf_genes[gene_id][transcript_id]["exons"].append(line)
 
     return gtf_genes
 
@@ -4559,7 +4300,6 @@ def read_gtf_genes(gtf_file):
 def merge_finalise_output_files(
     final_annotation_dir, region_annotation_dir, extension, id_label
 ):
-
     gtf_files = glob.glob(region_annotation_dir + "/*" + extension)
 
     merged_gtf_file = os.path.join(final_annotation_dir, (id_label + "_sel.gtf"))
@@ -4577,77 +4317,72 @@ def merge_finalise_output_files(
 
     gene_id_counter = 0
     transcript_id_counter = 0
-    gtf_out = open(merged_gtf_file, "w+")
-    cdna_out = open(merged_cdna_file, "w+")
-    amino_acid_out = open(merged_amino_acid_file, "w+")
-    for gtf_file in gtf_files:
-        logger.info("GTF file: " + gtf_file)
-        cdna_seq_index = {}
-        amino_acid_seq_index = {}
-        cdna_file = gtf_file + ".cdna"
-        amino_acid_file = gtf_file + ".prot"
-        with open(cdna_file) as cdna_in:
-            cdna_seq_index = fasta_to_dict(cdna_in.readlines())
-        with open(amino_acid_file) as amino_acid_in:
-            amino_acid_seq_index = fasta_to_dict(amino_acid_in.readlines())
+    with open(merged_gtf_file, "w+") as gtf_out, open(
+        merged_cdna_file, "w+"
+    ) as cdna_out, open(merged_amino_acid_file, "w+") as amino_acid_out:
+        for gtf_file in gtf_files:
+            logger.info("GTF file: " + gtf_file)
+            cdna_seq_index = {}
+            amino_acid_seq_index = {}
+            cdna_file = gtf_file + ".cdna"
+            amino_acid_file = gtf_file + ".prot"
+            with open(cdna_file) as cdna_in:
+                cdna_seq_index = fasta_to_dict(cdna_in.readlines())
+            with open(amino_acid_file) as amino_acid_in:
+                amino_acid_seq_index = fasta_to_dict(amino_acid_in.readlines())
 
-        current_gene_id = ""
-        gtf_in = open(gtf_file)
-        line = gtf_in.readline()
-        while line:
-            if re.search(r"^#", line):
-                line = gtf_in.readline()
-                continue
+            current_gene_id = ""
+            with open(gtf_file) as gtf_in:
+                for line in gtf_in:
+                    if re.search(r"^#", line):
+                        continue
 
-            eles = line.split("\t")
-            if not len(eles) == 9:
-                line = gtf_in.readline()
-                continue
+                    eles = line.split("\t")
+                    if not len(eles) == 9:
+                        continue
 
-            match = re.search(r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line)
-            if match and eles[2] == "transcript":
-                transcript_id_counter += 1
-
-            gene_id = match.group(1)
-            transcript_id = match.group(2)
-
-            if not current_gene_id:
-                gene_id_counter += 1
-                current_gene_id = gene_id
-
-            if not gene_id == current_gene_id:
-                gene_id_counter += 1
-                current_gene_id = gene_id
-
-            new_gene_id = id_label + "_" + str(gene_id_counter)
-            new_transcript_id = id_label + "_" + str(transcript_id_counter)
-            line = re.sub(
-                'gene_id "' + gene_id + '"', ('gene_id "' + new_gene_id + '"'), line
-            )
-            line = re.sub(
-                'transcript_id "' + transcript_id + '"',
-                ('transcript_id "' + new_transcript_id + '"'),
-                line,
-            )
-            gtf_out.write(line)
-            line = gtf_in.readline()
-
-            if eles[2] == "transcript":
-                new_header = ">" + new_transcript_id + "\n"
-                cdna_out.write(new_header + cdna_seq_index[transcript_id])
-
-                if transcript_id in amino_acid_seq_index:
-                    amino_acid_out.write(
-                        new_header + amino_acid_seq_index[transcript_id]
+                    match = re.search(
+                        r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line
                     )
+                    if match and eles[2] == "transcript":
+                        transcript_id_counter += 1
 
-    gtf_out.close()
-    cdna_out.close()
-    amino_acid_out.close()
+                    gene_id = match.group(1)
+                    transcript_id = match.group(2)
+
+                    if not current_gene_id:
+                        gene_id_counter += 1
+                        current_gene_id = gene_id
+
+                    if not gene_id == current_gene_id:
+                        gene_id_counter += 1
+                        current_gene_id = gene_id
+
+                    new_gene_id = id_label + "_" + str(gene_id_counter)
+                    new_transcript_id = id_label + "_" + str(transcript_id_counter)
+                    line = re.sub(
+                        'gene_id "' + gene_id + '"',
+                        ('gene_id "' + new_gene_id + '"'),
+                        line,
+                    )
+                    line = re.sub(
+                        'transcript_id "' + transcript_id + '"',
+                        ('transcript_id "' + new_transcript_id + '"'),
+                        line,
+                    )
+                    gtf_out.write(line)
+
+                    if eles[2] == "transcript":
+                        new_header = ">" + new_transcript_id + "\n"
+                        cdna_out.write(new_header + cdna_seq_index[transcript_id])
+
+                        if transcript_id in amino_acid_seq_index:
+                            amino_acid_out.write(
+                                new_header + amino_acid_seq_index[transcript_id]
+                            )
 
 
 def fasta_to_dict(fasta_list):
-
     index = {}
     it = iter(fasta_list)
     for header in it:
@@ -4680,13 +4415,12 @@ def fasta_to_dict(fasta_list):
 
 
 def multiprocess_generic(cmd):
-    print(" ".join(cmd))
+    logger.info(" ".join(cmd))
     subprocess.run(cmd)
 
 
 def multiprocess_finalise_geneset(cmd):
-
-    print(" ".join(cmd))
+    logger.info(" ".join(cmd))
     subprocess.run(cmd)
 
 

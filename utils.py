@@ -129,24 +129,21 @@ def get_seq_region_lengths(genome_file, min_seq_length):
     current_seq = ""
 
     seq_regions = {}
-    file_in = open(genome_file)
-    line = file_in.readline()
-    while line:
-        match = re.search(r">(.+)$", line)
-        if match and current_header:
-            if len(current_seq) > min_seq_length:
-                seq_regions[current_header] = len(current_seq)
+    with open(genome_file) as file_in:
+        for line in file_in:
+            match = re.search(r">(.+)$", line)
+            if match and current_header:
+                if len(current_seq) > min_seq_length:
+                    seq_regions[current_header] = len(current_seq)
 
-            current_seq = ""
-            current_header = match.group(1)
-        elif match:
-            current_header = match.group(1)
-        else:
-            current_seq += line.rstrip()
+                current_seq = ""
+                current_header = match.group(1)
+            elif match:
+                current_header = match.group(1)
+            else:
+                current_seq += line.rstrip()
 
-        line = file_in.readline()
-
-    if len(current_seq) > min_seq_length:
-        seq_regions[current_header] = len(current_seq)
+        if len(current_seq) > min_seq_length:
+            seq_regions[current_header] = len(current_seq)
 
     return seq_regions
