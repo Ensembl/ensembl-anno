@@ -15,7 +15,6 @@
 
 
 # standard library
-import glob
 import math
 import multiprocessing
 import os
@@ -46,6 +45,7 @@ def run_star_align(
     max_intron_length: int,
     num_threads: int,
 ):
+    # TODO
     # !!! Need to add in samtools path above instead of just using 'samtools' in command
 
     # TODO
@@ -76,8 +76,6 @@ def run_star_align(
 
     star_tmp_dir = star_dir / "tmp"
     # delete directory if already exists
-    # if star_tmp_dir.is_dir():
-    #     subprocess.run(["rm", "-rf", star_tmp_dir])
     shutil.rmtree(star_tmp_dir, ignore_errors=True)
 
     star_index_file = star_dir / "SAindex"
@@ -85,8 +83,7 @@ def run_star_align(
     fastq_file_list = []
     file_types = ["*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"]
     for file_type in file_types:
-        # fastq_file_list.extend(glob.glob(os.path.join(short_read_fastq_dir, file_type)))
-        fastq_file_list.extend(glob.glob(str(short_read_fastq_dir / file_type)))
+        fastq_file_list.extend(short_read_fastq_dir.glob(file_type))
 
     # This works out if the files are paired or not
     fastq_file_list = create_paired_paths(fastq_file_list)

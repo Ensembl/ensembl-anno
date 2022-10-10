@@ -86,7 +86,6 @@ def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
 
     try:
         target_dir.mkdir()
-
     except FileExistsError:
         logger.warning('Directory "%s" already exists' % target_dir)
     except OSError:
@@ -105,9 +104,9 @@ def create_paired_paths(fastq_file_paths):
         match = re.search(r"(.+)_\d+\.(fastq|fq)", path)
         if not match:
             logger.error(
-                "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired:"
+                "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired: %s"
+                % path
             )
-            logger.error(path)
             final_list.append([path])
             continue
 
@@ -124,7 +123,7 @@ def create_paired_paths(fastq_file_paths):
     return final_list
 
 
-def get_seq_region_lengths(genome_file, min_seq_length):
+def get_seq_region_lengths(genome_file, min_seq_length: int):
     current_header = ""
     current_seq = ""
 
