@@ -1336,7 +1336,6 @@ def run_cmsearch_regions(
     main_output_dir,
     num_threads: int,
 ):
-
     if not cmsearch_path:
         cmsearch_path = "cmsearch"
 
@@ -1345,15 +1344,12 @@ def run_cmsearch_regions(
 
     os.chdir(rfam_output_dir)
 
-    logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(rfam_output_dir, "annotation.gtf")
     if os.path.exists(output_file):
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
-            logger.info("Cmsearch gtf file exists")
+            logger.info("CMsearch GTF file already exists, skipping analysis")
             return
-    else:
-        logger.info("No gtf file, go on with the analysis")
 
     rfam_dbname = "Rfam"
     rfam_user = "rfamro"
@@ -2129,7 +2125,6 @@ def run_genblast_align(
     num_threads: int,
     genblast_timeout_secs,
 ):
-
     if not genblast_path:
         genblast_path = "genblast"
 
@@ -2147,15 +2142,12 @@ def run_genblast_align(
 
     create_dir(genblast_dir)
 
-    logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(genblast_dir, "annotation.gtf")
     if os.path.exists(output_file):
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
-            logger.info("Genblast gtf file exists")
+            logger.info("Genblast GTF file exists, skipping analysis")
             return
-    else:
-        logger.info("No gtf file, go on with the analysis")
 
     genblast_output_file = os.path.join(genblast_dir, "genblast")
 
@@ -2533,7 +2525,6 @@ def run_minimap2_align(
     max_intron_length,
     num_threads: int,
 ):
-
     if not minimap2_path:
         minimap2_path = "minimap2"
 
@@ -2546,15 +2537,12 @@ def run_minimap2_align(
 
     minimap2_output_dir = create_dir(main_output_dir, "minimap2_output")
 
-    logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(minimap2_output_dir, "annotation.gtf")
     if os.path.exists(output_file):
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
-            logger.info("Minimap2 gtf file exists")
+            logger.info("Minimap2 GTF file exists skipping analysis")
             return
-    else:
-        logger.info("No gtf file, go on with the analysis")
 
     genome_file_name = os.path.basename(genome_file)
     genome_file_index = genome_file_name + ".mmi"
@@ -3164,7 +3152,6 @@ def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_pa
 def run_stringtie_assemble(
     stringtie_path, samtools_path, main_output_dir, genome_file, num_threads: int
 ):
-
     if not stringtie_path:
         stringtie_path = shutil.which("stringtie")
     check_exe(stringtie_path)
@@ -3175,15 +3162,12 @@ def run_stringtie_assemble(
 
     stringtie_dir = create_dir(main_output_dir, "stringtie_output")
 
-    logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(stringtie_dir, "annotation.gtf")
     if os.path.exists(output_file):
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
-            logger.info("Stringtie gtf file exists")
+            logger.info("StringTie GTF file exists skipping analysis")
             return
-    else:
-        logger.info("No gtf file, go on with the analysis")
 
     stringtie_merge_input_file = os.path.join(stringtie_dir, "stringtie_assemblies.txt")
     stringtie_merge_output_file = os.path.join(stringtie_dir, "annotation.gtf")
@@ -3215,8 +3199,7 @@ def run_stringtie_assemble(
             )
             logger.info(transcript_file_path)
         else:
-            logger.info("Running Stringtie on: " + sorted_bam_file_name)
-            logger.info("Writing output to: " + transcript_file_path)
+            logger.info("Running Stringtie on: %s, writing output to:\n%s" % sorted_bam_file_name, transcript_file_path)
             subprocess.run(
                 [
                     stringtie_path,
@@ -3260,7 +3243,6 @@ def run_stringtie_assemble(
 
 
 def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
-
     if not scallop_path:
         scallop_path = shutil.which("scallop")
     check_exe(scallop_path)
@@ -3271,15 +3253,12 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
 
     scallop_dir = create_dir(main_output_dir, "scallop_output")
 
-    logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(scallop_dir, "annotation.gtf")
     if os.path.exists(output_file):
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
-            logger.info("Scallop gtf file exists")
+            logger.info("Scallop gtf file exists, skipping analysis")
             return
-    else:
-        logger.info("No gtf file, go on with the analysis")
 
     stringtie_merge_input_file = os.path.join(scallop_dir, "scallop_assemblies.txt")
     stringtie_merge_output_file = os.path.join(scallop_dir, "annotation.gtf")
@@ -3312,8 +3291,7 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
             )
             logger.info(transcript_file_path)
         else:
-            logger.info("Running Scallop on: " + sorted_bam_file_name)
-            logger.info("Writing output to: " + transcript_file_path)
+            logger.info("Running Scallop on: %s, writing output to:\n%s" % sorted_bam_file_name, transcript_file_path)
             scallop_cmd = [
                 scallop_path,
                 "-i",
@@ -3362,8 +3340,9 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
 
 
 def check_gtf_content(gtf_file, content_obj):
-    logger.info("check gtf transcript function")
-    # This just checks how many transcript lines are in a GTF
+    """
+    This just checks how many transcript lines are in a GTF
+    """
     transcript_count = 0
     with open(gtf_file) as gtf_in:
         for line in gtf_in:
@@ -3372,7 +3351,7 @@ def check_gtf_content(gtf_file, content_obj):
                 continue
             if eles[2] == content_obj:
                 transcript_count += 1
-    logger.info("transcript_count: %s" % transcript_count)
+    logger.info("%s GTF transcript count: %s" % gtf_file, transcript_count)
     return transcript_count
 
 
