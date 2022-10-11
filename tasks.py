@@ -258,13 +258,13 @@ def check_for_fastq_subsamples(fastq_file_list):
     # Mainly just about making sure that if you have subsamples they're used and if you have pairs they're paired
     for idx, fastq_files in enumerate(fastq_file_list):
         fastq_file = fastq_files[0]
-        subsample_file = fastq_file + ".sub"
+        subsample_file = f"{fastq_file}.sub"
 
         fastq_file_pair = ""
         subsample_file_pair = ""
         if len(fastq_files) == 2:
             fastq_file_pair = fastq_files[1]
-            subsample_file_pair = fastq_file_pair + ".sub"
+            subsample_file_pair = f"{fastq_file_pair}.sub"
 
         # This bit will replace the list entry with a string, don't need a list after this function for each pair/file
         if os.path.exists(subsample_file):
@@ -282,9 +282,9 @@ def check_for_fastq_subsamples(fastq_file_list):
                 "Found a subsampled paired file extension, will use that instead of the original file:\n%s"
                 % subsample_file_pair
             )
-            fastq_file_list[idx] = subsample_file + "," + subsample_file_pair
+            fastq_file_list[idx] = f"{subsample_file},{subsample_file_pair}"
         elif fastq_file_pair:
-            fastq_file_list[idx] = fastq_file + "," + fastq_file_pair
+            fastq_file_list[idx] = f"{fastq_file},{fastq_file_pair}"
 
         logger.info("Entry at current index:\n%s" % fastq_file_list[idx])
 

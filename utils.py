@@ -101,7 +101,7 @@ def create_paired_paths(fastq_file_paths):
     final_list = []
 
     for path in fastq_file_paths:
-        match = re.search(r"(.+)_\d+\.(fastq|fq)", path)
+        match = re.search(r"(.+)_\d+\.(fastq|fq)", str(path))
         if not match:
             logger.error(
                 "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired: %s"
