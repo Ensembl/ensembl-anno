@@ -2044,6 +2044,7 @@ def run_genblast_align(
     max_intron_length,
     num_threads: int,
     genblast_timeout_secs,
+    main_script_dir: pathlib.Path,
 ):
     if not genblast_path:
         genblast_path = "genblast"
@@ -2075,13 +2076,8 @@ def run_genblast_align(
     logger.info("ASNB file: %s" % asnb_file)
 
     if not os.path.exists("alignscore.txt"):
-        subprocess.run(
-            [
-                "cp",
-                os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt",
-                "./",
-            ]
-        )
+        original_alignscore_path = main_script_dir / "support_files" / "alignscore.txt"
+        subprocess.run(["cp", original_alignscore_path, "./"])
 
     if not os.path.exists(masked_genome_file):
         raise FileNotFoundError(
@@ -4599,6 +4595,7 @@ def main():
             max_intron_length,
             num_threads,
             genblast_timeout,
+            main_script_dir,
         )
 
     # Run GenBlast on BUSCO set, gives higher priority when creating the final genes in cases where transcriptomic data are missing or fragmented
@@ -4614,6 +4611,7 @@ def main():
             max_intron_length,
             num_threads,
             genblast_timeout,
+            main_script_dir,
         )
     ############################################################################
 
