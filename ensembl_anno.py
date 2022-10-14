@@ -423,75 +423,6 @@ def batch_gtf_records(input_gtf_file, batch_size, output_dir, record_type):
     return records
 
 
-def run_find_orfs(genome_file, main_output_dir):
-    """
-    TODO
-    unused function, not refactored, delete
-    """
-    min_orf_length = 600
-
-    orf_output_dir = create_dir(main_output_dir, "orf_output")
-    seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
-    for region_name in seq_region_lengths:
-        region_length = seq_region_lengths[region_name]
-        seq = get_sequence(
-            seq_region=region_name,
-            start=1,
-            end=region_length,
-            strand=1,
-            fasta_file=genome_file,
-            output_dir=orf_output_dir,
-        )
-        for phase in range(0, 6):
-            find_orf_phased_region(
-                region_name, seq, phase, min_orf_length, orf_output_dir
-            )
-
-
-def find_orf_phased_region(
-    region_name, seq, phase, min_orf_length, orf_output_dir: pathlib.Path
-):
-    """
-    TODO
-    unused function, not refactored, delete
-    (used in unused function)
-    """
-    current_index = phase
-    orf_counter = 1
-    if phase > 2:
-        seq = reverse_complement(seq)
-        current_index = current_index % 3
-
-    orf_file_path = orf_output_dir / f"{region_name}.phase{phase}.orf.fa"
-    with open(orf_file_path, "w+") as orf_out:
-        while current_index < len(seq):
-            codon = seq[current_index : current_index + 3]
-            if codon == "ATG":
-                orf_seq = codon
-                for j in range(current_index + 3, len(seq), 3):
-                    next_codon = seq[j : j + 3]
-                    if (
-                        next_codon == "TAA"
-                        or next_codon == "TAG"
-                        or next_codon == "TGA"
-                    ):
-                        orf_seq += next_codon
-                        if len(orf_seq) >= min_orf_length:
-                            orf_out.write(
-                                f">{region_name}_phase{phase}_orf{orf_counter}\n"
-                            )
-                            orf_out.write(f"{orf_seq}\n")
-                            orf_counter += 1
-                            orf_seq = ""
-                            break
-
-                    # If there's another met in phase, then put i to the start of the codon after j so that only the longest ORF is found
-                    if next_codon == "ATG":
-                        current_index = j + 3
-                    orf_seq += next_codon
-            current_index += 3
-
-
 def run_repeatmasker_regions(
     genome_file: Union[pathlib.Path, str],
     repeatmasker_path,
@@ -2667,67 +2598,6 @@ def bed_to_gtf(minimap2_output_dir: pathlib.Path):
                     gene_id += 1
 
 
-def bed_to_gff(input_dir: pathlib.Path, hints_file: Union[pathlib.Path, str]):
-    """
-    TODO
-    unused function, not refactored, delete
-    """
-    with open(hints_file, "w+") as gff_out:
-        exons_dict = {}
-        for bed_file in input_dir.glob("*.bed"):
-            logger.info("Processing file for hints:\n%s" % bed_file)
-            with open(bed_file) as bed_in:
-                for line in bed_in:
-                    line = line.rstrip()
-                    elements = line.split("\t")
-                    seq_region_name = elements[0]
-                    offset = int(elements[1])
-                    hit_name = elements[3]
-                    strand = elements[5]
-                    block_sizes = elements[10].split(",")
-                    block_sizes = list(filter(None, block_sizes))
-                    block_starts = elements[11].split(",")
-                    block_starts = list(filter(None, block_starts))
-                    exons = bed_to_exons(block_sizes, block_starts, offset)
-                    for i, element in enumerate(exons):
-                        exon_coords = exons[i]
-                        exon_key = (
-                            seq_region_name
-                            + ":"
-                            + exon_coords[0]
-                            + ":"
-                            + exon_coords[1]
-                            + ":"
-                            + strand
-                        )
-                        if exon_key in exons_dict:
-                            exons_dict[exon_key][5] += 1
-                        else:
-                            gff_list = [
-                                seq_region_name,
-                                "CDNA",
-                                "exon",
-                                exon_coords[0],
-                                exon_coords[1],
-                                1.0,
-                                strand,
-                                ".",
-                            ]
-                            exons_dict[exon_key] = gff_list
-
-        for exon_key, gff_list in exons_dict.items():
-            gff_list[5] = str(gff_list[5])
-            gff_line = "\t".join(gff_list) + "\tsrc=W;mul=" + gff_list[5] + ";\n"
-            gff_out.write(gff_line)
-
-    sorted_hints_out = open(f"{hints_file}.srt", "w+")
-    subprocess.run(
-        ["sort", "-k1,1", "-k7,7", "-k4,4", "-k5,5", hints_file],
-        stdout=sorted_hints_out,
-    )
-    sorted_hints_out.close()
-
-
 def bed_to_exons(block_sizes, block_starts, offset):
     exons = []
     for i, element in enumerate(block_sizes):
@@ -3315,150 +3185,6 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.
             stringtie_merge_input_file,
         ]
     )
-
-
-def splice_junction_to_gff(input_dir: pathlib.Path, hints_file):
-    """
-    TODO
-    unused function, not refactored, delete
-    """
-    with open(hints_file, "w+") as sjf_out:
-        for sj_tab_file in input_dir.glob("*.sj.tab"):
-            with open(sj_tab_file) as sjf_in:
-                for line in sjf_in:
-                    elements = line.split("\t")
-                    strand = "+"
-                    # If the strand is undefined then skip, Augustus expects a strand
-                    if elements[3] == "0":
-                        continue
-                    elif elements[3] == "2":
-                        strand = "-"
-
-                    junction_length = int(elements[2]) - int(elements[1]) + 1
-                    if junction_length < 100:
-                        continue
-
-                    if not elements[4] and elements[7] < 10:
-                        continue
-
-                    # For the moment treat multimapping and single mapping things as a combined score
-                    score = float(elements[6]) + float(elements[7])
-                    score = str(score)
-                    output_line = [
-                        elements[0],
-                        "RNASEQ",
-                        "intron",
-                        elements[1],
-                        elements[2],
-                        score,
-                        strand,
-                        ".",
-                        f"src=W;mul={score};",
-                    ]
-                    sjf_out.write("\t".join(output_line) + "\n")
-
-
-def model_builder(work_dir: pathlib.Path):
-    """
-    TODO
-    unused function, not refactored, delete
-    """
-    star_output_dir = work_dir / "star_output"
-
-    all_junctions_file = star_output_dir / "all_junctions.sj"
-    with open(all_junctions_file, "w+") as sjf_out:
-        for sj_tab_file in glob.glob(f"{input_dir}/*.sj.tab"):
-            with open(sj_tab_file) as sjf_in:
-                for line in sjf_in:
-                    elements = line.split("\t")
-                    strand = "+"
-
-                    # my $slice_name = $eles[0];
-                    # my $start = $eles[1];
-                    # my $end = $eles[2];
-                    # my $strand = $eles[3];
-
-                    # If the strand is undefined then skip, Augustus expects a strand
-                    if elements[3] == "0":
-                        continue
-                    elif elements[3] == "2":
-                        strand = "-"
-
-                    junction_length = int(elements[2]) - int(elements[1]) + 1
-                    if junction_length < 100:
-                        continue
-
-                    if not elements[4] and elements[7] < 10:
-                        continue
-
-                    # For the moment treat multimapping and single mapping things as a combined score
-                    score = float(elements[6]) + float(elements[7])
-                    score = str(score)
-                    output_line = [
-                        elements[0],
-                        "RNASEQ",
-                        "intron",
-                        elements[1],
-                        elements[2],
-                        score,
-                        strand,
-                        ".",
-                        f"src=W;mul={score};",
-                    ]
-                    sjf_out.write("\t".join(output_line) + "\n")
-
-
-def split_genome(
-    genome_file: Union[pathlib.Path, str], target_dir: pathlib.Path, min_seq_length: int
-):
-    """
-    TODO
-    unused function, not refactored, delete
-    """
-    # This is the lazy initial way of just splitting into a dir of files based on the toplevel sequence with a min sequence length filter
-    # There are a couple of obvious improvements:
-    # 1) Instead of making files for all seqs, just process N seqs parallel, where N = num_threads. Then you could clean up the seq file
-    #    after each seq finishes, thus avoiding potentially having thousands of file in a dir
-    # 2) Split the seq into even slices and process these in parallel (which the same cleanup as in 1). For sequences smaller than the
-    #    target slice size, bundle them up together into a single file. Vastly more complex, partially implemented in the splice_genome method
-    #    Allows for more consistency with parallelisation (since there should be no large outliers). But require a mapping strategy for the
-    #    coords and sequence names and all the hints will need to be adjusted
-    current_header = ""
-    current_seq = ""
-
-    with open(genome_file) as file_in:
-        for line in file_in:
-            match = re.search(r">(.+)$", line)
-            if match and current_header:
-                if len(current_seq) > min_seq_length:
-                    file_out_name = target_dir / f"{current_header}.split.fa"
-                    if not file_out_name.exists():
-                        with open(file_out_name, "w+") as file_out:
-                            file_out.write(f">{current_header}\n{current_seq}\n")
-
-                    else:
-                        logger.info(
-                            "Existing split file found, will not overwrite: %s"
-                            % file_out_name
-                        )
-
-                current_seq = ""
-                current_header = match.group(1)
-            elif match:
-                current_header = match.group(1)
-            else:
-                current_seq += line.rstrip()
-
-        if len(current_seq) > min_seq_length:
-            file_out_name = target_dir / f"{current_header}.split.fa"
-            if not file_out_name.exists():
-                with open(file_out_name, "w+") as file_out:
-                    file_out.write(f">{current_header}\n{current_seq}\n")
-
-            else:
-                logger.info(
-                    "Existing split file found, will not overwrite:\n%s" % file_out_name
-                )
 
 
 def run_finalise_geneset(
@@ -4296,26 +4022,6 @@ def fasta_to_dict(fasta_list):
     return index
 
 
-# def merge_gtf_files(file_paths,id_label):
-#     gtf_file_path = os.path.join(output_dir,'annotation.gtf')
-#     gtf_out = open(gtf_file_path,'w+')
-#     for gtf_file_path in gtf_files:
-#         gtf_file_name = os.path.basename(gtf_file_path)
-#         match = re.search(r'\.rs(\d+)\.re(\d+)\.',gtf_file_name)
-#         start_offset = int(match.group(1))
-#         gtf_in = open(gtf_file_path,'r')
-#         line = gtf_in.readline()
-#         while line:
-#             values = line.split("\t")
-#             if len(values) == 9 and (values[2] in feature_types):
-#                 values[3] = str(int(values[3]) + (start_offset - 1))
-#                 values[4] = str(int(values[4]) + (start_offset - 1))
-#                 gtf_out.write("\t".join(values))
-#                 line = gtf_in.readline()
-#         gtf_in.close()
-#     gtf_out.close()
-
-
 def subprocess_run_and_log(command):
     logger.info("subprocess_run_and_log command: %s" % " ".join(command))
     subprocess.run(command)
@@ -4383,83 +4089,6 @@ def get_seq_region_names(genome_file: Union[pathlib.Path, str]):
                     region_list.append(match.group(1))
 
     return region_list
-
-
-def slice_genome(genome_file: Union[pathlib.Path, str], target_dir, target_slice_size):
-    """
-    TODO
-    unused function, not refactored, delete
-    """
-    # The below is sort of tested
-    # Without the
-    target_seq_length = 50_000_000
-    min_seq_length = 1000
-    current_header = ""
-    current_seq = ""
-    seq_dict = {}
-    for line in seq:
-        match = re.search(r">(.+)$", line)
-        if match and current_header:
-            seq_dict[current_header] = current_seq
-            current_seq = ""
-            current_header = match.group(1)
-        elif match:
-            current_header = match.group(1)
-        else:
-            current_seq += line.rstrip()
-
-    seq_dict[current_header] = current_seq
-
-    seq_buffer = 0
-    file_number = 0
-    file_name = f"genome_file_{file_number}"
-
-    for header in seq_dict:
-        seq_iterator = 0
-        seq = seq_dict[header]
-
-        while len(seq) > target_seq_length:
-            with open(os.path.join(target_dir, file_name), "w+") as file_out:
-                subseq = seq[0:target_seq_length]
-                file_out.write(f">{header}_sli{seq_iterator}\n{subseq}\n")
-            seq = seq[target_seq_length:]
-            seq_iterator += 1
-            file_number += 1
-            file_name = f"genome_file_{file_number}"
-
-        if len(seq) >= min_seq_length:
-            file_name = f"genome_file_{file_number}"
-            with open(os.path.join(file_name), "w+") as file_out:
-                file_out.write(f">{header}_sli{seq_iterator}\n{seq}\n")
-            file_number += 1
-            file_name = f"genome_file_{file_number}"
-
-
-def coallate_results(main_output_dir):
-    """
-    TODO
-    unused function, not refactored, delete
-    """
-    results_dir = create_dir(main_output_dir, "results")
-
-    output_dirs = [
-        "augustus_output",
-        "cpg_output",
-        "dust_output",
-        "eponine_output",
-        "red_output",
-        "rfam_output",
-        "trf_output",
-        "trnascan_output",
-    ]
-    for output_dir in output_dirs:
-        match = re.search(r"(.+)_output", output_dir)
-        result_type = match.group(1)
-        results_path = main_output_dir / output_dir / "annotation.gtf"
-        if results_path.exists():
-            copy_path = results_dir / f"{result_type}.gtf"
-            cpy_cmd = ["cp", results_path, copy_path]
-            subprocess.run(cpy_cmd)
 
 
 def main():
@@ -5021,10 +4650,6 @@ def main():
             db_details,
             num_threads,
         )
-
-    # coallate_results(work_dir)
-
-    # run_find_orfs(genome_file,work_dir)
 
 
 if __name__ == "__main__":
