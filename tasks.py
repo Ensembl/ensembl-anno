@@ -23,6 +23,8 @@ import re
 import shutil
 import subprocess
 
+from typing import Union
+
 # project imports
 from utils import (
     check_exe,
@@ -37,9 +39,9 @@ def run_star_align(
     star_path,
     trim_fastq,
     subsample_script_path,
-    main_output_dir,
+    main_output_dir: pathlib.Path,
     short_read_fastq_dir,
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     max_reads_per_sample,
     max_total_reads,
     max_intron_length: int,
@@ -50,7 +52,6 @@ def run_star_align(
 
     # TODO
     # use and pass Path objects directly as arguments to the function
-    main_output_dir = pathlib.Path(main_output_dir)
     short_read_fastq_dir = pathlib.Path(short_read_fastq_dir)
 
     if not star_path:
@@ -99,14 +100,13 @@ def run_star_align(
 
             if (
                 fastq_file_pair
-                and os.path.exists(fastq_file + ".sub")
-                and os.path.exists(fastq_file_pair + ".sub")
+                and os.path.exists(f"{fastq_file}.sub")
+                and os.path.exists(f"{fastq_file_pair}.sub")
             ):
                 logger.info(
                     "Found existing .sub files on the fastq path for both members of the pair, will use those instead of subsampling again:\n%s\n%s"
-                    % fastq_file
-                    + ".sub",
-                    fastq_file_pair + ".sub",
+                    % f"{fastq_file}.sub",
+                    f"{fastq_file_pair}.sub",
                 )
             elif fastq_file_pair:
                 pool.apply_async(
@@ -117,11 +117,10 @@ def run_star_align(
                         subsample_script_path,
                     ),
                 )
-            elif os.path.exists(fastq_file + ".sub"):
+            elif os.path.exists(f"{fastq_file}.sub"):
                 logger.info(
                     "Found an existing .sub file on the fastq path, will use that instead:\n%s"
-                    % fastq_file
-                    + ".sub"
+                    % f"{fastq_file}.sub"
                 )
             else:
                 pool.apply_async(
@@ -168,7 +167,7 @@ def run_star_align(
 
     logger.info("Running STAR on the files in the fastq dir")
     for fastq_file_path in fastq_file_list:
-        logger.info(fastq_file_path)
+        logger.info("fastq_file_path: %s" % fastq_file_path)
         fastq_file_name = os.path.basename(fastq_file_path)
         check_compression = re.search(r".gz$", fastq_file_name)
 

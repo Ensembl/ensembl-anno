@@ -38,18 +38,20 @@ from utils import (
     add_log_file_handler,
     check_exe,
     check_file,
+    check_gtf_content,
     create_dir,
     create_paired_paths,
     get_seq_region_lengths,
     logger,
+    prlimit_command,
 )
 
 
 def load_results_to_ensembl_db(
-    main_script_dir: Union[pathlib.Path, str],
+    main_script_dir: pathlib.Path,
     load_to_ensembl_db,
     genome_file: Union[pathlib.Path, str],
-    main_output_dir: Union[pathlib.Path, str],
+    main_output_dir: pathlib.Path,
     db_details,
     num_threads: int,
 ):
@@ -268,7 +270,7 @@ def load_results_to_ensembl_db(
 def generic_load_records_to_ensembl_db(
     load_to_ensembl_db,
     db_loading_script,
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     db_details,
     db_loading_dir,
     load_type,
@@ -299,7 +301,7 @@ def generic_load_records_to_ensembl_db(
 def multiprocess_load_records_to_ensembl_db(
     load_to_ensembl_db,
     db_loading_script,
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     db_details,
     output_dir,
     load_type,
@@ -351,7 +353,7 @@ def multiprocess_load_records_to_ensembl_db(
         if load_to_ensembl_db == "single_transcript_genes":
             loading_cmd.append("-make_single_transcript_genes")
 
-    logger.info(" ".join(loading_cmd))
+    logger.info("loading_cmd: %s" % " ".join(loading_cmd))
     subprocess.run(loading_cmd)
     gtf_temp_out.close()
     os.remove(gtf_temp_file_path)  # NOTE: doesn't seem to be working
@@ -422,6 +424,10 @@ def batch_gtf_records(input_gtf_file, batch_size, output_dir, record_type):
 
 
 def run_find_orfs(genome_file, main_output_dir):
+    """
+    TODO
+    unused function, not refactored, delete
+    """
     min_orf_length = 600
 
     orf_output_dir = create_dir(main_output_dir, "orf_output")
@@ -442,16 +448,21 @@ def run_find_orfs(genome_file, main_output_dir):
             )
 
 
-def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_dir):
+def find_orf_phased_region(
+    region_name, seq, phase, min_orf_length, orf_output_dir: pathlib.Path
+):
+    """
+    TODO
+    unused function, not refactored, delete
+    (used in unused function)
+    """
     current_index = phase
     orf_counter = 1
     if phase > 2:
         seq = reverse_complement(seq)
         current_index = current_index % 3
 
-    orf_file_path = os.path.join(
-        orf_output_dir, (region_name + ".phase" + str(phase) + ".orf.fa")
-    )
+    orf_file_path = orf_output_dir / f"{region_name}.phase{phase}.orf.fa"
     with open(orf_file_path, "w+") as orf_out:
         while current_index < len(seq):
             codon = seq[current_index : current_index + 3]
@@ -469,7 +480,7 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
                             orf_out.write(
                                 f">{region_name}_phase{phase}_orf{orf_counter}\n"
                             )
-                            orf_out.write(orf_seq + "\n")
+                            orf_out.write(f"{orf_seq}\n")
                             orf_counter += 1
                             orf_seq = ""
                             break
@@ -482,7 +493,7 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
 
 
 def run_repeatmasker_regions(
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     repeatmasker_path,
     library,
     species,
@@ -506,7 +517,7 @@ def run_repeatmasker_regions(
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
     )
 
     if not library:
@@ -559,7 +570,7 @@ def run_repeatmasker_regions(
 def multiprocess_repeatmasker(
     generic_repeatmasker_cmd,
     slice_id,
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     repeatmasker_output_dir: Union[pathlib.Path, str],
 ):
     region_name = slice_id[0]
@@ -595,7 +606,7 @@ def multiprocess_repeatmasker(
 
     repeatmasker_cmd = generic_repeatmasker_cmd.copy()
     repeatmasker_cmd.append(region_fasta_file_path)
-    logger.info(" ".join(repeatmasker_cmd))
+    logger.info("repeatmasker_cmd: %s" % " ".join(repeatmasker_cmd))
     subprocess.run(repeatmasker_cmd)
 
     create_repeatmasker_gtf(
@@ -652,7 +663,11 @@ def create_repeatmasker_gtf(
 
 
 def run_eponine_regions(
-    genome_file, java_path, eponine_path, main_output_dir, num_threads: int
+    genome_file: Union[pathlib.Path, str],
+    java_path,
+    eponine_path,
+    main_output_dir,
+    num_threads: int,
 ):
     if not java_path:
         java_path = "java"
@@ -675,7 +690,7 @@ def run_eponine_regions(
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
     )
 
     threshold = "0.999"
@@ -709,7 +724,7 @@ def run_eponine_regions(
 def multiprocess_eponine(
     generic_eponine_cmd,
     slice_id,
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     eponine_output_dir: Union[pathlib.Path, str],
 ):
     region_name = slice_id[0]
@@ -746,7 +761,7 @@ def multiprocess_eponine(
     eponine_cmd = generic_eponine_cmd.copy()
     eponine_cmd.append(region_fasta_file_path)
 
-    logger.info(" ".join(eponine_cmd))
+    logger.info("eponine_cmd: %s" % " ".join(eponine_cmd))
     subprocess.run(eponine_cmd, stdout=eponine_out)
     eponine_out.close()
 
@@ -780,7 +795,9 @@ def create_eponine_gtf(eponine_output_file_path, region_results_file_path, regio
                 feature_count += 1
 
 
-def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads: int):
+def run_cpg_regions(
+    genome_file: Union[pathlib.Path, str], cpg_path, main_output_dir, num_threads: int
+):
     if not cpg_path:
         cpg_path = "cpg_lh"
 
@@ -797,7 +814,7 @@ def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads: int):
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
     )
 
     logger.info("Running CpG processes")
@@ -854,7 +871,7 @@ def multiprocess_cpg(
     cpg_out = open(cpg_output_file_path, "w+")
 
     cpg_cmd = [cpg_path, region_fasta_file_path]
-    logger.info(" ".join(cpg_cmd))
+    logger.info("cpg_cmd: %s" % " ".join(cpg_cmd))
     subprocess.run(cpg_cmd, stdout=cpg_out)
     cpg_out.close()
 
@@ -899,16 +916,19 @@ def create_cpg_gtf(cpg_output_file_path, region_results_file_path, region_name):
 
 
 def run_trnascan_regions(
-    genome_file, trnascan_path, trnascan_filter_path, main_output_dir, num_threads: int
+    genome_file: Union[pathlib.Path, str],
+    trnascan_path,
+    trnascan_filter_path,
+    main_output_dir,
+    num_threads: int,
 ):
     if not trnascan_path:
         trnascan_path = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/tRNAscan-SE"
-    logger.info(trnascan_path)
-    if not trnascan_filter_path:
-        trnascan_filter_path = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
-    logger.info(trnascan_filter_path)
     check_exe(trnascan_path)
     logger.info("trnascan_path: %s" % trnascan_path)
+
+    if not trnascan_filter_path:
+        trnascan_filter_path = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
     # check_exe(trnascan_filter_path)
     check_file(trnascan_filter_path)
     logger.info("trnascan_filter_path: %s" % trnascan_filter_path)
@@ -925,7 +945,7 @@ def run_trnascan_regions(
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
     )
 
     generic_trnascan_cmd = [
@@ -963,7 +983,7 @@ def run_trnascan_regions(
 def multiprocess_trnascan(
     generic_trnascan_cmd,
     slice_id,
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     trnascan_filter_path,
     trnascan_output_dir: Union[pathlib.Path, str],
 ):
@@ -1090,7 +1110,9 @@ def create_trnascan_gtf(
                 gene_counter += 1
 
 
-def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads: int):
+def run_dust_regions(
+    genome_file: Union[pathlib.Path, str], dust_path, main_output_dir, num_threads: int
+):
     if not dust_path:
         dust_path = "dustmasker"
 
@@ -1108,7 +1130,7 @@ def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads: int):
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
     )
 
     generic_dust_cmd = [dust_path, "-in"]
@@ -1132,7 +1154,10 @@ def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads: int):
 
 
 def multiprocess_dust(
-    generic_dust_cmd, slice_id, genome_file, dust_output_dir: Union[pathlib.Path, str]
+    generic_dust_cmd,
+    slice_id,
+    genome_file: Union[pathlib.Path, str],
+    dust_output_dir: pathlib.Path,
 ):
     region_name = slice_id[0]
     start = slice_id[1]
@@ -1166,7 +1191,7 @@ def multiprocess_dust(
     dust_out = open(dust_output_file_path, "w+")
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
-    logger.info(" ".join(dust_cmd))
+    logger.info("dust_cmd" % " ".join(dust_cmd))
     subprocess.run(dust_cmd, stdout=dust_out)
     dust_out.close()
 
@@ -1190,7 +1215,9 @@ def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name
                 repeat_count += 1
 
 
-def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads: int):
+def run_trf_repeats(
+    genome_file: Union[pathlib.Path, str], trf_path, main_output_dir, num_threads: int
+):
     if not trf_path:
         trf_path = "trf"
 
@@ -1207,7 +1234,7 @@ def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads: int):
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
     )
 
     match_score = 2
@@ -1256,9 +1283,12 @@ def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads: int):
 
 
 def multiprocess_trf(
-    generic_trf_cmd, slice_id, genome_file, trf_output_dir, trf_output_extension
+    generic_trf_cmd,
+    slice_id,
+    genome_file: Union[pathlib.Path, str],
+    trf_output_dir: pathlib.Path,
+    trf_output_extension,
 ):
-
     region_name = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
@@ -1277,21 +1307,21 @@ def multiprocess_trf(
         output_dir=trf_output_dir,
     )
 
-    slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
-    region_fasta_file_name = slice_file_name + ".fa"
-    region_fasta_file_path = os.path.join(trf_output_dir, region_fasta_file_name)
+    slice_file_name = f"{region_name}.rs{start}.re{end}"
+    region_fasta_file_name = f"{slice_file_name}.fa"
+    region_fasta_file_path = trf_output_dir / region_fasta_file_name
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = slice_file_name + ".trf.gtf"
-    region_results_file_path = os.path.join(trf_output_dir, region_results_file_name)
+    region_results_file_name = f"{slice_file_name}.trf.gtf"
+    region_results_file_path = trf_output_dir / region_results_file_name
 
-    # TRF writes to the current dir, so swtich to the output dir for it
+    # TRF writes to the current dir, so switch to the output dir for it
     os.chdir(trf_output_dir)
-    trf_output_file_path = region_fasta_file_path + trf_output_extension
+    trf_output_file_path = f"{region_fasta_file_path}{trf_output_extension}"
     trf_cmd = generic_trf_cmd.copy()
     trf_cmd[1] = region_fasta_file_path
-    logger.info(" ".join(trf_cmd))
+    logger.info("trf_cmd: %s" % " ".join(trf_cmd))
     subprocess.run(trf_cmd)
     create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
     os.remove(trf_output_file_path)
@@ -1328,7 +1358,7 @@ def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
 
 
 def run_cmsearch_regions(
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     cmsearch_path,
     rfam_cm_db_path,
     rfam_seeds_file_path,
@@ -1344,8 +1374,8 @@ def run_cmsearch_regions(
 
     os.chdir(rfam_output_dir)
 
-    output_file = os.path.join(rfam_output_dir, "annotation.gtf")
-    if os.path.exists(output_file):
+    output_file = rfam_output_dir / "annotation.gtf"
+    if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("CMsearch GTF file already exists, skipping analysis")
@@ -1367,7 +1397,7 @@ def run_cmsearch_regions(
     rfam_seeds_file_path = (
         "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed"
     )
-    rfam_selected_models_file = os.path.join(rfam_output_dir, "rfam_models.cm")
+    rfam_selected_models_file = rfam_output_dir / "rfam_models.cm"
     with open(rfam_accession_file) as rfam_accessions_in:
         rfam_accessions = rfam_accessions_in.read().splitlines()
 
@@ -1383,7 +1413,7 @@ def run_cmsearch_regions(
             if match:
                 model_accession = match.group(1)
                 if model_accession in rfam_accessions:
-                    rfam_cm_out.write(model + "//\n")
+                    rfam_cm_out.write(f"{model}//\n")
 
     seed_descriptions = get_rfam_seed_descriptions(rfam_seeds_file_path)
     cv_models = extract_rfam_metrics(rfam_selected_models_file)
@@ -1391,7 +1421,7 @@ def run_cmsearch_regions(
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
     )
 
     generic_cmsearch_cmd = [
@@ -1432,10 +1462,9 @@ def run_cmsearch_regions(
     if num_threads > 5:
         num_threads = 5
     pool = multiprocessing.Pool(num_threads)
-    exception_files = glob.glob(rfam_output_dir + "/*.rfam.except")
-    for exception_file_path in exception_files:
-        exception_file_name = os.path.basename(exception_file_path)
-        logger.info("Running himem job for failed region:\n" + exception_file_path)
+    for exception_file_path in rfam_output_dir.glob("*.rfam.except"):
+        logger.info("Running himem job for failed region:\n%s" % exception_file_path)
+        exception_file_name = exception_file_path.name
         match = re.search(r"(.+)\.rs(\d+)\.re(\d+)\.", exception_file_name)
         if match:
             except_region = match.group(1)
@@ -1461,33 +1490,16 @@ def run_cmsearch_regions(
     slice_output_to_gtf(rfam_output_dir, ".rfam.gtf", 1, None, None)
 
 
-def prlimit_command(command_list, virtual_memory_limit):
-
-    """
-    Prepend memory limiting arguments to a command list to be run with subprocess.
-
-    This method uses the `prlimit` program to set the memory limit.
-
-    The `virtual_memory_limit` size is in bytes.
-
-    prlimit arguments:
-    -v, --as[=limits]
-           Address space limit.
-    """
-    return ["prlimit", f"-v{virtual_memory_limit}"] + command_list
-
-
 def multiprocess_cmsearch(
     generic_cmsearch_cmd,
     slice_id,
-    genome_file,
-    rfam_output_dir,
+    genome_file: Union[pathlib.Path, str],
+    rfam_output_dir: pathlib.Path,
     rfam_selected_models_file,
     cv_models,
     seed_descriptions,
     memory_limit,
 ):
-
     region_name = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
@@ -1506,32 +1518,29 @@ def multiprocess_cmsearch(
         output_dir=rfam_output_dir,
     )
 
-    slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
-    region_fasta_file_name = slice_file_name + ".fa"
-    region_fasta_file_path = os.path.join(rfam_output_dir, region_fasta_file_name)
+    slice_file_name = f"{region_name}.rs{start}.re{end}"
+    region_fasta_file_name = f"{slice_file_name}.fa"
+    region_fasta_file_path = rfam_output_dir / region_fasta_file_name
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_tblout_file_name = slice_file_name + ".tblout"
-    region_tblout_file_path = os.path.join(rfam_output_dir, region_tblout_file_name)
-    region_results_file_name = slice_file_name + ".rfam.gtf"
-    region_results_file_path = os.path.join(rfam_output_dir, region_results_file_name)
+    region_tblout_file_name = f"{slice_file_name}.tblout"
+    region_tblout_file_path = rfam_output_dir / region_tblout_file_name
+    region_results_file_name = f"{slice_file_name}.rfam.gtf"
+    region_results_file_path = rfam_output_dir / region_results_file_name
 
-    exception_results_file_name = slice_file_name + ".rfam.except"
-    exception_results_file_path = os.path.join(
-        rfam_output_dir, exception_results_file_name
-    )
+    exception_results_file_name = f"{slice_file_name}.rfam.except"
+    exception_results_file_path = rfam_output_dir / exception_results_file_name
 
     cmsearch_cmd = generic_cmsearch_cmd.copy()
     cmsearch_cmd.append(region_tblout_file_path)
     cmsearch_cmd.append(rfam_selected_models_file)
     cmsearch_cmd.append(region_fasta_file_path)
-    logger.info(" ".join(cmsearch_cmd))
 
     if memory_limit is not None:
         cmsearch_cmd = prlimit_command(cmsearch_cmd, memory_limit)
 
-    logger.info(" ".join(cmsearch_cmd))
+    logger.info("cmsearch_cmd: %s" % " ".join(cmsearch_cmd))
 
     return_value = None
     try:
@@ -1556,59 +1565,57 @@ def multiprocess_cmsearch(
     initial_table_results = parse_rfam_tblout(region_tblout_file_path, region_name)
     unique_table_results = remove_rfam_overlap(initial_table_results)
     filtered_table_results = filter_rfam_results(unique_table_results, cv_models)
-    create_rfam_gtf(
-        filtered_table_results,
-        cv_models,
-        seed_descriptions,
-        region_name,
-        region_results_file_path,
-        genome_file,
-        rfam_output_dir,
-    )
+    if filtered_table_results:
+        create_rfam_gtf(
+            filtered_results=filtered_table_results,
+            cm_models=cv_models,
+            descriptions=seed_descriptions,
+            region_name=region_name,
+            region_results_file_path=region_results_file_path,
+            genome_file=genome_file,
+            rfam_output_dir=rfam_output_dir,
+        )
     os.remove(region_fasta_file_path)
     os.remove(region_tblout_file_path)
     gc.collect()
 
 
 def get_rfam_seed_descriptions(rfam_seeds_path):
-
     descriptions = {}
-    rfam_seeds = []
 
     # NOTE: for some reason the decoder breaks on the seeds file, so I have made this ignore errors
     with open(rfam_seeds_path, encoding="utf-8", errors="ignore") as rfam_seeds_in:
-        rfam_seeds = rfam_seeds_in.read().splitlines()
+        for line in rfam_seeds_in:
+            seed = line.rstrip()
 
-    for seed in rfam_seeds:
-        domain_match = re.search("^\#=GF AC   (.+)", seed)
-        if domain_match:
-            domain = domain_match.group(1)
-            descriptions[domain] = {}
-            continue
+            domain_match = re.search("^\#=GF AC   (.+)", seed)
+            if domain_match:
+                domain = domain_match.group(1)
+                descriptions[domain] = {}
+                continue
 
-        description_match = re.search("^\#=GF DE   (.+)", seed)
-        if description_match:
-            description = description_match.group(1)
-            descriptions[domain]["description"] = description
-            continue
+            description_match = re.search("^\#=GF DE   (.+)", seed)
+            if description_match:
+                description = description_match.group(1)
+                descriptions[domain]["description"] = description
+                continue
 
-        name_match = re.search("^\#=GF ID   (.+)", seed)
-        if name_match:
-            name = name_match.group(1)
-            descriptions[domain]["name"] = name
-            continue
+            name_match = re.search("^\#=GF ID   (.+)", seed)
+            if name_match:
+                name = name_match.group(1)
+                descriptions[domain]["name"] = name
+                continue
 
-        type_match = re.search("^\#=GF TP   Gene; (.+)", seed)
-        if type_match:
-            rfam_type = type_match.group(1)
-            descriptions[domain]["type"] = rfam_type
-            continue
+            type_match = re.search("^\#=GF TP   Gene; (.+)", seed)
+            if type_match:
+                rfam_type = type_match.group(1)
+                descriptions[domain]["type"] = rfam_type
+                continue
 
     return descriptions
 
 
 def extract_rfam_metrics(rfam_selected_models_file):
-
     with open(rfam_selected_models_file, "r") as rfam_cm_in:
         rfam_data = rfam_cm_in.read()
 
@@ -1658,41 +1665,37 @@ def extract_rfam_metrics(rfam_selected_models_file):
 
 
 def parse_rfam_tblout(region_tblout_file_path, region_name):
-
+    parsed_results = []
     with open(region_tblout_file_path, "r") as rfam_tbl_in:
-        rfam_tbl_data = rfam_tbl_in.read()
+        for result in rfam_tbl_in:
+            parsed_tbl_data = {}
+            if not re.match(r"^" + region_name, result):
+                continue
 
-    tbl_results = rfam_tbl_data.split("\n")
+            hit = result.split()
+            accession = hit[3]
+            target_name = hit[0]
+            query_name = hit[2]
+            hstart = hit[5]
+            hend = hit[6]
+            start = hit[7]
+            end = hit[8]
+            if hit[9] == "+":
+                strand = 1
+            else:
+                strand = -1
+            evalue = hit[15]
+            score = hit[14]
 
-    all_parsed_results = []
-    for result in tbl_results:
-        parsed_tbl_data = {}
-        if not re.match(r"^" + region_name, result):
-            continue
+            parsed_tbl_data["accession"] = accession
+            parsed_tbl_data["start"] = start
+            parsed_tbl_data["end"] = end
+            parsed_tbl_data["strand"] = strand
+            parsed_tbl_data["query_name"] = query_name
+            parsed_tbl_data["score"] = score
+            parsed_results.append(parsed_tbl_data)
 
-        hit = result.split()
-        accession = hit[3]
-        target_name = hit[0]
-        query_name = hit[2]
-        hstart = hit[5]
-        hend = hit[6]
-        start = hit[7]
-        end = hit[8]
-        if hit[9] == "+":
-            strand = 1
-        else:
-            strand = -1
-        evalue = hit[15]
-        score = hit[14]
-
-        parsed_tbl_data["accession"] = accession
-        parsed_tbl_data["start"] = start
-        parsed_tbl_data["end"] = end
-        parsed_tbl_data["strand"] = strand
-        parsed_tbl_data["query_name"] = query_name
-        parsed_tbl_data["score"] = score
-        all_parsed_results.append(parsed_tbl_data)
-    return all_parsed_results
+    return parsed_results
 
 
 # NOTE some of the code above and the code commented out here is to do with creating
@@ -1715,7 +1718,6 @@ def parse_rfam_tblout(region_tblout_file_path, region_name):
 
 
 def remove_rfam_overlap(parsed_tbl_data):
-
     excluded_structures = {}
     chosen_structures = []
     for structure_x in parsed_tbl_data:
@@ -1724,27 +1726,13 @@ def remove_rfam_overlap(parsed_tbl_data):
         structure_x_end = int(structure_x["end"])
         structure_x_score = float(structure_x["score"])
         structure_x_accession = structure_x["accession"]
-        structure_x_string = ":".join(
-            [
-                str(structure_x_start),
-                str(structure_x_end),
-                str(structure_x_score),
-                structure_x_accession,
-            ]
-        )
+        structure_x_string = "{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
         for structure_y in parsed_tbl_data:
             structure_y_start = int(structure_y["start"])
             structure_y_end = int(structure_y["end"])
             structure_y_score = float(structure_y["score"])
             structure_y_accession = structure_y["accession"]
-            structure_y_string = ":".join(
-                [
-                    str(structure_y_start),
-                    str(structure_y_end),
-                    str(structure_y_score),
-                    structure_y_accession,
-                ]
-            )
+            structure_y_string = "{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
             if structure_y_string in excluded_structures:
                 continue
 
@@ -1764,7 +1752,6 @@ def remove_rfam_overlap(parsed_tbl_data):
 
 
 def filter_rfam_results(unfiltered_tbl_data, cv_models):
-
     filtered_results = []
     for structure in unfiltered_tbl_data:
         query = structure["query_name"]
@@ -1808,7 +1795,7 @@ def create_rfam_gtf(
     descriptions,
     region_name,
     region_results_file_path,
-    genome_file,
+    genome_file: Union[pathlib.Path, str],
     rfam_output_dir,
 ):
     if not filtered_results:
@@ -1830,7 +1817,7 @@ def create_rfam_gtf(
                         rfam_type = "misc_RNA"
                 domain = structure["query_name"]
                 padding = model["-length"]
-                #      rfam_type = description['type']
+                # rfam_type = description['type']
                 gtf_strand = structure["strand"]
                 rnafold_strand = structure["strand"]
                 if gtf_strand == 1:
@@ -1894,7 +1881,7 @@ def check_rnafold_structure(seq, rfam_output_dir):
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=rfam_output_dir
     ) as rna_temp_in:
-        rna_temp_in.writelines(">seq1\n" + seq + "\n")
+        rna_temp_in.write(f">seq1\n{seq}\n")
         rna_in_file_path = rna_temp_in.name
 
     rnafold_cmd = ["RNAfold", "--infile", rna_in_file_path]
@@ -1912,8 +1899,15 @@ def check_rnafold_structure(seq, rfam_output_dir):
 
 
 def slice_output_to_gtf(
-    output_dir, extension, unique_ids, feature_id_label, new_id_prefix
+    output_dir: pathlib.Path,
+    extension,
+    unique_ids,
+    feature_id_label,
+    new_id_prefix,
 ):
+    if not extension:
+        extension = ".gtf"
+
     # Note that this does not make unique ids at the moment
     # In many cases this is fine because the ids are unique by seq region, but in cases like batching it can cause problems
     # So will add in a helper method to make ids unique
@@ -1934,20 +1928,17 @@ def slice_output_to_gtf(
     feature_counter = 1
 
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
-    if not extension:
-        extension = ".gtf"
-    gtf_files = glob.glob(output_dir + "/*" + extension)
-    gtf_file_path = os.path.join(output_dir, "annotation.gtf")
-    with open(gtf_file_path, "w+") as gtf_out:
-        for gtf_file_path in gtf_files:
-            if os.stat(gtf_file_path).st_size == 0:
-                logger.info("File is empty, will skip:\n" + gtf_file_path)
+    gtf_output_file_path = output_dir / "annotation.gtf"
+    with open(gtf_output_file_path, "w+") as gtf_out:
+        for gtf_input_file_path in output_dir.glob("*{extension}"):
+            if gtf_input_file_path.stat().st_size == 0:
+                logger.info("File is empty, will skip:\n%s" % gtf_input_file_path)
                 continue
 
-            gtf_file_name = os.path.basename(gtf_file_path)
+            gtf_file_name = gtf_input_file_path.name
             match = re.search(r"\.rs(\d+)\.re(\d+)\.", gtf_file_name)
             start_offset = int(match.group(1))
-            with open(gtf_file_path, "r") as gtf_in:
+            with open(gtf_input_file_path, "r") as gtf_in:
                 for line in gtf_in:
                     values = line.split("\t")
                     if len(values) == 9 and (values[2] in feature_types):
@@ -1968,16 +1959,16 @@ def slice_output_to_gtf(
                                 current_gene_id = match_gene_type.group(2)
                                 full_transcript_id_string = match_gene_type.group(3)
                                 current_transcript_id = match_gene_type.group(4)
-                                gene_id_key = gtf_file_name + "." + str(current_gene_id)
+                                gene_id_key = f"{gtf_file_name}.{current_gene_id}"
                                 transcript_id_key = (
-                                    gene_id_key + "." + str(current_transcript_id)
+                                    f"{gene_id_key}.{current_transcript_id}"
                                 )
                                 if gene_id_key not in gene_id_index:
-                                    new_gene_id = "gene" + str(gene_counter)
+                                    new_gene_id = f"gene{gene_counter}"
                                     gene_id_index[gene_id_key] = new_gene_id
                                     attribs = re.sub(
                                         full_gene_id_string,
-                                        'gene_id "' + new_gene_id + '"',
+                                        f'gene_id "{new_gene_id}"',
                                         attribs,
                                     )
                                     transcript_id_count_index[gene_id_key] = 1
@@ -1986,7 +1977,7 @@ def slice_output_to_gtf(
                                     new_gene_id = gene_id_index[gene_id_key]
                                     attribs = re.sub(
                                         full_gene_id_string,
-                                        'gene_id "' + new_gene_id + '"',
+                                        f'gene_id "{new_gene_id}"',
                                         attribs,
                                     )
                                 if transcript_id_key not in gene_transcript_id_index:
@@ -2000,7 +1991,7 @@ def slice_output_to_gtf(
                                     ] = new_transcript_id
                                     attribs = re.sub(
                                         full_transcript_id_string,
-                                        'transcript_id "' + new_transcript_id + '"',
+                                        f'transcript_id "{new_transcript_id}"',
                                         attribs,
                                     )
                                     transcript_id_count_index[gene_id_key] += 1
@@ -2010,7 +2001,7 @@ def slice_output_to_gtf(
                                     ]
                                     attribs = re.sub(
                                         full_transcript_id_string,
-                                        'transcript_id "' + new_transcript_id + '"',
+                                        f'transcript_id "{new_transcript_id}"',
                                         attribs,
                                     )
                                 values[8] = attribs
@@ -2026,7 +2017,7 @@ def slice_output_to_gtf(
                                     new_feature_id = f"{new_id_prefix}{feature_counter}"
                                     attribs = re.sub(
                                         full_feature_id_string,
-                                        feature_id_label + ' "' + new_feature_id + '"',
+                                        f'{feature_id_label} "{new_feature_id}"',
                                         attribs,
                                     )
                                     feature_counter += 1
@@ -2039,8 +2030,11 @@ def slice_output_to_gtf(
                         )
 
 
-def run_red(red_path, main_output_dir, genome_file):
-
+def run_red(
+    red_path,
+    genome_file: pathlib.Path,
+    main_output_dir: Union[pathlib.Path, str],
+):
     if not red_path:
         red_path = "Red"
 
@@ -2050,40 +2044,35 @@ def run_red(red_path, main_output_dir, genome_file):
     red_repeat_dir = create_dir(red_dir, "repeat_output")
     red_genome_dir = create_dir(red_dir, "genome_dir")
 
-    sym_link_genome_cmd = "ln -s " + genome_file + " " + red_genome_dir
+    genome_file_name = genome_file.name
+    red_genome_file = red_genome_dir / genome_file_name
+    genome_file_stem = genome_file.stem
+    masked_genome_file = red_mask_dir / f"{genome_file_stem}.msk"
+    repeat_coords_file = red_repeat_dir / f"{genome_file_stem}.rpt"
+    gtf_output_file_path = red_dir / "annotation.gtf"
 
-    genome_file_name = os.path.basename(genome_file)
-    red_genome_file = os.path.join(red_genome_dir, genome_file_name)
-    masked_genome_file = os.path.join(
-        red_mask_dir, os.path.splitext(genome_file_name)[0] + ".msk"
-    )
-    repeat_coords_file = os.path.join(
-        red_repeat_dir, os.path.splitext(genome_file_name)[0] + ".rpt"
-    )
-    gtf_output_file_path = os.path.join(red_dir, "annotation.gtf")
-
-    if os.path.exists(masked_genome_file):
+    if masked_genome_file.exists():
         logger.warning(
             "Masked Genome file already found on the path to the Red mask output dir. Will not create a new file"
         )
         create_red_gtf(repeat_coords_file, gtf_output_file_path)
         return masked_genome_file
 
-    if os.path.exists(red_genome_file):
+    if red_genome_file.exists():
         logger.warning(
             "Unmasked genome file already found on the path to the Red genome dir, will not create a sym link"
         )
-
     else:
         logger.info(
-            "Preparing to sym link the genome file to the Red genome dir. Cmd\n%s"
-            % sym_link_genome_cmd
+            "Creating sym link of the genome file to the Red genome dir:\n%s\nto\n%s"
+            % genome_file,
+            red_genome_file,
         )
-        subprocess.run(["ln", "-s", genome_file, red_genome_dir])
+        red_genome_file.symlink_to(genome_file)
 
-    if not os.path.exists(os.path.join(red_genome_dir, genome_file_name)):
+    if not red_genome_file.exists():
         logger.error(
-            "Could not find the genome file in the Red genome dir or sym link to the original file. Path expected:\n%s"
+            "Could not find the genome file or sym link to the original file in the Red genome dir at:\n%s"
             % red_genome_file
         )
 
@@ -2140,18 +2129,18 @@ def run_genblast_align(
 
     check_exe(makeblastdb_path)
 
-    create_dir(genblast_dir)
+    genblast_dir = create_dir(genblast_dir)
 
-    output_file = os.path.join(genblast_dir, "annotation.gtf")
-    if os.path.exists(output_file):
+    output_file = genblast_dir / "annotation.gtf"
+    if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Genblast GTF file exists, skipping analysis")
             return
 
-    genblast_output_file = os.path.join(genblast_dir, "genblast")
+    genblast_output_file = genblast_dir / "genblast"
 
-    asnb_file = masked_genome_file + ".asnb"
+    asnb_file = f"{masked_genome_file}.asnb"
     logger.info("ASNB file: %s" % asnb_file)
 
     if not os.path.exists("alignscore.txt"):
@@ -2164,10 +2153,12 @@ def run_genblast_align(
         )
 
     if not os.path.exists(masked_genome_file):
-        raise IOError("Masked genome file does not exist: %s" % masked_genome_file)
+        raise FileNotFoundError(
+            "Masked genome file does not exist: %s" % masked_genome_file
+        )
 
     if not os.path.exists(protein_file):
-        raise IOError("Protein file does not exist: %s" % protein_file)
+        raise FileNotFoundError("Protein file does not exist: %s" % protein_file)
 
     if not os.path.exists(asnb_file):
         run_convert2blastmask(convert2blastmask_path, masked_genome_file, asnb_file)
@@ -2175,11 +2166,13 @@ def run_genblast_align(
         logger.info("Found an existing asnb, so will skip convert2blastmask")
 
     if not os.path.exists(asnb_file):
-        raise IOError("asnb file does not exist: %s" % asnb_file)
+        raise FileNotFoundError("asnb file does not exist: %s" % asnb_file)
 
     run_makeblastdb(makeblastdb_path, masked_genome_file, asnb_file)
 
-    batched_protein_files = split_protein_file(protein_file, genblast_dir, 20)
+    batched_protein_files = split_protein_file(
+        protein_file=protein_file, protein_output_dir=genblast_dir, batch_size=20
+    )
 
     pool = multiprocessing.Pool(num_threads)
     for batched_protein_file in batched_protein_files:
@@ -2202,16 +2195,15 @@ def run_genblast_align(
 
 
 def multiprocess_genblast(
-    batched_protein_file,
+    batched_protein_file: pathlib.Path,
     masked_genome_file,
     genblast_path,
     genblast_timeout_secs,
     max_intron_length,
 ):
-
-    batch_num = os.path.splitext(batched_protein_file)[0]
-    batch_dir = os.path.dirname(batched_protein_file)
-    logger.info("Running GenBlast on " + batched_protein_file + ":")
+    # batch_num = os.path.splitext(batched_protein_file)[0]
+    # batch_dir = os.path.dirname(batched_protein_file)
+    logger.info("Running GenBlast on %s:" % batched_protein_file)
 
     genblast_cmd = [
         genblast_path,
@@ -2250,40 +2242,39 @@ def multiprocess_genblast(
         batched_protein_file,
     ]
 
-    logger.info(" ".join(genblast_cmd))
+    logger.info("genblast_cmd: %s" % " ".join(genblast_cmd))
     # Using the child process termination as described here:
     # https://alexandra-zaharia.github.io/posts/kill-subprocess-and-its-children-on-timeout-python/
     try:
         p = subprocess.Popen(genblast_cmd, start_new_session=True)
         p.wait(timeout=genblast_timeout_secs)
     except subprocess.TimeoutExpired:
-        logger.error("Timeout reached for file:\n" + batched_protein_file)
-        subprocess.run(["touch", (batched_protein_file + ".except")])
+        logger.error("Timeout reached for file:\n%s" % batched_protein_file)
+        subprocess.run(["touch", f"{batched_protein_file}.except"])
         os.killpg(os.getpgid(p.pid), signal.SIGTERM)
 
-    files_to_delete = glob.glob(batched_protein_file + "*msk.blast*")
+    files_to_delete = glob.glob(f"{batched_protein_file}*msk.blast*")
     files_to_delete.append(batched_protein_file)
     for file_to_delete in files_to_delete:
         subprocess.run(["rm", file_to_delete])
 
 
 def generate_genblast_gtf(genblast_dir):
-    file_out_name = os.path.join(genblast_dir, "annotation.gtf")
-    file_out = open(file_out_name, "w+")
-    genblast_extension = "_1.1c_2.3_s1_0_16_1"
-    for root, dirs, files in os.walk(genblast_dir):
-        for genblast_file in files:
-            genblast_file = os.path.join(root, genblast_file)
-            if genblast_file.endswith(".gff"):
-                gtf_string = convert_gff_to_gtf(genblast_file)
-                file_out.write(gtf_string)
-            elif (
-                genblast_file.endswith(".fa.blast")
-                or genblast_file.endswith(".fa.blast.report")
-                or genblast_file.endswith(genblast_extension)
-            ):
-                subprocess.run(["rm", genblast_file])
-    file_out.close()
+    file_out_name = genblast_dir / "annotation.gtf"
+    with open(file_out_name, "w+") as file_out:
+        genblast_extension = "_1.1c_2.3_s1_0_16_1"
+        for root, dirs, files in os.walk(str(genblast_dir)):
+            for genblast_file in files:
+                genblast_file = os.path.join(root, genblast_file)
+                if genblast_file.endswith(".gff"):
+                    gtf_string = convert_gff_to_gtf(genblast_file)
+                    file_out.write(gtf_string)
+                elif (
+                    genblast_file.endswith(".fa.blast")
+                    or genblast_file.endswith(".fa.blast.report")
+                    or genblast_file.endswith(genblast_extension)
+                ):
+                    subprocess.run(["rm", genblast_file])
 
 
 def convert_gff_to_gtf(gff_file):
@@ -2300,7 +2291,7 @@ def convert_gff_to_gtf(gff_file):
             attributes = set_attributes(results[8], results[2])
             results[8] = attributes
             converted_line = "\t".join(results)
-            gtf_string += converted_line + "\n"
+            gtf_string += f"{converted_line}\n"
     return gtf_string
 
 
@@ -2310,19 +2301,13 @@ def set_attributes(attributes, feature_type):
     if feature_type == "transcript":
         match = re.search(r"Name\=(.+)$", split_attributes[1])
         name = match.group(1)
-        converted_attributes = 'gene_id "' + name + '"; transcript_id "' + name + '";'
+        converted_attributes = f'gene_id "{name}"; transcript_id "{name}";'
     elif feature_type == "exon":
         match = re.search(r"\-E(\d+);Parent\=(.+)\-R\d+\-\d+\-", attributes)
         exon_rank = match.group(1)
         name = match.group(2)
         converted_attributes = (
-            'gene_id "'
-            + name
-            + '"; transcript_id "'
-            + name
-            + '"; exon_number "'
-            + exon_rank
-            + '";'
+            f'gene_id "{name}"; transcript_id "{name}"; exon_number "{exon_rank}";'
         )
 
     return converted_attributes
@@ -2342,25 +2327,24 @@ def set_attributes(attributes, feature_type):
 # 5       genBlastG       coding_exon     69461131        69461741        .       +       .       ID=259454-R1-1-A1-E2;Parent=259454-R1-1-A1
 
 
-def split_protein_file(protein_file, protein_output_dir, batch_size=20):
-    batched_protein_files = []
-
+def split_protein_file(
+    protein_file, protein_output_dir: pathlib.Path, batch_size: int = 20
+) -> list[pathlib.Path]:
     for i in range(0, 10):
         create_dir(protein_output_dir, f"bin_{i}")
 
+    batched_protein_files = []
     with open(protein_file) as file_in:
         seq_count = 0
         batch_count = 0
         current_record = ""
         initial_seq = 1
         for line in file_in:
-            num_dir = random.randint(0, 9)
             match = re.search(r">(.+)$", line)
             if match and not initial_seq and seq_count % batch_size == 0:
-                file_out_name = os.path.join(
-                    protein_output_dir,
-                    ("bin_" + str(random.randint(0, 9))),
-                    (str(batch_count) + ".fa"),
+                num_dir = random.randint(0, 9)
+                file_out_name = (
+                    protein_output_dir / f"{bin_}{num_dir}" / f"{batch_count}.fa"
                 )
                 with open(file_out_name, "w+") as file_out:
                     file_out.write(current_record)
@@ -2377,11 +2361,8 @@ def split_protein_file(protein_file, protein_output_dir, batch_size=20):
                 current_record += line
 
     if current_record:
-        file_out_name = os.path.join(
-            protein_output_dir,
-            ("bin_" + str(random.randint(0, 9))),
-            (str(batch_count) + ".fa"),
-        )
+        num_dir = random.randint(0, 9)
+        file_out_name = protein_output_dir / f"{bin_}{num_dir}" / f"{batch_count}.fa"
         with open(file_out_name, "w+") as file_out:
             file_out.write(current_record)
         batched_protein_files.append(file_out_name)
@@ -2390,9 +2371,7 @@ def split_protein_file(protein_file, protein_output_dir, batch_size=20):
 
 
 def run_convert2blastmask(convert2blastmask_path, masked_genome_file, asnb_file):
-
-    asnb_file = masked_genome_file + ".asnb"
-    logger.info("Running convert2blastmask prior to GenBlast:")
+    asnb_file = f"{masked_genome_file}.asnb"
     cmd = [
         convert2blastmask_path,
         "-in",
@@ -2407,49 +2386,49 @@ def run_convert2blastmask(convert2blastmask_path, masked_genome_file, asnb_file)
         "-out",
         asnb_file,
     ]
-    logger.info(" ".join(cmd))
+    logger.info("Running convert2blastmask prior to GenBlast:\n%s" % " ".join(cmd))
     subprocess.run(cmd)
     logger.info("Completed running convert2blastmask")
 
 
 def run_makeblastdb(makeblastdb_path, masked_genome_file, asnb_file):
-
-    logger.info("Running makeblastdb prior to GenBlast")
-    subprocess.run(
-        [
-            makeblastdb_path,
-            "-in",
-            masked_genome_file,
-            "-dbtype",
-            "nucl",
-            "-parse_seqids",
-            "-mask_data",
-            asnb_file,
-            "-max_file_sz",
-            "10000000000",
-        ]
-    )
+    cmd = [
+        makeblastdb_path,
+        "-in",
+        masked_genome_file,
+        "-dbtype",
+        "nucl",
+        "-parse_seqids",
+        "-mask_data",
+        asnb_file,
+        "-max_file_sz",
+        "10000000000",
+    ]
+    logger.info("Running makeblastdb prior to GenBlast:\n%s" % " ".join(cmd))
+    subprocess.run(cmd)
     logger.info("Completed running makeblastdb")
 
 
 def run_trimming(
-    main_output_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads: int
+    main_output_dir: Union[pathlib.Path, str],
+    short_read_fastq_dir,
+    delete_pre_trim_fastq,
+    num_threads: int,
 ):
-
     trim_galore_path = "trim_galore"
     check_exe(trim_galore_path)
 
     trim_dir = create_dir(main_output_dir, "trim_galore_output")
 
     fastq_file_list = []
-    file_types = ("*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz")
+    file_types = ["*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"]
     for file_type in file_types:
         fastq_file_list.extend(glob.glob(os.path.join(short_read_fastq_dir, file_type)))
 
     fastq_file_list = create_paired_paths(fastq_file_list)
 
     for fastq_file_path in fastq_file_list:
-        logger.info("fastaq file path" + fastq_file_path)
+        logger.info("fastaq file path:%s" % fastq_file_path)
 
     generic_trim_galore_cmd = [
         trim_galore_path,
@@ -2474,18 +2453,19 @@ def run_trimming(
         )
         if delete_pre_trim_fastq:
             for file_path in fastq_files:
-                logger.info("Removing original fastq file post trimming:\n" + file_path)
+                logger.info(
+                    "Removing original fastq file post trimming:\n%s" % file_path
+                )
                 subprocess.run(["rm", file_path])
 
     pool.close()
     pool.join()
 
-    trimmed_fastq_list = glob.glob(os.path.join(trim_dir, "*.fq.gz"))
-    for trimmed_fastq_path in trimmed_fastq_list:
-        logger.info("Trimmed file path:\n" + trimmed_fastq_path)
+    for trimmed_fastq_path in trim_dir.glob("*.fq.gz"):
+        logger.info("Trimmed file path:\n%s" % trimmed_fastq_path)
         sub_patterns = r"|".join(("_val_1.fq", "_val_2.fq", "_trimmed.fq"))
-        updated_file_path = re.sub(sub_patterns, ".fq", trimmed_fastq_path)
-        logger.info("Updated file path:\n" + updated_file_path)
+        updated_file_path = re.sub(sub_patterns, ".fq", str(trimmed_fastq_path))
+        logger.info("Updated file path:\n%s" % updated_file_path)
         subprocess.run(["mv", trimmed_fastq_path, updated_file_path])
 
         files_to_delete_list = []
@@ -2496,7 +2476,6 @@ def run_trimming(
 
 
 def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_files, trim_dir):
-
     fastq_file = fastq_files[0]
     fastq_file_pair = None
     if len(fastq_files) == 2:
@@ -2511,8 +2490,10 @@ def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_files, trim_dir):
     if fastq_file_pair:
         trim_galore_cmd.append(fastq_file_pair)
 
-    logger.info("Running Trim Galore with the following command:")
-    logger.info(" ".join(trim_galore_cmd))
+    logger.info(
+        "Running Trim Galore with the following command:\n%s"
+        % " ".join(trim_galore_cmd)
+    )
     subprocess.run(trim_galore_cmd)
 
 
@@ -2521,7 +2502,7 @@ def run_minimap2_align(
     paftools_path,
     main_output_dir,
     long_read_fastq_dir,
-    genome_file,
+    genome_file: pathlib.Path,
     max_intron_length,
     num_threads: int,
 ):
@@ -2537,23 +2518,23 @@ def run_minimap2_align(
 
     minimap2_output_dir = create_dir(main_output_dir, "minimap2_output")
 
-    output_file = os.path.join(minimap2_output_dir, "annotation.gtf")
-    if os.path.exists(output_file):
+    output_file = minimap2_output_dir / "annotation.gtf"
+    if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Minimap2 GTF file exists skipping analysis")
             return
 
-    genome_file_name = os.path.basename(genome_file)
-    genome_file_index = genome_file_name + ".mmi"
-    minimap2_index_file = os.path.join(minimap2_output_dir, genome_file_index)
-    minimap2_hints_file = os.path.join(minimap2_output_dir, "minimap2_hints.gff")
+    genome_file_name = genome_file.name
+    genome_file_index = f"{genome_file_name}.mmi"
+    minimap2_index_file = minimap2_output_dir / genome_file_index
+    minimap2_hints_file = minimap2_output_dir / "minimap2_hints.gff"
 
     fastq_file_list = []
-    for fastq_file in glob.glob(long_read_fastq_dir + "/*.fastq"):
+    for fastq_file in glob.glob(f"{long_read_fastq_dir}/*.fastq"):
         fastq_file_list.append(fastq_file)
 
-    for fastq_file in glob.glob(long_read_fastq_dir + "/*.fq"):
+    for fastq_file in glob.glob(f"{long_read_fastq_dir}/*.fq"):
         fastq_file_list.append(fastq_file)
 
     if not fastq_file_list:
@@ -2566,7 +2547,7 @@ def run_minimap2_align(
         return
         # raise IndexError('The list of fastq files is empty. Fastq dir:\n%s' % long_read_fastq_dir)
 
-    if not os.path.exists(minimap2_index_file):
+    if not minimap2_index_file.exists():
         logger.info("Did not find an index file for minimap2. Will create now")
         subprocess.run(
             [
@@ -2574,22 +2555,21 @@ def run_minimap2_align(
                 "-t",
                 str(num_threads),
                 "-d",
-                os.path.join(minimap2_index_file),
+                minimap2_index_file,
                 genome_file,
             ]
         )
 
-    if not minimap2_index_file:
-        raise IOError(
-            "The minimap2 index file does not exist. Expected path:\n%s"
-            % minimap2_index_file
+    if not minimap2_index_file.exists():
+        raise FileNotFoundError(
+            "Failed to create the minimap2 index file at:\n%s" % minimap2_index_file
         )
 
     logger.info("Running minimap2 on the files in the long read fastq dir")
     for fastq_file_path in fastq_file_list:
-        fastq_file_name = os.path.basename(fastq_file_path)
-        sam_file = os.path.join(minimap2_output_dir, (fastq_file_name + ".sam"))
-        bed_file = os.path.join(minimap2_output_dir, (fastq_file_name + ".bed"))
+        fastq_file_name = fastq_file_path.name
+        sam_file = minimap2_output_dir / f"{fastq_file_name}.sam"
+        bed_file = minimap2_output_dir / f"{fastq_file_name}.bed"
         bed_file_out = open(bed_file, "w+")
         logger.info("Processing %s" % fastq_file)
         subprocess.run(
@@ -2620,12 +2600,11 @@ def run_minimap2_align(
     logger.info("Completed running minimap2")
 
 
-def bed_to_gtf(minimap2_output_dir):
-    gtf_file_path = os.path.join(minimap2_output_dir, "annotation.gtf")
+def bed_to_gtf(minimap2_output_dir: pathlib.Path):
+    gtf_file_path = minimap2_output_dir / "annotation.gtf"
     with open(gtf_file_path, "w+") as gtf_out:
-        exons_dict = {}
         gene_id = 1
-        for bed_file in glob.glob(minimap2_output_dir + "/*.bed"):
+        for bed_file in minimap2_output_dir.glob("*.bed"):
             logger.info("Converting bed to GTF:\n%s" % bed_file)
             with open(bed_file) as bed_in:
                 for line in bed_in:
@@ -2649,17 +2628,12 @@ def bed_to_gtf(minimap2_output_dir):
                         ".",
                         strand,
                         ".",
-                        'gene_id "minimap_'
-                        + str(gene_id)
-                        + '"; '
-                        + 'transcript_id "minimap_'
-                        + str(gene_id)
-                        + '"',
+                        f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"',
                     ]
                     transcript_start = None
                     transcript_end = None
                     exon_records = []
-                    for i, exon_coords in enumerate(exons):
+                    for index, exon_coords in enumerate(exons, start=1):
                         if (
                             transcript_start is None
                             or exon_coords[0] < transcript_start
@@ -2678,14 +2652,7 @@ def bed_to_gtf(minimap2_output_dir):
                             ".",
                             strand,
                             ".",
-                            'gene_id "minimap_'
-                            + str(gene_id)
-                            + '"; '
-                            + 'transcript_id "minimap_'
-                            + str(gene_id)
-                            + '"; exon_number "'
-                            + str(i + 1)
-                            + '";',
+                            f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"; exon_number "{index}";',
                         ]
 
                         exon_records.append(exon_line)
@@ -2700,10 +2667,14 @@ def bed_to_gtf(minimap2_output_dir):
                     gene_id += 1
 
 
-def bed_to_gff(input_dir, hints_file):
+def bed_to_gff(input_dir: pathlib.Path, hints_file: Union[pathlib.Path, str]):
+    """
+    TODO
+    unused function, not refactored, delete
+    """
     with open(hints_file, "w+") as gff_out:
         exons_dict = {}
-        for bed_file in glob.glob(input_dir + "/*.bed"):
+        for bed_file in input_dir.glob("*.bed"):
             logger.info("Processing file for hints:\n%s" % bed_file)
             with open(bed_file) as bed_in:
                 for line in bed_in:
@@ -2749,7 +2720,7 @@ def bed_to_gff(input_dir, hints_file):
             gff_line = "\t".join(gff_list) + "\tsrc=W;mul=" + gff_list[5] + ";\n"
             gff_out.write(gff_line)
 
-    sorted_hints_out = open((hints_file + ".srt"), "w+")
+    sorted_hints_out = open(f"{hints_file}.srt", "w+")
     subprocess.run(
         ["sort", "-k1,1", "-k7,7", "-k4,4", "-k5,5", hints_file],
         stdout=sorted_hints_out,
@@ -2773,31 +2744,25 @@ def bed_to_exons(block_sizes, block_starts, offset):
     return exons
 
 
-def check_transcriptomic_output(main_output_dir):
-
+def check_transcriptomic_output(main_output_dir: pathlib.Path):
     # This will check across the various transcriptomic dirs and check there's actually some data
     transcriptomic_dirs = ["scallop_output", "stringtie_output", "minimap2_output"]
     total_lines = 0
-    min_lines = 100000
+    min_lines = 100_000
     for transcriptomic_dir in transcriptomic_dirs:
-        full_file_path = os.path.join(
-            main_output_dir, transcriptomic_dir, "annotation.gtf"
-        )
-        if not os.path.exists(full_file_path):
+        full_file_path = main_output_dir / transcriptomic_dir / "annotation.gtf"
+        if not full_file_path.exists():
             logger.warning(
-                "Warning, no annotation.gtf found for "
-                + transcriptomic_dir
-                + ". This might be fine, e.g. no long read data were provided"
+                'Warning, no annotation.gtf found for "%s". This might be fine, e.g. no long read data were provided'
+                % transcriptomic_dir
             )
             continue
         num_lines = sum(1 for line in open(full_file_path))
-        total_lines = total_lines + num_lines
+        total_lines += num_lines
         logger.info(
-            "For "
-            + transcriptomic_dir
-            + " found a total of "
-            + str(num_lines)
-            + " in the annotation.gtf file"
+            'For "%s" found a total of %s in the annotation.gtf file'
+            % transcriptomic_dir,
+            num_lines,
         )
     if total_lines == 0:
         raise IOError(
@@ -2805,17 +2770,14 @@ def check_transcriptomic_output(main_output_dir):
         )
     elif total_lines <= min_lines:
         raise IOError(
-            "Anno was run with transcriptomic mode enabled, but the total number of lines in the output files were less than the min expected value"
-            + "\n"
-            "Found: " + str(total_lines) + "\n"
-            "Min allowed: " + str(min_lines)
+            "Anno was run with transcriptomic mode enabled, but the total number of lines in the output files were less than the min expected value\nFound: %s\nMin allowed: %s"
+            % total_lines,
+            min_lines,
         )
-
     else:
         logger.info(
-            "Found "
-            + str(total_lines)
-            + " total lines across the transcriptomic files. Checks passed"
+            "Found %s total lines across the transcriptomic files. Checks passed"
+            % total_lines
         )
 
 
@@ -2848,12 +2810,15 @@ def check_transcriptomic_output(main_output_dir):
 ###
 
 
-def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
-    gtf_file_path = os.path.join(augustus_output_dir, "annotation.gtf")
+def augustus_output_to_gtf(
+    augustus_output_dir: pathlib.Path,
+    augustus_genome_dir: pathlib.Path,
+):
+    gtf_file_path = augustus_output_dir / "annotation.gtf"
     with open(gtf_file_path, "w+") as gtf_out:
         record_count = 1
-        for gff_file_path in glob.glob(augustus_genome_dir + "/*.aug"):
-            gff_file_name = os.path.basename(gff_file_path)
+        for gff_file_path in augustus_genome_dir.glob("*.aug"):
+            gff_file_name = gff_file_path.name
             match = re.search(r"\.rs(\d+)\.re(\d+)\.", gff_file_name)
             start_offset = int(match.group(1))
 
@@ -2894,24 +2859,21 @@ def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
                     ):
                         values[3] = str(int(values[3]) + (start_offset - 1))
                         values[4] = str(int(values[4]) + (start_offset - 1))
-                        values[8] = (
-                            'gene_id "aug'
-                            + str(record_count)
-                            + '"; transcript_id "aug'
-                            + str(record_count)
-                            + '";'
-                        )
+                        # fmt: off
+                        values[8] = f'gene_id "aug{record_count}"; transcript_id "aug{record_count}";'
+                        # fmt: on
                         if values[2] == "exon":
-                            values[8] = (
-                                values[8] + ' exon_number "' + str(exon_number) + '";'
-                            )
+                            values[8] += f' exon_number "{exon_number}";'
                             exon_number += 1
-                        values[8] = values[8] + "\n"
+                        values[8] += "\n"
                         current_record.append("\t".join(values))
 
 
 def run_augustus_predict(
-    augustus_path, main_output_dir, masked_genome_file, num_threads: int
+    augustus_path,
+    main_output_dir: pathlib.Path,
+    masked_genome_file,
+    num_threads: int,
 ):
     min_seq_length = 1000
 
@@ -2932,12 +2894,12 @@ def run_augustus_predict(
     augustus_hints_dir = create_dir(augustus_dir, "hints")
     augustus_genome_dir = create_dir(augustus_dir, "genome_dir")
     augustus_evidence_dir = create_dir(augustus_dir, "evidence")
-    augustus_hints_file = os.path.join(augustus_evidence_dir, "augustus_hints.gff")
-    star_dir = os.path.join(main_output_dir, "star_output")
-    minimap2_output_dir = os.path.join(main_output_dir, "minimap2_output")
+    augustus_hints_file = augustus_evidence_dir / "augustus_hints.gff"
+    star_dir = main_output_dir / "star_output"
+    # minimap2_output_dir = main_output_dir / "minimap2_output"
 
-    if os.path.exists(star_dir):
-        logger.info("Found a Star output dir, generating hints from any .sj.tab files")
+    if star_dir.exists():
+        logger.info("Found a STAR output dir, generating hints from any .sj.tab files")
         generate_hints(
             bam2hints_path,
             bam2wig_path,
@@ -2947,14 +2909,14 @@ def run_augustus_predict(
             num_threads,
         )
         with open(augustus_hints_file, "w+") as hints_out:
-            for gff_file in glob.glob(augustus_hints_dir + "/*.bam.hints.gff"):
+            for gff_file in augustus_hints_dir.glob("*.bam.hints.gff"):
                 with open(gff_file, "r") as gff_in:
                     for line in gff_in:
                         hints_out.write(line)
 
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1000000, overlap=100000, min_length=5000
+        seq_region_lengths, slice_size=1_000_000, overlap=100_000, min_length=5000
     )
 
     generic_augustus_cmd = [
@@ -2989,7 +2951,10 @@ def run_augustus_predict(
 
 
 def create_slice_ids(
-    seq_region_lengths, slice_size: int = 1000000, overlap: int = 0, min_length: int = 0
+    seq_region_lengths,
+    slice_size: int = 1_000_000,
+    overlap: int = 0,
+    min_length: int = 0,
 ):
     slice_ids = []
     for region, region_length in seq_region_lengths.items():
@@ -3021,12 +2986,12 @@ def generate_hints(
     bam2hints_path,
     bam2wig_path,
     wig2hints_path,
-    augustus_hints_dir,
-    star_dir,
+    augustus_hints_dir: Union[pathlib.Path, str],
+    star_dir: pathlib.Path,
     num_threads: int,
 ):
     pool = multiprocessing.Pool(num_threads)
-    for bam_file in glob.glob(star_dir + "/*.bam"):
+    for bam_file in star_dir.glob("*.bam"):
         pool.apply_async(
             multiprocess_augustus_hints,
             args=(
@@ -3042,20 +3007,24 @@ def generate_hints(
 
 
 def multiprocess_augustus_hints(
-    bam2hints_path, bam2wig_path, wig2hints_path, bam_file, augustus_hints_dir
+    bam2hints_path,
+    bam2wig_path,
+    wig2hints_path,
+    bam_file: pathlib.Path,
+    augustus_hints_dir: pathlib.Path,
 ):
-    bam_file_name = os.path.basename(bam_file)
-    logger.info("Processing " + bam_file_name + " for Augustus hints")
+    bam_file_name = bam_file.name
+    logger.info("Processing %s for Augustus hints" % bam_file_name)
 
-    bam2hints_file_name = bam_file_name + ".hints.gff"
-    bam2hints_file_path = os.path.join(augustus_hints_dir, bam2hints_file_name)
+    bam2hints_file_name = f"{bam_file_name}.hints.gff"
+    bam2hints_file_path = augustus_hints_dir / bam2hints_file_name
     bam2hints_cmd = [
         bam2hints_path,
-        ("--in=" + bam_file),
-        ("--out=" + bam2hints_file_path),
+        f"--in={bam_file}",
+        f"--out={bam2hints_file_path}",
         "--maxintronlen=100000",
     ]
-    logger.info("bam2hints command:\n" + " ".join(bam2hints_cmd))
+    logger.info("bam2hints command:\n%s" % " ".join(bam2hints_cmd))
     subprocess.run(bam2hints_cmd)
 
     # bam2wig_cmd = [bam2wig_path,'-D',augustus_hints_dir,bam_file]
@@ -3076,7 +3045,13 @@ def multiprocess_augustus_hints(
     # wig2hints_out.close()
 
 
-def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir):
+def multiprocess_augustus_id(
+    cmd,
+    slice_id,
+    genome_file: Union[pathlib.Path, str],
+    hints_file,
+    output_dir: pathlib.Path,
+):
     region = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
@@ -3089,11 +3064,9 @@ def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir)
         output_dir=output_dir,
     )
 
-    region_fasta_file_name = region + ".rs" + str(start) + ".re" + str(end) + ".fa"
-    region_fasta_file_path = os.path.join(output_dir, region_fasta_file_name)
-    region_augustus_file_path = os.path.join(
-        output_dir, (region_fasta_file_name + ".aug")
-    )
+    region_fasta_file_name = f"{region}.rs{start}.re{end}.fa"
+    region_fasta_file_path = output_dir / region_fasta_file_name
+    region_augustus_file_path = output_dir / f"{region_fasta_file_name}.aug"
 
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
@@ -3105,28 +3078,33 @@ def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir)
     aug_out = open(region_augustus_file_path, "w+")
 
     augustus_forward = cmd.copy()
-    augustus_forward.append(("--hintsfile=" + region_hints_file))
-    augustus_forward.append("--strand=forward")
-    augustus_forward.append(region_fasta_file_path)
+    augustus_forward.extend(
+        [f"--hintsfile={region_hints_file}", "--strand=forward", region_fasta_file_path]
+    )
     subprocess.run(augustus_forward, stdout=aug_out)
 
     augustus_backward = cmd.copy()
-    augustus_backward.append(("--hintsfile=" + region_hints_file))
-    augustus_backward.append("--strand=backward")
-    augustus_backward.append(region_fasta_file_path)
+    augustus_forward.extend(
+        [
+            f"--hintsfile={region_hints_file}",
+            "--strand=backward",
+            region_fasta_file_path,
+        ]
+    )
     subprocess.run(augustus_backward, stdout=aug_out)
 
     aug_out.close()
 
 
 def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_path):
-    # Note this is trying to be memory and file efficient at the cost of speed
-    # So files are only created as needed and the hints are being read line by line as written as needed
-    # This comes with the downside of being slow, but it's only a very small amount of time relative
-    # to how slow the step is in total. Given that this step in general eats up a low of memory, saving as much
-    # as possible here is not a bad thing even if it's adding in an overhead by continuously reading the hints file
-
-    region_hints_file_path = region_fasta_file_path + ".gff"
+    """
+    Note this is trying to be memory and file efficient at the cost of speed
+    So files are only created as needed and the hints are being read line by line as written as needed
+    This comes with the downside of being slow, but it's only a very small amount of time relative
+    to how slow the step is in total. Given that this step in general eats up a low of memory, saving as much
+    as possible here is not a bad thing even if it's adding in an overhead by continuously reading the hints file
+    """
+    region_hints_file_path = f"{region_fasta_file_path}.gff"
     with open(hints_file) as hints_in, open(region_hints_file_path, "w+") as hints_out:
         for hint_line in hints_in:
             hint_line_values = hint_line.split("\t")
@@ -3150,7 +3128,7 @@ def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_pa
 
 
 def run_stringtie_assemble(
-    stringtie_path, samtools_path, main_output_dir, genome_file, num_threads: int
+    stringtie_path, samtools_path, main_output_dir, num_threads: int
 ):
     if not stringtie_path:
         stringtie_path = shutil.which("stringtie")
@@ -3162,44 +3140,46 @@ def run_stringtie_assemble(
 
     stringtie_dir = create_dir(main_output_dir, "stringtie_output")
 
-    output_file = os.path.join(stringtie_dir, "annotation.gtf")
-    if os.path.exists(output_file):
+    output_file = stringtie_dir / "annotation.gtf"
+    if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("StringTie GTF file exists skipping analysis")
             return
 
-    stringtie_merge_input_file = os.path.join(stringtie_dir, "stringtie_assemblies.txt")
-    stringtie_merge_output_file = os.path.join(stringtie_dir, "annotation.gtf")
-    star_dir = os.path.join(main_output_dir, "star_output")
+    stringtie_merge_input_file = stringtie_dir / "stringtie_assemblies.txt"
+    stringtie_merge_output_file = stringtie_dir / "annotation.gtf"
+    star_dir = main_output_dir / "star_output"
 
-    if os.path.exists(star_dir):
-        logger.info("Found a Star output dir, will load sam file")
+    if star_dir.exists():
+        logger.info("Found a STAR output dir, will load sam file")
 
-    sorted_bam_files = []
-    for bam_file in glob.glob(star_dir + "/*.bam"):
-        sorted_bam_files.append(bam_file)
+    sorted_bam_files = list(star_dir.glob("*.bam"))
 
     if not sorted_bam_files:
         raise IndexError(
-            "The list of sorted bam files is empty, expected them in Star output dir. Star dir:\n%s"
+            "The list of sorted bam files is empty, expected them in STAR output dir:\n%s"
             % star_dir
         )
 
     # Don't know why this isn't multiprocessed, probably cos it was fast enough in serial. But consider multiprocessing if
     # the mem usage is low
     for sorted_bam_file in sorted_bam_files:
-        sorted_bam_file_name = os.path.basename(sorted_bam_file)
+        sorted_bam_file_name = sorted_bam_file.name
         transcript_file_name = re.sub(".bam", ".stringtie.gtf", sorted_bam_file_name)
-        transcript_file_path = os.path.join(stringtie_dir, transcript_file_name)
+        transcript_file_path = stringtie_dir / transcript_file_name
 
-        if os.path.exists(transcript_file_path):
+        if transcript_file_path.exists():
             logger.info(
-                "Found an existing stringtie gtf file, will not overwrite. File found:"
+                "Found an existing stringtie gtf file, will not overwrite:\n%s"
+                % transcript_file_path
             )
-            logger.info(transcript_file_path)
         else:
-            logger.info("Running Stringtie on: %s, writing output to:\n%s" % sorted_bam_file_name, transcript_file_path)
+            logger.info(
+                "Running Stringtie on: %s, writing output to:\n%s"
+                % sorted_bam_file_name,
+                transcript_file_path,
+            )
             subprocess.run(
                 [
                     stringtie_path,
@@ -3215,22 +3195,18 @@ def run_stringtie_assemble(
             )
 
     # Now need to merge
-    logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
-
-    # Now need to merge
-    logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
+    logger.info("Creating Stringtie merge input file: %s" % stringtie_merge_input_file)
     with open(stringtie_merge_input_file, "w+") as gtf_list_out:
-        for gtf_file in glob.glob(str(stringtie_dir / "*.stringtie.gtf")):
+        for gtf_file in stringtie_dir.glob("*.stringtie.gtf"):
             transcript_count = check_gtf_content(gtf_file, "transcript")
             if transcript_count > 0:
-                gtf_list_out.write(gtf_file + "\n")
+                gtf_list_out.write(f"{gtf_file}\n")
             else:
                 logger.warning(
-                    "Warning, skipping file with no transcripts. Path:\n" + gtf_file
+                    "Warning, skipping file with no transcripts:\n%s" % gtf_file
                 )
 
-    logger.info("Merging Stringtie results. Writing to the following file:")
-    logger.info(stringtie_merge_output_file)
+    logger.info("Merging Stringtie results to:\n%s" % stringtie_merge_output_file)
     subprocess.run(
         [
             stringtie_path,
@@ -3242,7 +3218,7 @@ def run_stringtie_assemble(
     )
 
 
-def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
+def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.Path):
     if not scallop_path:
         scallop_path = shutil.which("scallop")
     check_exe(scallop_path)
@@ -3253,45 +3229,46 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
 
     scallop_dir = create_dir(main_output_dir, "scallop_output")
 
-    output_file = os.path.join(scallop_dir, "annotation.gtf")
-    if os.path.exists(output_file):
+    output_file = scallop_dir / "annotation.gtf"
+    if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Scallop gtf file exists, skipping analysis")
             return
 
-    stringtie_merge_input_file = os.path.join(scallop_dir, "scallop_assemblies.txt")
-    stringtie_merge_output_file = os.path.join(scallop_dir, "annotation.gtf")
-    star_dir = os.path.join(main_output_dir, "star_output")
+    stringtie_merge_input_file = scallop_dir / "scallop_assemblies.txt"
+    stringtie_merge_output_file = scallop_dir / "annotation.gtf"
+    star_dir = main_output_dir / "star_output"
     memory_limit = 40 * 1024**3
 
-    if os.path.exists(star_dir):
-        logger.info("Found a Star output dir, will load bam files")
+    if star_dir.exists():
+        logger.info("Found a STAR output dir, will load bam files")
 
-    sorted_bam_files = []
-    for bam_file in glob.glob(star_dir + "/*.bam"):
-        sorted_bam_files.append(bam_file)
+    sorted_bam_files = list(star_dir.glob("*.bam"))
 
     if not sorted_bam_files:
         raise IndexError(
-            "The list of sorted bam files is empty, expected them in Star output dir. Star dir:\n%s"
+            "Empty list of sorted bam files, expected them in STAR output dir:\n%s"
             % star_dir
         )
 
-    # Don't know why this isn't multiprocessed, probably cos it was fast enough in serial. But consider multiprocessing if
-    # the mem usage is low
+    # Don't know why this isn't multiprocessed, probably cos it was fast enough in serial.
+    # But consider multiprocessing if the mem usage is low.
     for sorted_bam_file in sorted_bam_files:
-        sorted_bam_file_name = os.path.basename(sorted_bam_file)
+        sorted_bam_file_name = sorted_bam_file.name
         transcript_file_name = re.sub(".bam", ".scallop.gtf", sorted_bam_file_name)
-        transcript_file_path = os.path.join(scallop_dir, transcript_file_name)
+        transcript_file_path = scallop_dir / transcript_file_name
 
-        if os.path.exists(transcript_file_path):
+        if transcript_file_path.exists():
             logger.info(
-                "Found an existing scallop gtf file, will not overwrite. File found:"
+                "Found an existing scallop gtf file, will not overwrite:\n%s"
+                % transcript_file_path
             )
-            logger.info(transcript_file_path)
         else:
-            logger.info("Running Scallop on: %s, writing output to:\n%s" % sorted_bam_file_name, transcript_file_path)
+            logger.info(
+                "Running Scallop on: %s, writing output to:\n%s" % sorted_bam_file_name,
+                transcript_file_path,
+            )
             scallop_cmd = [
                 scallop_path,
                 "-i",
@@ -3308,26 +3285,27 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
             try:
                 return_value = subprocess.check_output(scallop_cmd)
             except subprocess.CalledProcessError as ex:
-                logger.error("Issue processing the following region with scallop")
-                logger.error("Return value: " + str(return_value))
+                logger.error(
+                    "Issue processing the following region with scallop\nReturn value: %s"
+                    % return_value
+                )
 
     #      subprocess.run([scallop_path,'-i',sorted_bam_file,'-o',transcript_file_path,'--min_flank_length','10'])
 
     # Now need to merge
-    logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
+    logger.info("Creating Stringtie merge input file: %s" % stringtie_merge_input_file)
 
     with open(stringtie_merge_input_file, "w+") as gtf_list_out:
-        for gtf_file in glob.glob(str(scallop_dir / "*.scallop.gtf")):
+        for gtf_file in scallop_dir.glob("*.scallop.gtf"):
             transcript_count = check_gtf_content(gtf_file, "transcript")
             if transcript_count > 0:
-                gtf_list_out.write(gtf_file + "\n")
+                gtf_list_out.write(f"{gtf_file}\n")
             else:
                 logger.warning(
-                    "Warning, skipping file with no transcripts. Path:\n" + gtf_file
+                    "Warning, skipping file with no transcripts:\n%s" % gtf_file
                 )
 
-    logger.info("Merging Scallop results. Writing to the following file:")
-    logger.info(stringtie_merge_output_file)
+    logger.info("Merging Scallop results to:\n%s" % stringtie_merge_output_file)
     subprocess.run(
         [
             stringtie_path,
@@ -3339,25 +3317,13 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
     )
 
 
-def check_gtf_content(gtf_file, content_obj):
+def splice_junction_to_gff(input_dir: pathlib.Path, hints_file):
     """
-    This just checks how many transcript lines are in a GTF
+    TODO
+    unused function, not refactored, delete
     """
-    transcript_count = 0
-    with open(gtf_file) as gtf_in:
-        for line in gtf_in:
-            eles = line.split("\t")
-            if not len(eles) == 9:
-                continue
-            if eles[2] == content_obj:
-                transcript_count += 1
-    logger.info("%s GTF transcript count: %s" % gtf_file, transcript_count)
-    return transcript_count
-
-
-def splice_junction_to_gff(input_dir, hints_file):
     with open(hints_file, "w+") as sjf_out:
-        for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
+        for sj_tab_file in input_dir.glob("*.sj.tab"):
             with open(sj_tab_file) as sjf_in:
                 for line in sjf_in:
                     elements = line.split("\t")
@@ -3387,17 +3353,21 @@ def splice_junction_to_gff(input_dir, hints_file):
                         score,
                         strand,
                         ".",
-                        ("src=W;mul=" + score + ";"),
+                        f"src=W;mul={score};",
                     ]
                     sjf_out.write("\t".join(output_line) + "\n")
 
 
-def model_builder(work_dir):
-    star_output_dir = os.path.join(work_dir, "star_output")
+def model_builder(work_dir: pathlib.Path):
+    """
+    TODO
+    unused function, not refactored, delete
+    """
+    star_output_dir = work_dir / "star_output"
 
-    all_junctions_file = os.path.join(star_output_dir, "all_junctions.sj")
+    all_junctions_file = star_output_dir / "all_junctions.sj"
     with open(all_junctions_file, "w+") as sjf_out:
-        for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
+        for sj_tab_file in glob.glob(f"{input_dir}/*.sj.tab"):
             with open(sj_tab_file) as sjf_in:
                 for line in sjf_in:
                     elements = line.split("\t")
@@ -3433,12 +3403,18 @@ def model_builder(work_dir):
                         score,
                         strand,
                         ".",
-                        ("src=W;mul=" + score + ";"),
+                        f"src=W;mul={score};",
                     ]
                     sjf_out.write("\t".join(output_line) + "\n")
 
 
-def split_genome(genome_file, target_dir, min_seq_length):
+def split_genome(
+    genome_file: Union[pathlib.Path, str], target_dir: pathlib.Path, min_seq_length: int
+):
+    """
+    TODO
+    unused function, not refactored, delete
+    """
     # This is the lazy initial way of just splitting into a dir of files based on the toplevel sequence with a min sequence length filter
     # There are a couple of obvious improvements:
     # 1) Instead of making files for all seqs, just process N seqs parallel, where N = num_threads. Then you could clean up the seq file
@@ -3455,10 +3431,8 @@ def split_genome(genome_file, target_dir, min_seq_length):
             match = re.search(r">(.+)$", line)
             if match and current_header:
                 if len(current_seq) > min_seq_length:
-                    file_out_name = os.path.join(
-                        target_dir, (current_header + ".split.fa")
-                    )
-                    if not os.path.exists(file_out_name):
+                    file_out_name = target_dir / f"{current_header}.split.fa"
+                    if not file_out_name.exists():
                         with open(file_out_name, "w+") as file_out:
                             file_out.write(f">{current_header}\n{current_seq}\n")
 
@@ -3476,8 +3450,8 @@ def split_genome(genome_file, target_dir, min_seq_length):
                 current_seq += line.rstrip()
 
         if len(current_seq) > min_seq_length:
-            file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
-            if not os.path.exists(file_out_name):
+            file_out_name = target_dir / f"{current_header}.split.fa"
+            if not file_out_name.exists():
                 with open(file_out_name, "w+") as file_out:
                     file_out.write(f">{current_header}\n{current_seq}\n")
 
@@ -3488,8 +3462,8 @@ def split_genome(genome_file, target_dir, min_seq_length):
 
 
 def run_finalise_geneset(
-    main_script_dir: Union[pathlib.Path, str],
-    main_output_dir: Union[pathlib.Path, str],
+    main_script_dir: pathlib.Path,
+    main_output_dir: pathlib.Path,
     genome_file: Union[pathlib.Path, str],
     seq_region_names,
     validation_type,
@@ -3497,9 +3471,8 @@ def run_finalise_geneset(
     num_threads: int,
 ):
     if validation_type is None:
-        logger.info("Setting validation type to relaxed")
-    else:
-        logger.info("Setting validation type to " + validation_type)
+        validation_type = "relaxed"
+    logger.info("Setting validation type to %s" % validation_type)
 
     final_annotation_dir = create_dir(main_output_dir, "annotation_output")
     region_annotation_dir = create_dir(final_annotation_dir, "initial_region_gtfs")
@@ -3587,7 +3560,7 @@ def run_finalise_geneset(
         )
 
         if transcriptomic_annotation_raw.exists():
-            logger.info("Finalising transcriptomic data for: " + seq_region_name)
+            logger.info("Finalising transcriptomic data for: %s" % seq_region_name)
             transcriptomic_annotation_select = re.sub(
                 "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
             )
@@ -3605,10 +3578,10 @@ def run_finalise_geneset(
                     "transcriptomic",
                 ]
             )
-            pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            pool.apply_async(subprocess_run_and_log, args=(cmd,))
 
         if busco_annotation_raw.exists():
-            logger.info("Finalising BUSCO data for: " + seq_region_name)
+            logger.info("Finalising BUSCO data for: %s" % seq_region_name)
             busco_annotation_select = re.sub(
                 "_raw.gtf", "_sel.gtf", busco_annotation_raw
             )
@@ -3626,10 +3599,10 @@ def run_finalise_geneset(
                     "busco",
                 ]
             )
-            pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            pool.apply_async(subprocess_run_and_log, args=(cmd,))
 
         if protein_annotation_raw.exists():
-            logger.info("Finalising protein data for: " + seq_region_name)
+            logger.info("Finalising protein data for: %s" % seq_region_name)
             protein_annotation_select = re.sub(
                 "_raw.gtf", "_sel.gtf", protein_annotation_raw
             )
@@ -3648,20 +3621,30 @@ def run_finalise_geneset(
                     "protein",
                 ]
             )
-            pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            pool.apply_async(subprocess_run_and_log, args=(cmd,))
 
     pool.close()
     pool.join()
 
     # At this point we will have the region files for all the,
+
     merge_finalise_output_files(
-        final_annotation_dir, region_annotation_dir, ".trans.gtf", "transcriptomic"
+        final_annotation_dir=final_annotation_dir,
+        region_annotation_dir=region_annotation_dir,
+        extension=".trans.gtf",
+        id_label="transcriptomic",
     )
     merge_finalise_output_files(
-        final_annotation_dir, region_annotation_dir, ".busco.gtf", "busco"
+        final_annotation_dir=final_annotation_dir,
+        region_annotation_dir=region_annotation_dir,
+        extension=".busco.gtf",
+        id_label="busco",
     )
     merge_finalise_output_files(
-        final_annotation_dir, region_annotation_dir, ".protein.gtf", "protein"
+        final_annotation_dir=final_annotation_dir,
+        region_annotation_dir=region_annotation_dir,
+        extension=".protein.gtf",
+        id_label="protein",
     )
 
     # Create a single GTF file with all the selected transcripts now that they have proper ids
@@ -3700,13 +3683,16 @@ def run_finalise_geneset(
                 final_region_gtf_path,
             ]
         )
-        pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+        pool.apply_async(subprocess_run_and_log, args=(cmd,))
 
     pool.close()
     pool.join()
 
     merge_finalise_output_files(
-        final_annotation_dir, final_region_annotation_dir, ".final.gtf", "prevalidation"
+        final_annotation_dir=final_annotation_dir,
+        region_annotation_dir=final_region_annotation_dir,
+        extension=".final.gtf",
+        id_label="prevalidation",
     )
     merged_gtf_file = final_annotation_dir / "prevalidation_sel.gtf"
     merged_cdna_file = final_annotation_dir / "prevalidation_sel.cdna.fa"
@@ -3728,7 +3714,6 @@ def run_finalise_geneset(
     cleaned_initial_gtf_file = final_annotation_dir / "cleaned_pre_utr.gtf"
     cleaned_utr_gtf_file = final_annotation_dir / "annotation.gtf"
 
-    logger.info("Cleaning initial set")
     cleaning_cmd = [
         "perl",
         clean_geneset_script,
@@ -3739,7 +3724,7 @@ def run_finalise_geneset(
         "-output_gtf_file",
         cleaned_initial_gtf_file,
     ]
-    logger.info(" ".join(cleaning_cmd))
+    logger.info("Cleaning initial set:\n%s" % " ".join(cleaning_cmd))
     subprocess.run(cleaning_cmd)
 
     # Clean UTRs
@@ -3768,12 +3753,15 @@ def run_finalise_geneset(
                 utr_region_gtf_path,
             ]
         )
-        pool.apply_async(multiprocess_generic, args=(cmd,))
+        pool.apply_async(subprocess_run_and_log, args=(cmd,))
     pool.close()
     pool.join()
 
     merge_finalise_output_files(
-        final_annotation_dir, utr_region_annotation_dir, ".utr.gtf", "annotation"
+        final_annotation_dir=final_annotation_dir,
+        region_annotation_dir=utr_region_annotation_dir,
+        extension=".utr.gtf",
+        id_label="annotation",
     )
     subprocess.run(
         [
@@ -3783,7 +3771,6 @@ def run_finalise_geneset(
         ]
     )
 
-    logger.info("Dumping transcript and translation sequences")
     dumping_cmd = [
         "perl",
         gtf_to_seq_script,
@@ -3792,7 +3779,9 @@ def run_finalise_geneset(
         "-gtf_file",
         cleaned_utr_gtf_file,
     ]
-    logger.info(" ".join(dumping_cmd))
+    logger.info(
+        "Dumping transcript and translation sequences:\n%s" % " ".join(dumping_cmd)
+    )
     subprocess.run(dumping_cmd)
 
     logger.info("Finished creating gene set")
@@ -3801,18 +3790,17 @@ def run_finalise_geneset(
 def validate_coding_transcripts(
     cdna_file,
     amino_acid_file,
-    validation_dir,
+    validation_dir: pathlib.Path,
     validation_type,
     diamond_validation_db,
     gtf_file,
     num_threads: int,
 ):
-
     logger.info("Running CDS validation with RNAsamba and CPC2")
     rnasamba_weights = "/nfs/production/flicek/ensembl/genebuild/genebuild_virtual_user/rnasamba_data/full_length_weights.hdf5"
-    rnasamba_output_path = os.path.join(validation_dir, "rnasamba.tsv.txt")
-    cpc2_output_path = os.path.join(validation_dir, "cpc2.tsv")
-    rnasamba_volume = validation_dir + "/:/app:rw"
+    rnasamba_output_path = validation_dir / "rnasamba.tsv.txt"
+    cpc2_output_path = validation_dir / "cpc2.tsv"
+    rnasamba_volume = f"{validation_dir}/:/app:rw"
     rnasamba_cmd = [
         "singularity",
         "exec",
@@ -3825,9 +3813,9 @@ def validate_coding_transcripts(
         cdna_file,
         rnasamba_weights,
     ]
-    logger.info(" ".join(rnasamba_cmd))
+    logger.info("rnasamba_cmd: %s" % " ".join(rnasamba_cmd))
     subprocess.run(rnasamba_cmd)
-    cpc2_volume = validation_dir + "/:/app:rw"
+    cpc2_volume = f"{validation_dir}/:/app:rw"
     cpc2_cmd = [
         "singularity",
         "exec",
@@ -3842,9 +3830,9 @@ def validate_coding_transcripts(
         "-o",
         cpc2_output_path,
     ]
-    logger.info(" ".join(cpc2_cmd))
+    logger.info("cpc2_cmd: %s" % " ".join(cpc2_cmd))
     subprocess.run(cpc2_cmd)
-    cpc2_output_path = cpc2_output_path + ".txt"
+    cpc2_output_path = f"{cpc2_output_path}.txt"
 
     check_file(rnasamba_output_path)
     check_file(cpc2_output_path)
@@ -3872,10 +3860,16 @@ def validate_coding_transcripts(
 
 
 def diamond_validation(
-    diamond_validation_db, amino_acid_file, diamond_output_dir, num_threads: int
+    diamond_validation_db,
+    amino_acid_file,
+    diamond_output_dir: pathlib.Path,
+    num_threads: int,
 ):
-
-    batched_protein_files = split_protein_file(amino_acid_file, diamond_output_dir, 100)
+    batched_protein_files = split_protein_file(
+        protein_file=amino_acid_file,
+        protein_output_dir=diamond_output_dir,
+        batch_size=100,
+    )
 
     pool = multiprocessing.Pool(num_threads)
     for batched_protein_file in batched_protein_files:
@@ -3892,16 +3886,13 @@ def diamond_validation(
 
 
 def multiprocess_diamond(
-    batched_protein_file,
+    batched_protein_file: pathlib.Path,
     diamond_output_dir,
     diamond_validation_db,
 ):
-
-    batch_num = os.path.splitext(batched_protein_file)[0]
-    batch_dir = os.path.dirname(batched_protein_file)
-    diamond_output_file = batched_protein_file + ".dmdout"
-    logger.info("Running diamond on " + batched_protein_file + ":")
-
+    # batch_num = os.path.splitext(batched_protein_file)[0]
+    # batch_dir = os.path.dirname(batched_protein_file)
+    diamond_output_file = f"{batched_protein_file}.dmdout"
     diamond_cmd = [
         "diamond",
         "blastp",
@@ -3913,15 +3904,15 @@ def multiprocess_diamond(
         diamond_output_file,
     ]
 
-    logger.info(" ".join(diamond_cmd))
+    logger.info(
+        "Running diamond on %s:\n%s" % batched_protein_file, " ".join(diamond_cmd)
+    )
     subprocess.run(diamond_cmd)
     subprocess.run(["mv", diamond_output_file, diamond_output_dir])
 
 
 def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
-
     output_lines = []
-
     for gene_id in parsed_gtf_genes.keys():
         transcript_ids = parsed_gtf_genes[gene_id].keys()
         for transcript_id in transcript_ids:
@@ -3960,7 +3951,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             biotype = match.group(1)
             if biotype == "busco" or biotype == "protein":
                 transcript_line = re.sub(
-                    '; biotype "' + biotype + '";',
+                    '; biotype "{biotype}";',
                     '; biotype "protein_coding";',
                     transcript_line,
                 )
@@ -3980,7 +3971,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             if single_cds_exon_transcript == 1 and validation_type == "relaxed":
                 if diamond_e_value is not None:
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -3990,7 +3981,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_single_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4003,7 +3994,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4015,7 +4006,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_single_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4028,7 +4019,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and avg_coding_probability >= min_single_exon_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4037,7 +4028,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             else:
                 if diamond_e_value is not None:
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4047,7 +4038,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_multi_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4060,15 +4051,13 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
+                        '; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
                 elif transcript_length >= 200:
                     transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
-                        '; biotype "lncRNA";',
-                        transcript_line,
+                        '; biotype "{biotype}";', '; biotype "lncRNA";', transcript_line
                     )
                     transcript_line = re.sub(
                         ' translation_coords "[^"]+";', "", transcript_line
@@ -4082,7 +4071,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
     return output_lines
 
 
-def read_rnasamba_results(file_path):
+def read_rnasamba_results(file_path: Union[pathlib.Path, str]):
     results = []
     with open(file_path) as file_in:
         for line in file_in:
@@ -4134,10 +4123,9 @@ def read_cpc2_results(file_path):
     return results
 
 
-def read_diamond_results(diamond_output_dir):
+def read_diamond_results(diamond_output_dir: pathlib.Path):
     results = []
-    diamond_files = glob.glob(diamond_output_dir + "/*.dmdout")
-    for diamond_file in diamond_files:
+    for diamond_file in diamond_output_dir.glob("*.dmdout"):
         with open(diamond_file) as file_in:
             for line in file_in:
                 line = line.rstrip()
@@ -4154,7 +4142,6 @@ def read_diamond_results(diamond_output_dir):
 
 
 def combine_results(rnasamba_results, cpc2_results, diamond_results):
-
     transcript_ids = {}
 
     for result in rnasamba_results:
@@ -4217,36 +4204,35 @@ def read_gtf_genes(gtf_file):
 
 
 def merge_finalise_output_files(
-    final_annotation_dir, region_annotation_dir, extension, id_label
+    final_annotation_dir: pathlib.Path,
+    region_annotation_dir: pathlib.Path,
+    extension: str,
+    id_label: str,
 ):
-    gtf_files = glob.glob(region_annotation_dir + "/*" + extension)
-
-    merged_gtf_file = os.path.join(final_annotation_dir, (id_label + "_sel.gtf"))
-    merged_cdna_file = os.path.join(final_annotation_dir, (id_label + "_sel.cdna.fa"))
-    merged_amino_acid_file = os.path.join(
-        final_annotation_dir, (id_label + "_sel.prot.fa")
-    )
-
-    # The below is not great, it's a bit messy because there might be some cases where there aren't
-    # translations. So it's not as straightforward as reading the records across all three files
-    # in parallel. The solution is to just load the seqs into memory and index them on the current
-    # header, which should correspond to a transcript/gene id in the GTF. When writing the results
-    # into the single merged files the ids will be updated to be unique and consistent across the
-    # three file types
+    """
+    The below is not great, it's a bit messy because there might be some cases where there aren't
+    translations. So it's not as straightforward as reading the records across all three files
+    in parallel. The solution is to just load the seqs into memory and index them on the current
+    header, which should correspond to a transcript/gene id in the GTF. When writing the results
+    into the single merged files the ids will be updated to be unique and consistent across the
+    three file types
+    """
+    merged_gtf_file = final_annotation_dir / f"{id_label}_sel.gtf"
+    merged_cdna_file = final_annotation_dir / f"{id_label}_sel.cdna.fa"
+    merged_amino_acid_file = final_annotation_dir / f"{id_label}_sel.prot.fa"
 
     gene_id_counter = 0
     transcript_id_counter = 0
     with open(merged_gtf_file, "w+") as gtf_out, open(
         merged_cdna_file, "w+"
     ) as cdna_out, open(merged_amino_acid_file, "w+") as amino_acid_out:
+        gtf_files = region_annotation_dir.glob(f"*{extension}")
         for gtf_file in gtf_files:
-            logger.info("GTF file: " + gtf_file)
-            cdna_seq_index = {}
-            amino_acid_seq_index = {}
-            cdna_file = gtf_file + ".cdna"
-            amino_acid_file = gtf_file + ".prot"
+            logger.info("GTF file: %s" % gtf_file)
+            cdna_file = f"{gtf_file}.cdna"
             with open(cdna_file) as cdna_in:
                 cdna_seq_index = fasta_to_dict(cdna_in.readlines())
+            amino_acid_file = f"{gtf_file}.prot"
             with open(amino_acid_file) as amino_acid_in:
                 amino_acid_seq_index = fasta_to_dict(amino_acid_in.readlines())
 
@@ -4277,22 +4263,20 @@ def merge_finalise_output_files(
                         gene_id_counter += 1
                         current_gene_id = gene_id
 
-                    new_gene_id = id_label + "_" + str(gene_id_counter)
-                    new_transcript_id = id_label + "_" + str(transcript_id_counter)
+                    new_gene_id = f"{id_label}_{gene_id_counter}"
+                    new_transcript_id = f"{id_label}_{transcript_id_counter}"
                     line = re.sub(
-                        'gene_id "' + gene_id + '"',
-                        ('gene_id "' + new_gene_id + '"'),
-                        line,
+                        f'gene_id "{gene_id}"', f'gene_id "{new_gene_id}"', line
                     )
                     line = re.sub(
-                        'transcript_id "' + transcript_id + '"',
-                        ('transcript_id "' + new_transcript_id + '"'),
+                        f'transcript_id "{transcript_id}"',
+                        f'transcript_id "{new_transcript_id}"',
                         line,
                     )
                     gtf_out.write(line)
 
                     if eles[2] == "transcript":
-                        new_header = ">" + new_transcript_id + "\n"
+                        new_header = f">{new_transcript_id}\n"
                         cdna_out.write(new_header + cdna_seq_index[transcript_id])
 
                         if transcript_id in amino_acid_seq_index:
@@ -4313,34 +4297,28 @@ def fasta_to_dict(fasta_list):
 
 
 # def merge_gtf_files(file_paths,id_label):
-
-#  gtf_file_path = os.path.join(output_dir,'annotation.gtf')
-#  gtf_out = open(gtf_file_path,'w+')
-#  for gtf_file_path in gtf_files:
-#    gtf_file_name = os.path.basename(gtf_file_path)
-#    match = re.search(r'\.rs(\d+)\.re(\d+)\.',gtf_file_name)
-#    start_offset = int(match.group(1))
-#    gtf_in = open(gtf_file_path,'r')
-#    line = gtf_in.readline()
-#    while line:
-#      values = line.split("\t")
-#      if len(values) == 9 and (values[2] in feature_types):
-#        values[3] = str(int(values[3]) + (start_offset - 1))
-#        values[4] = str(int(values[4]) + (start_offset - 1))
-#        gtf_out.write("\t".join(values))
-#        line = gtf_in.readline()
-#    gtf_in.close()
-#  gtf_out.close()
-
-
-def multiprocess_generic(cmd):
-    logger.info(" ".join(cmd))
-    subprocess.run(cmd)
+#     gtf_file_path = os.path.join(output_dir,'annotation.gtf')
+#     gtf_out = open(gtf_file_path,'w+')
+#     for gtf_file_path in gtf_files:
+#         gtf_file_name = os.path.basename(gtf_file_path)
+#         match = re.search(r'\.rs(\d+)\.re(\d+)\.',gtf_file_name)
+#         start_offset = int(match.group(1))
+#         gtf_in = open(gtf_file_path,'r')
+#         line = gtf_in.readline()
+#         while line:
+#             values = line.split("\t")
+#             if len(values) == 9 and (values[2] in feature_types):
+#                 values[3] = str(int(values[3]) + (start_offset - 1))
+#                 values[4] = str(int(values[4]) + (start_offset - 1))
+#                 gtf_out.write("\t".join(values))
+#                 line = gtf_in.readline()
+#         gtf_in.close()
+#     gtf_out.close()
 
 
-def multiprocess_finalise_geneset(cmd):
-    logger.info(" ".join(cmd))
-    subprocess.run(cmd)
+def subprocess_run_and_log(command):
+    logger.info("subprocess_run_and_log command: %s" % " ".join(command))
+    subprocess.run(command)
 
 
 def get_sequence(
@@ -4361,7 +4339,7 @@ def get_sequence(
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=output_dir
     ) as bed_temp_file:
-        bed_temp_file.writelines(seq_region + "\t" + str(start) + "\t" + str(end))
+        bed_temp_file.write(f"{seq_region}\t{start}\t{end}")
         bed_temp_file.close()
 
     bedtools_command = [
@@ -4386,7 +4364,7 @@ def get_sequence(
     return sequence
 
 
-def reverse_complement(sequence):
+def reverse_complement(sequence: str) -> str:
     rev_matrix = str.maketrans("atgcATGC", "tacgTACG")
     return sequence.translate(rev_matrix)[::-1]
 
@@ -4407,10 +4385,14 @@ def get_seq_region_names(genome_file: Union[pathlib.Path, str]):
     return region_list
 
 
-def slice_genome(genome_file, target_dir, target_slice_size):
+def slice_genome(genome_file: Union[pathlib.Path, str], target_dir, target_slice_size):
+    """
+    TODO
+    unused function, not refactored, delete
+    """
     # The below is sort of tested
     # Without the
-    target_seq_length = 50000000
+    target_seq_length = 50_000_000
     min_seq_length = 1000
     current_header = ""
     current_seq = ""
@@ -4430,7 +4412,7 @@ def slice_genome(genome_file, target_dir, target_slice_size):
 
     seq_buffer = 0
     file_number = 0
-    file_name = "genome_file_" + str(file_number)
+    file_name = f"genome_file_{file_number}"
 
     for header in seq_dict:
         seq_iterator = 0
@@ -4443,19 +4425,23 @@ def slice_genome(genome_file, target_dir, target_slice_size):
             seq = seq[target_seq_length:]
             seq_iterator += 1
             file_number += 1
-            file_name = "genome_file_" + str(file_number)
+            file_name = f"genome_file_{file_number}"
 
         if len(seq) >= min_seq_length:
-            file_name = "genome_file_" + str(file_number)
+            file_name = f"genome_file_{file_number}"
             with open(os.path.join(file_name), "w+") as file_out:
                 file_out.write(f">{header}_sli{seq_iterator}\n{seq}\n")
             file_number += 1
-            file_name = "genome_file_" + str(file_number)
+            file_name = f"genome_file_{file_number}"
 
 
 def coallate_results(main_output_dir):
-
+    """
+    TODO
+    unused function, not refactored, delete
+    """
     results_dir = create_dir(main_output_dir, "results")
+
     output_dirs = [
         "augustus_output",
         "cpg_output",
@@ -4469,9 +4455,9 @@ def coallate_results(main_output_dir):
     for output_dir in output_dirs:
         match = re.search(r"(.+)_output", output_dir)
         result_type = match.group(1)
-        results_path = os.path.join(main_output_dir, output_dir, "annotation.gtf")
-        copy_path = os.path.join(results_dir, (result_type + ".gtf"))
-        if os.path.exists(results_path):
+        results_path = main_output_dir / output_dir / "annotation.gtf"
+        if results_path.exists():
+            copy_path = results_dir / f"{result_type}.gtf"
             cpy_cmd = ["cp", results_path, copy_path]
             subprocess.run(cpy_cmd)
 
@@ -4523,8 +4509,8 @@ def main():
     parser.add_argument(
         "--genblast_timeout",
         type=int,
-        help="GenBlast timeout in seconds",
         default=10800,
+        help="GenBlast timeout in seconds",
     )
     parser.add_argument(
         "--run_busco",
@@ -4547,10 +4533,10 @@ def main():
         help="Path to a file with Rfam CM accessions, one accession per line, to use with cmsearch",
     )
     parser.add_argument(
-        "--run_star", action="store_true", help="Run Star for short read alignment"
+        "--run_star", action="store_true", help="Run STAR for short read alignment"
     )
     parser.add_argument(
-        "--star_path", type=str, help="Path to Star for short read alignment"
+        "--star_path", type=str, help="Path to STAR for short read alignment"
     )
     parser.add_argument(
         "--max_reads_per_sample",
@@ -4568,14 +4554,14 @@ def main():
     )
     parser.add_argument(
         "--short_read_fastq_dir",
-        help="Path to short read fastq dir for running with Star",
+        help="Path to short read fastq dir for running with STAR",
     )
     parser.add_argument(
         "--max_intron_length",
         nargs="?",
         type=int,
-        default=100000,
-        help="The maximum intron size for alignments. Default=100000",
+        default=100_000,
+        help="The maximum intron size for alignments. Default=100,000",
     )
     parser.add_argument(
         "--run_minimap2",
@@ -4696,7 +4682,7 @@ def main():
     parser.add_argument(
         "--run_proteins",
         action="store_true",
-        help="Run GenBlast if protein_file and/or busco_protein_file",
+        help="Run GenBlast if protein_file and/or busco_protein_file have also been set",
     )
     parser.add_argument(
         "--diamond_validation_db",
@@ -4706,10 +4692,12 @@ def main():
     parser.add_argument(
         "--validation_type",
         type=str,
-        help='The strength of evidence needed to validate and ORF as protein coding, can be "relaxed" or "moderate"',
+        help='The strength of evidence needed to validate an ORF as protein coding, can be "relaxed" or "moderate"',
     )
     parser.add_argument(
         "--load_to_ensembl_db",
+        # TODO
+        # resolve boolean vs string argument type
         action="store_true",
         help="Load results to an Ensembl db, must also provide the db_details flag",
     )
@@ -4805,7 +4793,7 @@ def main():
 
     genome_file = pathlib.Path(genome_file)
     if not genome_file.exists():
-        raise IOError("File does not exist: %s" % genome_file)
+        raise FileNotFoundError("File does not exist: %s" % genome_file)
 
     if not work_dir:
         work_dir = pathlib.Path.cwd()
@@ -4868,12 +4856,11 @@ def main():
     seq_region_names = get_seq_region_names(genome_file)
     logger.debug("seq region names:\n%s" % seq_region_names)
 
-    #################################
     # Repeat analyses
-    #################################
+    ############################################################################
     if run_masking:
         logger.info("Running masking via Red")
-        masked_genome_file = run_red(red_path, work_dir, genome_file)
+        masked_genome_file = run_red(red_path, genome_file, work_dir)
         logger.info("Masked genome file: %s" % masked_genome_file)
     else:
         logger.info("Not running masking, presuming the genome file is softmasked")
@@ -4891,10 +4878,10 @@ def main():
         run_repeatmasker_regions(
             genome_file, repeatmasker_path, library, species, work_dir, num_threads
         )
+    ############################################################################
 
-    #################################
     # Simple feature analyses
-    #################################
+    ############################################################################
     if run_cpg:
         logger.info("Annotating CpG islands")
         run_cpg_regions(genome_file, cpg_path, work_dir, num_threads)
@@ -4902,10 +4889,10 @@ def main():
     if run_eponine:
         logger.info("Running Eponine to find transcription start sites")
         run_eponine_regions(genome_file, java_path, eponine_path, work_dir, num_threads)
+    ############################################################################
 
-    #################################
     # sncRNA analyses
-    #################################
+    ############################################################################
     # Search Rfam with cmsearch
     if run_cmsearch:
         logger.info("Annotating sncRNAs")
@@ -4918,10 +4905,10 @@ def main():
         run_trnascan_regions(
             genome_file, trnascan_path, trnascan_filter_path, work_dir, num_threads
         )
+    ############################################################################
 
-    #################################
     # Transcriptomic analyses
-    #################################
+    ############################################################################
     if trim_fastq:
         run_trimming(work_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads)
 
@@ -4929,16 +4916,16 @@ def main():
     if run_star:
         logger.info("Running STAR")
         run_star_align(
-            star_path,
-            trim_fastq,
-            subsample_script_path,
-            work_dir,
-            short_read_fastq_dir,
-            genome_file,
-            max_reads_per_sample,
-            max_total_reads,
-            max_intron_length,
-            num_threads,
+            star_path=star_path,
+            trim_fastq=trim_fastq,
+            subsample_script_path=subsample_script_path,
+            main_output_dir=work_dir,
+            short_read_fastq_dir=short_read_fastq_dir,
+            genome_file=genome_file,
+            max_reads_per_sample=max_reads_per_sample,
+            max_total_reads=max_total_reads,
+            max_intron_length=max_intron_length,
+            num_threads=num_threads,
         )
 
     # Run Scallop
@@ -4949,9 +4936,7 @@ def main():
     # Run Stringtie
     if run_stringtie:
         logger.info("Running StringTie")
-        run_stringtie_assemble(
-            stringtie_path, samtools_path, work_dir, genome_file, num_threads
-        )
+        run_stringtie_assemble(stringtie_path, samtools_path, work_dir, num_threads)
 
     # Run minimap2
     if run_minimap2:
@@ -4968,10 +4953,10 @@ def main():
 
     if run_transcriptomic:
         check_transcriptomic_output(work_dir)
+    ############################################################################
 
-    #################################
     # Protein analyses
-    #################################
+    ############################################################################
     # Run GenBlast
     if run_genblast:
         logger.info("Running GenBlast")
@@ -4979,7 +4964,7 @@ def main():
             genblast_path,
             convert2blastmask_path,
             makeblastdb_path,
-            os.path.join(work_dir, "genblast_output"),
+            work_dir / "genblast_output",
             protein_file,
             masked_genome_file,
             max_intron_length,
@@ -4994,17 +4979,17 @@ def main():
             genblast_path,
             convert2blastmask_path,
             makeblastdb_path,
-            os.path.join(work_dir, "busco_output"),
+            work_dir / "busco_output",
             busco_protein_file,
             masked_genome_file,
             max_intron_length,
             num_threads,
             genblast_timeout,
         )
+    ############################################################################
 
-    #################################
     # Finalisation analyses
-    #################################
+    ############################################################################
     # Do some magic
     if finalise_geneset:
         logger.info("Finalise geneset")
@@ -5017,14 +5002,15 @@ def main():
             diamond_validation_db,
             num_threads,
         )
+    ############################################################################
 
-    #################################
     # Other analyses
-    #################################
+    ############################################################################
     # Run Augustus
     if run_augustus:
         logger.info("Running Augustus")
         run_augustus_predict(augustus_path, work_dir, masked_genome_file, num_threads)
+    ############################################################################
 
     if load_to_ensembl_db:
         load_results_to_ensembl_db(

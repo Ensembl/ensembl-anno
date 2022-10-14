@@ -67,6 +67,22 @@ def check_file(file_path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
 
 
+def check_gtf_content(gtf_file: Union[pathlib.Path, str], content_obj):
+    """
+    This just checks how many transcript lines are in a GTF
+    """
+    transcript_count = 0
+    with open(gtf_file) as gtf_in:
+        for line in gtf_in:
+            eles = line.split("\t")
+            if not len(eles) == 9:
+                continue
+            if eles[2] == content_obj:
+                transcript_count += 1
+    logger.info("%s GTF transcript count: %s" % gtf_file, transcript_count)
+    return transcript_count
+
+
 def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
     """
     Create directory or subdirectory and log operations.
@@ -90,6 +106,7 @@ def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
         logger.warning('Directory "%s" already exists' % target_dir)
     except OSError:
         logger.error('Failed to create directory "%s"' % target_dir)
+        sys.exit()
     else:
         logger.info('Successfully created directory "%s"' % target_dir)
 
@@ -97,6 +114,10 @@ def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
 
 
 def create_paired_paths(fastq_file_paths):
+    """
+    TODO
+    standardize to str or pathlib.Path paths
+    """
     path_dict = {}
     final_list = []
 
@@ -123,7 +144,7 @@ def create_paired_paths(fastq_file_paths):
     return final_list
 
 
-def get_seq_region_lengths(genome_file, min_seq_length: int):
+def get_seq_region_lengths(genome_file: Union[pathlib.Path, str], min_seq_length: int):
     current_header = ""
     current_seq = ""
 
@@ -146,3 +167,20 @@ def get_seq_region_lengths(genome_file, min_seq_length: int):
             seq_regions[current_header] = len(current_seq)
 
     return seq_regions
+
+
+def prlimit_command(command_list: list, virtual_memory_limit: int):
+    """
+    Uses the `prlimit` program to set a memory limit for a command list to be run with subprocess.
+
+    prlimit - get and set process resource limits
+    -v, --as[=limits]
+        Address space limit.
+
+    Args:
+        command_list: original subprocess command list
+        virtual_memory_limit: virtual memory limit in bytes
+    Returns:
+        memory limited subprocess command list
+    """
+    return ["prlimit", f"-v{virtual_memory_limit}"] + command_list
