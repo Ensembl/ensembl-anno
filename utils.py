@@ -79,7 +79,7 @@ def check_gtf_content(gtf_file: Union[pathlib.Path, str], content_obj):
                 continue
             if eles[2] == content_obj:
                 transcript_count += 1
-    logger.info("%s GTF transcript count: %s" % gtf_file, transcript_count)
+    logger.info("%s GTF transcript count: %s" % (gtf_file, transcript_count))
     return transcript_count
 
 

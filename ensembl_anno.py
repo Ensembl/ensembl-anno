@@ -509,9 +509,8 @@ def multiprocess_repeatmasker(
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find repeats with RepeatMasker: %s:%s:%s" % region_name,
-        start,
-        end,
+        "Processing slice to find repeats with RepeatMasker: %s:%s:%s"
+        % (region_name, start, end)
     )
     seq = get_sequence(
         seq_region=region_name,
@@ -663,9 +662,8 @@ def multiprocess_eponine(
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find repeats with Eponine: %s:%s:%s" % region_name,
-        start,
-        end,
+        "Processing slice to find repeats with Eponine: %s:%s:%s"
+        % (region_name, start, end)
     )
     seq = get_sequence(
         seq_region=region_name,
@@ -775,9 +773,8 @@ def multiprocess_cpg(
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find CpG islands with cpg_lh: %s:%s:%s" % region_name,
-        start,
-        end,
+        "Processing slice to find CpG islands with cpg_lh: %s:%s:%s"
+        % (region_name, start, end)
     )
     seq = get_sequence(
         seq_region=region_name,
@@ -923,9 +920,8 @@ def multiprocess_trnascan(
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find tRNAs using tRNAscan-SE: %s:%s:%s" % region_name,
-        start,
-        end,
+        "Processing slice to find tRNAs using tRNAscan-SE: %s:%s:%s"
+        % (region_name, start, end)
     )
     seq = get_sequence(
         seq_region=region_name,
@@ -1096,9 +1092,7 @@ def multiprocess_dust(
 
     logger.info(
         "Processing slice to find low complexity regions with Dust: %s:%s:%s"
-        % region_name,
-        start,
-        end,
+        % (region_name, start, end)
     )
     seq = get_sequence(
         seq_region=region_name,
@@ -1225,9 +1219,8 @@ def multiprocess_trf(
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find tandem repeats with TRF: %s:%s:%s" % region_name,
-        start,
-        end,
+        "Processing slice to find tandem repeats with TRF: %s:%s:%s"
+        % (region_name, start, end)
     )
     seq = get_sequence(
         seq_region=region_name,
@@ -1436,9 +1429,8 @@ def multiprocess_cmsearch(
     end = slice_id[2]
 
     logger.info(
-        "Processing Rfam data using cmsearch against slice: %s:%s:%s" % region_name,
-        start,
-        end,
+        "Processing Rfam data using cmsearch against slice: %s:%s:%s"
+        % (region_name, start, end)
     )
     seq = get_sequence(
         seq_region=region_name,
@@ -1482,10 +1474,7 @@ def multiprocess_cmsearch(
         # worked running at a time
         logger.error(
             "Issue processing the following region with cmsearch: %s %s-%s. Return value: %s"
-            % region_name,
-            start,
-            end,
-            return_value,
+            % (region_name, start, end, return_value)
         )
         with open(exception_results_file_path, "w+") as exception_out:
             exception_out.write(f"{region_name} {start} {end}\n")
@@ -1996,8 +1985,7 @@ def run_red(
     else:
         logger.info(
             "Creating sym link of the genome file to the Red genome dir:\n%s\nto\n%s"
-            % genome_file,
-            red_genome_file,
+            % (genome_file, red_genome_file)
         )
         red_genome_file.symlink_to(genome_file)
 
@@ -2627,8 +2615,7 @@ def check_transcriptomic_output(main_output_dir: pathlib.Path):
         total_lines += num_lines
         logger.info(
             'For "%s" found a total of %s in the annotation.gtf file'
-            % transcriptomic_dir,
-            num_lines,
+            % (transcriptomic_dir, num_lines)
         )
     if total_lines == 0:
         raise IOError(
@@ -2637,8 +2624,7 @@ def check_transcriptomic_output(main_output_dir: pathlib.Path):
     elif total_lines <= min_lines:
         raise IOError(
             "Anno was run with transcriptomic mode enabled, but the total number of lines in the output files were less than the min expected value\nFound: %s\nMin allowed: %s"
-            % total_lines,
-            min_lines,
+            % (total_lines, min_lines)
         )
     else:
         logger.info(
@@ -3043,8 +3029,7 @@ def run_stringtie_assemble(
         else:
             logger.info(
                 "Running Stringtie on: %s, writing output to:\n%s"
-                % sorted_bam_file_name,
-                transcript_file_path,
+                % (sorted_bam_file_name, transcript_file_path)
             )
             subprocess.run(
                 [
@@ -3132,8 +3117,8 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.
             )
         else:
             logger.info(
-                "Running Scallop on: %s, writing output to:\n%s" % sorted_bam_file_name,
-                transcript_file_path,
+                "Running Scallop on: %s, writing output to:\n%s"
+                % (sorted_bam_file_name, transcript_file_path)
             )
             scallop_cmd = [
                 scallop_path,
@@ -3627,7 +3612,7 @@ def multiprocess_diamond(
     ]
 
     logger.info(
-        "Running diamond on %s:\n%s" % batched_protein_file, " ".join(diamond_cmd)
+        "Running diamond on %s:\n%s" % (batched_protein_file, " ".join(diamond_cmd))
     )
     subprocess.run(diamond_cmd)
     subprocess.run(["mv", diamond_output_file, diamond_output_dir])

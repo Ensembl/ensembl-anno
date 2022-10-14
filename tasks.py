@@ -111,8 +111,7 @@ def run_star_align(
             ):
                 logger.info(
                     "Found existing .sub files on the fastq path for both members of the pair, will use those instead of subsampling again:\n%s\n%s"
-                    % f"{fastq_file}.sub",
-                    f"{fastq_file_pair}.sub",
+                    % (f"{fastq_file}.sub", f"{fastq_file_pair}.sub")
                 )
             elif fastq_file_pair:
                 pool.apply_async(
