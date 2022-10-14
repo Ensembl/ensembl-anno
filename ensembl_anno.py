@@ -4098,7 +4098,7 @@ def main():
         help="Path where the output and temp files will write to. Uses current dir by default",
     )
     parser.add_argument(
-        "--genome_file", type=str, help="Path to the fasta genome file", required=True
+        "--genome_file", type=str, required=True, help="Path to the fasta genome file"
     )
     parser.add_argument(
         "--num_threads", type=int, default=1, help="Number of threads to use"
@@ -4551,6 +4551,7 @@ def main():
             max_total_reads=max_total_reads,
             max_intron_length=max_intron_length,
             num_threads=num_threads,
+            main_script_dir=main_script_dir,
         )
 
     # Run Scallop

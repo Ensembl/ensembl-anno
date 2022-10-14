@@ -46,6 +46,7 @@ def run_star_align(
     max_total_reads,
     max_intron_length: int,
     num_threads: int,
+    main_script_dir: pathlib.Path,
 ):
     # TODO
     # !!! Need to add in samtools path above instead of just using 'samtools' in command
@@ -63,8 +64,13 @@ def run_star_align(
     if trim_fastq:
         short_read_fastq_dir = main_output_dir / "trim_galore_output"
 
-    #  if not os.path.exists(subsample_script_path):
-    subsample_script_path = "subsample_fastq.py"
+    if (
+        subsample_script_path is None
+        or not pathlib.Path(subsample_script_path).exists()
+    ):
+        subsample_script_path = (
+            main_script_dir / "support_scripts" / "subsample_fastq.py"
+        )
 
     star_dir = create_dir(main_output_dir, "star_output")
 
@@ -112,9 +118,9 @@ def run_star_align(
                 pool.apply_async(
                     run_subsample_script,
                     args=(
+                        subsample_script_path,
                         fastq_file,
                         fastq_file_pair,
-                        subsample_script_path,
                     ),
                 )
             elif os.path.exists(f"{fastq_file}.sub"):
@@ -126,9 +132,9 @@ def run_star_align(
                 pool.apply_async(
                     run_subsample_script,
                     args=(
+                        subsample_script_path,
                         fastq_file,
                         fastq_file_pair,
-                        subsample_script_path,
                     ),
                 )
 
@@ -290,17 +296,13 @@ def check_for_fastq_subsamples(fastq_file_list):
     return fastq_file_list
 
 
-def run_subsample_script(fastq_file, fastq_file_pair, subsample_script_path):
+def run_subsample_script(subsample_script_path, fastq_file, fastq_file_pair):
+    subsample_script_cmd = [
+        "python3",
+        subsample_script_path,
+        "--fastq_file",
+        fastq_file,
+    ]
     if fastq_file_pair:
-        subprocess.run(
-            [
-                "python3",
-                subsample_script_path,
-                "--fastq_file",
-                fastq_file,
-                "--fastq_file_pair",
-                fastq_file_pair,
-            ]
-        )
-    else:
-        subprocess.run(["python3", subsample_script_path, "--fastq_file", fastq_file])
+        subsample_script_cmd.extend(["--fastq_file_pair", fastq_file_pair])
+    subprocess.run(subsample_script_cmd)
