@@ -30,7 +30,7 @@ import signal
 import subprocess
 import tempfile
 
-from typing import Union
+from typing import List, Union
 
 # project imports
 from utils import (
@@ -2243,7 +2243,7 @@ def set_attributes(attributes, feature_type):
 
 def split_protein_file(
     protein_file, protein_output_dir: pathlib.Path, batch_size: int = 20
-) -> list[pathlib.Path]:
+) -> List[pathlib.Path]:
     for i in range(0, 10):
         create_dir(protein_output_dir, f"bin_{i}")
 
