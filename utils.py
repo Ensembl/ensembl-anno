@@ -184,3 +184,16 @@ def prlimit_command(command_list: list, virtual_memory_limit: int):
         memory limited subprocess command list
     """
     return ["prlimit", f"-v{virtual_memory_limit}"] + command_list
+
+
+def list_to_string(original_list: List) -> str:
+    """
+    Create a string with the original list elements string representations concatenated
+    with spaces between them.
+
+    Args:
+        original_list: original list
+    Returns:
+        generated list element string
+    """
+    return str.join(" ", [str(element) for element in original_list])

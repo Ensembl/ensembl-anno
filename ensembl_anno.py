@@ -41,6 +41,7 @@ from utils import (
     create_dir,
     create_paired_paths,
     get_seq_region_lengths,
+    list_to_string,
     logger,
     prlimit_command,
 )
@@ -352,7 +353,7 @@ def multiprocess_load_records_to_ensembl_db(
         if load_to_ensembl_db == "single_transcript_genes":
             loading_cmd.append("-make_single_transcript_genes")
 
-    logger.info("loading_cmd: %s" % " ".join(loading_cmd))
+    logger.info("loading_cmd: %s" % list_to_string(loading_cmd))
     subprocess.run(loading_cmd)
     gtf_temp_out.close()
     os.remove(gtf_temp_file_path)  # NOTE: doesn't seem to be working
@@ -535,7 +536,7 @@ def multiprocess_repeatmasker(
 
     repeatmasker_cmd = generic_repeatmasker_cmd.copy()
     repeatmasker_cmd.append(region_fasta_file_path)
-    logger.info("repeatmasker_cmd: %s" % " ".join(repeatmasker_cmd))
+    logger.info("repeatmasker_cmd: %s" % list_to_string(repeatmasker_cmd))
     subprocess.run(repeatmasker_cmd)
 
     create_repeatmasker_gtf(
@@ -689,7 +690,7 @@ def multiprocess_eponine(
     eponine_cmd = generic_eponine_cmd.copy()
     eponine_cmd.append(region_fasta_file_path)
 
-    logger.info("eponine_cmd: %s" % " ".join(eponine_cmd))
+    logger.info("eponine_cmd: %s" % list_to_string(eponine_cmd))
     subprocess.run(eponine_cmd, stdout=eponine_out)
     eponine_out.close()
 
@@ -798,7 +799,7 @@ def multiprocess_cpg(
     cpg_out = open(cpg_output_file_path, "w+")
 
     cpg_cmd = [cpg_path, region_fasta_file_path]
-    logger.info("cpg_cmd: %s" % " ".join(cpg_cmd))
+    logger.info("cpg_cmd: %s" % list_to_string(cpg_cmd))
     subprocess.run(cpg_cmd, stdout=cpg_out)
     cpg_out.close()
 
@@ -957,7 +958,7 @@ def multiprocess_trnascan(
     trnascan_cmd[3] = trnascan_output_file_path
     trnascan_cmd[5] = trnascan_ss_output_file_path
 
-    logger.info("tRNAscan-SE command:\n%s" % " ".join(trnascan_cmd))
+    logger.info("tRNAscan-SE command:\n%s" % list_to_string(trnascan_cmd))
     subprocess.run(trnascan_cmd)
 
     # If we have a blank output file at this point we want to stop and remove whatever files
@@ -980,7 +981,7 @@ def multiprocess_trnascan(
         "--prefix",
         trnascan_filter_file_prefix,
     ]
-    logger.info("tRNAscan-SE filter command:\n%s" % " ".join(filter_cmd))
+    logger.info("tRNAscan-SE filter command:\n%s" % list_to_string(filter_cmd))
     subprocess.run(filter_cmd)
 
     create_trnascan_gtf(
@@ -1115,7 +1116,7 @@ def multiprocess_dust(
     dust_out = open(dust_output_file_path, "w+")
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
-    logger.info("dust_cmd" % " ".join(dust_cmd))
+    logger.info("dust_cmd" % list_to_string(dust_cmd))
     subprocess.run(dust_cmd, stdout=dust_out)
     dust_out.close()
 
@@ -1244,7 +1245,7 @@ def multiprocess_trf(
     trf_output_file_path = f"{region_fasta_file_path}{trf_output_extension}"
     trf_cmd = generic_trf_cmd.copy()
     trf_cmd[1] = region_fasta_file_path
-    logger.info("trf_cmd: %s" % " ".join(trf_cmd))
+    logger.info("trf_cmd: %s" % list_to_string(trf_cmd))
     subprocess.run(trf_cmd)
     create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
     os.remove(trf_output_file_path)
@@ -1462,7 +1463,7 @@ def multiprocess_cmsearch(
     if memory_limit is not None:
         cmsearch_cmd = prlimit_command(cmsearch_cmd, memory_limit)
 
-    logger.info("cmsearch_cmd: %s" % " ".join(cmsearch_cmd))
+    logger.info("cmsearch_cmd: %s" % list_to_string(cmsearch_cmd))
 
     return_value = None
     try:
@@ -2156,7 +2157,7 @@ def multiprocess_genblast(
         batched_protein_file,
     ]
 
-    logger.info("genblast_cmd: %s" % " ".join(genblast_cmd))
+    logger.info("genblast_cmd: %s" % list_to_string(genblast_cmd))
     # Using the child process termination as described here:
     # https://alexandra-zaharia.github.io/posts/kill-subprocess-and-its-children-on-timeout-python/
     try:
@@ -2300,7 +2301,9 @@ def run_convert2blastmask(convert2blastmask_path, masked_genome_file, asnb_file)
         "-out",
         asnb_file,
     ]
-    logger.info("Running convert2blastmask prior to GenBlast:\n%s" % " ".join(cmd))
+    logger.info(
+        "Running convert2blastmask prior to GenBlast:\n%s" % list_to_string(cmd)
+    )
     subprocess.run(cmd)
     logger.info("Completed running convert2blastmask")
 
@@ -2318,7 +2321,7 @@ def run_makeblastdb(makeblastdb_path, masked_genome_file, asnb_file):
         "-max_file_sz",
         "10000000000",
     ]
-    logger.info("Running makeblastdb prior to GenBlast:\n%s" % " ".join(cmd))
+    logger.info("Running makeblastdb prior to GenBlast:\n%s" % list_to_string(cmd))
     subprocess.run(cmd)
     logger.info("Completed running makeblastdb")
 
@@ -2406,7 +2409,7 @@ def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_files, trim_dir):
 
     logger.info(
         "Running Trim Galore with the following command:\n%s"
-        % " ".join(trim_galore_cmd)
+        % list_to_string(trim_galore_cmd)
     )
     subprocess.run(trim_galore_cmd)
 
@@ -3147,7 +3150,7 @@ def multiprocess_augustus_hints(
         f"--out={bam2hints_file_path}",
         "--maxintronlen=100000",
     ]
-    logger.info("bam2hints command:\n%s" % " ".join(bam2hints_cmd))
+    logger.info("bam2hints command:\n%s" % list_to_string(bam2hints_cmd))
     subprocess.run(bam2hints_cmd)
 
     # bam2wig_cmd = [bam2wig_path,'-D',augustus_hints_dir,bam_file]
@@ -3702,7 +3705,7 @@ def run_finalise_geneset(
         "-output_gtf_file",
         cleaned_initial_gtf_file,
     ]
-    logger.info("Cleaning initial set:\n%s" % " ".join(cleaning_cmd))
+    logger.info("Cleaning initial set:\n%s" % list_to_string(cleaning_cmd))
     subprocess.run(cleaning_cmd)
 
     # Clean UTRs
@@ -3758,7 +3761,8 @@ def run_finalise_geneset(
         cleaned_utr_gtf_file,
     ]
     logger.info(
-        "Dumping transcript and translation sequences:\n%s" % " ".join(dumping_cmd)
+        "Dumping transcript and translation sequences:\n%s"
+        % list_to_string(dumping_cmd)
     )
     subprocess.run(dumping_cmd)
 
@@ -3791,7 +3795,7 @@ def validate_coding_transcripts(
         cdna_file,
         rnasamba_weights,
     ]
-    logger.info("rnasamba_cmd: %s" % " ".join(rnasamba_cmd))
+    logger.info("rnasamba_cmd: %s" % list_to_string(rnasamba_cmd))
     subprocess.run(rnasamba_cmd)
     cpc2_volume = f"{validation_dir}/:/app:rw"
     cpc2_cmd = [
@@ -3808,7 +3812,7 @@ def validate_coding_transcripts(
         "-o",
         cpc2_output_path,
     ]
-    logger.info("cpc2_cmd: %s" % " ".join(cpc2_cmd))
+    logger.info("cpc2_cmd: %s" % list_to_string(cpc2_cmd))
     subprocess.run(cpc2_cmd)
     cpc2_output_path = f"{cpc2_output_path}.txt"
 
@@ -3883,7 +3887,8 @@ def multiprocess_diamond(
     ]
 
     logger.info(
-        "Running diamond on %s:\n%s" % (batched_protein_file, " ".join(diamond_cmd))
+        "Running diamond on %s:\n%s"
+        % (batched_protein_file, list_to_string(diamond_cmd))
     )
     subprocess.run(diamond_cmd)
     subprocess.run(["mv", diamond_output_file, diamond_output_dir])
@@ -4275,7 +4280,7 @@ def fasta_to_dict(fasta_list):
 
 
 def subprocess_run_and_log(command):
-    logger.info("subprocess_run_and_log command: %s" % " ".join(command))
+    logger.info("subprocess_run_and_log command: %s" % list_to_string(command))
     subprocess.run(command)
 
 
