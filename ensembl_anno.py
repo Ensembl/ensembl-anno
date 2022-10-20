@@ -864,7 +864,7 @@ def run_trnascan_regions(
     trnascan_output_dir = create_dir(main_output_dir, "trnascan_output")
 
     output_file = trnascan_output_dir / "annotation.gtf"
-    if os.path.exists(output_file):
+    if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Trnascan gtf file already exists, skipping analysis")
@@ -1287,7 +1287,7 @@ def run_cmsearch_regions(
     rfam_cm_db_path,
     rfam_seeds_file_path,
     rfam_accession_file,
-    main_output_dir,
+    main_output_dir: pathlib.Path,
     num_threads: int,
 ):
     if not cmsearch_path:
@@ -1309,12 +1309,12 @@ def run_cmsearch_regions(
     rfam_user = "rfamro"
     rfam_host = "mysql-rfam-public.ebi.ac.uk"
     rfam_port = "4497"
-    #  rfam_accession_query_cmd = ["mysql -h", rfam_host,"-u",rfam_user,"-P",rfam_port,"-NB -e",rfam_dbname,"'select rfam_acc FROM (SELECT DISTINCT f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff, f.trusted_cutoff FROM full_region fr, rfamseq rf, taxonomy tx, family f WHERE rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc AND fr.rfamseq_acc = rf.rfamseq_acc AND LOWER(tx.tax_string) LIKE \'%" + clade + "%\' AND (f.type LIKE \'%snRNA%\' OR f.type LIKE \'%rRNA%\' OR LOWER(f.rfam_id) LIKE \'%rnase%\' OR LOWER(f.rfam_id) LIKE \'%vault%\' OR LOWER(f.rfam_id) LIKE \'%y_rna%\' OR f.rfam_id LIKE \'%Metazoa_SRP%\') AND is_significant = 1) AS TEMP WHERE rfam_id NOT LIKE \'%bacteria%\' AND rfam_id NOT LIKE \'%archaea%\' AND rfam_id NOT LIKE \'%microsporidia%\';'"]
+    # rfam_accession_query_cmd = ["mysql -h", rfam_host,"-u",rfam_user,"-P",rfam_port,"-NB -e",rfam_dbname,"'select rfam_acc FROM (SELECT DISTINCT f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff, f.trusted_cutoff FROM full_region fr, rfamseq rf, taxonomy tx, family f WHERE rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc AND fr.rfamseq_acc = rf.rfamseq_acc AND LOWER(tx.tax_string) LIKE \'%" + clade + "%\' AND (f.type LIKE \'%snRNA%\' OR f.type LIKE \'%rRNA%\' OR LOWER(f.rfam_id) LIKE \'%rnase%\' OR LOWER(f.rfam_id) LIKE \'%vault%\' OR LOWER(f.rfam_id) LIKE \'%y_rna%\' OR f.rfam_id LIKE \'%Metazoa_SRP%\') AND is_significant = 1) AS TEMP WHERE rfam_id NOT LIKE \'%bacteria%\' AND rfam_id NOT LIKE \'%archaea%\' AND rfam_id NOT LIKE \'%microsporidia%\';'"]
 
     # mysql -hmysql-rfam-public.ebi.ac.uk -urfamro -P4497 Rfam -NB -e "select rfam_acc FROM (SELECT DISTINCT f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff, f.trusted_cutoff FROM full_region fr, rfamseq rf, taxonomy tx, family f WHERE rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc AND fr.rfamseq_acc = rf.rfamseq_acc AND LOWER(tx.tax_string) LIKE '%insect%' AND (f.type LIKE '%snRNA%' OR f.type LIKE '%rRNA%' OR LOWER(f.rfam_id) LIKE '%rnase%' OR LOWER(f.rfam_id) LIKE '%vault%' OR LOWER(f.rfam_id) LIKE '%y_rna%' OR f.rfam_id LIKE '%Metazoa_SRP%') AND is_significant = 1) AS TEMP WHERE rfam_id NOT LIKE '%bacteria%' AND rfam_id NOT LIKE '%archaea%' AND rfam_id NOT LIKE '%microsporidia%';"
 
-    #  rfam_accession_file = '/hps/nobackup2/production/ensembl/fergal/production/test_runs/non_verts/butterfly/rfam_insect_ids.txt'
-    # rfam_accession_file = os.path.join(main_output_dir,'rfam_accessions.txt')
+    # rfam_accession_file = '/hps/nobackup2/production/ensembl/fergal/production/test_runs/non_verts/butterfly/rfam_insect_ids.txt'
+    # rfam_accession_file = main_output_dir / rfam_accessions.txt'
     rfam_cm_db_path = (
         "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm"
     )
@@ -1954,7 +1954,7 @@ def run_red(
     red_path,
     genome_file: pathlib.Path,
     main_output_dir: Union[pathlib.Path, str],
-):
+) -> pathlib.Path:
     if not red_path:
         red_path = "Red"
 
@@ -2387,9 +2387,7 @@ def run_trimming(
 
         files_to_delete_list = []
         for file_type in file_types:
-            files_to_delete_list.extend(
-                glob.glob(os.path.join(short_read_fastq_dir, file_type))
-            )
+            files_to_delete_list.extend(short_read_fastq_dir.glob(file_type))
 
 
 def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_files, trim_dir):
@@ -3153,20 +3151,20 @@ def multiprocess_augustus_hints(
     logger.info("bam2hints command:\n%s" % list_to_string(bam2hints_cmd))
     subprocess.run(bam2hints_cmd)
 
-    # bam2wig_cmd = [bam2wig_path,'-D',augustus_hints_dir,bam_file]
-    # print("bam2wig command:\n" + ' '.join(bam2wig_cmd))
+    # bam2wig_cmd = [bam2wig_path, "-D", augustus_hints_dir, bam_file]
+    # logger.info("bam2wig command:\n%s" % list_to_string(bam2wig_cmd))
     # subprocess.run(bam2wig_cmd)
 
     # wig2hints is odd in that it runs directly off STDIN and then just prints to STDOUT,
     # so the code below is implemented in steps as it's not good practice to use pipes and
     # redirects in a subprocess command
-    # wig_file_name = re.sub('.bam','.wig',bam_file_name)
-    # wig_file_path = os.path.join(augustus_hints_dir,wig_file_name)
-    # wig_hints_file_name = (wig_file_name + '.hints.gff')
-    # wig_hints_file_path =  os.path.join(augustus_hints_dir,wig_hints_file_name)
-    # print("Writing wig file info to hints file:\n" + wig_hints_file_name)
-    # wig2hints_out = open(wig_hints_file_path,'w+')
-    # wigcat = subprocess.Popen(('cat',wig_file_path), stdout=subprocess.PIPE)
+    # wig_file_name = re.sub(".bam", ".wig", bam_file_name)
+    # wig_file_path = augustus_hints_dir / wig_file_name
+    # wig_hints_file_name = f"{wig_file_name}.hints.gff"
+    # wig_hints_file_path = augustus_hints_dir / wig_hints_file_name
+    # logger.info("Writing wig file info to hints file:\n%s" % wig_hints_file_name)
+    # wig2hints_out = open(wig_hints_file_path, "w+")
+    # wigcat = subprocess.Popen(("cat", wig_file_path), stdout=subprocess.PIPE)
     # subprocess.run(wig2hints_path, stdin=wigcat.stdout, stdout=wig2hints_out)
     # wig2hints_out.close()
 

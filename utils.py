@@ -23,7 +23,7 @@ import re
 import shutil
 import sys
 
-from typing import Union
+from typing import List, Union
 
 
 # logging formats
@@ -169,7 +169,7 @@ def get_seq_region_lengths(genome_file: Union[pathlib.Path, str], min_seq_length
     return seq_regions
 
 
-def prlimit_command(command_list: list, virtual_memory_limit: int):
+def prlimit_command(command_list: List, virtual_memory_limit: int):
     """
     Uses the `prlimit` program to set a memory limit for a command list to be run with subprocess.
 
