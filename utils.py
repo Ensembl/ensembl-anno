@@ -181,7 +181,7 @@ def prlimit_command(command_list: List, virtual_memory_limit: int):
     return ["prlimit", f"-v{virtual_memory_limit}"] + command_list
 
 
-def list_to_string(original_list: List, separator:str =" ") -> str:
+def list_to_string(original_list: List, separator: str = " ") -> str:
     """
     Create a string with the original list elements string representations concatenated
     with spaces between them.

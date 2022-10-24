@@ -2347,7 +2347,9 @@ def run_trimming(
     fastq_paired_paths = create_paired_paths(fastq_file_list)
 
     for fastq_paired_files in fastq_paired_paths:
-        logger.info("FASTQ file path(s): %s" % list_to_string(fastq_paired_files, separator=","))
+        logger.info(
+            "FASTQ file path(s): %s" % list_to_string(fastq_paired_files, separator=",")
+        )
 
     generic_trim_galore_cmd = [
         trim_galore_path,
@@ -2392,7 +2394,11 @@ def run_trimming(
             files_to_delete_list.extend(short_read_fastq_dir.glob(file_type))
 
 
-def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_paired_files: List[pathlib.Path], trim_dir: pathlib.Path):
+def multiprocess_trim_galore(
+    generic_trim_galore_cmd,
+    fastq_paired_files: List[pathlib.Path],
+    trim_dir: pathlib.Path,
+):
     fastq_file = fastq_files[0]
 
     if len(fastq_files) == 2:
@@ -2490,8 +2496,14 @@ def run_star_align(
                 fastq_file_pair = None
 
             fastq_file_subsampled = fastq_file.parent / f"{fastq_file.name}.sub"
-            fastq_file_pair_subsampled = fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
-            if fastq_file_pair and fastq_file_subsampled.exists() and fastq_file_pair_subsampled.exists():
+            fastq_file_pair_subsampled = (
+                fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
+            )
+            if (
+                fastq_file_pair
+                and fastq_file_subsampled.exists()
+                and fastq_file_pair_subsampled.exists()
+            ):
                 logger.info(
                     "Found existing .sub files on the fastq path for both members of the pair, will use those instead of subsampling again:\n%s\n%s"
                     % (fastq_file_subsampled, fastq_file_pair_subsampled)
@@ -2658,7 +2670,9 @@ def run_subsample_script(subsample_script_path, fastq_file, fastq_file_pair):
     subprocess.run(subsample_script_cmd)
 
 
-def check_for_fastq_subsamples(fastq_paired_paths: List[List[pathlib.Path]]) -> List[List[pathlib.Path]]:
+def check_for_fastq_subsamples(
+    fastq_paired_paths: List[List[pathlib.Path]],
+) -> List[List[pathlib.Path]]:
     """
     Replace FASTQ files with their corresponding subsampled versions if they exist.
 
@@ -2679,7 +2693,9 @@ def check_for_fastq_subsamples(fastq_paired_paths: List[List[pathlib.Path]]) -> 
 
         if len(fastq_files) == 2:
             fastq_file_pair = fastq_files[1]
-            fastq_file_pair_subsampled = fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
+            fastq_file_pair_subsampled = (
+                fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
+            )
         # len(fastq_files) == 1
         else:
             fastq_file_pair = None
