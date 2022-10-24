@@ -851,4 +851,188 @@ def create_slice_ids(
             start = end + 1
 
     return slice_ids
+def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
+    output_lines = []
+    for gene_id in parsed_gtf_genes.keys():
+        transcript_ids = parsed_gtf_genes[gene_id].keys()
+        for transcript_id in transcript_ids:
+            transcript_line = parsed_gtf_genes[gene_id][transcript_id]["transcript"]
+            single_cds_exon_transcript = 0
+            translation_match = re.search(
+                r'; translation_coords "([^"]+)";', transcript_line
+            )
+            if translation_match:
+                translation_coords = translation_match.group(1)
+                translation_coords_list = translation_coords.split(":")
+                # If the start exon coords of both exons are the same, then it's the same exon and thus a single exon cds
+                if translation_coords_list[0] == translation_coords_list[3]:
+                    single_cds_exon_transcript = 1
 
+            exon_lines = parsed_gtf_genes[gene_id][transcript_id]["exons"]
+            validation_results = combined_results[transcript_id]
+            rnasamba_coding_probability = float(validation_results[0])
+            rnasamba_coding_potential = validation_results[1]
+            cpc2_coding_probability = float(validation_results[2])
+            cpc2_coding_potential = validation_results[3]
+            transcript_length = int(validation_results[4])
+            peptide_length = int(validation_results[5])
+            diamond_e_value = None
+            if len(validation_results) == 7:
+                diamond_e_value = validation_results[6]
+
+            avg_coding_probability = (
+                rnasamba_coding_probability + cpc2_coding_probability
+            ) / 2
+            max_coding_probability = max(
+                rnasamba_coding_probability, cpc2_coding_probability
+            )
+
+            match = re.search(r'; biotype "([^"]+)";', transcript_line)
+            biotype = match.group(1)
+            if biotype == "busco" or biotype == "protein":
+                transcript_line = re.sub(
+                    '; biotype "{biotype}";',
+                    '; biotype "protein_coding";',
+                    transcript_line,
+                )
+                output_lines.append(transcript_line)
+                output_lines.extend(exon_lines)
+                continue
+
+            min_single_exon_pep_length = 100
+            min_multi_exon_pep_length = 75
+            min_single_source_probability = 0.8
+            min_single_exon_probability = 0.9
+
+            # Note that the below looks at validating things under different levels of strictness
+            # There are a few different continue statements, where transcripts will be skipped resulting
+            # in a smaller post validation file. It mainly removes single coding exon genes with no real
+            # support or for multi-exon lncRNAs that are less than 200bp long
+            if single_cds_exon_transcript == 1 and validation_type == "relaxed":
+                if diamond_e_value is not None:
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    rnasamba_coding_potential == "coding"
+                    and cpc2_coding_potential == "coding"
+                    and peptide_length >= min_single_exon_pep_length
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    (
+                        rnasamba_coding_potential == "coding"
+                        or cpc2_coding_potential == "coding"
+                    )
+                    and peptide_length >= min_single_exon_pep_length
+                    and max_coding_probability >= min_single_source_probability
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                else:
+                    continue
+            elif single_cds_exon_transcript == 1 and validation_type == "moderate":
+                if (
+                    diamond_e_value is not None
+                    and peptide_length >= min_single_exon_pep_length
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    (
+                        rnasamba_coding_potential == "coding"
+                        and cpc2_coding_potential == "coding"
+                    )
+                    and peptide_length >= min_single_exon_pep_length
+                    and avg_coding_probability >= min_single_exon_probability
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                else:
+                    continue
+            else:
+                if diamond_e_value is not None:
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    rnasamba_coding_potential == "coding"
+                    and cpc2_coding_potential == "coding"
+                    and peptide_length >= min_multi_exon_pep_length
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    (
+                        rnasamba_coding_potential == "coding"
+                        or cpc2_coding_potential == "coding"
+                    )
+                    and peptide_length >= min_multi_exon_pep_length
+                    and max_coding_probability >= min_single_source_probability
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif transcript_length >= 200:
+                    transcript_line = re.sub(
+                        '; biotype "{biotype}";', '; biotype "lncRNA";', transcript_line
+                    )
+                    transcript_line = re.sub(
+                        ' translation_coords "[^"]+";', "", transcript_line
+                    )
+                else:
+                    continue
+
+            output_lines.append(transcript_line)
+            output_lines.extend(exon_lines)
+
+    return output_lines
+
+def read_gtf_genes(gtf_file):
+    gtf_genes = {}
+    with open(gtf_file) as gtf_in:
+        for line in gtf_in:
+            eles = line.split("\t")
+            if not len(eles) == 9:
+                continue
+
+            match = re.search(r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line)
+
+            if not match:
+                continue
+
+            gene_id = match.group(1)
+            transcript_id = match.group(2)
+            feature_type = eles[2]
+            if gene_id not in gtf_genes:
+                gtf_genes[gene_id] = {}
+            if feature_type == "transcript":
+                gtf_genes[gene_id][transcript_id] = {}
+                gtf_genes[gene_id][transcript_id]["transcript"] = line
+                gtf_genes[gene_id][transcript_id]["exons"] = []
+            elif feature_type == "exon":
+                gtf_genes[gene_id][transcript_id]["exons"].append(line)
+
+    return gtf_genes

@@ -464,3 +464,106 @@ def multiprocess_diamond(
     subprocess.run(["mv", diamond_output_file, diamond_output_dir])
 
 
+def read_rnasamba_results(file_path: Union[pathlib.Path, str]):
+    results = []
+    with open(file_path) as file_in:
+        for line in file_in:
+            line = line.rstrip()
+            match = re.search(r"^sequence_name", line)
+            if match:
+                continue
+
+            eles = line.split("\t")
+            if not len(eles) == 3:
+                continue
+
+            transcript_id = eles[0]
+            coding_probability = eles[1]
+            coding_potential = eles[2]
+            results.append([transcript_id, coding_probability, coding_potential])
+
+    return results
+
+
+def read_cpc2_results(file_path):
+    results = []
+    with open(file_path) as file_in:
+        for line in file_in:
+            line = line.rstrip()
+            match = re.search(r"^#ID", line)
+            if match:
+                continue
+
+            eles = line.split("\t")
+            if not len(eles) == 9:
+                continue
+
+            transcript_id = eles[0]
+            transcript_length = eles[1]
+            peptide_length = eles[2]
+            coding_probability = eles[7]
+            coding_potential = eles[8]
+            results.append(
+                [
+                    transcript_id,
+                    coding_probability,
+                    coding_potential,
+                    transcript_length,
+                    peptide_length,
+                ]
+            )
+
+    return results
+
+
+def read_diamond_results(diamond_output_dir: pathlib.Path):
+    results = []
+    for diamond_file in diamond_output_dir.glob("*.dmdout"):
+        with open(diamond_file) as file_in:
+            for line in file_in:
+                line = line.rstrip()
+
+                eles = line.split("\t")
+                if not len(eles) == 12:
+                    continue
+
+                transcript_id = eles[0]
+                e_value = eles[10]
+                results.append([transcript_id, e_value])
+
+    return results
+
+
+def combine_results(rnasamba_results, cpc2_results, diamond_results):
+    transcript_ids = {}
+
+    for result in rnasamba_results:
+        transcript_id = result[0]
+        coding_probability = result[1]
+        coding_potential = result[2]
+
+        if transcript_id not in transcript_ids:
+            transcript_ids[transcript_id] = [coding_probability, coding_potential]
+
+    for result in cpc2_results:
+        transcript_id = result[0]
+        coding_probability = result[1]
+        coding_potential = result[2]
+        transcript_length = result[3]
+        peptide_length = result[4]
+        transcript_ids[transcript_id].extend(
+            [coding_probability, coding_potential, transcript_length, peptide_length]
+        )
+
+    if diamond_results is not None:
+        for result in diamond_results:
+            transcript_id = result[0]
+            e_value = result[1]
+            # There seems to be an issue where there are a small number of sequences that don't make it into the cpc2/rnasamba output
+            # Should code in a system for this, but it would be good to understand why it happens to begin with. Seems to be the same
+            # number of missing seqs in both, so maybe a shared cut-off
+            if transcript_id in transcript_ids:
+                transcript_ids[transcript_id].extend([e_value])
+
+    return transcript_ids
+
