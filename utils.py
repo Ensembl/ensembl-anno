@@ -555,4 +555,137 @@ def batch_gtf_records(input_gtf_file, batch_size, output_dir, record_type):
 
             records.append(current_record_batch)
 
-    return records    
+    return records   
+
+def slice_output_to_gtf(
+    output_dir: pathlib.Path,
+    extension,
+    unique_ids,
+    feature_id_label,
+    new_id_prefix,
+):
+    if not extension:
+        extension = ".gtf"
+
+    # Note that this does not make unique ids at the moment
+    # In many cases this is fine because the ids are unique by seq region, but in cases like batching it can cause problems
+    # So will add in a helper method to make ids unique
+
+    # This holds keys of the current slice details with the gene id to form unique keys. Each time a new key is added
+    # the overall gene counter is incremented and the value of the key is set to the new gene id. Any subsequent
+    # lines with the same region/gene id key will then just get the new id without incrementing the counter
+    gene_id_index = {}
+    gene_transcript_id_index = {}
+    gene_counter = 1
+
+    # Similar to the gene id index, this will have a key that is based on the slice details, gene id and transcript id. If there
+    # is no existing entry, the transcript key will be added and the transcript counter is incremented. If there is a key then
+    # the transcript id will be replaced with the new transcript id (which is based on the new gene id and transcript counter)
+    # Example key KS8000.rs1.re1000000.gene_1.transcript_1 =
+    transcript_id_count_index = {}
+
+    feature_counter = 1
+
+    feature_types = ["exon", "transcript", "repeat", "simple_feature"]
+    gtf_output_file_path = output_dir / "annotation.gtf"
+    with open(gtf_output_file_path, "w+") as gtf_out:
+        for gtf_input_file_path in output_dir.glob("*{extension}"):
+            if gtf_input_file_path.stat().st_size == 0:
+                logger.info("File is empty, will skip:\n%s" % gtf_input_file_path)
+                continue
+
+            gtf_file_name = gtf_input_file_path.name
+            match = re.search(r"\.rs(\d+)\.re(\d+)\.", gtf_file_name)
+            start_offset = int(match.group(1))
+            with open(gtf_input_file_path, "r") as gtf_in:
+                for line in gtf_in:
+                    values = line.split("\t")
+                    if len(values) == 9 and (values[2] in feature_types):
+                        values[3] = str(int(values[3]) + (start_offset - 1))
+                        values[4] = str(int(values[4]) + (start_offset - 1))
+                        if unique_ids:
+                            # Maybe make a unique id based on the feature type
+                            # Basically region/feature id should be unique at this point, so could use region_id and current_id is key, value is the unique id that is incremented
+                            attribs = values[8]
+
+                            # This bit assigns unique gene/transcript ids if the line contains gene_id/transcript_id
+                            match_gene_type = re.search(
+                                r'(gene_id +"([^"]+)").+(transcript_id +"([^"]+)")',
+                                line,
+                            )
+                            if match_gene_type:
+                                full_gene_id_string = match_gene_type.group(1)
+                                current_gene_id = match_gene_type.group(2)
+                                full_transcript_id_string = match_gene_type.group(3)
+                                current_transcript_id = match_gene_type.group(4)
+                                gene_id_key = f"{gtf_file_name}.{current_gene_id}"
+                                transcript_id_key = (
+                                    f"{gene_id_key}.{current_transcript_id}"
+                                )
+                                if gene_id_key not in gene_id_index:
+                                    new_gene_id = f"gene{gene_counter}"
+                                    gene_id_index[gene_id_key] = new_gene_id
+                                    attribs = re.sub(
+                                        full_gene_id_string,
+                                        f'gene_id "{new_gene_id}"',
+                                        attribs,
+                                    )
+                                    transcript_id_count_index[gene_id_key] = 1
+                                    gene_counter += 1
+                                else:
+                                    new_gene_id = gene_id_index[gene_id_key]
+                                    attribs = re.sub(
+                                        full_gene_id_string,
+                                        f'gene_id "{new_gene_id}"',
+                                        attribs,
+                                    )
+                                if transcript_id_key not in gene_transcript_id_index:
+                                    new_transcript_id = (
+                                        gene_id_index[gene_id_key]
+                                        + ".t"
+                                        + str(transcript_id_count_index[gene_id_key])
+                                    )
+                                    gene_transcript_id_index[
+                                        transcript_id_key
+                                    ] = new_transcript_id
+                                    attribs = re.sub(
+                                        full_transcript_id_string,
+                                        f'transcript_id "{new_transcript_id}"',
+                                        attribs,
+                                    )
+                                    transcript_id_count_index[gene_id_key] += 1
+                                else:
+                                    new_transcript_id = gene_transcript_id_index[
+                                        transcript_id_key
+                                    ]
+                                    attribs = re.sub(
+                                        full_transcript_id_string,
+                                        f'transcript_id "{new_transcript_id}"',
+                                        attribs,
+                                    )
+                                values[8] = attribs
+
+                            # If you don't match a gene line, try a feature line
+                            else:
+                                match_feature_type = re.search(
+                                    r"(" + feature_id_label + ' +"([^"]+)")', line
+                                )
+                                if match_feature_type:
+                                    full_feature_id_string = match_feature_type.group(1)
+                                    current_feature_id = match_feature_type.group(2)
+                                    new_feature_id = f"{new_id_prefix}{feature_counter}"
+                                    attribs = re.sub(
+                                        full_feature_id_string,
+                                        f'{feature_id_label} "{new_feature_id}"',
+                                        attribs,
+                                    )
+                                    feature_counter += 1
+                                    values[8] = attribs
+
+                        gtf_out.write("\t".join(values))
+                    else:
+                        logger.info(
+                            "Feature type not recognised, will skip: %s" % values[2]
+                        )
+
+    

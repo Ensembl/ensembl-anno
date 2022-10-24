@@ -426,4 +426,73 @@ def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
                     trf_out.write(gtf_line)
                     repeat_count += 1
 
+def run_red(
+    red_path,
+    genome_file: pathlib.Path,
+    main_output_dir: Union[pathlib.Path, str],
+):
+    if not red_path:
+        red_path = "Red"
 
+    check_exe(red_path)
+    red_dir = create_dir(main_output_dir, "red_output")
+    red_mask_dir = create_dir(red_dir, "mask_output")
+    red_repeat_dir = create_dir(red_dir, "repeat_output")
+    red_genome_dir = create_dir(red_dir, "genome_dir")
+
+    genome_file_name = genome_file.name
+    red_genome_file = red_genome_dir / genome_file_name
+    genome_file_stem = genome_file.stem
+    masked_genome_file = red_mask_dir / f"{genome_file_stem}.msk"
+    repeat_coords_file = red_repeat_dir / f"{genome_file_stem}.rpt"
+    gtf_output_file_path = red_dir / "annotation.gtf"
+
+    if masked_genome_file.exists():
+        logger.warning(
+            "Masked Genome file already found on the path to the Red mask output dir. Will not create a new file"
+        )
+        create_red_gtf(repeat_coords_file, gtf_output_file_path)
+        return masked_genome_file
+
+    if red_genome_file.exists():
+        logger.warning(
+            "Unmasked genome file already found on the path to the Red genome dir, will not create a sym link"
+        )
+    else:
+        logger.info(
+            "Creating sym link of the genome file to the Red genome dir:\n%s\nto\n%s"
+            % (genome_file, red_genome_file)
+        )
+        red_genome_file.symlink_to(genome_file)
+
+    if not red_genome_file.exists():
+        logger.error(
+            "Could not find the genome file or sym link to the original file in the Red genome dir at:\n%s"
+            % red_genome_file
+        )
+
+    logger.info("Running Red, this may take some time depending on the genome size")
+    subprocess.run(
+        [red_path, "-gnm", red_genome_dir, "-msk", red_mask_dir, "-rpt", red_repeat_dir]
+    )
+
+    logger.info("Completed running Red")
+
+    create_red_gtf(repeat_coords_file, gtf_output_file_path)
+
+    return masked_genome_file
+
+
+def create_red_gtf(repeat_coords_file, gtf_output_file_path):
+    with open(repeat_coords_file, "r") as red_in, open(
+        gtf_output_file_path, "w+"
+    ) as red_out:
+        for repeat_id, line in enumerate(red_in, start=1):
+            result_match = re.search(r"^\>(.+)\:(\d+)\-(\d+)", line)
+            if result_match:
+                region_name = result_match.group(1)
+                # Note that Red is 0-based, so add 1
+                start = int(result_match.group(2)) + 1
+                end = int(result_match.group(3)) + 1
+                gtf_line = f'{region_name}\tRed\trepeat\t{start}\t{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'
+                red_out.write(gtf_line)
