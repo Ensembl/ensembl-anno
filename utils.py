@@ -819,4 +819,36 @@ def bed_to_exons(block_sizes, block_starts, offset):
         exons.append(exon_coords)
 
     return exons
-    
+
+
+def create_slice_ids(
+    seq_region_lengths,
+    slice_size: int = 1_000_000,
+    overlap: int = 0,
+    min_length: int = 0,
+):
+    slice_ids = []
+    for region, region_length in seq_region_lengths.items():
+        if region_length < min_length:
+            continue
+
+        if region_length <= slice_size:
+            slice_ids.append([region, 1, region_length])
+            continue
+
+        start = 1
+        end = start + slice_size - 1
+        while end < region_length:
+            start = start - overlap
+            if start < 1:
+                start = 1
+
+            end = start + slice_size - 1
+            if end > region_length:
+                end = region_length
+            if (end - start + 1) >= min_length:
+                slice_ids.append([region, start, end])
+            start = end + 1
+
+    return slice_ids
+

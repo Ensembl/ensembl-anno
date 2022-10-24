@@ -388,3 +388,540 @@ def run_minimap2_align(
     logger.info("Completed running minimap2")
 
 
+def check_transcriptomic_output(main_output_dir: pathlib.Path):
+    # This will check across the various transcriptomic dirs and check there's actually some data
+    transcriptomic_dirs = ["scallop_output", "stringtie_output", "minimap2_output"]
+    total_lines = 0
+    min_lines = 100_000
+    for transcriptomic_dir in transcriptomic_dirs:
+        full_file_path = main_output_dir / transcriptomic_dir / "annotation.gtf"
+        if not full_file_path.exists():
+            logger.warning(
+                'Warning, no annotation.gtf found for "%s". This might be fine, e.g. no long read data were provided'
+                % transcriptomic_dir
+            )
+            continue
+        num_lines = sum(1 for line in open(full_file_path))
+        total_lines += num_lines
+        logger.info(
+            'For "%s" found a total of %s in the annotation.gtf file'
+            % (transcriptomic_dir, num_lines)
+        )
+    if total_lines == 0:
+        raise IOError(
+            "Anno was run with transcriptomic mode enabled, but the transcriptomic annotation files are empty"
+        )
+    elif total_lines <= min_lines:
+        raise IOError(
+            "Anno was run with transcriptomic mode enabled, but the total number of lines in the output files were less than the min expected value\nFound: %s\nMin allowed: %s"
+            % (total_lines, min_lines)
+        )
+    else:
+        logger.info(
+            "Found %s total lines across the transcriptomic files. Checks passed"
+            % total_lines
+        )
+
+
+# start gene g1
+# 1       AUGUSTUS        gene    1       33908   1       +       .       g1
+# 1       AUGUSTUS        transcript      1       33908   .       +       .       g1.t1
+# 1       AUGUSTUS        CDS     3291    3585    .       +       2       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        exon    3291    3585    .       +       .       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        CDS     11377   11510   .       +       1       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        exon    11377   11510   .       +       .       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        CDS     30726   30871   .       +       2       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        exon    30726   30871   .       +       .       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        CDS     32975   33502   .       +       0       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        exon    32975   33908   .       +       .       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        stop_codon      33500   33502   .       +       0       transcript_id "g1.t1"; gene_id "g1";
+# 1       AUGUSTUS        tts     33908   33908   .       +       .       transcript_id "g1.t1"; gene_id "g1";
+# protein sequence = [GGRGEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEKKEKKEEEEEEEEEEEEEEEK
+# EEGEGMEGRDIMGIRGKQKQPRKQPELSSSFPTFLLTQKTPYCPESIKLLLILRNNIQTIVFYKGPKGVINDWRKFKLESEDGDSIPPSKKEILRQMS
+# SPQSRDDSKERMSRKMSIQEYELIHQDKEDESCLRKYRRQCMQDMHQKLSFGPRYGFVYELETGEQFLETIEKEQKVTTIVVNIYEDGVRGCDALNSS
+# LACLAVEYPMVKFCKIKASNTGAGDRFSTDVLPTLLVYKGGELISNFISVAEQFAEEFFAVDVESFLNEYGLLPEREIHDLEQTNMEDEDIE]
+# Evidence for and against this transcript:
+# % of transcript supported by hints (any source): 0
+# CDS exons: 0/4
+# CDS introns: 0/4
+# 5'UTR exons and introns: 0/0
+# 3'UTR exons and introns: 0/1
+# hint groups fully obeyed: 0
+# incompatible hint groups: 0
+# end gene g1
+###
+
+
+def augustus_output_to_gtf(
+    augustus_output_dir: pathlib.Path,
+    augustus_genome_dir: pathlib.Path,
+):
+    gtf_file_path = augustus_output_dir / "annotation.gtf"
+    with open(gtf_file_path, "w+") as gtf_out:
+        record_count = 1
+        for gff_file_path in augustus_genome_dir.glob("*.aug"):
+            gff_file_name = gff_file_path.name
+            match = re.search(r"\.rs(\d+)\.re(\d+)\.", gff_file_name)
+            start_offset = int(match.group(1))
+
+            exon_number = 1
+            current_exon_hints_total = 0
+            current_exon_hints_match = 0
+            current_intron_hints_total = 0
+            current_intron_hints_match = 0
+            current_record = []
+            with open(gff_file_path, "r") as gff_in:
+                for line in gff_in:
+                    match = re.search(r"# CDS exons\: (\d+)\/(\d+)", line)
+                    if match:
+                        current_exon_hints_match = match.group(1)
+                        current_exon_hints_total = match.group(2)
+
+                    match = re.search(r"# CDS introns\: (\d+)\/(\d+)", line)
+                    if match:
+                        current_introns_hints_match = match.group(1)
+                        current_introns_hints_total = match.group(2)
+
+                    if re.search(r"# end gene", line):
+                        for output_line in current_record:
+                            gtf_out.write(output_line)
+                        current_record = []
+                        current_exon_hints_total = 0
+                        current_exon_hints_match = 0
+                        current_intron_hints_total = 0
+                        current_intron_hints_match = 0
+                        record_count += 1
+                        exon_number = 1
+
+                    values = line.split("\t")
+                    if (
+                        len(values) == 9
+                        and values[1] == "AUGUSTUS"
+                        and (values[2] == "transcript" or values[2] == "exon")
+                    ):
+                        values[3] = str(int(values[3]) + (start_offset - 1))
+                        values[4] = str(int(values[4]) + (start_offset - 1))
+                        # fmt: off
+                        values[8] = f'gene_id "aug{record_count}"; transcript_id "aug{record_count}";'
+                        # fmt: on
+                        if values[2] == "exon":
+                            values[8] += f' exon_number "{exon_number}";'
+                            exon_number += 1
+                        values[8] += "\n"
+                        current_record.append("\t".join(values))
+
+
+def run_augustus_predict(
+    augustus_path,
+    main_output_dir: pathlib.Path,
+    masked_genome_file,
+    num_threads: int,
+):
+    min_seq_length = 1000
+
+    if not augustus_path:
+        augustus_path = (
+            "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus"
+        )
+    check_exe(augustus_path)
+
+    bam2hints_path = "/homes/fergal/bin/bam2hints"
+    bam2wig_path = "/homes/fergal/bin/bam2wig"
+    wig2hints_path = "/homes/fergal/bin/wig2hints"
+
+    # Run bam2hints, bam2wig, wig2hints, then combine the hints into a single file
+    # Multiprocess with all three steps in the MP as that would be fastest
+
+    augustus_dir = create_dir(main_output_dir, "augustus_output")
+    augustus_hints_dir = create_dir(augustus_dir, "hints")
+    augustus_genome_dir = create_dir(augustus_dir, "genome_dir")
+    augustus_evidence_dir = create_dir(augustus_dir, "evidence")
+    augustus_hints_file = augustus_evidence_dir / "augustus_hints.gff"
+    star_dir = main_output_dir / "star_output"
+    # minimap2_output_dir = main_output_dir / "minimap2_output"
+
+    if star_dir.exists():
+        logger.info("Found a STAR output dir, generating hints from any .sj.tab files")
+        generate_hints(
+            bam2hints_path,
+            bam2wig_path,
+            wig2hints_path,
+            augustus_hints_dir,
+            star_dir,
+            num_threads,
+        )
+        with open(augustus_hints_file, "w+") as hints_out:
+            for gff_file in augustus_hints_dir.glob("*.bam.hints.gff"):
+                with open(gff_file, "r") as gff_in:
+                    for line in gff_in:
+                        hints_out.write(line)
+
+    seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
+    slice_ids = create_slice_ids(
+        seq_region_lengths, slice_size=1_000_000, overlap=100_000, min_length=5000
+    )
+
+    generic_augustus_cmd = [
+        augustus_path,
+        "--species=human",
+        "--UTR=on",
+        (
+            "--extrinsicCfgFile="
+            + "/hps/nobackup2/production/ensembl/jma/src/Augustus/config/extrinsic/extrinsic.M.RM.E.W.P.cfg"
+        ),
+    ]
+
+    pool = multiprocessing.Pool(num_threads)
+    tasks = []
+
+    for slice_id in slice_ids:
+        pool.apply_async(
+            multiprocess_augustus_id,
+            args=(
+                generic_augustus_cmd,
+                slice_id,
+                masked_genome_file,
+                augustus_hints_file,
+                augustus_genome_dir,
+            ),
+        )
+
+    pool.close()
+    pool.join()
+
+    augustus_output_to_gtf(augustus_dir, augustus_genome_dir)
+
+
+def generate_hints(
+    bam2hints_path,
+    bam2wig_path,
+    wig2hints_path,
+    augustus_hints_dir: Union[pathlib.Path, str],
+    star_dir: pathlib.Path,
+    num_threads: int,
+):
+    pool = multiprocessing.Pool(num_threads)
+    for bam_file in star_dir.glob("*.bam"):
+        pool.apply_async(
+            multiprocess_augustus_hints,
+            args=(
+                bam2hints_path,
+                bam2wig_path,
+                wig2hints_path,
+                bam_file,
+                augustus_hints_dir,
+            ),
+        )
+    pool.close()
+    pool.join()
+
+
+def multiprocess_augustus_hints(
+    bam2hints_path,
+    bam2wig_path,
+    wig2hints_path,
+    bam_file: pathlib.Path,
+    augustus_hints_dir: pathlib.Path,
+):
+    bam_file_name = bam_file.name
+    logger.info("Processing %s for Augustus hints" % bam_file_name)
+
+    bam2hints_file_name = f"{bam_file_name}.hints.gff"
+    bam2hints_file_path = augustus_hints_dir / bam2hints_file_name
+    bam2hints_cmd = [
+        bam2hints_path,
+        f"--in={bam_file}",
+        f"--out={bam2hints_file_path}",
+        "--maxintronlen=100000",
+    ]
+    logger.info("bam2hints command:\n%s" % " ".join(bam2hints_cmd))
+    subprocess.run(bam2hints_cmd)
+
+    # bam2wig_cmd = [bam2wig_path,'-D',augustus_hints_dir,bam_file]
+    # print("bam2wig command:\n" + ' '.join(bam2wig_cmd))
+    # subprocess.run(bam2wig_cmd)
+
+    # wig2hints is odd in that it runs directly off STDIN and then just prints to STDOUT,
+    # so the code below is implemented in steps as it's not good practice to use pipes and
+    # redirects in a subprocess command
+    # wig_file_name = re.sub('.bam','.wig',bam_file_name)
+    # wig_file_path = os.path.join(augustus_hints_dir,wig_file_name)
+    # wig_hints_file_name = (wig_file_name + '.hints.gff')
+    # wig_hints_file_path =  os.path.join(augustus_hints_dir,wig_hints_file_name)
+    # print("Writing wig file info to hints file:\n" + wig_hints_file_name)
+    # wig2hints_out = open(wig_hints_file_path,'w+')
+    # wigcat = subprocess.Popen(('cat',wig_file_path), stdout=subprocess.PIPE)
+    # subprocess.run(wig2hints_path, stdin=wigcat.stdout, stdout=wig2hints_out)
+    # wig2hints_out.close()
+
+
+def multiprocess_augustus_id(
+    cmd,
+    slice_id,
+    genome_file: Union[pathlib.Path, str],
+    hints_file,
+    output_dir: pathlib.Path,
+):
+    region = slice_id[0]
+    start = slice_id[1]
+    end = slice_id[2]
+    seq = get_sequence(
+        seq_region=region,
+        start=start,
+        end=end,
+        strand=1,
+        fasta_file=genome_file,
+        output_dir=output_dir,
+    )
+
+    region_fasta_file_name = f"{region}.rs{start}.re{end}.fa"
+    region_fasta_file_path = output_dir / region_fasta_file_name
+    region_augustus_file_path = output_dir / f"{region_fasta_file_name}.aug"
+
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
+
+    region_hints_file = create_slice_hints_file(
+        region, start, end, hints_file, region_fasta_file_path
+    )
+
+    aug_out = open(region_augustus_file_path, "w+")
+
+    augustus_forward = cmd.copy()
+    augustus_forward.extend(
+        [f"--hintsfile={region_hints_file}", "--strand=forward", region_fasta_file_path]
+    )
+    subprocess.run(augustus_forward, stdout=aug_out)
+
+    augustus_backward = cmd.copy()
+    augustus_forward.extend(
+        [
+            f"--hintsfile={region_hints_file}",
+            "--strand=backward",
+            region_fasta_file_path,
+        ]
+    )
+    subprocess.run(augustus_backward, stdout=aug_out)
+
+    aug_out.close()
+
+
+def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_path):
+    """
+    Note this is trying to be memory and file efficient at the cost of speed
+    So files are only created as needed and the hints are being read line by line as written as needed
+    This comes with the downside of being slow, but it's only a very small amount of time relative
+    to how slow the step is in total. Given that this step in general eats up a low of memory, saving as much
+    as possible here is not a bad thing even if it's adding in an overhead by continuously reading the hints file
+    """
+    region_hints_file_path = f"{region_fasta_file_path}.gff"
+    with open(hints_file) as hints_in, open(region_hints_file_path, "w+") as hints_out:
+        for hint_line in hints_in:
+            hint_line_values = hint_line.split("\t")
+            if not len(hint_line_values) == 9:
+                continue
+
+            hint_region = hint_line_values[0]
+            hint_region_start = int(hint_line_values[3])
+            hint_region_end = int(hint_line_values[4])
+
+            if (
+                hint_region == region
+                and hint_region_start >= start
+                and hint_region_end <= end
+            ):
+                hint_line_values[3] = str(int(hint_line_values[3]) - (start - 1))
+                hint_line_values[4] = str(int(hint_line_values[4]) - (start - 1))
+                hints_out.write("\t".join(hint_line_values))
+
+    return region_hints_file_path
+
+
+def run_stringtie_assemble(
+    stringtie_path, samtools_path, main_output_dir, num_threads: int
+):
+    if not stringtie_path:
+        stringtie_path = shutil.which("stringtie")
+    check_exe(stringtie_path)
+
+    if not samtools_path:
+        samtools_path = shutil.which("samtools")
+    check_exe(samtools_path)
+
+    stringtie_dir = create_dir(main_output_dir, "stringtie_output")
+
+    output_file = stringtie_dir / "annotation.gtf"
+    if output_file.exists():
+        transcript_count = check_gtf_content(output_file, "transcript")
+        if transcript_count > 0:
+            logger.info("StringTie GTF file exists skipping analysis")
+            return
+
+    stringtie_merge_input_file = stringtie_dir / "stringtie_assemblies.txt"
+    stringtie_merge_output_file = stringtie_dir / "annotation.gtf"
+    star_dir = main_output_dir / "star_output"
+
+    if star_dir.exists():
+        logger.info("Found a STAR output dir, will load sam file")
+
+    sorted_bam_files = list(star_dir.glob("*.bam"))
+
+    if not sorted_bam_files:
+        raise IndexError(
+            "The list of sorted bam files is empty, expected them in STAR output dir:\n%s"
+            % star_dir
+        )
+
+    # Don't know why this isn't multiprocessed, probably cos it was fast enough in serial. But consider multiprocessing if
+    # the mem usage is low
+    for sorted_bam_file in sorted_bam_files:
+        sorted_bam_file_name = sorted_bam_file.name
+        transcript_file_name = re.sub(".bam", ".stringtie.gtf", sorted_bam_file_name)
+        transcript_file_path = stringtie_dir / transcript_file_name
+
+        if transcript_file_path.exists():
+            logger.info(
+                "Found an existing stringtie gtf file, will not overwrite:\n%s"
+                % transcript_file_path
+            )
+        else:
+            logger.info(
+                "Running Stringtie on: %s, writing output to:\n%s"
+                % (sorted_bam_file_name, transcript_file_path)
+            )
+            subprocess.run(
+                [
+                    stringtie_path,
+                    sorted_bam_file,
+                    "-o",
+                    transcript_file_path,
+                    "-p",
+                    str(num_threads),
+                    "-t",
+                    "-a",
+                    "15",
+                ]
+            )
+
+    # Now need to merge
+    logger.info("Creating Stringtie merge input file: %s" % stringtie_merge_input_file)
+    with open(stringtie_merge_input_file, "w+") as gtf_list_out:
+        for gtf_file in stringtie_dir.glob("*.stringtie.gtf"):
+            transcript_count = check_gtf_content(gtf_file, "transcript")
+            if transcript_count > 0:
+                gtf_list_out.write(f"{gtf_file}\n")
+            else:
+                logger.warning(
+                    "Warning, skipping file with no transcripts:\n%s" % gtf_file
+                )
+
+    logger.info("Merging Stringtie results to:\n%s" % stringtie_merge_output_file)
+    subprocess.run(
+        [
+            stringtie_path,
+            "--merge",
+            "-o",
+            stringtie_merge_output_file,
+            stringtie_merge_input_file,
+        ]
+    )
+
+
+def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.Path):
+    if not scallop_path:
+        scallop_path = shutil.which("scallop")
+    check_exe(scallop_path)
+
+    if not stringtie_path:
+        stringtie_path = shutil.which("stringtie")
+    check_exe(stringtie_path)
+
+    scallop_dir = create_dir(main_output_dir, "scallop_output")
+
+    output_file = scallop_dir / "annotation.gtf"
+    if output_file.exists():
+        transcript_count = check_gtf_content(output_file, "transcript")
+        if transcript_count > 0:
+            logger.info("Scallop gtf file exists, skipping analysis")
+            return
+
+    stringtie_merge_input_file = scallop_dir / "scallop_assemblies.txt"
+    stringtie_merge_output_file = scallop_dir / "annotation.gtf"
+    star_dir = main_output_dir / "star_output"
+    memory_limit = 40 * 1024**3
+
+    if star_dir.exists():
+        logger.info("Found a STAR output dir, will load bam files")
+
+    sorted_bam_files = list(star_dir.glob("*.bam"))
+
+    if not sorted_bam_files:
+        raise IndexError(
+            "Empty list of sorted bam files, expected them in STAR output dir:\n%s"
+            % star_dir
+        )
+
+    # Don't know why this isn't multiprocessed, probably cos it was fast enough in serial.
+    # But consider multiprocessing if the mem usage is low.
+    for sorted_bam_file in sorted_bam_files:
+        sorted_bam_file_name = sorted_bam_file.name
+        transcript_file_name = re.sub(".bam", ".scallop.gtf", sorted_bam_file_name)
+        transcript_file_path = scallop_dir / transcript_file_name
+
+        if transcript_file_path.exists():
+            logger.info(
+                "Found an existing scallop gtf file, will not overwrite:\n%s"
+                % transcript_file_path
+            )
+        else:
+            logger.info(
+                "Running Scallop on: %s, writing output to:\n%s"
+                % (sorted_bam_file_name, transcript_file_path)
+            )
+            scallop_cmd = [
+                scallop_path,
+                "-i",
+                sorted_bam_file,
+                "-o",
+                transcript_file_path,
+                "--min_flank_length",
+                "10",
+            ]
+            if memory_limit is not None:
+                scallop_cmd = prlimit_command(scallop_cmd, memory_limit)
+
+            return_value = None
+            try:
+                return_value = subprocess.check_output(scallop_cmd)
+            except subprocess.CalledProcessError as ex:
+                logger.error(
+                    "Issue processing the following region with scallop\nReturn value: %s"
+                    % return_value
+                )
+
+    #      subprocess.run([scallop_path,'-i',sorted_bam_file,'-o',transcript_file_path,'--min_flank_length','10'])
+
+    # Now need to merge
+    logger.info("Creating Stringtie merge input file: %s" % stringtie_merge_input_file)
+
+    with open(stringtie_merge_input_file, "w+") as gtf_list_out:
+        for gtf_file in scallop_dir.glob("*.scallop.gtf"):
+            transcript_count = check_gtf_content(gtf_file, "transcript")
+            if transcript_count > 0:
+                gtf_list_out.write(f"{gtf_file}\n")
+            else:
+                logger.warning(
+                    "Warning, skipping file with no transcripts:\n%s" % gtf_file
+                )
+
+    logger.info("Merging Scallop results to:\n%s" % stringtie_merge_output_file)
+    subprocess.run(
+        [
+            stringtie_path,
+            "--merge",
+            "-o",
+            stringtie_merge_output_file,
+            stringtie_merge_input_file,
+        ]
+    )
+
