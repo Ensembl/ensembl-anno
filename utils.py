@@ -688,4 +688,135 @@ def slice_output_to_gtf(
                             "Feature type not recognised, will skip: %s" % values[2]
                         )
 
+   
+def convert_gff_to_gtf(gff_file):
+    gtf_string = ""
+    with open(gff_file) as file_in:
+        for line in file_in:
+            # match = re.search(r"genBlastG",line)
+            # if match:
+            results = line.split()
+            if not len(results) == 9:
+                continue
+            if results[2] == "coding_exon":
+                results[2] = "exon"
+            attributes = set_attributes(results[8], results[2])
+            results[8] = attributes
+            converted_line = "\t".join(results)
+            gtf_string += f"{converted_line}\n"
+    
+    return gtf_string   
+def set_attributes(attributes, feature_type):
+    converted_attributes = ""
+    split_attributes = attributes.split(";")
+    if feature_type == "transcript":
+        match = re.search(r"Name\=(.+)$", split_attributes[1])
+        name = match.group(1)
+        converted_attributes = f'gene_id "{name}"; transcript_id "{name}";'
+    elif feature_type == "exon":
+        match = re.search(r"\-E(\d+);Parent\=(.+)\-R\d+\-\d+\-", attributes)
+        exon_rank = match.group(1)
+        name = match.group(2)
+        converted_attributes = (
+            f'gene_id "{name}"; transcript_id "{name}"; exon_number "{exon_rank}";'
+        )
+
+    return converted_attributes
+
+
+# Example genBlast output
+# 1       genBlastG       transcript      131128674       131137049       252.729 -       .       ID=259447-R1-1-A1;Name=259447;PID=84.65;Coverage=94.22;Note=PID:84.65-Cover:94.22
+# 1       genBlastG       coding_exon     131137031       131137049       .       -       .       ID=259447-R1-1-A1-E1;Parent=259447-R1-1-A1
+# 1       genBlastG       coding_exon     131136260       131136333       .       -       .       ID=259447-R1-1-A1-E2;Parent=259447-R1-1-A1
+# 1       genBlastG       coding_exon     131128674       131130245       .       -       .       ID=259447-R1-1-A1-E3;Parent=259447-R1-1-A1
+##sequence-region       1_group1        1       4534
+# 1       genBlastG       transcript      161503457       161503804       30.94   +       .       ID=259453-R1-1-A1;Name=259453;PID=39.46;Coverage=64.97;Note=PID:39.46-Cover:64.97
+# 1       genBlastG       coding_exon     161503457       161503804       .       +       .       ID=259453-R1-1-A1-E1;Parent=259453-R1-1-A1
+##sequence-region       5_group1        1       4684
+# 5       genBlastG       transcript      69461063        69461741        86.16   +       .       ID=259454-R1-1-A1;Name=259454;PID=82.02;Coverage=91.67;Note=PID:82.02-Cover:91.67
+# 5       genBlastG       coding_exon     69461063        69461081        .       +       .       ID=259454-R1-1-A1-E1;Parent=259454-R1-1-A1
+# 5       genBlastG       coding_exon     69461131        69461741        .       +       .       ID=259454-R1-1-A1-E2;Parent=259454-R1-1-A1
+
+    
+def bed_to_gtf(minimap2_output_dir: pathlib.Path):
+    gtf_file_path = minimap2_output_dir / "annotation.gtf"
+    with open(gtf_file_path, "w+") as gtf_out:
+        gene_id = 1
+        for bed_file in minimap2_output_dir.glob("*.bed"):
+            logger.info("Converting bed to GTF:\n%s" % bed_file)
+            with open(bed_file) as bed_in:
+                for line in bed_in:
+                    line = line.rstrip()
+                    elements = line.split("\t")
+                    seq_region_name = elements[0]
+                    offset = int(elements[1])
+                    hit_name = elements[3]
+                    strand = elements[5]
+                    block_sizes = elements[10].split(",")
+                    block_sizes = list(filter(None, block_sizes))
+                    block_starts = elements[11].split(",")
+                    block_starts = list(filter(None, block_starts))
+                    exons = bed_to_exons(block_sizes, block_starts, offset)
+                    transcript_line = [
+                        seq_region_name,
+                        "minimap",
+                        "transcript",
+                        0,
+                        0,
+                        ".",
+                        strand,
+                        ".",
+                        f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"',
+                    ]
+                    transcript_start = None
+                    transcript_end = None
+                    exon_records = []
+                    for index, exon_coords in enumerate(exons, start=1):
+                        if (
+                            transcript_start is None
+                            or exon_coords[0] < transcript_start
+                        ):
+                            transcript_start = exon_coords[0]
+
+                        if transcript_end is None or exon_coords[1] > transcript_end:
+                            transcript_end = exon_coords[1]
+
+                        exon_line = [
+                            seq_region_name,
+                            "minimap",
+                            "exon",
+                            str(exon_coords[0]),
+                            str(exon_coords[1]),
+                            ".",
+                            strand,
+                            ".",
+                            f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"; exon_number "{index}";',
+                        ]
+
+                        exon_records.append(exon_line)
+
+                    transcript_line[3] = str(transcript_start)
+                    transcript_line[4] = str(transcript_end)
+
+                    gtf_out.write("\t".join(transcript_line) + "\n")
+                    for exon_line in exon_records:
+                        gtf_out.write("\t".join(exon_line) + "\n")
+
+                    gene_id += 1
+
+
+def bed_to_exons(block_sizes, block_starts, offset):
+    exons = []
+    for i, element in enumerate(block_sizes):
+        block_start = offset + int(block_starts[i]) + 1
+        block_end = block_start + int(block_sizes[i]) - 1
+
+        if block_end < block_start:
+            logger.warning("Warning: block end is less than block start, skipping exon")
+            continue
+
+        exon_coords = [str(block_start), str(block_end)]
+        exons.append(exon_coords)
+
+    return exons
     
