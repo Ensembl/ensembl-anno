@@ -113,35 +113,30 @@ def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
     return target_dir
 
 
-def create_paired_paths(fastq_file_paths):
-    """
-    TODO
-    standardize to str or pathlib.Path paths
-    """
+def create_paired_paths(
+    fastq_file_paths: List[pathlib.Path],
+) -> List[List[pathlib.Path]]:
+    paired_paths = []
     path_dict = {}
-    final_list = []
-
-    for path in fastq_file_paths:
-        match = re.search(r"(.+)_\d+\.(fastq|fq)", str(path))
-        if not match:
+    for fastq_file_path in fastq_file_paths:
+        match = re.search(r"(.+)_\d+\.(fastq|fq)", str(fastq_file_path))
+        if match:
+            prefix = match.group(1)
+            if prefix not in path_dict:
+                path_dict[prefix] = []
+            path_dict[prefix].append(fastq_file_path)
+        # not match
+        else:
             logger.error(
                 "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired: %s"
-                % path
+                % fastq_file_path
             )
-            final_list.append([path])
-            continue
+            paired_paths.append([fastq_file_path])
 
-        prefix = match.group(1)
-        if prefix in path_dict:
-            # path_dict[prefix] = path_dict[prefix] + ',' + path
-            path_dict[prefix].append(path)
-        else:
-            path_dict[prefix] = [path]
+    for pair in path_dict.values():
+        paired_paths.append(pair)
 
-    for pair in path_dict:
-        final_list.append(path_dict[pair])
-
-    return final_list
+    return paired_paths
 
 
 def get_seq_region_lengths(genome_file: Union[pathlib.Path, str], min_seq_length: int):
@@ -186,14 +181,16 @@ def prlimit_command(command_list: List, virtual_memory_limit: int):
     return ["prlimit", f"-v{virtual_memory_limit}"] + command_list
 
 
-def list_to_string(original_list: List) -> str:
+def list_to_string(original_list: List, separator:str =" ") -> str:
     """
     Create a string with the original list elements string representations concatenated
     with spaces between them.
 
     Args:
         original_list: original list
+        separator: character (or string) to separate the elements string representations
+        in the resulting string
     Returns:
         generated list element string
     """
-    return str.join(" ", [str(element) for element in original_list])
+    return str.join(separator, [str(element) for element in original_list])

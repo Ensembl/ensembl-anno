@@ -2333,17 +2333,21 @@ def run_trimming(
     trim_galore_path = "trim_galore"
     check_exe(trim_galore_path)
 
+    # TODO
+    # update type upstream
+    short_read_fastq_dir = pathlib.Path(short_read_fastq_dir)
+
     trim_dir = create_dir(main_output_dir, "trim_galore_output")
 
-    fastq_file_list = []
     file_types = ["*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"]
+    fastq_file_list = []
     for file_type in file_types:
-        fastq_file_list.extend(glob.glob(os.path.join(short_read_fastq_dir, file_type)))
+        fastq_file_list.extend(short_read_fastq_dir.glob(file_type))
 
-    fastq_file_list = create_paired_paths(fastq_file_list)
+    fastq_paired_paths = create_paired_paths(fastq_file_list)
 
-    for fastq_file_path in fastq_file_list:
-        logger.info("fastaq file path:%s" % fastq_file_path)
+    for fastq_paired_files in fastq_paired_paths:
+        logger.info("FASTQ file path(s): %s" % list_to_string(fastq_paired_files, separator=","))
 
     generic_trim_galore_cmd = [
         trim_galore_path,
@@ -2357,21 +2361,21 @@ def run_trimming(
     ]
 
     pool = multiprocessing.Pool(num_threads)
-    for fastq_files in fastq_file_list:
+    for fastq_paired_files in fastq_paired_paths:
         pool.apply_async(
             multiprocess_trim_galore,
             args=(
                 generic_trim_galore_cmd,
-                fastq_files,
+                fastq_paired_files,
                 trim_dir,
             ),
         )
         if delete_pre_trim_fastq:
-            for file_path in fastq_files:
+            for fastq_path in fastq_paired_files:
                 logger.info(
-                    "Removing original fastq file post trimming:\n%s" % file_path
+                    "Removing original fastq file post trimming:\n%s" % fastq_path
                 )
-                subprocess.run(["rm", file_path])
+                subprocess.run(["rm", fastq_path])
 
     pool.close()
     pool.join()
@@ -2388,11 +2392,14 @@ def run_trimming(
             files_to_delete_list.extend(short_read_fastq_dir.glob(file_type))
 
 
-def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_files, trim_dir):
+def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_paired_files: List[pathlib.Path], trim_dir: pathlib.Path):
     fastq_file = fastq_files[0]
-    fastq_file_pair = None
+
     if len(fastq_files) == 2:
         fastq_file_pair = fastq_files[1]
+    # len(fastq_files) == 1
+    else:
+        fastq_file_pair = None
 
     trim_galore_cmd = generic_trim_galore_cmd
     if fastq_file_pair:
@@ -2468,25 +2475,26 @@ def run_star_align(
         fastq_file_list.extend(short_read_fastq_dir.glob(file_type))
 
     # This works out if the files are paired or not
-    fastq_file_list = create_paired_paths(fastq_file_list)
+    fastq_paired_paths = create_paired_paths(fastq_file_list)
 
     # Subsamples in parallel if there's a value set
     if max_reads_per_sample:
         pool = multiprocessing.Pool(num_threads)
-        for fastq_files in fastq_file_list:
+        for fastq_files in fastq_paired_paths:
             fastq_file = fastq_files[0]
-            fastq_file_pair = ""
+
             if len(fastq_files) == 2:
                 fastq_file_pair = fastq_files[1]
+            # len(fastq_files) == 1
+            else:
+                fastq_file_pair = None
 
-            if (
-                fastq_file_pair
-                and os.path.exists(f"{fastq_file}.sub")
-                and os.path.exists(f"{fastq_file_pair}.sub")
-            ):
+            fastq_file_subsampled = fastq_file.parent / f"{fastq_file.name}.sub"
+            fastq_file_pair_subsampled = fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
+            if fastq_file_pair and fastq_file_subsampled.exists() and fastq_file_pair_subsampled.exists():
                 logger.info(
                     "Found existing .sub files on the fastq path for both members of the pair, will use those instead of subsampling again:\n%s\n%s"
-                    % (f"{fastq_file}.sub", f"{fastq_file_pair}.sub")
+                    % (fastq_file_subsampled, fastq_file_pair_subsampled)
                 )
             elif fastq_file_pair:
                 pool.apply_async(
@@ -2497,7 +2505,7 @@ def run_star_align(
                         fastq_file_pair,
                     ),
                 )
-            elif os.path.exists(f"{fastq_file}.sub"):
+            elif fastq_file_subsampled.exists():
                 logger.info(
                     "Found an existing .sub file on the fastq path, will use that instead:\n%s"
                     % f"{fastq_file}.sub"
@@ -2515,9 +2523,9 @@ def run_star_align(
         pool.close()
         pool.join()
 
-    fastq_file_list = check_for_fastq_subsamples(fastq_file_list)
+    fastq_paired_paths = check_for_fastq_subsamples(fastq_paired_paths)
 
-    if not fastq_file_list:
+    if not fastq_paired_paths:
         raise IndexError(f"Empty fastq files list. Fastq dir:\n{short_read_fastq_dir}")
 
     if not star_index_file.is_file():
@@ -2546,9 +2554,16 @@ def run_star_align(
         raise IOError(f"STAR index file failed to be generated at:\n{star_index_file}")
 
     logger.info("Running STAR on the files in the fastq dir")
-    for fastq_file_path in fastq_file_list:
-        logger.info("fastq_file_path: %s" % fastq_file_path)
-        fastq_file_name = os.path.basename(fastq_file_path)
+    for fastq_files in fastq_paired_paths:
+        # NOTE
+        # There might be a bug here. The paired FASTQ files elements of the output list
+        # of check_for_fastq_subsamples were strings containing paths separated by comma,
+        # but the following code originally was handled these elements as if they were
+        # a single path. The next command was added to select the first file from the pair,
+        # but maybe there is something more to be done here.
+        fastq_file = fastq_files[0]
+        logger.info("fastq_file: %s" % list_to_string(fastq_file))
+        fastq_file_name = fastq_file.name
         check_compression = re.search(r".gz$", fastq_file_name)
 
         # If there's a tmp dir already, the most likely cause is that STAR failed on the previous input file(s)
@@ -2572,8 +2587,8 @@ def run_star_align(
             )
             continue
 
-        logger.info("Processing %s" % fastq_file_path)
-        #    star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file_path,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
+        logger.info("Processing %s" % fastq_file)
+        # star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
 
         star_command = [
             star_path,
@@ -2590,7 +2605,7 @@ def run_star_align(
             "--genomeDir",
             star_dir,
             "--readFilesIn",
-            fastq_file_path,
+            fastq_file,
             "--outFileNamePrefix",
             f"{star_dir}/",
             "--outTmpDir",
@@ -2643,43 +2658,54 @@ def run_subsample_script(subsample_script_path, fastq_file, fastq_file_pair):
     subprocess.run(subsample_script_cmd)
 
 
-def check_for_fastq_subsamples(fastq_file_list):
-    # This should probably removed at some point as it is needlessly complicated
-    # Would be better to just build into the previous step
-    # Mainly just about making sure that if you have subsamples they're used and if you have pairs they're paired
-    for idx, fastq_files in enumerate(fastq_file_list):
-        fastq_file = fastq_files[0]
-        subsample_file = f"{fastq_file}.sub"
+def check_for_fastq_subsamples(fastq_paired_paths: List[List[pathlib.Path]]) -> List[List[pathlib.Path]]:
+    """
+    Replace FASTQ files with their corresponding subsampled versions if they exist.
 
-        fastq_file_pair = ""
-        subsample_file_pair = ""
+    Original comment:
+    This should probably removed at some point as it is needlessly complicated
+    Would be better to just build into the previous step
+    Mainly just about making sure that if you have subsamples they're used and if you have pairs they're paired
+
+    Args:
+        fastq_paired_paths: list of lists containing the FASTQ paired file paths
+    Returns:
+        the input list with FASTQ file paths replaced with their corresponding
+        subsampled versions
+    """
+    for index, fastq_files in enumerate(fastq_paired_paths):
+        fastq_file = fastq_files[0]
+        fastq_file_subsampled = fastq_file.parent / f"{fastq_file.name}.sub"
+
         if len(fastq_files) == 2:
             fastq_file_pair = fastq_files[1]
-            subsample_file_pair = f"{fastq_file_pair}.sub"
+            fastq_file_pair_subsampled = fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
+        # len(fastq_files) == 1
+        else:
+            fastq_file_pair = None
+            fastq_file_pair_subsampled = None
 
-        # This bit will replace the list entry with a string, don't need a list after this function for each pair/file
-        if os.path.exists(subsample_file):
+        if fastq_file_subsampled.exists():
             logger.info(
                 "Found a subsampled file extension, will use that instead of the original file:\n%s"
-                % subsample_file
+                % fastq_file_subsampled
             )
-            fastq_file_list[idx] = subsample_file
+            fastq_paired_paths[index] = fastq_file_subsampled
         else:
-            fastq_file_list[idx] = fastq_file
+            fastq_paired_paths[index] = fastq_file
 
-        # This bit just concats the paired file (or subsampled paired file) if it exists
-        if os.path.exists(subsample_file_pair):
+        if fastq_file_pair_subsampled.exists():
             logger.info(
                 "Found a subsampled paired file extension, will use that instead of the original file:\n%s"
-                % subsample_file_pair
+                % fastq_file_pair_subsampled
             )
-            fastq_file_list[idx] = f"{subsample_file},{subsample_file_pair}"
+            fastq_paired_paths[index].append(fastq_file_pair_subsampled)
         elif fastq_file_pair:
-            fastq_file_list[idx] = f"{fastq_file},{fastq_file_pair}"
+            fastq_paired_paths[index].append(fastq_file_pair)
 
-        logger.info("Entry at current index:\n%s" % fastq_file_list[idx])
+        logger.info("Entry at current index:\n%s" % fastq_paired_paths[index])
 
-    return fastq_file_list
+    return fastq_paired_paths
 
 
 def run_minimap2_align(
