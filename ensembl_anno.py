@@ -2026,9 +2026,9 @@ def run_genblast_align(
     genblast_path,
     convert2blastmask_path,
     makeblastdb_path,
-    genblast_dir,
+    genblast_dir: pathlib.Path,
     protein_file,
-    masked_genome_file,
+    masked_genome_file: pathlib.Path,
     max_intron_length,
     num_threads: int,
     genblast_timeout_secs,
@@ -2058,7 +2058,7 @@ def run_genblast_align(
             logger.info("Genblast GTF file exists, skipping analysis")
             return
 
-    genblast_output_file = genblast_dir / "genblast"
+    # genblast_output_file = genblast_dir / "genblast"
 
     asnb_file = f"{masked_genome_file}.asnb"
     logger.info("ASNB file: %s" % asnb_file)
@@ -2067,7 +2067,7 @@ def run_genblast_align(
         original_alignscore_path = main_script_dir / "support_files" / "alignscore.txt"
         subprocess.run(["cp", original_alignscore_path, "./"])
 
-    if not os.path.exists(masked_genome_file):
+    if not masked_genome_file.exists():
         raise FileNotFoundError(
             "Masked genome file does not exist: %s" % masked_genome_file
         )
@@ -2174,22 +2174,20 @@ def multiprocess_genblast(
         subprocess.run(["rm", file_to_delete])
 
 
-def generate_genblast_gtf(genblast_dir):
+def generate_genblast_gtf(genblast_dir: pathlib.Path):
+    genblast_extension = "_1.1c_2.3_s1_0_16_1"
     file_out_name = genblast_dir / "annotation.gtf"
     with open(file_out_name, "w+") as file_out:
-        genblast_extension = "_1.1c_2.3_s1_0_16_1"
-        for root, dirs, files in os.walk(str(genblast_dir)):
-            for genblast_file in files:
-                genblast_file = os.path.join(root, genblast_file)
-                if genblast_file.endswith(".gff"):
-                    gtf_string = convert_gff_to_gtf(genblast_file)
-                    file_out.write(gtf_string)
-                elif (
-                    genblast_file.endswith(".fa.blast")
-                    or genblast_file.endswith(".fa.blast.report")
-                    or genblast_file.endswith(genblast_extension)
-                ):
-                    subprocess.run(["rm", genblast_file])
+        for path in genblast_dir.glob("**/*"):
+            if path.suffix == ".gff":
+                gtf_string = convert_gff_to_gtf(path)
+                file_out.write(gtf_string)
+            elif (
+                str(path).endswith(".fa.blast")
+                or str(path).endswith(".fa.blast.report")
+                or str(path).endswith(genblast_extension)
+            ):
+                subprocess.run(["rm", path])
 
 
 def convert_gff_to_gtf(gff_file):
