@@ -2257,7 +2257,7 @@ def split_protein_file(
             if match and not initial_seq and seq_count % batch_size == 0:
                 num_dir = random.randint(0, 9)
                 file_out_name = (
-                    protein_output_dir / f"{bin_}{num_dir}" / f"{batch_count}.fa"
+                    protein_output_dir / f"bin_{num_dir}" / f"{batch_count}.fa"
                 )
                 with open(file_out_name, "w+") as file_out:
                     file_out.write(current_record)
@@ -2275,7 +2275,7 @@ def split_protein_file(
 
     if current_record:
         num_dir = random.randint(0, 9)
-        file_out_name = protein_output_dir / f"{bin_}{num_dir}" / f"{batch_count}.fa"
+        file_out_name = protein_output_dir / f"bin_{num_dir}" / f"{batch_count}.fa"
         with open(file_out_name, "w+") as file_out:
             file_out.write(current_record)
         batched_protein_files.append(file_out_name)
