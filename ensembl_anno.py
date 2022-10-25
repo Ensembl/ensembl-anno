@@ -3502,7 +3502,7 @@ def run_finalise_geneset(
 
     # This used to be a list of output dirs and a loop which was neat, I'm converting to a list of conditions as
     # it's more straightforward with the renaming and having to merge scallop and stringtie
-    protein_annotation_raw = main_output_dir / "genblast_output", "annotation.gtf"
+    protein_annotation_raw = main_output_dir / "genblast_output" / "annotation.gtf"
     minimap2_annotation_raw = main_output_dir / "minimap2_output" / "annotation.gtf"
     stringtie_annotation_raw = main_output_dir / "stringtie_output" / "annotation.gtf"
     scallop_annotation_raw = main_output_dir / "scallop_output" / "annotation.gtf"
