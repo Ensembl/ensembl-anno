@@ -3581,7 +3581,7 @@ def run_finalise_geneset(
         if transcriptomic_annotation_raw.exists():
             logger.info("Finalising transcriptomic data for: %s" % seq_region_name)
             transcriptomic_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
+                "_raw.gtf", "_sel.gtf", str(transcriptomic_annotation_raw)
             )
             cmd = generic_select_cmd.copy()
             cmd.extend(
@@ -3602,7 +3602,7 @@ def run_finalise_geneset(
         if busco_annotation_raw.exists():
             logger.info("Finalising BUSCO data for: %s" % seq_region_name)
             busco_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", busco_annotation_raw
+                "_raw.gtf", "_sel.gtf", str(busco_annotation_raw)
             )
             cmd = generic_select_cmd.copy()
             cmd.extend(
@@ -3623,7 +3623,7 @@ def run_finalise_geneset(
         if protein_annotation_raw.exists():
             logger.info("Finalising protein data for: %s" % seq_region_name)
             protein_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", protein_annotation_raw
+                "_raw.gtf", "_sel.gtf", str(protein_annotation_raw)
             )
             cmd = generic_select_cmd.copy()
             cmd.extend(
