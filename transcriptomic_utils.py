@@ -13,227 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def run_star_align(
-    star_path,
-    trim_fastq,
-    subsample_script_path,
-    main_output_dir: pathlib.Path,
-    short_read_fastq_dir,
-    genome_file: Union[pathlib.Path, str],
-    max_reads_per_sample,
-    max_total_reads,
-    max_intron_length: int,
-    num_threads: int,
-    main_script_dir: pathlib.Path,
-):
-    # TODO
-    # !!! Need to add in samtools path above instead of just using 'samtools' in command
-
-    # TODO
-    # use and pass Path objects directly as arguments to the function
-    short_read_fastq_dir = pathlib.Path(short_read_fastq_dir)
-
-    if not star_path:
-        star_path = "STAR"
-
-    check_exe(star_path)
-
-    # If trimming has been enabled then switch the path for short_read_fastq_dir from the original location to the trimmed fastq dir
-    if trim_fastq:
-        short_read_fastq_dir = main_output_dir / "trim_galore_output"
-
-    if (
-        subsample_script_path is None
-        or not pathlib.Path(subsample_script_path).exists()
-    ):
-        subsample_script_path = (
-            main_script_dir / "support_scripts" / "subsample_fastq.py"
-        )
-
-    star_dir = create_dir(main_output_dir, "star_output")
-
-    log_final_out = star_dir / "Log.final.out"
-    log_out = star_dir / "Log.out"
-    log_progress_out = star_dir / "Log.progress.out"
-    if log_final_out.is_file() and log_out.is_file() and log_progress_out.is_file():
-        logger.info("Skipping analysis, log files already exist")
-        return
-
-    star_tmp_dir = star_dir / "tmp"
-    # delete directory if already exists
-    shutil.rmtree(star_tmp_dir, ignore_errors=True)
-
-    star_index_file = star_dir / "SAindex"
-
-    fastq_file_list = []
-    file_types = ["*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"]
-    for file_type in file_types:
-        fastq_file_list.extend(short_read_fastq_dir.glob(file_type))
-
-    # This works out if the files are paired or not
-    fastq_file_list = create_paired_paths(fastq_file_list)
-
-    # Subsamples in parallel if there's a value set
-    if max_reads_per_sample:
-        pool = multiprocessing.Pool(num_threads)
-        for fastq_files in fastq_file_list:
-            fastq_file = fastq_files[0]
-            fastq_file_pair = ""
-            if len(fastq_files) == 2:
-                fastq_file_pair = fastq_files[1]
-
-            if (
-                fastq_file_pair
-                and os.path.exists(f"{fastq_file}.sub")
-                and os.path.exists(f"{fastq_file_pair}.sub")
-            ):
-                logger.info(
-                    "Found existing .sub files on the fastq path for both members of the pair, will use those instead of subsampling again:\n%s\n%s"
-                    % (f"{fastq_file}.sub", f"{fastq_file_pair}.sub")
-                )
-            elif fastq_file_pair:
-                pool.apply_async(
-                    run_subsample_script,
-                    args=(
-                        subsample_script_path,
-                        fastq_file,
-                        fastq_file_pair,
-                    ),
-                )
-            elif os.path.exists(f"{fastq_file}.sub"):
-                logger.info(
-                    "Found an existing .sub file on the fastq path, will use that instead:\n%s"
-                    % f"{fastq_file}.sub"
-                )
-            else:
-                pool.apply_async(
-                    run_subsample_script,
-                    args=(
-                        subsample_script_path,
-                        fastq_file,
-                        fastq_file_pair,
-                    ),
-                )
-
-        pool.close()
-        pool.join()
-
-    fastq_file_list = check_for_fastq_subsamples(fastq_file_list)
-
-    if not fastq_file_list:
-        raise IndexError(f"Empty fastq files list. Fastq dir:\n{short_read_fastq_dir}")
-
-    if not star_index_file.is_file():
-        logger.info("STAR index file does not exist, generating new one.")
-        seq_region_lengths = get_seq_region_lengths(genome_file, 0)
-        genome_size = sum(seq_region_lengths.values())
-        index_bases = min(14, math.floor((math.log(genome_size, 2) / 2) - 1))
-        subprocess.run(
-            [
-                star_path,
-                "--runThreadN",
-                str(num_threads),
-                "--runMode",
-                "genomeGenerate",
-                "--outFileNamePrefix",
-                f"{star_dir}/",
-                "--genomeDir",
-                star_dir,
-                "--genomeSAindexNbases",
-                str(index_bases),
-                "--genomeFastaFiles",
-                genome_file,
-            ]
-        )
-    if not star_index_file.is_file():
-        raise IOError(f"STAR index file failed to be generated at:\n{star_index_file}")
-
-    logger.info("Running STAR on the files in the fastq dir")
-    for fastq_file_path in fastq_file_list:
-        logger.info("fastq_file_path: %s" % fastq_file_path)
-        fastq_file_name = os.path.basename(fastq_file_path)
-        check_compression = re.search(r".gz$", fastq_file_name)
-
-        # If there's a tmp dir already, the most likely cause is that STAR failed on the previous input file(s)
-        # In this case STAR would effectively break for all the rest of the files, as it won't run if the tmp
-        # dir exists. So clean it up and put out a warning. Another approach would be to just name the tmp dir
-        # uniquely. Also there should be code checking the return on STAR anyway. So later when this is being
-        # cleaned up to have proper tests, need to decide on the best implementation
-        if star_tmp_dir.exists():
-            logger.error(
-                "Found existing tmp dir, implies potential failure on previous file, deleting"
-            )
-            shutil.rmtree(star_tmp_dir)
-
-        sam_file_path = star_dir / f"{fastq_file_name}.sam"
-        sam_temp_file_path = star_dir / f"{sam_file_path.name}.tmp"
-        bam_sort_file_path = sam_file_path.with_suffix(".bam")
-
-        if bam_sort_file_path.is_file() and bam_sort_file_path.stat().st_size > 0:
-            logger.info(
-                "Existing bam file for fastq file found, skipping processing file"
-            )
-            continue
-
-        logger.info("Processing %s" % fastq_file_path)
-        #    star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file_path,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
-
-        star_command = [
-            star_path,
-            "--outFilterIntronMotifs",
-            "RemoveNoncanonicalUnannotated",
-            "--outSAMstrandField",
-            "intronMotif",
-            "--runThreadN",
-            str(num_threads),
-            "--twopassMode",
-            "Basic",
-            "--runMode",
-            "alignReads",
-            "--genomeDir",
-            star_dir,
-            "--readFilesIn",
-            fastq_file_path,
-            "--outFileNamePrefix",
-            f"{star_dir}/",
-            "--outTmpDir",
-            star_tmp_dir,
-            "--outSAMtype",
-            "SAM",
-            "--alignIntronMax",
-            str(max_intron_length),
-        ]
-
-        if check_compression:
-            star_command.append("--readFilesCommand")
-            star_command.append("gunzip")
-            star_command.append("-c")
-
-        subprocess.run(star_command)
-        (star_dir / "Aligned.out.sam").rename(sam_file_path)
-        junctions_file_path = star_dir / f"{fastq_file_name}.sj.tab"
-        (star_dir / "SJ.out.tab").rename(junctions_file_path)
-
-        logger.info("Converting samfile into sorted bam file:\n%s" % bam_sort_file_path)
-        subprocess.run(
-            [
-                "samtools",
-                "sort",
-                "-@",
-                str(num_threads),
-                "-T",
-                sam_temp_file_path,
-                "-o",
-                bam_sort_file_path,
-                sam_file_path,
-            ]
-        )
-
-        os.remove(sam_file_path)
-
-    logger.info("Completed running STAR")
-
-
 def run_subsample_script(subsample_script_path, fastq_file, fastq_file_pair):
     subsample_script_cmd = [
         "python3",
@@ -246,44 +25,57 @@ def run_subsample_script(subsample_script_path, fastq_file, fastq_file_pair):
     subprocess.run(subsample_script_cmd)
 
 
-def check_for_fastq_subsamples(fastq_file_list):
-    # This should probably removed at some point as it is needlessly complicated
-    # Would be better to just build into the previous step
-    # Mainly just about making sure that if you have subsamples they're used and if you have pairs they're paired
-    for idx, fastq_files in enumerate(fastq_file_list):
-        fastq_file = fastq_files[0]
-        subsample_file = f"{fastq_file}.sub"
 
-        fastq_file_pair = ""
-        subsample_file_pair = ""
+def check_for_fastq_subsamples(
+    fastq_paired_paths: List[List[pathlib.Path]],
+) -> List[List[pathlib.Path]]:
+    """
+    Replace FASTQ files with their corresponding subsampled versions if they exist.
+    Original comment:
+    This should probably removed at some point as it is needlessly complicated
+    Would be better to just build into the previous step
+    Mainly just about making sure that if you have subsamples they're used and if you have pairs they're paired
+    Args:
+        fastq_paired_paths: list of lists containing the FASTQ paired file paths
+    Returns:
+        the input list with FASTQ file paths replaced with their corresponding
+        subsampled versions
+    """
+    for index, fastq_files in enumerate(fastq_paired_paths):
+        fastq_file = fastq_files[0]
+        fastq_file_subsampled = fastq_file.parent / f"{fastq_file.name}.sub"
+
         if len(fastq_files) == 2:
             fastq_file_pair = fastq_files[1]
-            subsample_file_pair = f"{fastq_file_pair}.sub"
+            fastq_file_pair_subsampled = (
+                fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
+            )
+        # len(fastq_files) == 1
+        else:
+            fastq_file_pair = None
+            fastq_file_pair_subsampled = None
 
-        # This bit will replace the list entry with a string, don't need a list after this function for each pair/file
-        if os.path.exists(subsample_file):
+        if fastq_file_subsampled.exists():
             logger.info(
                 "Found a subsampled file extension, will use that instead of the original file:\n%s"
-                % subsample_file
+                % fastq_file_subsampled
             )
-            fastq_file_list[idx] = subsample_file
+            fastq_paired_paths[index] = fastq_file_subsampled
         else:
-            fastq_file_list[idx] = fastq_file
+            fastq_paired_paths[index] = fastq_file
 
-        # This bit just concats the paired file (or subsampled paired file) if it exists
-        if os.path.exists(subsample_file_pair):
+        if fastq_file_pair_subsampled.exists():
             logger.info(
                 "Found a subsampled paired file extension, will use that instead of the original file:\n%s"
-                % subsample_file_pair
+                % fastq_file_pair_subsampled
             )
-            fastq_file_list[idx] = f"{subsample_file},{subsample_file_pair}"
+            fastq_paired_paths[index].append(fastq_file_pair_subsampled)
         elif fastq_file_pair:
-            fastq_file_list[idx] = f"{fastq_file},{fastq_file_pair}"
+            fastq_paired_paths[index].append(fastq_file_pair)
 
-        logger.info("Entry at current index:\n%s" % fastq_file_list[idx])
+        logger.info("Entry at current index:\n%s" % fastq_paired_paths[index])
 
-    return fastq_file_list
-
+    return fastq_paired_paths
 
 def run_minimap2_align(
     minimap2_path,
@@ -925,3 +717,414 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.
         ]
     )
 
+
+def run_trimming(
+    main_output_dir: Union[pathlib.Path, str],
+    short_read_fastq_dir,
+    delete_pre_trim_fastq,
+    num_threads: int,
+):
+    trim_galore_path = "trim_galore"
+    check_exe(trim_galore_path)
+
+    # TODO
+    # update type upstream
+    short_read_fastq_dir = pathlib.Path(short_read_fastq_dir)
+
+    trim_dir = create_dir(main_output_dir, "trim_galore_output")
+
+    file_types = ["*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"]
+    fastq_file_list = []
+    for file_type in file_types:
+        fastq_file_list.extend(short_read_fastq_dir.glob(file_type))
+
+    fastq_paired_paths = create_paired_paths(fastq_file_list)
+
+    for fastq_paired_files in fastq_paired_paths:
+        logger.info(
+            "FASTQ file path(s): %s" % list_to_string(fastq_paired_files, separator=",")
+        )
+
+    generic_trim_galore_cmd = [
+        trim_galore_path,
+        "--illumina",
+        "--quality",
+        "20",
+        "--length",
+        "50",
+        "--output_dir",
+        trim_dir,
+    ]
+
+    pool = multiprocessing.Pool(num_threads)
+    for fastq_paired_files in fastq_paired_paths:
+        pool.apply_async(
+            multiprocess_trim_galore,
+            args=(
+                generic_trim_galore_cmd,
+                fastq_paired_files,
+                trim_dir,
+            ),
+        )
+        if delete_pre_trim_fastq:
+            for fastq_path in fastq_paired_files:
+                logger.info(
+                    "Removing original fastq file post trimming:\n%s" % fastq_path
+                )
+                subprocess.run(["rm", fastq_path])
+
+    pool.close()
+    pool.join()
+
+    for trimmed_fastq_path in trim_dir.glob("*.fq.gz"):
+        logger.info("Trimmed file path:\n%s" % trimmed_fastq_path)
+        sub_patterns = r"|".join(("_val_1.fq", "_val_2.fq", "_trimmed.fq"))
+        updated_file_path = re.sub(sub_patterns, ".fq", str(trimmed_fastq_path))
+        logger.info("Updated file path:\n%s" % updated_file_path)
+        subprocess.run(["mv", trimmed_fastq_path, updated_file_path])
+
+        files_to_delete_list = []
+        for file_type in file_types:
+            files_to_delete_list.extend(short_read_fastq_dir.glob(file_type))
+
+
+def multiprocess_trim_galore(
+    generic_trim_galore_cmd,
+    fastq_paired_files: List[pathlib.Path],
+    trim_dir: pathlib.Path,
+):
+    fastq_file = fastq_files[0]
+
+    if len(fastq_files) == 2:
+        fastq_file_pair = fastq_files[1]
+    # len(fastq_files) == 1
+    else:
+        fastq_file_pair = None
+
+    trim_galore_cmd = generic_trim_galore_cmd
+    if fastq_file_pair:
+        trim_galore_cmd.append("--paired")
+
+    trim_galore_cmd.append(fastq_file)
+
+    if fastq_file_pair:
+        trim_galore_cmd.append(fastq_file_pair)
+
+    logger.info(
+        "Running Trim Galore with the following command:\n%s"
+        % list_to_string(trim_galore_cmd)
+    )
+    subprocess.run(trim_galore_cmd)
+
+
+def run_star_align(
+    star_path,
+    trim_fastq,
+    subsample_script_path,
+    main_output_dir: pathlib.Path,
+    short_read_fastq_dir,
+    genome_file: Union[pathlib.Path, str],
+    max_reads_per_sample,
+    max_total_reads,
+    max_intron_length: int,
+    num_threads: int,
+    main_script_dir: pathlib.Path,
+):
+    # TODO
+    # !!! Need to add in samtools path above instead of just using 'samtools' in command
+
+    # TODO
+    # use and pass Path objects directly as arguments to the function
+    short_read_fastq_dir = pathlib.Path(short_read_fastq_dir)
+
+    if not star_path:
+        star_path = "STAR"
+
+    check_exe(star_path)
+
+    # If trimming has been enabled then switch the path for short_read_fastq_dir from the original location to the trimmed fastq dir
+    if trim_fastq:
+        short_read_fastq_dir = main_output_dir / "trim_galore_output"
+
+    if (
+        subsample_script_path is None
+        or not pathlib.Path(subsample_script_path).exists()
+    ):
+        subsample_script_path = (
+            main_script_dir / "support_scripts" / "subsample_fastq.py"
+        )
+
+    star_dir = create_dir(main_output_dir, "star_output")
+
+    log_final_out = star_dir / "Log.final.out"
+    log_out = star_dir / "Log.out"
+    log_progress_out = star_dir / "Log.progress.out"
+    if log_final_out.is_file() and log_out.is_file() and log_progress_out.is_file():
+        logger.info("Skipping analysis, log files already exist")
+        return
+
+    star_tmp_dir = star_dir / "tmp"
+    # delete directory if already exists
+    shutil.rmtree(star_tmp_dir, ignore_errors=True)
+
+    star_index_file = star_dir / "SAindex"
+
+    fastq_file_list = []
+    file_types = ["*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz"]
+    for file_type in file_types:
+        fastq_file_list.extend(short_read_fastq_dir.glob(file_type))
+
+    # This works out if the files are paired or not
+    fastq_paired_paths = create_paired_paths(fastq_file_list)
+
+    # Subsamples in parallel if there's a value set
+    if max_reads_per_sample:
+        pool = multiprocessing.Pool(num_threads)
+        for fastq_files in fastq_paired_paths:
+            fastq_file = fastq_files[0]
+
+            if len(fastq_files) == 2:
+                fastq_file_pair = fastq_files[1]
+            # len(fastq_files) == 1
+            else:
+                fastq_file_pair = None
+
+            fastq_file_subsampled = fastq_file.parent / f"{fastq_file.name}.sub"
+            fastq_file_pair_subsampled = (
+                fastq_file_pair.parent / f"{fastq_file_pair.name}.sub"
+            )
+            if (
+                fastq_file_pair
+                and fastq_file_subsampled.exists()
+                and fastq_file_pair_subsampled.exists()
+            ):
+                logger.info(
+                    "Found existing .sub files on the fastq path for both members of the pair, will use those instead of subsampling again:\n%s\n%s"
+                    % (fastq_file_subsampled, fastq_file_pair_subsampled)
+                )
+            elif fastq_file_pair:
+                pool.apply_async(
+                    run_subsample_script,
+                    args=(
+                        subsample_script_path,
+                        fastq_file,
+                        fastq_file_pair,
+                    ),
+                )
+            elif fastq_file_subsampled.exists():
+                logger.info(
+                    "Found an existing .sub file on the fastq path, will use that instead:\n%s"
+                    % f"{fastq_file}.sub"
+                )
+            else:
+                pool.apply_async(
+                    run_subsample_script,
+                    args=(
+                        subsample_script_path,
+                        fastq_file,
+                        fastq_file_pair,
+                    ),
+                )
+
+        pool.close()
+        pool.join()
+
+    fastq_paired_paths = check_for_fastq_subsamples(fastq_paired_paths)
+
+    if not fastq_paired_paths:
+        raise IndexError(f"Empty fastq files list. Fastq dir:\n{short_read_fastq_dir}")
+
+    if not star_index_file.is_file():
+        logger.info("STAR index file does not exist, generating new one.")
+        seq_region_lengths = get_seq_region_lengths(genome_file, 0)
+        genome_size = sum(seq_region_lengths.values())
+        index_bases = min(14, math.floor((math.log(genome_size, 2) / 2) - 1))
+        subprocess.run(
+            [
+                star_path,
+                "--runThreadN",
+                str(num_threads),
+                "--runMode",
+                "genomeGenerate",
+                "--outFileNamePrefix",
+                f"{star_dir}/",
+                "--genomeDir",
+                star_dir,
+                "--genomeSAindexNbases",
+                str(index_bases),
+                "--genomeFastaFiles",
+                genome_file,
+            ]
+        )
+    if not star_index_file.is_file():
+        raise IOError(f"STAR index file failed to be generated at:\n{star_index_file}")
+
+    logger.info("Running STAR on the files in the fastq dir")
+    for fastq_files in fastq_paired_paths:
+        # NOTE
+        # There might be a bug here. The paired FASTQ files elements of the output list
+        # of check_for_fastq_subsamples were strings containing paths separated by comma,
+        # but the following code originally was handled these elements as if they were
+        # a single path. The next command was added to select the first file from the pair,
+        # but maybe there is something more to be done here.
+        fastq_file = fastq_files[0]
+        logger.info("fastq_file: %s" % list_to_string(fastq_file))
+        fastq_file_name = fastq_file.name
+        check_compression = re.search(r".gz$", fastq_file_name)
+
+        # If there's a tmp dir already, the most likely cause is that STAR failed on the previous input file(s)
+        # In this case STAR would effectively break for all the rest of the files, as it won't run if the tmp
+        # dir exists. So clean it up and put out a warning. Another approach would be to just name the tmp dir
+        # uniquely. Also there should be code checking the return on STAR anyway. So later when this is being
+        # cleaned up to have proper tests, need to decide on the best implementation
+        if star_tmp_dir.exists():
+            logger.error(
+                "Found existing tmp dir, implies potential failure on previous file, deleting"
+            )
+            shutil.rmtree(star_tmp_dir)
+
+        sam_file_path = star_dir / f"{fastq_file_name}.sam"
+        sam_temp_file_path = star_dir / f"{sam_file_path.name}.tmp"
+        bam_sort_file_path = sam_file_path.with_suffix(".bam")
+
+        if bam_sort_file_path.is_file() and bam_sort_file_path.stat().st_size > 0:
+            logger.info(
+                "Existing bam file for fastq file found, skipping processing file"
+            )
+            continue
+
+        logger.info("Processing %s" % fastq_file)
+        # star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
+
+        star_command = [
+            star_path,
+            "--outFilterIntronMotifs",
+            "RemoveNoncanonicalUnannotated",
+            "--outSAMstrandField",
+            "intronMotif",
+            "--runThreadN",
+            str(num_threads),
+            "--twopassMode",
+            "Basic",
+            "--runMode",
+            "alignReads",
+            "--genomeDir",
+            star_dir,
+            "--readFilesIn",
+            fastq_file,
+            "--outFileNamePrefix",
+            f"{star_dir}/",
+            "--outTmpDir",
+            star_tmp_dir,
+            "--outSAMtype",
+            "SAM",
+            "--alignIntronMax",
+            str(max_intron_length),
+        ]
+
+        if check_compression:
+            star_command.append("--readFilesCommand")
+            star_command.append("gunzip")
+            star_command.append("-c")
+
+        subprocess.run(star_command)
+        (star_dir / "Aligned.out.sam").rename(sam_file_path)
+        junctions_file_path = star_dir / f"{fastq_file_name}.sj.tab"
+        (star_dir / "SJ.out.tab").rename(junctions_file_path)
+
+        logger.info("Converting samfile into sorted bam file:\n%s" % bam_sort_file_path)
+        subprocess.run(
+            [
+                "samtools",
+                "sort",
+                "-@",
+                str(num_threads),
+                "-T",
+                sam_temp_file_path,
+                "-o",
+                bam_sort_file_path,
+                sam_file_path,
+            ]
+        )
+
+        os.remove(sam_file_path)
+
+    logger.info("Completed running STAR")    
+
+def create_paired_paths(
+    fastq_file_paths: List[pathlib.Path],
+) -> List[List[pathlib.Path]]:
+    paired_paths = []
+    path_dict = {}
+    for fastq_file_path in fastq_file_paths:
+        match = re.search(r"(.+)_\d+\.(fastq|fq)", str(fastq_file_path))
+        if match:
+            prefix = match.group(1)
+            if prefix not in path_dict:
+                path_dict[prefix] = []
+            path_dict[prefix].append(fastq_file_path)
+        # not match
+        else:
+            logger.error(
+                "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired: %s"
+                % fastq_file_path
+            )
+            paired_paths.append([fastq_file_path])
+
+    for pair in path_dict.values():
+        paired_paths.append(pair)
+
+    return paired_paths   
+
+
+def model_builder(work_dir):
+
+    star_output_dir = os.path.join(work_dir, "star_output")
+
+    all_junctions_file = os.path.join(star_output_dir, "all_junctions.sj")
+    sjf_out = open(all_junctions_file, "w+")
+
+    for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
+        sjf_in = open(sj_tab_file)
+        sjf_lines = sjf_in.readlines()
+        for line in sjf_lines:
+            elements = line.split("\t")
+            strand = "+"
+
+            #    my $slice_name = $eles[0];
+            #    my $start = $eles[1];
+            #    my $end = $eles[2];
+            #    my $strand = $eles[3];
+
+            # If the strand is undefined then skip, Augustus expects a strand
+            if elements[3] == "0":
+                continue
+            elif elements[3] == "2":
+                strand = "-"
+
+            junction_length = int(elements[2]) - int(elements[1]) + 1
+            if junction_length < 100:
+                continue
+
+            if not elements[4] and elements[7] < 10:
+                continue
+
+            # For the moment treat multimapping and single mapping things as a combined score
+            score = float(elements[6]) + float(elements[7])
+            score = str(score)
+            output_line = [
+                elements[0],
+                "RNASEQ",
+                "intron",
+                elements[1],
+                elements[2],
+                score,
+                strand,
+                ".",
+                ("src=W;mul=" + score + ";"),
+            ]
+            sjf_out.write("\t".join(output_line) + "\n")
+
+    sjf_out.close()
+
+    
