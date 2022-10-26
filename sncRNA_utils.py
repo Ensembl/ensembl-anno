@@ -13,6 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# standard library
+import argparse
+import gc
+import glob
+import io
+import math
+import multiprocessing
+import os
+import pathlib
+import random
+import re
+import shutil
+import signal
+import subprocess
+import tempfile
+import sys
+import errno
+import logging
+
+from typing import List, Union
+
 def run_trnascan_regions(
     genome_file: Union[pathlib.Path, str],
     trnascan_path,
