@@ -2706,9 +2706,9 @@ def check_for_fastq_subsamples(
                 "Found a subsampled file extension, will use that instead of the original file:\n%s"
                 % fastq_file_subsampled
             )
-            fastq_paired_paths[index] = fastq_file_subsampled
+            fastq_paired_paths[index] = [fastq_file_subsampled]
         else:
-            fastq_paired_paths[index] = fastq_file
+            fastq_paired_paths[index] = [fastq_file]
 
         if fastq_file_pair_subsampled.exists():
             logger.info(
