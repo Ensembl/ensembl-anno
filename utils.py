@@ -112,36 +112,6 @@ def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
     return target_dir
 
 
-def create_paired_paths(fastq_file_paths):
-    """
-    TODO
-    standardize to str or pathlib.Path paths
-    """
-    path_dict = {}
-    final_list = []
-
-    for path in fastq_file_paths:
-        match = re.search(r"(.+)_\d+\.(fastq|fq)", str(path))
-        if not match:
-            logger.error(
-                "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired: %s"
-                % path
-            )
-            final_list.append([path])
-            continue
-
-        prefix = match.group(1)
-        if prefix in path_dict:
-            # path_dict[prefix] = path_dict[prefix] + ',' + path
-            path_dict[prefix].append(path)
-        else:
-            path_dict[prefix] = [path]
-
-    for pair in path_dict:
-        final_list.append(path_dict[pair])
-
-    return final_list
-
 
 def get_seq_region_lengths(genome_file: Union[pathlib.Path, str], min_seq_length: int):
     current_header = ""
@@ -737,89 +707,6 @@ def set_attributes(attributes, feature_type):
 # 5       genBlastG       coding_exon     69461063        69461081        .       +       .       ID=259454-R1-1-A1-E1;Parent=259454-R1-1-A1
 # 5       genBlastG       coding_exon     69461131        69461741        .       +       .       ID=259454-R1-1-A1-E2;Parent=259454-R1-1-A1
 
-    
-def bed_to_gtf(minimap2_output_dir: pathlib.Path):
-    gtf_file_path = minimap2_output_dir / "annotation.gtf"
-    with open(gtf_file_path, "w+") as gtf_out:
-        gene_id = 1
-        for bed_file in minimap2_output_dir.glob("*.bed"):
-            logger.info("Converting bed to GTF:\n%s" % bed_file)
-            with open(bed_file) as bed_in:
-                for line in bed_in:
-                    line = line.rstrip()
-                    elements = line.split("\t")
-                    seq_region_name = elements[0]
-                    offset = int(elements[1])
-                    hit_name = elements[3]
-                    strand = elements[5]
-                    block_sizes = elements[10].split(",")
-                    block_sizes = list(filter(None, block_sizes))
-                    block_starts = elements[11].split(",")
-                    block_starts = list(filter(None, block_starts))
-                    exons = bed_to_exons(block_sizes, block_starts, offset)
-                    transcript_line = [
-                        seq_region_name,
-                        "minimap",
-                        "transcript",
-                        0,
-                        0,
-                        ".",
-                        strand,
-                        ".",
-                        f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"',
-                    ]
-                    transcript_start = None
-                    transcript_end = None
-                    exon_records = []
-                    for index, exon_coords in enumerate(exons, start=1):
-                        if (
-                            transcript_start is None
-                            or exon_coords[0] < transcript_start
-                        ):
-                            transcript_start = exon_coords[0]
-
-                        if transcript_end is None or exon_coords[1] > transcript_end:
-                            transcript_end = exon_coords[1]
-
-                        exon_line = [
-                            seq_region_name,
-                            "minimap",
-                            "exon",
-                            str(exon_coords[0]),
-                            str(exon_coords[1]),
-                            ".",
-                            strand,
-                            ".",
-                            f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"; exon_number "{index}";',
-                        ]
-
-                        exon_records.append(exon_line)
-
-                    transcript_line[3] = str(transcript_start)
-                    transcript_line[4] = str(transcript_end)
-
-                    gtf_out.write("\t".join(transcript_line) + "\n")
-                    for exon_line in exon_records:
-                        gtf_out.write("\t".join(exon_line) + "\n")
-
-                    gene_id += 1
-
-
-def bed_to_exons(block_sizes, block_starts, offset):
-    exons = []
-    for i, element in enumerate(block_sizes):
-        block_start = offset + int(block_starts[i]) + 1
-        block_end = block_start + int(block_sizes[i]) - 1
-
-        if block_end < block_start:
-            logger.warning("Warning: block end is less than block start, skipping exon")
-            continue
-
-        exon_coords = [str(block_start), str(block_end)]
-        exons.append(exon_coords)
-
-    return exons
-
 
 def create_slice_ids(
     seq_region_lengths,
@@ -1036,3 +923,329 @@ def read_gtf_genes(gtf_file):
                 gtf_genes[gene_id][transcript_id]["exons"].append(line)
 
     return gtf_genes
+
+
+def fasta_to_dict(fasta_list):
+    index = {}
+    it = iter(fasta_list)
+    for header in it:
+        match = re.search(r">(.+)\n$", header)
+        header = match.group(1)
+        seq = next(it)
+        index[header] = seq
+    return index
+
+
+def subprocess_run_and_log(command):
+    logger.info("subprocess_run_and_log command: %s" % " ".join(command))
+    subprocess.run(command)
+
+
+def get_sequence(
+    seq_region,
+    start: int,
+    end: int,
+    strand: int,
+    fasta_file,
+    output_dir: Union[pathlib.Path, str],
+):
+    start -= 1
+    bedtools_path = "bedtools"
+
+    # This creates a tempfile and writes the bed info to it based on whatever information
+    # has been passed in about the sequence. Then runs bedtools getfasta. The fasta file
+    # should have a faidx. This can be created with the create_faidx static method prior
+    # to fetching sequence
+    with tempfile.NamedTemporaryFile(
+        mode="w+t", delete=False, dir=output_dir
+    ) as bed_temp_file:
+        bed_temp_file.write(f"{seq_region}\t{start}\t{end}")
+        bed_temp_file.close()
+
+    bedtools_command = [
+        bedtools_path,
+        "getfasta",
+        "-fi",
+        fasta_file,
+        "-bed",
+        bed_temp_file.name,
+    ]
+    bedtools_output = subprocess.Popen(bedtools_command, stdout=subprocess.PIPE)
+    for idx, line in enumerate(
+        io.TextIOWrapper(bedtools_output.stdout, encoding="utf-8")
+    ):
+        if idx == 1:
+            if strand == 1:
+                sequence = line.rstrip()
+            else:
+                sequence = reverse_complement(line.rstrip())
+
+    os.remove(bed_temp_file.name)
+    return sequence
+
+
+def reverse_complement(sequence: str) -> str:
+    rev_matrix = str.maketrans("atgcATGC", "tacgTACG")
+    return sequence.translate(rev_matrix)[::-1]
+
+
+def get_seq_region_names(genome_file: Union[pathlib.Path, str]):
+    region_list = []
+    with open(genome_file) as file_in:
+        for line in file_in:
+            match = re.search(r">([^\s]+)", line)
+            if match:
+                region_name = match.group(1)
+                if region_name == "MT":
+                    logger.info('Skipping region named "MT"')
+                    continue
+                else:
+                    region_list.append(match.group(1))
+
+    return region_list
+
+
+def run_find_orfs(genome_file, main_output_dir):
+
+    min_orf_length = 600
+
+    orf_output_dir = create_dir(main_output_dir, "orf_output")
+    seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
+    for region_name in seq_region_lengths:
+        region_length = seq_region_lengths[region_name]
+        seq = get_sequence(
+            region_name, 1, region_length, 1, genome_file, orf_output_dir
+        )
+        for phase in range(0, 6):
+            find_orf_phased_region(
+                region_name, seq, phase, min_orf_length, orf_output_dir
+            )
+
+
+def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_dir):
+
+    current_index = phase
+    orf_counter = 1
+    if phase > 2:
+        seq = reverse_complement(seq)
+        current_index = current_index % 3
+
+    orf_file_path = os.path.join(
+        orf_output_dir, (region_name + ".phase" + str(phase) + ".orf.fa")
+    )
+    orf_out = open(orf_file_path, "w+")
+
+    while current_index < len(seq):
+        codon = seq[current_index : current_index + 3]
+        if codon == "ATG":
+            orf_seq = codon
+            for j in range(current_index + 3, len(seq), 3):
+                next_codon = seq[j : j + 3]
+                if next_codon == "TAA" or next_codon == "TAG" or next_codon == "TGA":
+                    orf_seq += next_codon
+                    if len(orf_seq) >= min_orf_length:
+                        orf_out.write(
+                            ">"
+                            + region_name
+                            + "_phase"
+                            + str(phase)
+                            + "_orf"
+                            + str(orf_counter)
+                            + "\n"
+                        )
+                        orf_out.write(orf_seq + "\n")
+                        orf_counter += 1
+                        orf_seq = ""
+                        break
+
+                # If there's another met in phase, then put i to the start of the codon after j so that only the longest ORF is found
+                if next_codon == "ATG":
+                    current_index = j + 3
+                orf_seq += next_codon
+        current_index += 3
+    orf_out.close()
+ 
+
+def list_to_string(original_list: List, separator: str = " ") -> str:
+    """
+    Create a string with the original list elements string representations concatenated
+    with spaces between them.
+    Args:
+        original_list: original list
+        separator: character (or string) to separate the elements string representations
+        in the resulting string
+    Returns:
+        generated list element string
+    """
+    return str.join(separator, [str(element) for element in original_list])
+
+def splice_junction_to_gff(input_dir, hints_file):
+
+    sjf_out = open(hints_file, "w+")
+
+    for sj_tab_file in glob.glob(input_dir + "/*.sj.tab"):
+        sjf_in = open(sj_tab_file)
+        sjf_lines = sjf_in.readlines()
+        for line in sjf_lines:
+            elements = line.split("\t")
+            strand = "+"
+            # If the strand is undefined then skip, Augustus expects a strand
+            if elements[3] == "0":
+                continue
+            elif elements[3] == "2":
+                strand = "-"
+
+            junction_length = int(elements[2]) - int(elements[1]) + 1
+            if junction_length < 100:
+                continue
+
+            if not elements[4] and elements[7] < 10:
+                continue
+
+            # For the moment treat multimapping and single mapping things as a combined score
+            score = float(elements[6]) + float(elements[7])
+            score = str(score)
+            output_line = [
+                elements[0],
+                "RNASEQ",
+                "intron",
+                elements[1],
+                elements[2],
+                score,
+                strand,
+                ".",
+                ("src=W;mul=" + score + ";"),
+            ]
+            sjf_out.write("\t".join(output_line) + "\n")
+
+    sjf_out.close()
+def split_genome(genome_file, target_dir, min_seq_length):
+    # This is the lazy initial way of just splitting into a dir of files based on the toplevel sequence with a min sequence length filter
+    # There are a couple of obvious improvements:
+    # 1) Instead of making files for all seqs, just process N seqs parallel, where N = num_threads. Then you could clean up the seq file
+    #    after each seq finishes, thus avoiding potentially having thousands of file in a dir
+    # 2) Split the seq into even slices and process these in parallel (which the same cleanup as in 1). For sequences smaller than the
+    #    target slice size, bundle them up together into a single file. Vastly more complex, partially implemented in the splice_genome method
+    #    Allows for more consistency with parallelisation (since there should be no large outliers). But require a mapping strategy for the
+    #    coords and sequence names and all the hints will need to be adjusted
+    current_header = ""
+    current_seq = ""
+
+    file_in = open(genome_file)
+    line = file_in.readline()
+    while line:
+        match = re.search(r">(.+)$", line)
+        if match and current_header:
+            if len(current_seq) > min_seq_length:
+                file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
+                if not os.path.exists(file_out_name):
+                    file_out = open(file_out_name, "w+")
+                    file_out.write(">" + current_header + "\n" + current_seq + "\n")
+                    file_out.close()
+
+                else:
+                    print(
+                        "Found an existing split file, so will not overwrite. File found:"
+                    )
+                    print(file_out_name)
+
+            current_seq = ""
+            current_header = match.group(1)
+        elif match:
+            current_header = match.group(1)
+        else:
+            current_seq += line.rstrip()
+
+        line = file_in.readline()
+
+    if len(current_seq) > min_seq_length:
+        file_out_name = os.path.join(target_dir, (current_header + ".split.fa"))
+        if not os.path.exists(file_out_name):
+            file_out = open(file_out_name, "w+")
+            file_out.write(">" + current_header + "\n" + current_seq + "\n")
+            file_out.close()
+
+        else:
+            logger.info(
+                "Found an existing split file, so will not overwrite. File found:"
+            )
+            logger.info(file_out_name)
+
+    file_in.close()    
+
+def multiprocess_generic(cmd):
+    print(" ".join(cmd))
+    subprocess.run(cmd)
+def slice_genome(genome_file, target_dir, target_slice_size):
+    # The below is sort of tested
+    # Without the
+    target_seq_length = 50000000
+    min_seq_length = 1000
+    current_header = ""
+    current_seq = ""
+    seq_dict = {}
+    for line in seq:
+        match = re.search(r">(.+)$", line)
+        if match and current_header:
+            seq_dict[current_header] = current_seq
+            current_seq = ""
+            current_header = match.group(1)
+        elif match:
+            current_header = match.group(1)
+        else:
+            current_seq += line.rstrip()
+
+    seq_dict[current_header] = current_seq
+
+    seq_buffer = 0
+    file_number = 0
+    file_name = "genome_file_" + str(file_number)
+
+    for header in seq_dict:
+        seq_iterator = 0
+        seq = seq_dict[header]
+
+        while len(seq) > target_seq_length:
+            file_out = open(os.path.join(target_dir, file_name), "w+")
+            subseq = seq[0:target_seq_length]
+            file_out.write(
+                ">" + header + "_sli" + str(seq_iterator) + "\n" + subseq + "\n"
+            )
+            file_out.close()
+            seq = seq[target_seq_length:]
+            seq_iterator += 1
+            file_number += 1
+            file_name = "genome_file_" + str(file_number)
+
+        if len(seq) >= min_seq_length:
+            file_name = "genome_file_" + str(file_number)
+            file_out = open(os.path.join(file_name), "w+")
+            file_out.write(
+                ">" + header + "_sli" + str(seq_iterator) + "\n" + seq + "\n"
+            )
+            file_out.close()
+            file_number += 1
+            file_name = "genome_file_" + str(file_number)
+
+
+
+def seq_region_names(genome_file):
+    region_list = []
+
+    file_in = open(genome_file)
+    line = file_in.readline()
+    while line:
+        match = re.search(r">([^\s]+)", line)
+        if match:
+            region_name = match.group(1)
+            if region_name == "MT":
+                logger.info("Skipping region named MT")
+                line = file_in.readline()
+                continue
+            else:
+                region_list.append(match.group(1))
+        line = file_in.readline()
+
+    return region_list
+
+    

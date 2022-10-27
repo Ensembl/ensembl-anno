@@ -33,22 +33,6 @@ import tempfile
 from typing import Union
 
 # project imports
-from utils import (
-    add_log_file_handler,
-    check_exe,
-    check_file,
-    check_gtf_content,
-    create_dir,
-    get_seq_region_lengths,
-    logger,
-    prlimit_command,
-    load_results_to_ensembl_db,
-    generic_load_records_to_ensembl_db,
-    multiprocess_load_records_to_ensembl_db,
-    batch_gtf_records,
-    run_find_orfs,
-    find_orf_phased_region,
-)
 
 from repeatmasking_utils import (
     run_repeatmasker_regions,
@@ -89,283 +73,17 @@ from sncRNA_utils import (
 )
 
 
-def slice_output_to_gtf(
-    output_dir: pathlib.Path,
-    extension,
-    unique_ids,
-    feature_id_label,
-    new_id_prefix,
-):
-    if not extension:
-        extension = ".gtf"
-
-    # Note that this does not make unique ids at the moment
-    # In many cases this is fine because the ids are unique by seq region, but in cases like batching it can cause problems
-    # So will add in a helper method to make ids unique
-
-    # This holds keys of the current slice details with the gene id to form unique keys. Each time a new key is added
-    # the overall gene counter is incremented and the value of the key is set to the new gene id. Any subsequent
-    # lines with the same region/gene id key will then just get the new id without incrementing the counter
-    gene_id_index = {}
-    gene_transcript_id_index = {}
-    gene_counter = 1
-
-    # Similar to the gene id index, this will have a key that is based on the slice details, gene id and transcript id. If there
-    # is no existing entry, the transcript key will be added and the transcript counter is incremented. If there is a key then
-    # the transcript id will be replaced with the new transcript id (which is based on the new gene id and transcript counter)
-    # Example key KS8000.rs1.re1000000.gene_1.transcript_1 =
-    transcript_id_count_index = {}
-
-    feature_counter = 1
-
-    feature_types = ["exon", "transcript", "repeat", "simple_feature"]
-    gtf_output_file_path = output_dir / "annotation.gtf"
-    with open(gtf_output_file_path, "w+") as gtf_out:
-        for gtf_input_file_path in output_dir.glob("*{extension}"):
-            if gtf_input_file_path.stat().st_size == 0:
-                logger.info("File is empty, will skip:\n%s" % gtf_input_file_path)
-                continue
-
-            gtf_file_name = gtf_input_file_path.name
-            match = re.search(r"\.rs(\d+)\.re(\d+)\.", gtf_file_name)
-            start_offset = int(match.group(1))
-            with open(gtf_input_file_path, "r") as gtf_in:
-                for line in gtf_in:
-                    values = line.split("\t")
-                    if len(values) == 9 and (values[2] in feature_types):
-                        values[3] = str(int(values[3]) + (start_offset - 1))
-                        values[4] = str(int(values[4]) + (start_offset - 1))
-                        if unique_ids:
-                            # Maybe make a unique id based on the feature type
-                            # Basically region/feature id should be unique at this point, so could use region_id and current_id is key, value is the unique id that is incremented
-                            attribs = values[8]
-
-                            # This bit assigns unique gene/transcript ids if the line contains gene_id/transcript_id
-                            match_gene_type = re.search(
-                                r'(gene_id +"([^"]+)").+(transcript_id +"([^"]+)")',
-                                line,
-                            )
-                            if match_gene_type:
-                                full_gene_id_string = match_gene_type.group(1)
-                                current_gene_id = match_gene_type.group(2)
-                                full_transcript_id_string = match_gene_type.group(3)
-                                current_transcript_id = match_gene_type.group(4)
-                                gene_id_key = f"{gtf_file_name}.{current_gene_id}"
-                                transcript_id_key = (
-                                    f"{gene_id_key}.{current_transcript_id}"
-                                )
-                                if gene_id_key not in gene_id_index:
-                                    new_gene_id = f"gene{gene_counter}"
-                                    gene_id_index[gene_id_key] = new_gene_id
-                                    attribs = re.sub(
-                                        full_gene_id_string,
-                                        f'gene_id "{new_gene_id}"',
-                                        attribs,
-                                    )
-                                    transcript_id_count_index[gene_id_key] = 1
-                                    gene_counter += 1
-                                else:
-                                    new_gene_id = gene_id_index[gene_id_key]
-                                    attribs = re.sub(
-                                        full_gene_id_string,
-                                        f'gene_id "{new_gene_id}"',
-                                        attribs,
-                                    )
-                                if transcript_id_key not in gene_transcript_id_index:
-                                    new_transcript_id = (
-                                        gene_id_index[gene_id_key]
-                                        + ".t"
-                                        + str(transcript_id_count_index[gene_id_key])
-                                    )
-                                    gene_transcript_id_index[
-                                        transcript_id_key
-                                    ] = new_transcript_id
-                                    attribs = re.sub(
-                                        full_transcript_id_string,
-                                        f'transcript_id "{new_transcript_id}"',
-                                        attribs,
-                                    )
-                                    transcript_id_count_index[gene_id_key] += 1
-                                else:
-                                    new_transcript_id = gene_transcript_id_index[
-                                        transcript_id_key
-                                    ]
-                                    attribs = re.sub(
-                                        full_transcript_id_string,
-                                        f'transcript_id "{new_transcript_id}"',
-                                        attribs,
-                                    )
-                                values[8] = attribs
-
-                            # If you don't match a gene line, try a feature line
-                            else:
-                                match_feature_type = re.search(
-                                    r"(" + feature_id_label + ' +"([^"]+)")', line
-                                )
-                                if match_feature_type:
-                                    full_feature_id_string = match_feature_type.group(1)
-                                    current_feature_id = match_feature_type.group(2)
-                                    new_feature_id = f"{new_id_prefix}{feature_counter}"
-                                    attribs = re.sub(
-                                        full_feature_id_string,
-                                        f'{feature_id_label} "{new_feature_id}"',
-                                        attribs,
-                                    )
-                                    feature_counter += 1
-                                    values[8] = attribs
-
-                        gtf_out.write("\t".join(values))
-                    else:
-                        logger.info(
-                            "Feature type not recognised, will skip: %s" % values[2]
-                        )
-
-
-
-
-def convert_gff_to_gtf(gff_file):
-    gtf_string = ""
-    with open(gff_file) as file_in:
-        for line in file_in:
-            # match = re.search(r"genBlastG",line)
-            # if match:
-            results = line.split()
-            if not len(results) == 9:
-                continue
-            if results[2] == "coding_exon":
-                results[2] = "exon"
-            attributes = set_attributes(results[8], results[2])
-            results[8] = attributes
-            converted_line = "\t".join(results)
-            gtf_string += f"{converted_line}\n"
-    return gtf_string
-
-
-def set_attributes(attributes, feature_type):
-    converted_attributes = ""
-    split_attributes = attributes.split(";")
-    if feature_type == "transcript":
-        match = re.search(r"Name\=(.+)$", split_attributes[1])
-        name = match.group(1)
-        converted_attributes = f'gene_id "{name}"; transcript_id "{name}";'
-    elif feature_type == "exon":
-        match = re.search(r"\-E(\d+);Parent\=(.+)\-R\d+\-\d+\-", attributes)
-        exon_rank = match.group(1)
-        name = match.group(2)
-        converted_attributes = (
-            f'gene_id "{name}"; transcript_id "{name}"; exon_number "{exon_rank}";'
-        )
-
-    return converted_attributes
-
-
-# Example genBlast output
-# 1       genBlastG       transcript      131128674       131137049       252.729 -       .       ID=259447-R1-1-A1;Name=259447;PID=84.65;Coverage=94.22;Note=PID:84.65-Cover:94.22
-# 1       genBlastG       coding_exon     131137031       131137049       .       -       .       ID=259447-R1-1-A1-E1;Parent=259447-R1-1-A1
-# 1       genBlastG       coding_exon     131136260       131136333       .       -       .       ID=259447-R1-1-A1-E2;Parent=259447-R1-1-A1
-# 1       genBlastG       coding_exon     131128674       131130245       .       -       .       ID=259447-R1-1-A1-E3;Parent=259447-R1-1-A1
-##sequence-region       1_group1        1       4534
-# 1       genBlastG       transcript      161503457       161503804       30.94   +       .       ID=259453-R1-1-A1;Name=259453;PID=39.46;Coverage=64.97;Note=PID:39.46-Cover:64.97
-# 1       genBlastG       coding_exon     161503457       161503804       .       +       .       ID=259453-R1-1-A1-E1;Parent=259453-R1-1-A1
-##sequence-region       5_group1        1       4684
-# 5       genBlastG       transcript      69461063        69461741        86.16   +       .       ID=259454-R1-1-A1;Name=259454;PID=82.02;Coverage=91.67;Note=PID:82.02-Cover:91.67
-# 5       genBlastG       coding_exon     69461063        69461081        .       +       .       ID=259454-R1-1-A1-E1;Parent=259454-R1-1-A1
-# 5       genBlastG       coding_exon     69461131        69461741        .       +       .       ID=259454-R1-1-A1-E2;Parent=259454-R1-1-A1
-
-from  protein_utils {
+from  protein_utils import (
     run_genblast_align,
     multiprocess_genblast,
     generate_genblast_gtf,
     split_protein_file,
     run_convert2blastmask,
     run_makeblastdb,
-    }
+    )
 
 
-
-def bed_to_gtf(minimap2_output_dir: pathlib.Path):
-    gtf_file_path = minimap2_output_dir / "annotation.gtf"
-    with open(gtf_file_path, "w+") as gtf_out:
-        gene_id = 1
-        for bed_file in minimap2_output_dir.glob("*.bed"):
-            logger.info("Converting bed to GTF:\n%s" % bed_file)
-            with open(bed_file) as bed_in:
-                for line in bed_in:
-                    line = line.rstrip()
-                    elements = line.split("\t")
-                    seq_region_name = elements[0]
-                    offset = int(elements[1])
-                    hit_name = elements[3]
-                    strand = elements[5]
-                    block_sizes = elements[10].split(",")
-                    block_sizes = list(filter(None, block_sizes))
-                    block_starts = elements[11].split(",")
-                    block_starts = list(filter(None, block_starts))
-                    exons = bed_to_exons(block_sizes, block_starts, offset)
-                    transcript_line = [
-                        seq_region_name,
-                        "minimap",
-                        "transcript",
-                        0,
-                        0,
-                        ".",
-                        strand,
-                        ".",
-                        f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"',
-                    ]
-                    transcript_start = None
-                    transcript_end = None
-                    exon_records = []
-                    for index, exon_coords in enumerate(exons, start=1):
-                        if (
-                            transcript_start is None
-                            or exon_coords[0] < transcript_start
-                        ):
-                            transcript_start = exon_coords[0]
-
-                        if transcript_end is None or exon_coords[1] > transcript_end:
-                            transcript_end = exon_coords[1]
-
-                        exon_line = [
-                            seq_region_name,
-                            "minimap",
-                            "exon",
-                            str(exon_coords[0]),
-                            str(exon_coords[1]),
-                            ".",
-                            strand,
-                            ".",
-                            f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"; exon_number "{index}";',
-                        ]
-
-                        exon_records.append(exon_line)
-
-                    transcript_line[3] = str(transcript_start)
-                    transcript_line[4] = str(transcript_end)
-
-                    gtf_out.write("\t".join(transcript_line) + "\n")
-                    for exon_line in exon_records:
-                        gtf_out.write("\t".join(exon_line) + "\n")
-
-                    gene_id += 1
-
-
-def bed_to_exons(block_sizes, block_starts, offset):
-    exons = []
-    for i, element in enumerate(block_sizes):
-        block_start = offset + int(block_starts[i]) + 1
-        block_end = block_start + int(block_sizes[i]) - 1
-
-        if block_end < block_start:
-            logger.warning("Warning: block end is less than block start, skipping exon")
-            continue
-
-        exon_coords = [str(block_start), str(block_end)]
-        exons.append(exon_coords)
-
-    return exons
-
-from transcriptomic_utils inport {
+from transcriptomic_utils import (
     run_trimming,
     multiprocess_trim_galore,
     create_paired_paths,
@@ -373,6 +91,9 @@ from transcriptomic_utils inport {
     run_subsample_script,
     check_for_fastq_subsamples,
     run_minimap2_align,
+    bed_to_gtf,
+    bed_to_gff,
+    bed_to_exons,
     check_transcriptomic_output,
     augustus_output_to_gtf,
     run_augustus_predict,
@@ -383,202 +104,42 @@ from transcriptomic_utils inport {
     run_stringtie_assemble,
     run_scallop_assemble,
     model_builder,
-}
+)
+from utils import (
+    add_log_file_handler,
+    check_exe,
+    check_file,
+    check_gtf_content,
+    create_dir,
+    get_seq_region_lengths,
+    logger,
+    prlimit_command,
+    load_results_to_ensembl_db,
+    generic_load_records_to_ensembl_db,
+    multiprocess_load_records_to_ensembl_db,
+    batch_gtf_records,
+    run_find_orfs,
+    find_orf_phased_region,
+    slice_output_to_gtf,
+    convert_gff_to_gtf,
+    set_attributes,
+    create_slice_ids,
+    update_gtf_genes,
+    read_gtf_genes,
+    fasta_to_dict,
+    splice_junction_to_gff,
+    split_genome,
+    multiprocess_generic,
+    reverse_complement,
+    get_seq_region_names,
+    slice_genome,
+    subprocess_run_and_log,
+    get_sequence,
+    seq_region_names,
+    coallate_results,
+)
 
-
-def create_slice_ids(
-    seq_region_lengths,
-    slice_size: int = 1_000_000,
-    overlap: int = 0,
-    min_length: int = 0,
-):
-    slice_ids = []
-    for region, region_length in seq_region_lengths.items():
-        if region_length < min_length:
-            continue
-
-        if region_length <= slice_size:
-            slice_ids.append([region, 1, region_length])
-            continue
-
-        start = 1
-        end = start + slice_size - 1
-        while end < region_length:
-            start = start - overlap
-            if start < 1:
-                start = 1
-
-            end = start + slice_size - 1
-            if end > region_length:
-                end = region_length
-            if (end - start + 1) >= min_length:
-                slice_ids.append([region, start, end])
-            start = end + 1
-
-    return slice_ids
-
-
-
-def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
-    output_lines = []
-    for gene_id in parsed_gtf_genes.keys():
-        transcript_ids = parsed_gtf_genes[gene_id].keys()
-        for transcript_id in transcript_ids:
-            transcript_line = parsed_gtf_genes[gene_id][transcript_id]["transcript"]
-            single_cds_exon_transcript = 0
-            translation_match = re.search(
-                r'; translation_coords "([^"]+)";', transcript_line
-            )
-            if translation_match:
-                translation_coords = translation_match.group(1)
-                translation_coords_list = translation_coords.split(":")
-                # If the start exon coords of both exons are the same, then it's the same exon and thus a single exon cds
-                if translation_coords_list[0] == translation_coords_list[3]:
-                    single_cds_exon_transcript = 1
-
-            exon_lines = parsed_gtf_genes[gene_id][transcript_id]["exons"]
-            validation_results = combined_results[transcript_id]
-            rnasamba_coding_probability = float(validation_results[0])
-            rnasamba_coding_potential = validation_results[1]
-            cpc2_coding_probability = float(validation_results[2])
-            cpc2_coding_potential = validation_results[3]
-            transcript_length = int(validation_results[4])
-            peptide_length = int(validation_results[5])
-            diamond_e_value = None
-            if len(validation_results) == 7:
-                diamond_e_value = validation_results[6]
-
-            avg_coding_probability = (
-                rnasamba_coding_probability + cpc2_coding_probability
-            ) / 2
-            max_coding_probability = max(
-                rnasamba_coding_probability, cpc2_coding_probability
-            )
-
-            match = re.search(r'; biotype "([^"]+)";', transcript_line)
-            biotype = match.group(1)
-            if biotype == "busco" or biotype == "protein":
-                transcript_line = re.sub(
-                    '; biotype "{biotype}";',
-                    '; biotype "protein_coding";',
-                    transcript_line,
-                )
-                output_lines.append(transcript_line)
-                output_lines.extend(exon_lines)
-                continue
-
-            min_single_exon_pep_length = 100
-            min_multi_exon_pep_length = 75
-            min_single_source_probability = 0.8
-            min_single_exon_probability = 0.9
-
-            # Note that the below looks at validating things under different levels of strictness
-            # There are a few different continue statements, where transcripts will be skipped resulting
-            # in a smaller post validation file. It mainly removes single coding exon genes with no real
-            # support or for multi-exon lncRNAs that are less than 200bp long
-            if single_cds_exon_transcript == 1 and validation_type == "relaxed":
-                if diamond_e_value is not None:
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                elif (
-                    rnasamba_coding_potential == "coding"
-                    and cpc2_coding_potential == "coding"
-                    and peptide_length >= min_single_exon_pep_length
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                elif (
-                    (
-                        rnasamba_coding_potential == "coding"
-                        or cpc2_coding_potential == "coding"
-                    )
-                    and peptide_length >= min_single_exon_pep_length
-                    and max_coding_probability >= min_single_source_probability
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                else:
-                    continue
-            elif single_cds_exon_transcript == 1 and validation_type == "moderate":
-                if (
-                    diamond_e_value is not None
-                    and peptide_length >= min_single_exon_pep_length
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                elif (
-                    (
-                        rnasamba_coding_potential == "coding"
-                        and cpc2_coding_potential == "coding"
-                    )
-                    and peptide_length >= min_single_exon_pep_length
-                    and avg_coding_probability >= min_single_exon_probability
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                else:
-                    continue
-            else:
-                if diamond_e_value is not None:
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                elif (
-                    rnasamba_coding_potential == "coding"
-                    and cpc2_coding_potential == "coding"
-                    and peptide_length >= min_multi_exon_pep_length
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                elif (
-                    (
-                        rnasamba_coding_potential == "coding"
-                        or cpc2_coding_potential == "coding"
-                    )
-                    and peptide_length >= min_multi_exon_pep_length
-                    and max_coding_probability >= min_single_source_probability
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                elif transcript_length >= 200:
-                    transcript_line = re.sub(
-                        '; biotype "{biotype}";', '; biotype "lncRNA";', transcript_line
-                    )
-                    transcript_line = re.sub(
-                        ' translation_coords "[^"]+";', "", transcript_line
-                    )
-                else:
-                    continue
-
-            output_lines.append(transcript_line)
-            output_lines.extend(exon_lines)
-
-    return output_lines
-
-from fianlisation_utils import {
+from finalisation_utils import (
     run_finalise_geneset,
     validate_coding_transcripts,
     diamond_validation,
@@ -588,117 +149,12 @@ from fianlisation_utils import {
     read_diamond_results,
     combine_results,
     merge_finalise_output_files,
-}
-
-
-
-def read_gtf_genes(gtf_file):
-    gtf_genes = {}
-    with open(gtf_file) as gtf_in:
-        for line in gtf_in:
-            eles = line.split("\t")
-            if not len(eles) == 9:
-                continue
-
-            match = re.search(r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line)
-
-            if not match:
-                continue
-
-            gene_id = match.group(1)
-            transcript_id = match.group(2)
-            feature_type = eles[2]
-            if gene_id not in gtf_genes:
-                gtf_genes[gene_id] = {}
-            if feature_type == "transcript":
-                gtf_genes[gene_id][transcript_id] = {}
-                gtf_genes[gene_id][transcript_id]["transcript"] = line
-                gtf_genes[gene_id][transcript_id]["exons"] = []
-            elif feature_type == "exon":
-                gtf_genes[gene_id][transcript_id]["exons"].append(line)
-
-    return gtf_genes
-
-
-
-def fasta_to_dict(fasta_list):
-    index = {}
-    it = iter(fasta_list)
-    for header in it:
-        match = re.search(r">(.+)\n$", header)
-        header = match.group(1)
-        seq = next(it)
-        index[header] = seq
-    return index
-
-
-def subprocess_run_and_log(command):
-    logger.info("subprocess_run_and_log command: %s" % " ".join(command))
-    subprocess.run(command)
-
-
-def get_sequence(
-    seq_region,
-    start: int,
-    end: int,
-    strand: int,
-    fasta_file,
-    output_dir: Union[pathlib.Path, str],
-):
-    start -= 1
-    bedtools_path = "bedtools"
-
-    # This creates a tempfile and writes the bed info to it based on whatever information
-    # has been passed in about the sequence. Then runs bedtools getfasta. The fasta file
-    # should have a faidx. This can be created with the create_faidx static method prior
-    # to fetching sequence
-    with tempfile.NamedTemporaryFile(
-        mode="w+t", delete=False, dir=output_dir
-    ) as bed_temp_file:
-        bed_temp_file.write(f"{seq_region}\t{start}\t{end}")
-        bed_temp_file.close()
-
-    bedtools_command = [
-        bedtools_path,
-        "getfasta",
-        "-fi",
-        fasta_file,
-        "-bed",
-        bed_temp_file.name,
-    ]
-    bedtools_output = subprocess.Popen(bedtools_command, stdout=subprocess.PIPE)
-    for idx, line in enumerate(
-        io.TextIOWrapper(bedtools_output.stdout, encoding="utf-8")
-    ):
-        if idx == 1:
-            if strand == 1:
-                sequence = line.rstrip()
-            else:
-                sequence = reverse_complement(line.rstrip())
-
-    os.remove(bed_temp_file.name)
-    return sequence
-
-
-def reverse_complement(sequence: str) -> str:
-    rev_matrix = str.maketrans("atgcATGC", "tacgTACG")
-    return sequence.translate(rev_matrix)[::-1]
-
-
-def get_seq_region_names(genome_file: Union[pathlib.Path, str]):
-    region_list = []
-    with open(genome_file) as file_in:
-        for line in file_in:
-            match = re.search(r">([^\s]+)", line)
-            if match:
-                region_name = match.group(1)
-                if region_name == "MT":
-                    logger.info('Skipping region named "MT"')
-                    continue
-                else:
-                    region_list.append(match.group(1))
-
-    return region_list
+    subprocess_run_and_log,
+    get_sequence,
+    reverse_complement,
+    get_seq_region_names,
+    multiprocess_finalise_geneset,
+)
 
 
 def main():
