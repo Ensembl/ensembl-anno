@@ -201,6 +201,148 @@ def run_minimap2_align(
     logger.info("Completed running minimap2")
 
 
+def bed_to_gtf(minimap2_output_dir: pathlib.Path):
+    gtf_file_path = minimap2_output_dir / "annotation.gtf"
+    with open(gtf_file_path, "w+") as gtf_out:
+        gene_id = 1
+        for bed_file in minimap2_output_dir.glob("*.bed"):
+            logger.info("Converting bed to GTF:\n%s" % bed_file)
+            with open(bed_file) as bed_in:
+                for line in bed_in:
+                    line = line.rstrip()
+                    elements = line.split("\t")
+                    seq_region_name = elements[0]
+                    offset = int(elements[1])
+                    hit_name = elements[3]
+                    strand = elements[5]
+                    block_sizes = elements[10].split(",")
+                    block_sizes = list(filter(None, block_sizes))
+                    block_starts = elements[11].split(",")
+                    block_starts = list(filter(None, block_starts))
+                    exons = bed_to_exons(block_sizes, block_starts, offset)
+                    transcript_line = [
+                        seq_region_name,
+                        "minimap",
+                        "transcript",
+                        0,
+                        0,
+                        ".",
+                        strand,
+                        ".",
+                        f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"',
+                    ]
+                    transcript_start = None
+                    transcript_end = None
+                    exon_records = []
+                    for index, exon_coords in enumerate(exons, start=1):
+                        if (
+                            transcript_start is None
+                            or exon_coords[0] < transcript_start
+                        ):
+                            transcript_start = exon_coords[0]
+
+                        if transcript_end is None or exon_coords[1] > transcript_end:
+                            transcript_end = exon_coords[1]
+
+                        exon_line = [
+                            seq_region_name,
+                            "minimap",
+                            "exon",
+                            str(exon_coords[0]),
+                            str(exon_coords[1]),
+                            ".",
+                            strand,
+                            ".",
+                            f'gene_id "minimap_{gene_id}"; transcript_id "minimap_{gene_id}"; exon_number "{index}";',
+                        ]
+
+                        exon_records.append(exon_line)
+
+                    transcript_line[3] = str(transcript_start)
+                    transcript_line[4] = str(transcript_end)
+
+                    gtf_out.write("\t".join(transcript_line) + "\n")
+                    for exon_line in exon_records:
+                        gtf_out.write("\t".join(exon_line) + "\n")
+
+                    gene_id += 1
+
+def bed_to_gff(input_dir, hints_file):
+
+    gff_out = open(hints_file, "w+")
+    exons_dict = {}
+    for bed_file in glob.glob(input_dir + "/*.bed"):
+        logger.info("Processing file for hints:")
+        logger.info(bed_file)
+        bed_in = open(bed_file)
+        bed_lines = bed_in.readlines()
+        for line in bed_lines:
+            line = line.rstrip()
+            elements = line.split("\t")
+            seq_region_name = elements[0]
+            offset = int(elements[1])
+            hit_name = elements[3]
+            strand = elements[5]
+            block_sizes = elements[10].split(",")
+            block_sizes = list(filter(None, block_sizes))
+            block_starts = elements[11].split(",")
+            block_starts = list(filter(None, block_starts))
+            exons = bed_to_exons(block_sizes, block_starts, offset)
+            for i, element in enumerate(exons):
+                exon_coords = exons[i]
+                exon_key = (
+                    seq_region_name
+                    + ":"
+                    + exon_coords[0]
+                    + ":"
+                    + exon_coords[1]
+                    + ":"
+                    + strand
+                )
+                if exon_key in exons_dict:
+                    exons_dict[exon_key][5] += 1
+                else:
+                    gff_list = [
+                        seq_region_name,
+                        "CDNA",
+                        "exon",
+                        exon_coords[0],
+                        exon_coords[1],
+                        1.0,
+                        strand,
+                        ".",
+                    ]
+                    exons_dict[exon_key] = gff_list
+
+    for exon_key, gff_list in exons_dict.items():
+        gff_list[5] = str(gff_list[5])
+        gff_line = "\t".join(gff_list) + "\tsrc=W;mul=" + gff_list[5] + ";\n"
+        gff_out.write(gff_line)
+
+    gff_out.close()
+
+    sorted_hints_out = open((hints_file + ".srt"), "w+")
+    subprocess.run(
+        ["sort", "-k1,1", "-k7,7", "-k4,4", "-k5,5", hints_file],
+        stdout=sorted_hints_out,
+    )
+    sorted_hints_out.close()
+
+def bed_to_exons(block_sizes, block_starts, offset):
+    exons = []
+    for i, element in enumerate(block_sizes):
+        block_start = offset + int(block_starts[i]) + 1
+        block_end = block_start + int(block_sizes[i]) - 1
+
+        if block_end < block_start:
+            logger.warning("Warning: block end is less than block start, skipping exon")
+            continue
+
+        exon_coords = [str(block_start), str(block_end)]
+        exons.append(exon_coords)
+
+    return exons
+
 def check_transcriptomic_output(main_output_dir: pathlib.Path):
     # This will check across the various transcriptomic dirs and check there's actually some data
     transcriptomic_dirs = ["scallop_output", "stringtie_output", "minimap2_output"]
@@ -1148,4 +1290,25 @@ def model_builder(work_dir):
 
     sjf_out.close()
 
+def coallate_results(main_output_dir):
+
+    results_dir = create_dir(main_output_dir, "results")
+    output_dirs = [
+        "augustus_output",
+        "cpg_output",
+        "dust_output",
+        "eponine_output",
+        "red_output",
+        "rfam_output",
+        "trf_output",
+        "trnascan_output",
+    ]
+    for output_dir in output_dirs:
+        match = re.search(r"(.+)_output", output_dir)
+        result_type = match.group(1)
+        results_path = os.path.join(main_output_dir, output_dir, "annotation.gtf")
+        copy_path = os.path.join(results_dir, (result_type + ".gtf"))
+        if os.path.exists(results_path):
+            cpy_cmd = ["cp", results_path, copy_path]
+            subprocess.run(cpy_cmd)
     
