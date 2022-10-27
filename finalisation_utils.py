@@ -12,7 +12,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# standard library
+import argparse
+import gc
+import glob
+import io
+import math
+import multiprocessing
+import os
+import pathlib
+import random
+import re
+import shutil
+import signal
+import subprocess
+import tempfile
+import sys
+import errno
+import logging
 
+from typing import List, Union
 
 def run_finalise_geneset(
     main_script_dir: pathlib.Path,
@@ -36,7 +55,7 @@ def run_finalise_geneset(
 
     # This used to be a list of output dirs and a loop which was neat, I'm converting to a list of conditions as
     # it's more straightforward with the renaming and having to merge scallop and stringtie
-    protein_annotation_raw = main_output_dir / "genblast_output", "annotation.gtf"
+    protein_annotation_raw = main_output_dir / "genblast_output" / "annotation.gtf"
     minimap2_annotation_raw = main_output_dir / "minimap2_output" / "annotation.gtf"
     stringtie_annotation_raw = main_output_dir / "stringtie_output" / "annotation.gtf"
     scallop_annotation_raw = main_output_dir / "scallop_output" / "annotation.gtf"
@@ -115,7 +134,7 @@ def run_finalise_geneset(
         if transcriptomic_annotation_raw.exists():
             logger.info("Finalising transcriptomic data for: %s" % seq_region_name)
             transcriptomic_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
+                "_raw.gtf", "_sel.gtf", str(transcriptomic_annotation_raw)
             )
             cmd = generic_select_cmd.copy()
             cmd.extend(
@@ -136,7 +155,7 @@ def run_finalise_geneset(
         if busco_annotation_raw.exists():
             logger.info("Finalising BUSCO data for: %s" % seq_region_name)
             busco_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", busco_annotation_raw
+                "_raw.gtf", "_sel.gtf", str(busco_annotation_raw)
             )
             cmd = generic_select_cmd.copy()
             cmd.extend(
@@ -157,7 +176,7 @@ def run_finalise_geneset(
         if protein_annotation_raw.exists():
             logger.info("Finalising protein data for: %s" % seq_region_name)
             protein_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", protein_annotation_raw
+                "_raw.gtf", "_sel.gtf", str(protein_annotation_raw)
             )
             cmd = generic_select_cmd.copy()
             cmd.extend(
@@ -277,7 +296,7 @@ def run_finalise_geneset(
         "-output_gtf_file",
         cleaned_initial_gtf_file,
     ]
-    logger.info("Cleaning initial set:\n%s" % " ".join(cleaning_cmd))
+    logger.info("Cleaning initial set:\n%s" % list_to_string(cleaning_cmd))
     subprocess.run(cleaning_cmd)
 
     # Clean UTRs
@@ -333,7 +352,8 @@ def run_finalise_geneset(
         cleaned_utr_gtf_file,
     ]
     logger.info(
-        "Dumping transcript and translation sequences:\n%s" % " ".join(dumping_cmd)
+        "Dumping transcript and translation sequences:\n%s"
+        % list_to_string(dumping_cmd)
     )
     subprocess.run(dumping_cmd)
 
@@ -567,3 +587,88 @@ def combine_results(rnasamba_results, cpc2_results, diamond_results):
 
     return transcript_ids
 
+def merge_finalise_output_files(
+    final_annotation_dir: pathlib.Path,
+    region_annotation_dir: pathlib.Path,
+    extension: str,
+    id_label: str,
+):
+    """
+    The below is not great, it's a bit messy because there might be some cases where there aren't
+    translations. So it's not as straightforward as reading the records across all three files
+    in parallel. The solution is to just load the seqs into memory and index them on the current
+    header, which should correspond to a transcript/gene id in the GTF. When writing the results
+    into the single merged files the ids will be updated to be unique and consistent across the
+    three file types
+    """
+    merged_gtf_file = final_annotation_dir / f"{id_label}_sel.gtf"
+    merged_cdna_file = final_annotation_dir / f"{id_label}_sel.cdna.fa"
+    merged_amino_acid_file = final_annotation_dir / f"{id_label}_sel.prot.fa"
+
+    gene_id_counter = 0
+    transcript_id_counter = 0
+    with open(merged_gtf_file, "w+") as gtf_out, open(
+        merged_cdna_file, "w+"
+    ) as cdna_out, open(merged_amino_acid_file, "w+") as amino_acid_out:
+        gtf_files = region_annotation_dir.glob(f"*{extension}")
+        for gtf_file in gtf_files:
+            logger.info("GTF file: %s" % gtf_file)
+            cdna_file = f"{gtf_file}.cdna"
+            with open(cdna_file) as cdna_in:
+                cdna_seq_index = fasta_to_dict(cdna_in.readlines())
+            amino_acid_file = f"{gtf_file}.prot"
+            with open(amino_acid_file) as amino_acid_in:
+                amino_acid_seq_index = fasta_to_dict(amino_acid_in.readlines())
+
+            current_gene_id = ""
+            with open(gtf_file) as gtf_in:
+                for line in gtf_in:
+                    if re.search(r"^#", line):
+                        continue
+
+                    eles = line.split("\t")
+                    if not len(eles) == 9:
+                        continue
+
+                    match = re.search(
+                        r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line
+                    )
+                    if match and eles[2] == "transcript":
+                        transcript_id_counter += 1
+
+                    gene_id = match.group(1)
+                    transcript_id = match.group(2)
+
+                    if not current_gene_id:
+                        gene_id_counter += 1
+                        current_gene_id = gene_id
+
+                    if not gene_id == current_gene_id:
+                        gene_id_counter += 1
+                        current_gene_id = gene_id
+
+                    new_gene_id = f"{id_label}_{gene_id_counter}"
+                    new_transcript_id = f"{id_label}_{transcript_id_counter}"
+                    line = re.sub(
+                        f'gene_id "{gene_id}"', f'gene_id "{new_gene_id}"', line
+                    )
+                    line = re.sub(
+                        f'transcript_id "{transcript_id}"',
+                        f'transcript_id "{new_transcript_id}"',
+                        line,
+                    )
+                    gtf_out.write(line)
+
+                    if eles[2] == "transcript":
+                        new_header = f">{new_transcript_id}\n"
+                        cdna_out.write(new_header + cdna_seq_index[transcript_id])
+
+                        if transcript_id in amino_acid_seq_index:
+                            amino_acid_out.write(
+                                new_header + amino_acid_seq_index[transcript_id]
+                            )
+
+def multiprocess_finalise_geneset(cmd):
+
+    print(" ".join(cmd))
+    subprocess.run(cmd)
