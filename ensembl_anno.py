@@ -2574,7 +2574,7 @@ def run_star_align(
         # a single path. The next command was added to select the first file from the pair,
         # but maybe there is something more to be done here.
         fastq_file = fastq_files[0]
-        logger.info("fastq_file: %s" % list_to_string(fastq_file))
+        logger.info("fastq_file: %s" % fastq_file)
         fastq_file_name = fastq_file.name
         check_compression = re.search(r".gz$", fastq_file_name)
 
