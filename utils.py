@@ -23,7 +23,7 @@ import re
 import shutil
 import sys
 
-from typing import List, Union
+from typing import Dict, List, Union
 
 
 # logging formats
@@ -139,7 +139,18 @@ def create_paired_paths(
     return paired_paths
 
 
-def get_seq_region_lengths(genome_file: Union[pathlib.Path, str], min_seq_length: int):
+def get_seq_region_lengths(
+    genome_file: Union[pathlib.Path, str], min_seq_length: int
+) -> Dict[str, int]:
+    """
+    Calculate the sequence region lengths in the genome_file.
+
+    Args:
+        genome_file: the genome file containing the sequence regions
+        min_seq_length: ?
+    Returns:
+        a dictionary with keys the sequence region names and values their lengths
+    """
     current_header = ""
     current_seq = ""
 

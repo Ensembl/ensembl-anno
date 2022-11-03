@@ -30,7 +30,7 @@ import signal
 import subprocess
 import tempfile
 
-from typing import List, Union
+from typing import Dict, List, Union
 
 # project imports
 from utils import (
@@ -1410,9 +1410,9 @@ def multiprocess_cmsearch(
     genome_file: Union[pathlib.Path, str],
     rfam_output_dir: pathlib.Path,
     rfam_selected_models_file,
-    cv_models,
-    seed_descriptions,
-    memory_limit,
+    cv_models: Dict[str, Dict],
+    seed_descriptions: Dict,
+    memory_limit: int,
 ):
     region_name = slice_id[0]
     start = slice_id[1]
@@ -1443,9 +1443,9 @@ def multiprocess_cmsearch(
     exception_results_file_path = rfam_output_dir / f"{slice_file_name}.rfam.except"
 
     cmsearch_cmd = generic_cmsearch_cmd.copy()
-    cmsearch_cmd.append(region_tblout_file_path)
-    cmsearch_cmd.append(rfam_selected_models_file)
-    cmsearch_cmd.append(region_fasta_file_path)
+    cmsearch_cmd.extend(
+        [region_tblout_file_path, rfam_selected_models_file, region_fasta_file_path]
+    )
 
     if memory_limit is not None:
         cmsearch_cmd = prlimit_command(cmsearch_cmd, memory_limit)
@@ -1472,22 +1472,21 @@ def multiprocess_cmsearch(
     initial_table_results = parse_rfam_tblout(region_tblout_file_path, region_name)
     unique_table_results = remove_rfam_overlap(initial_table_results)
     filtered_table_results = filter_rfam_results(unique_table_results, cv_models)
-    if filtered_table_results:
-        create_rfam_gtf(
-            filtered_results=filtered_table_results,
-            cm_models=cv_models,
-            descriptions=seed_descriptions,
-            region_name=region_name,
-            region_results_file_path=region_results_file_path,
-            genome_file=genome_file,
-            rfam_output_dir=rfam_output_dir,
-        )
+    create_rfam_gtf(
+        filtered_results=filtered_table_results,
+        cm_models=cv_models,
+        descriptions=seed_descriptions,
+        region_name=region_name,
+        region_results_file_path=region_results_file_path,
+        genome_file=genome_file,
+        rfam_output_dir=rfam_output_dir,
+    )
     os.remove(region_fasta_file_path)
     os.remove(region_tblout_file_path)
     gc.collect()
 
 
-def get_rfam_seed_descriptions(rfam_seeds_path):
+def get_rfam_seed_descriptions(rfam_seeds_path) -> Dict:
     descriptions = {}
 
     # NOTE: for some reason the decoder breaks on the seeds file, so I have made this ignore errors
@@ -1522,7 +1521,7 @@ def get_rfam_seed_descriptions(rfam_seeds_path):
     return descriptions
 
 
-def extract_rfam_metrics(rfam_selected_models_file):
+def extract_rfam_metrics(rfam_selected_models_file: pathlib.Path) -> Dict[str, Dict]:
     with open(rfam_selected_models_file, "r") as rfam_cm_in:
         rfam_data = rfam_cm_in.read()
 
@@ -1571,7 +1570,29 @@ def extract_rfam_metrics(rfam_selected_models_file):
     return parsed_cm_data
 
 
-def parse_rfam_tblout(region_tblout_file_path, region_name):
+def parse_rfam_tblout(
+    region_tblout_file_path: pathlib.Path, region_name: str
+) -> List[Dict]:
+    """
+    # original comment bellow this function:
+    # NOTE some of the code above and the code commented out here is to do with creating
+    # a DAF. As we don't have a python concept of this I'm leaving it out for the moment
+    # but the code below is a reference
+    #    my $daf = Bio::EnsEMBL::DnaDnaAlignFeature->new(
+    #      -slice          => $self->queries,
+    #      -start          => $strand == 1 ? $start : $end,
+    #      -end            => $strand == 1 ? $end : $start,
+    #      -strand         => $strand,
+    #      -hstart         => $hstart,
+    #      -hend           => $hend,
+    #      -hstrand        => $strand,
+    #      -score          => $score,
+    #      -hseqname       => length($target_name) > 39 ? substr($target_name, 0, 39) : $target_name,,
+    #      -p_value  => $evalue,
+    #      -align_type => 'ensembl',
+    #      -cigar_string  => abs($hend - $hstart) . "M",
+    #   );
+    """
     parsed_results = []
     with open(region_tblout_file_path, "r") as rfam_tbl_in:
         for result in rfam_tbl_in:
@@ -1581,18 +1602,18 @@ def parse_rfam_tblout(region_tblout_file_path, region_name):
 
             hit = result.split()
             accession = hit[3]
-            target_name = hit[0]
+            # target_name = hit[0]
             query_name = hit[2]
-            hstart = hit[5]
-            hend = hit[6]
-            start = hit[7]
-            end = hit[8]
+            # hstart = int(hit[5])
+            # hend = int(hit[6])
+            start = int(hit[7])
+            end = int(hit[8])
             if hit[9] == "+":
                 strand = 1
             else:
                 strand = -1
-            evalue = hit[15]
-            score = hit[14]
+            # evalue = float(hit[15])
+            score = float(hit[14])
 
             parsed_tbl_data["accession"] = accession
             parsed_tbl_data["start"] = start
@@ -1605,39 +1626,20 @@ def parse_rfam_tblout(region_tblout_file_path, region_name):
     return parsed_results
 
 
-# NOTE some of the code above and the code commented out here is to do with creating
-# a DAF. As we don't have a python concept of this I'm leaving it out for the moment
-# but the code below is a reference
-#    my $daf = Bio::EnsEMBL::DnaDnaAlignFeature->new(
-#      -slice          => $self->queries,
-#      -start          => $strand == 1 ? $start : $end,
-#      -end            => $strand == 1 ? $end : $start,
-#      -strand         => $strand,
-#      -hstart         => $hstart,
-#      -hend           => $hend,
-#      -hstrand        => $strand,
-#      -score          => $score,
-#      -hseqname       => length($target_name) > 39 ? substr($target_name, 0, 39) : $target_name,,
-#      -p_value  => $evalue,
-#      -align_type => 'ensembl',
-#      -cigar_string  => abs($hend - $hstart) . "M",
-#   );
-
-
-def remove_rfam_overlap(parsed_tbl_data):
+def remove_rfam_overlap(parsed_tbl_data: List[Dict]) -> List[Dict]:
     excluded_structures = {}
     chosen_structures = []
     for structure_x in parsed_tbl_data:
         chosen_structure = structure_x
-        structure_x_start = int(structure_x["start"])
-        structure_x_end = int(structure_x["end"])
-        structure_x_score = float(structure_x["score"])
+        structure_x_start = structure_x["start"]
+        structure_x_end = structure_x["end"]
+        structure_x_score = structure_x["score"]
         structure_x_accession = structure_x["accession"]
         structure_x_string = f"{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
         for structure_y in parsed_tbl_data:
-            structure_y_start = int(structure_y["start"])
-            structure_y_end = int(structure_y["end"])
-            structure_y_score = float(structure_y["score"])
+            structure_y_start = structure_y["start"]
+            structure_y_end = structure_y["end"]
+            structure_y_score = structure_y["score"]
             structure_y_accession = structure_y["accession"]
             structure_y_string = f"{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
             if structure_y_string in excluded_structures:
@@ -1658,31 +1660,29 @@ def remove_rfam_overlap(parsed_tbl_data):
     return chosen_structures
 
 
-def filter_rfam_results(unfiltered_tbl_data, cv_models):
+def filter_rfam_results(
+    unfiltered_tbl_data: List[Dict], cv_models: Dict[str, Dict]
+) -> List[Dict]:
     filtered_results = []
     for structure in unfiltered_tbl_data:
         query = structure["query_name"]
         if query in cv_models:
-            threshold = cv_models[query]["-threshold"]
+            threshold = float(cv_models[query]["-threshold"])
+
             if query == "LSU_rRNA_eukarya":
                 threshold = 1700
-
             elif query == "LSU_rRNA_archaea":
                 continue
-
             elif query == "LSU_rRNA_bacteria":
                 continue
-
             elif query == "SSU_rRNA_eukarya":
                 threshold = 1600
-
             elif query == "5_8S_rRNA":
                 threshold = 85
-
             elif query == "5S_rRNA":
                 threshold = 75
 
-            if threshold and float(structure["score"]) >= float(threshold):
+            if threshold and structure["score"] >= threshold:
                 filtered_results.append(structure)
 
     return filtered_results
@@ -1697,13 +1697,13 @@ def filter_rfam_results(unfiltered_tbl_data, cv_models):
 
 
 def create_rfam_gtf(
-    filtered_results,
-    cm_models,
+    filtered_results: List[Dict],
+    cm_models: Dict[str, Dict],
     descriptions,
     region_name,
     region_results_file_path,
     genome_file: Union[pathlib.Path, str],
-    rfam_output_dir,
+    rfam_output_dir: pathlib.Path,
 ):
     if not filtered_results:
         return
@@ -1781,7 +1781,7 @@ def create_rfam_gtf(
                 gene_counter += 1
 
 
-def check_rnafold_structure(seq, rfam_output_dir):
+def check_rnafold_structure(seq: str, rfam_output_dir: pathlib.Path):
     # Note there's some extra code in the RNAfold Perl module for encoding the structure into an attrib
     # Could consider implementing this when running for loading into an Ensembl db
     structure = 0
@@ -1797,7 +1797,7 @@ def check_rnafold_structure(seq, rfam_output_dir):
         match = re.search(r"([().]+)\s\(\s*(-*\d+.\d+)\)\n$", line)
         if match:
             structure = match.group(1)
-            score = match.group(2)
+            # score = match.group(2)
             break
     rna_temp_in.close()
     os.remove(rna_in_file_path)
@@ -3106,7 +3106,7 @@ def create_slice_ids(
     slice_size: int = 1_000_000,
     overlap: int = 0,
     min_length: int = 0,
-):
+) -> List[List]:
     slice_ids = []
     for region, region_length in seq_region_lengths.items():
         if region_length < min_length:
@@ -4318,7 +4318,12 @@ def get_sequence(
     strand: int,
     fasta_file,
     output_dir: Union[pathlib.Path, str],
-):
+) -> str:
+    """
+    TODO:
+    The functionality of this function could be better implemented by using pybedtools
+    or even better pyfaidx.
+    """
     start -= 1
     bedtools_path = "bedtools"
 
