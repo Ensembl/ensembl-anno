@@ -1633,13 +1633,13 @@ def remove_rfam_overlap(parsed_tbl_data):
         structure_x_end = int(structure_x["end"])
         structure_x_score = float(structure_x["score"])
         structure_x_accession = structure_x["accession"]
-        structure_x_string = "{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
+        structure_x_string = f"{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
         for structure_y in parsed_tbl_data:
             structure_y_start = int(structure_y["start"])
             structure_y_end = int(structure_y["end"])
             structure_y_score = float(structure_y["score"])
             structure_y_accession = structure_y["accession"]
-            structure_y_string = "{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
+            structure_y_string = f"{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
             if structure_y_string in excluded_structures:
                 continue
 
@@ -3959,7 +3959,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             biotype = match.group(1)
             if biotype == "busco" or biotype == "protein":
                 transcript_line = re.sub(
-                    '; biotype "{biotype}";',
+                    f'; biotype "{biotype}";',
                     '; biotype "protein_coding";',
                     transcript_line,
                 )
@@ -3979,7 +3979,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             if single_cds_exon_transcript == 1 and validation_type == "relaxed":
                 if diamond_e_value is not None:
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -3989,7 +3989,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_single_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4002,7 +4002,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4014,7 +4014,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_single_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4027,7 +4027,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and avg_coding_probability >= min_single_exon_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4036,7 +4036,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             else:
                 if diamond_e_value is not None:
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4046,7 +4046,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_multi_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -4059,13 +4059,15 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
                 elif transcript_length >= 200:
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";', '; biotype "lncRNA";', transcript_line
+                        f'; biotype "{biotype}";',
+                        '; biotype "lncRNA";',
+                        transcript_line,
                     )
                     transcript_line = re.sub(
                         ' translation_coords "[^"]+";', "", transcript_line
