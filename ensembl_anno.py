@@ -522,8 +522,7 @@ def multiprocess_repeatmasker(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = repeatmasker_output_dir / region_fasta_file_name
+    region_fasta_file_path = repeatmasker_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
@@ -675,14 +674,12 @@ def multiprocess_eponine(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = eponine_output_dir / region_fasta_file_name
+    region_fasta_file_path = eponine_output_dir / f"{slice_file_name}.fa"
 
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.epo.gtf"
-    region_results_file_path = eponine_output_dir / region_results_file_name
+    region_results_file_path = eponine_output_dir / f"{slice_file_name}.epo.gtf"
 
     eponine_output_file_path = f"{region_fasta_file_path}.epo"
     eponine_out = open(eponine_output_file_path, "w+")
@@ -786,14 +783,12 @@ def multiprocess_cpg(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = cpg_output_dir / region_fasta_file_name
+    region_fasta_file_path = cpg_output_dir / f"{slice_file_name}.fa"
 
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.cpg.gtf"
-    region_results_file_path = cpg_output_dir / region_results_file_name
+    region_results_file_path = cpg_output_dir / f"{slice_file_name}.cpg.gtf"
 
     cpg_output_file_path = f"{region_fasta_file_path}.cpg"
     cpg_out = open(cpg_output_file_path, "w+")
@@ -938,8 +933,7 @@ def multiprocess_trnascan(
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.trna.gtf"
-    region_results_file_path = trnascan_output_dir / region_results_file_name
+    region_results_file_path = trnascan_output_dir / f"{slice_file_name}.trna.gtf"
 
     trnascan_output_file_path = f"{region_fasta_file_path}.trna"
     trnascan_ss_output_file_path = f"{trnascan_output_file_path}.ss"
@@ -1104,13 +1098,11 @@ def multiprocess_dust(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = dust_output_dir / region_fasta_file_name
+    region_fasta_file_path = dust_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.dust.gtf"
-    region_results_file_path = dust_output_dir / region_results_file_name
+    region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
 
     dust_output_file_path = f"{region_fasta_file_path}.dust"
     dust_out = open(dust_output_file_path, "w+")
@@ -1232,13 +1224,11 @@ def multiprocess_trf(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = trf_output_dir / region_fasta_file_name
+    region_fasta_file_path = trf_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.trf.gtf"
-    region_results_file_path = trf_output_dir / region_results_file_name
+    region_results_file_path = trf_output_dir / f"{slice_file_name}.trf.gtf"
 
     # TRF writes to the current dir, so switch to the output dir for it
     os.chdir(trf_output_dir)
@@ -1442,18 +1432,15 @@ def multiprocess_cmsearch(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = rfam_output_dir / region_fasta_file_name
+
+    region_fasta_file_path = rfam_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_tblout_file_name = f"{slice_file_name}.tblout"
-    region_tblout_file_path = rfam_output_dir / region_tblout_file_name
-    region_results_file_name = f"{slice_file_name}.rfam.gtf"
-    region_results_file_path = rfam_output_dir / region_results_file_name
+    region_tblout_file_path = rfam_output_dir / f"{slice_file_name}.tblout"
+    region_results_file_path = rfam_output_dir / f"{slice_file_name}.rfam.gtf"
 
-    exception_results_file_name = f"{slice_file_name}.rfam.except"
-    exception_results_file_path = rfam_output_dir / exception_results_file_name
+    exception_results_file_path = rfam_output_dir / f"{slice_file_name}.rfam.except"
 
     cmsearch_cmd = generic_cmsearch_cmd.copy()
     cmsearch_cmd.append(region_tblout_file_path)
