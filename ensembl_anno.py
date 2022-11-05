@@ -493,8 +493,13 @@ def run_repeatmasker_regions(
 
     pool.close()
     pool.join()
+
     slice_output_to_gtf(
-        repeatmasker_output_dir, ".rm.gtf", 1, "repeat_id", "repeatmask"
+        output_dir=repeatmasker_output_dir,
+        extension=".rm.gtf",
+        unique_ids=1,
+        feature_id_label="repeat_id",
+        new_id_prefix="repeatmask",
     )
 
 
@@ -647,7 +652,14 @@ def run_eponine_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
+
+    slice_output_to_gtf(
+        output_dir=eponine_output_dir,
+        extension=".epo.gtf",
+        unique_ids=1,
+        feature_id_label="feature_id",
+        new_id_prefix="eponine",
+    )
 
 
 def multiprocess_eponine(
@@ -759,7 +771,14 @@ def run_cpg_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(cpg_output_dir, ".cpg.gtf", 1, "feature_id", "cpg")
+
+    slice_output_to_gtf(
+        output_dir=cpg_output_dir,
+        extension=".cpg.gtf",
+        unique_ids=1,
+        feature_id_label="feature_id",
+        new_id_prefix="cpg",
+    )
 
 
 def multiprocess_cpg(
@@ -900,7 +919,14 @@ def run_trnascan_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(trnascan_output_dir, ".trna.gtf", 1, None, None)
+
+    slice_output_to_gtf(
+        output_dir=trnascan_output_dir,
+        extension=".trna.gtf",
+        unique_ids=1,
+        feature_id_label=None,
+        new_id_prefix=None,
+    )
 
 
 def multiprocess_trnascan(
@@ -1071,7 +1097,14 @@ def run_dust_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(dust_output_dir, ".dust.gtf", 1, "repeat_id", "dust")
+
+    slice_output_to_gtf(
+        output_dir=dust_output_dir,
+        extension=".dust.gtf",
+        unique_ids=1,
+        feature_id_label="repeat_id",
+        new_id_prefix="dust",
+    )
 
 
 def multiprocess_dust(
@@ -1196,7 +1229,14 @@ def run_trf_repeats(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(trf_output_dir, ".trf.gtf", 1, "repeat_id", "trf")
+
+    slice_output_to_gtf(
+        output_dir=trf_output_dir,
+        extension=".trf.gtf",
+        unique_ids=1,
+        feature_id_label="repeat_id",
+        new_id_prefix="trf",
+    )
 
 
 def multiprocess_trf(
@@ -1401,7 +1441,13 @@ def run_cmsearch_regions(
     pool.close()
     pool.join()
 
-    slice_output_to_gtf(rfam_output_dir, ".rfam.gtf", 1, None, None)
+    slice_output_to_gtf(
+        output_dir=rfam_output_dir,
+        extension=".rfam.gtf",
+        unique_ids=1,
+        feature_id_label=None,
+        new_id_prefix=None,
+    )
 
 
 def multiprocess_cmsearch(
@@ -1807,10 +1853,10 @@ def check_rnafold_structure(seq: str, rfam_output_dir: pathlib.Path):
 
 def slice_output_to_gtf(
     output_dir: pathlib.Path,
-    extension,
-    unique_ids,
-    feature_id_label,
-    new_id_prefix,
+    extension: str,
+    unique_ids: int,
+    feature_id_label: Union[str, None],
+    new_id_prefix: Union[str, None],
 ):
     if not extension:
         extension = ".gtf"
@@ -1835,17 +1881,17 @@ def slice_output_to_gtf(
     feature_counter = 1
 
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
-    gtf_output_file_path = output_dir / "annotation.gtf"
-    with open(gtf_output_file_path, "w+") as gtf_out:
-        for gtf_input_file_path in output_dir.glob("*{extension}"):
-            if gtf_input_file_path.stat().st_size == 0:
-                logger.info("File is empty, will skip:\n%s" % gtf_input_file_path)
+    output_gtf_file_path = output_dir / "annotation.gtf"
+    with open(output_gtf_file_path, "w+") as gtf_out:
+        for input_gtf_file_path in output_dir.glob(f"*{extension}"):
+            if input_gtf_file_path.stat().st_size == 0:
+                logger.info("File is empty, will skip:\n%s" % input_gtf_file_path)
                 continue
 
-            gtf_file_name = gtf_input_file_path.name
+            gtf_file_name = input_gtf_file_path.name
             match = re.search(r"\.rs(\d+)\.re(\d+)\.", gtf_file_name)
             start_offset = int(match.group(1))
-            with open(gtf_input_file_path, "r") as gtf_in:
+            with open(input_gtf_file_path, "r") as gtf_in:
                 for line in gtf_in:
                     values = line.split("\t")
                     if len(values) == 9 and (values[2] in feature_types):
