@@ -1061,7 +1061,10 @@ def create_trnascan_gtf(
 
 
 def run_dust_regions(
-    genome_file: Union[pathlib.Path, str], dust_path, main_output_dir, num_threads: int
+    genome_file: pathlib.Path,
+    dust_path,
+    main_output_dir: pathlib.Path,
+    num_threads: int,
 ):
     if not dust_path:
         dust_path = "dustmasker"
@@ -1111,9 +1114,9 @@ def run_dust_regions(
 
 
 def multiprocess_dust(
-    generic_dust_cmd,
+    generic_dust_cmd: List,
     slice_id: Tuple[str, int, int],
-    genome_file: Union[pathlib.Path, str],
+    genome_file: pathlib.Path,
     dust_output_dir: pathlib.Path,
 ):
     region_name = slice_id[0]
@@ -1140,7 +1143,9 @@ def multiprocess_dust(
 
     region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
 
-    dust_output_file_path = f"{region_fasta_file_path}.dust"
+    dust_output_file_path = (
+        region_fasta_file_path.parent / f"{region_fasta_file_path.name}.dust"
+    )
     dust_out = open(dust_output_file_path, "w+")
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
@@ -1153,7 +1158,11 @@ def multiprocess_dust(
     os.remove(region_fasta_file_path)
 
 
-def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name):
+def create_dust_gtf(
+    dust_output_file_path: pathlib.Path,
+    region_results_file_path: pathlib.Path,
+    region_name: str,
+):
     with open(dust_output_file_path, "r") as dust_in, open(
         region_results_file_path, "w+"
     ) as dust_out:
@@ -4362,11 +4371,11 @@ def subprocess_run_and_log(command):
 
 
 def get_sequence(
-    seq_region,
+    seq_region: str,
     start: int,
     end: int,
     strand: int,
-    fasta_file,
+    fasta_file: Union[pathlib.Path, str],
     output_dir: Union[pathlib.Path, str],
 ) -> str:
     """
