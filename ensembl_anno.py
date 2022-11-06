@@ -30,7 +30,7 @@ import signal
 import subprocess
 import tempfile
 
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
 
 # project imports
 from utils import (
@@ -505,7 +505,7 @@ def run_repeatmasker_regions(
 
 def multiprocess_repeatmasker(
     generic_repeatmasker_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     repeatmasker_output_dir: Union[pathlib.Path, str],
 ):
@@ -664,7 +664,7 @@ def run_eponine_regions(
 
 def multiprocess_eponine(
     generic_eponine_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     eponine_output_dir: Union[pathlib.Path, str],
 ):
@@ -782,7 +782,10 @@ def run_cpg_regions(
 
 
 def multiprocess_cpg(
-    cpg_path, slice_id, genome_file, cpg_output_dir: Union[pathlib.Path, str]
+    cpg_path,
+    slice_id: Tuple[str, int, int],
+    genome_file,
+    cpg_output_dir: Union[pathlib.Path, str],
 ):
     region_name = slice_id[0]
     start = slice_id[1]
@@ -931,7 +934,7 @@ def run_trnascan_regions(
 
 def multiprocess_trnascan(
     generic_trnascan_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     trnascan_filter_path,
     trnascan_output_dir: Union[pathlib.Path, str],
@@ -1109,7 +1112,7 @@ def run_dust_regions(
 
 def multiprocess_dust(
     generic_dust_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     dust_output_dir: pathlib.Path,
 ):
@@ -1241,7 +1244,7 @@ def run_trf_repeats(
 
 def multiprocess_trf(
     generic_trf_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     trf_output_dir: pathlib.Path,
     trf_output_extension,
@@ -1452,7 +1455,7 @@ def run_cmsearch_regions(
 
 def multiprocess_cmsearch(
     generic_cmsearch_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     rfam_output_dir: pathlib.Path,
     rfam_selected_models_file,
@@ -3148,18 +3151,18 @@ def run_augustus_predict(
 
 
 def create_slice_ids(
-    seq_region_lengths,
+    seq_region_lengths: Dict[str, int],
     slice_size: int = 1_000_000,
     overlap: int = 0,
     min_length: int = 0,
-) -> List[List]:
+) -> List[Tuple[str, int, int]]:
     slice_ids = []
     for region, region_length in seq_region_lengths.items():
         if region_length < min_length:
             continue
 
         if region_length <= slice_size:
-            slice_ids.append([region, 1, region_length])
+            slice_ids.append((region, 1, region_length))
             continue
 
         start = 1
@@ -3173,7 +3176,7 @@ def create_slice_ids(
             if end > region_length:
                 end = region_length
             if (end - start + 1) >= min_length:
-                slice_ids.append([region, start, end])
+                slice_ids.append((region, start, end))
             start = end + 1
 
     return slice_ids
@@ -3244,7 +3247,7 @@ def multiprocess_augustus_hints(
 
 def multiprocess_augustus_id(
     cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     hints_file,
     output_dir: pathlib.Path,
@@ -3252,6 +3255,7 @@ def multiprocess_augustus_id(
     region = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
+
     seq = get_sequence(
         seq_region=region,
         start=start,
