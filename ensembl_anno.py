@@ -1144,7 +1144,7 @@ def multiprocess_dust(
     dust_out = open(dust_output_file_path, "w+")
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
-    logger.info("dust_cmd" % list_to_string(dust_cmd))
+    logger.info("dust_cmd: %s" % list_to_string(dust_cmd))
     subprocess.run(dust_cmd, stdout=dust_out)
     dust_out.close()
 

@@ -169,8 +169,8 @@ def get_seq_region_lengths(
             else:
                 current_seq += line.rstrip()
 
-        if len(current_seq) > min_seq_length:
-            seq_regions[current_header] = len(current_seq)
+    if len(current_seq) > min_seq_length:
+        seq_regions[current_header] = len(current_seq)
 
     return seq_regions
 
