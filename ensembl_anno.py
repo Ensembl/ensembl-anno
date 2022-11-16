@@ -1850,6 +1850,7 @@ def check_rnafold_structure(seq: str, rfam_output_dir: pathlib.Path):
         rna_in_file_path = rna_temp_in.name
 
     rnafold_cmd = ["RNAfold", "--infile", rna_in_file_path]
+    logger.info("rnafold_cmd: %s" % list_to_string(rnafold_cmd))
     rnafold_output = subprocess.Popen(rnafold_cmd, stdout=subprocess.PIPE)
     for line in io.TextIOWrapper(rnafold_output.stdout, encoding="utf-8"):
         match = re.search(r"([().]+)\s\(\s*(-*\d+.\d+)\)\n$", line)
@@ -2041,9 +2042,17 @@ def run_red(
         )
 
     logger.info("Running Red, this may take some time depending on the genome size")
-    subprocess.run(
-        [red_path, "-gnm", red_genome_dir, "-msk", red_mask_dir, "-rpt", red_repeat_dir]
-    )
+    red_command = [
+        red_path,
+        "-gnm",
+        red_genome_dir,
+        "-msk",
+        red_mask_dir,
+        "-rpt",
+        red_repeat_dir,
+    ]
+    logger.info("red_command: %s" % list_to_string(red_command))
+    subprocess.run(red_command)
 
     logger.info("Completed running Red")
 
@@ -2590,23 +2599,23 @@ def run_star_align(
         seq_region_lengths = get_seq_region_lengths(genome_file, 0)
         genome_size = sum(seq_region_lengths.values())
         index_bases = min(14, math.floor((math.log(genome_size, 2) / 2) - 1))
-        subprocess.run(
-            [
-                star_path,
-                "--runThreadN",
-                str(num_threads),
-                "--runMode",
-                "genomeGenerate",
-                "--outFileNamePrefix",
-                f"{star_dir}/",
-                "--genomeDir",
-                star_dir,
-                "--genomeSAindexNbases",
-                str(index_bases),
-                "--genomeFastaFiles",
-                genome_file,
-            ]
-        )
+        star_command = [
+            star_path,
+            "--runThreadN",
+            str(num_threads),
+            "--runMode",
+            "genomeGenerate",
+            "--outFileNamePrefix",
+            f"{star_dir}/",
+            "--genomeDir",
+            star_dir,
+            "--genomeSAindexNbases",
+            str(index_bases),
+            "--genomeFastaFiles",
+            genome_file,
+        ]
+        logger.info("star_command: %s" % list_to_string(star_command))
+        subprocess.run(star_command)
     if not star_index_file.is_file():
         raise IOError(f"STAR index file failed to be generated at:\n{star_index_file}")
 
@@ -2675,29 +2684,29 @@ def run_star_align(
         ]
 
         if check_compression:
-            star_command.append("--readFilesCommand")
-            star_command.append("gunzip")
-            star_command.append("-c")
+            star_command.extend(["--readFilesCommand", "gunzip", "-c"])
 
+        logger.info("star_command: %s" % list_to_string(star_command))
         subprocess.run(star_command)
+
         (star_dir / "Aligned.out.sam").rename(sam_file_path)
         junctions_file_path = star_dir / f"{representative_fastq_file_name}.sj.tab"
         (star_dir / "SJ.out.tab").rename(junctions_file_path)
 
         logger.info("Converting samfile into sorted bam file:\n%s" % bam_sort_file_path)
-        subprocess.run(
-            [
-                "samtools",
-                "sort",
-                "-@",
-                str(num_threads),
-                "-T",
-                sam_temp_file_path,
-                "-o",
-                bam_sort_file_path,
-                sam_file_path,
-            ]
-        )
+        samtools_command = [
+            "samtools",
+            "sort",
+            "-@",
+            str(num_threads),
+            "-T",
+            sam_temp_file_path,
+            "-o",
+            bam_sort_file_path,
+            sam_file_path,
+        ]
+        logger.info("samtools_command: %s" % list_to_string(samtools_command))
+        subprocess.run(samtools_command)
 
         os.remove(sam_file_path)
 
@@ -2713,6 +2722,7 @@ def run_subsample_script(subsample_script_path, fastq_file, fastq_file_pair):
     ]
     if fastq_file_pair:
         subsample_script_cmd.extend(["--fastq_file_pair", fastq_file_pair])
+    logger.info("subsample_script_cmd: %s" % list_to_string(subsample_script_cmd))
     subprocess.run(subsample_script_cmd)
 
 
@@ -2822,16 +2832,16 @@ def run_minimap2_align(
 
     if not minimap2_index_file.exists():
         logger.info("Did not find an index file for minimap2. Will create now")
-        subprocess.run(
-            [
-                minimap2_path,
-                "-t",
-                str(num_threads),
-                "-d",
-                minimap2_index_file,
-                genome_file,
-            ]
-        )
+        minimap2_command = [
+            minimap2_path,
+            "-t",
+            str(num_threads),
+            "-d",
+            minimap2_index_file,
+            genome_file,
+        ]
+        logger.info("minimap2_command: %s" % list_to_string(minimap2_command))
+        subprocess.run(minimap2_command)
 
     if not minimap2_index_file.exists():
         raise FileNotFoundError(
@@ -2845,27 +2855,30 @@ def run_minimap2_align(
         bed_file = minimap2_output_dir / f"{fastq_file_name}.bed"
         bed_file_out = open(bed_file, "w+")
         logger.info("Processing %s" % fastq_file)
-        subprocess.run(
-            [
-                minimap2_path,
-                "-G",
-                str(max_intron_length),
-                "-t",
-                str(num_threads),
-                "--cs",
-                "--secondary=no",
-                "-ax",
-                "splice",
-                "-u",
-                "b",
-                minimap2_index_file,
-                fastq_file_path,
-                "-o",
-                sam_file,
-            ]
-        )
+        minimap2_command = [
+            minimap2_path,
+            "-G",
+            str(max_intron_length),
+            "-t",
+            str(num_threads),
+            "--cs",
+            "--secondary=no",
+            "-ax",
+            "splice",
+            "-u",
+            "b",
+            minimap2_index_file,
+            fastq_file_path,
+            "-o",
+            sam_file,
+        ]
+        logger.info("minimap2_command: %s" % list_to_string(minimap2_command))
+        subprocess.run(minimap2_command)
+
         logger.info("Creating bed file from SAM")
-        subprocess.run([paftools_path, "splice2bed", sam_file], stdout=bed_file_out)
+        paftools_command = [paftools_path, "splice2bed", sam_file]
+        logger.info("paftools_command: %s" % list_to_string(paftools_command))
+        subprocess.run(paftools_command, stdout=bed_file_out)
         bed_file_out.close()
 
     bed_to_gtf(minimap2_output_dir)
@@ -3256,7 +3269,7 @@ def multiprocess_augustus_hints(
 
 
 def multiprocess_augustus_id(
-    cmd,
+    generic_augustus_cmd,
     slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     hints_file,
@@ -3288,21 +3301,27 @@ def multiprocess_augustus_id(
 
     aug_out = open(region_augustus_file_path, "w+")
 
-    augustus_forward = cmd.copy()
-    augustus_forward.extend(
+    augustus_forward_command = generic_augustus_cmd.copy()
+    augustus_forward_command.extend(
         [f"--hintsfile={region_hints_file}", "--strand=forward", region_fasta_file_path]
     )
-    subprocess.run(augustus_forward, stdout=aug_out)
+    logger.info(
+        "augustus_forward_command: %s" % list_to_string(augustus_forward_command)
+    )
+    subprocess.run(augustus_forward_command, stdout=aug_out)
 
-    augustus_backward = cmd.copy()
-    augustus_forward.extend(
+    augustus_backward_command = generic_augustus_cmd.copy()
+    augustus_backward_command.extend(
         [
             f"--hintsfile={region_hints_file}",
             "--strand=backward",
             region_fasta_file_path,
         ]
     )
-    subprocess.run(augustus_backward, stdout=aug_out)
+    logger.info(
+        "augustus_backward_command: %s" % list_to_string(augustus_backward_command)
+    )
+    subprocess.run(augustus_backward_command, stdout=aug_out)
 
     aug_out.close()
 
@@ -3390,19 +3409,19 @@ def run_stringtie_assemble(
                 "Running Stringtie on: %s, writing output to:\n%s"
                 % (sorted_bam_file_name, transcript_file_path)
             )
-            subprocess.run(
-                [
-                    stringtie_path,
-                    sorted_bam_file,
-                    "-o",
-                    transcript_file_path,
-                    "-p",
-                    str(num_threads),
-                    "-t",
-                    "-a",
-                    "15",
-                ]
-            )
+            stringtie_command = [
+                stringtie_path,
+                sorted_bam_file,
+                "-o",
+                transcript_file_path,
+                "-p",
+                str(num_threads),
+                "-t",
+                "-a",
+                "15",
+            ]
+            logger.info("stringtie_command: %s" % list_to_string(stringtie_command))
+            subprocess.run(stringtie_command)
 
     # Now need to merge
     logger.info("Creating Stringtie merge input file: %s" % stringtie_merge_input_file)
@@ -3417,15 +3436,15 @@ def run_stringtie_assemble(
                 )
 
     logger.info("Merging Stringtie results to:\n%s" % stringtie_merge_output_file)
-    subprocess.run(
-        [
-            stringtie_path,
-            "--merge",
-            "-o",
-            stringtie_merge_output_file,
-            stringtie_merge_input_file,
-        ]
-    )
+    stringtie_command = [
+        stringtie_path,
+        "--merge",
+        "-o",
+        stringtie_merge_output_file,
+        stringtie_merge_input_file,
+    ]
+    logger.info("stringtie_command: %s" % list_to_string(stringtie_command))
+    subprocess.run(stringtie_command)
 
 
 def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.Path):
@@ -3493,6 +3512,7 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.
 
             return_value = None
             try:
+                logger.info("scallop_cmd: %s" % list_to_string(scallop_cmd))
                 return_value = subprocess.check_output(scallop_cmd)
             except subprocess.CalledProcessError as ex:
                 logger.error(
@@ -3516,15 +3536,15 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.
                 )
 
     logger.info("Merging Scallop results to:\n%s" % stringtie_merge_output_file)
-    subprocess.run(
-        [
-            stringtie_path,
-            "--merge",
-            "-o",
-            stringtie_merge_output_file,
-            stringtie_merge_input_file,
-        ]
-    )
+    stringtie_command = [
+        stringtie_path,
+        "--merge",
+        "-o",
+        stringtie_merge_output_file,
+        stringtie_merge_input_file,
+    ]
+    logger.info("stringtie_command: %s" % list_to_string(stringtie_command))
+    subprocess.run(stringtie_command)
 
 
 def run_finalise_geneset(
@@ -4405,6 +4425,7 @@ def get_sequence(
         "-bed",
         bed_temp_file.name,
     ]
+    logger.info("bedtools_command: %s" % list_to_string(bedtools_command))
     bedtools_output = subprocess.Popen(bedtools_command, stdout=subprocess.PIPE)
     for idx, line in enumerate(
         io.TextIOWrapper(bedtools_output.stdout, encoding="utf-8")
