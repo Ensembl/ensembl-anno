@@ -2612,16 +2612,17 @@ def run_star_align(
 
     logger.info("Running STAR on the files in the fastq dir")
     for fastq_files in fastq_paired_paths:
+        # STAR input string of comma separated fastq_files paths
+        fastq_files_string = list_to_string(fastq_files, separator=",")
+
         # NOTE
-        # There might be a bug here. The paired FASTQ files elements of the output list
-        # of check_for_fastq_subsamples were strings containing paths separated by comma,
-        # but the following code originally was handled these elements as if they were
-        # a single path. The next command was added to select the first file from the pair,
-        # but maybe there is something more to be done here.
-        fastq_file = fastq_files[0]
-        logger.info("fastq_file: %s" % fastq_file)
-        fastq_file_name = fastq_file.name
-        check_compression = re.search(r".gz$", fastq_file_name)
+        # The name of the last file in the fastq_files list is used to generate
+        # derivative files, in order to mirror the original program implementation.
+        # Maybe a better base name to denote all files in fastq_files could be used here.
+        representative_fastq_file = fastq_files[-1]
+        logger.info("representative_fastq_file: %s" % representative_fastq_file)
+        representative_fastq_file_name = representative_fastq_file.name
+        check_compression = re.search(r".gz$", representative_fastq_file_name)
 
         # If there's a tmp dir already, the most likely cause is that STAR failed on the previous input file(s)
         # In this case STAR would effectively break for all the rest of the files, as it won't run if the tmp
@@ -2634,7 +2635,7 @@ def run_star_align(
             )
             shutil.rmtree(star_tmp_dir)
 
-        sam_file_path = star_dir / f"{fastq_file_name}.sam"
+        sam_file_path = star_dir / f"{representative_fastq_file_name}.sam"
         sam_temp_file_path = star_dir / f"{sam_file_path.name}.tmp"
         bam_sort_file_path = sam_file_path.with_suffix(".bam")
 
@@ -2644,8 +2645,8 @@ def run_star_align(
             )
             continue
 
-        logger.info("Processing %s" % fastq_file)
-        # star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
+        logger.info("Processing %s" % fastq_files_string)
+        # star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_files_string,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
 
         star_command = [
             star_path,
@@ -2662,7 +2663,7 @@ def run_star_align(
             "--genomeDir",
             star_dir,
             "--readFilesIn",
-            fastq_file,
+            fastq_files_string,
             "--outFileNamePrefix",
             f"{star_dir}/",
             "--outTmpDir",
@@ -2680,7 +2681,7 @@ def run_star_align(
 
         subprocess.run(star_command)
         (star_dir / "Aligned.out.sam").rename(sam_file_path)
-        junctions_file_path = star_dir / f"{fastq_file_name}.sj.tab"
+        junctions_file_path = star_dir / f"{representative_fastq_file_name}.sj.tab"
         (star_dir / "SJ.out.tab").rename(junctions_file_path)
 
         logger.info("Converting samfile into sorted bam file:\n%s" % bam_sort_file_path)
