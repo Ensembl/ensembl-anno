@@ -3095,7 +3095,7 @@ def augustus_output_to_gtf(
 def run_augustus_predict(
     augustus_path,
     main_output_dir: pathlib.Path,
-    masked_genome_file,
+    masked_genome_file: pathlib.Path,
     num_threads: int,
 ):
     min_seq_length = 1000
@@ -3271,7 +3271,7 @@ def multiprocess_augustus_hints(
 def multiprocess_augustus_id(
     generic_augustus_cmd,
     slice_id: Tuple[str, int, int],
-    genome_file: Union[pathlib.Path, str],
+    genome_file: pathlib.Path,
     hints_file,
     output_dir: pathlib.Path,
 ):
@@ -4793,6 +4793,8 @@ def main():
     genome_file = pathlib.Path(genome_file)
     if not genome_file.exists():
         raise FileNotFoundError("File does not exist: %s" % genome_file)
+
+    masked_genome_file = pathlib.Path(masked_genome_file)
 
     if not work_dir:
         work_dir = pathlib.Path.cwd()
