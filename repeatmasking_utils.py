@@ -13,26 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
-import errno
-import gc
-import glob
-import io
-import logging
-import math
 import multiprocessing
 import os
 import pathlib
-import random
 import re
-import shutil
-import signal
 import subprocess
-import sys
-import tempfile
 
 from pathlib import Path
 
+from typing import Union
 
 def run_repeatmasker_regions(
     genome_file: Union[pathlib.Path, str],
@@ -65,7 +54,7 @@ def run_repeatmasker_regions(
         library = "homo"
 
     check_exe(repeatmasker_path)
-    repeatmasker_output_dir = Union[pathlib.Path, create_dir(main_output_dir, "repeatmasker_output")]
+    repeatmasker_output_dir = Path(create_dir(main_output_dir, "repeatmasker_output"))
     os.chdir(repeatmasker_output_dir)
 
     output_file = repeatmasker_output_dir / "annotation.gtf"
@@ -224,7 +213,12 @@ def create_repeatmasker_gtf(
                 repeat_count += 1
 
 
-def run_dust_regions(genome_file:Union[pathlib.Path, str], dust_path:Union[pathlib.Path, str], main_output_dir, num_threads):
+def run_dust_regions(
+    genome_file: Union[pathlib.Path, str],
+    dust_path: Union[pathlib.Path, str],
+    main_output_dir,
+    num_threads,
+):
     """
     Run Dust on genomic slices
 
@@ -242,17 +236,15 @@ def run_dust_regions(genome_file:Union[pathlib.Path, str], dust_path:Union[pathl
         dust_path = "dustmasker"
 
     check_exe(dust_path)
-    dust_output_dir = Union[pathlib.Path, create_dir(main_output_dir, "dust_output")]
+    dust_output_dir = Path(create_dir(main_output_dir, "dust_output"))
 
     output_file = dust_output_dir / "annotation.gtf"
-    logger.info(output_file)
-    if Path(output_file).is_file():
+    logger.info(f"dust output {output_file}")
+    if output_file.is_file():
         transcript_count = check_gtf_content(output_file, "repeat")
         if transcript_count > 0:
             logger.info("Dust gtf file exists")
             return 0
-    else:
-        logger.info("No gtf file, go on with the analysis")
 
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
@@ -292,24 +284,16 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find low complexity regions with Dust: "
-        + region_name
-        + ":"
-        + str(start)
-        + ":"
-        + str(end)
+        f"Processing slice to find low complexity regions with Dust: {region_name}:{start}:{end}"
     )
     seq = get_sequence(region_name, start, end, 1, genome_file, dust_output_dir)
 
-    slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
-    region_fasta_file_name = slice_file_name + ".fa"
-    region_fasta_file_path = os.path.join(dust_output_dir, region_fasta_file_name)
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    slice_file_name = f"{region_name}.rs{start}.re{end}"
+    region_fasta_file_path = dust_output_dir / f"{slice_file_name}.fa"
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = slice_file_name + ".dust.gtf"
-    region_results_file_path = os.path.join(dust_output_dir, region_results_file_name)
+    region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
 
     dust_output_file_path = region_fasta_file_path + ".dust"
     dust_out = open(dust_output_file_path, "w+")
@@ -320,8 +304,8 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
     dust_out.close()
 
     create_dust_gtf(dust_output_file_path, region_results_file_path, region_name)
-    os.remove(dust_output_file_path)
-    os.remove(region_fasta_file_path)
+    dust_output_file_path.unlink()
+    region_fasta_file_path.unlink()
 
 
 def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name):
@@ -334,31 +318,18 @@ def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name
         region_results_file_path : pathlib.Path
         region_name :str
     """
-    dust_in = open(dust_output_file_path, "r")
-    dust_out = open(region_results_file_path, "w+")
-    line = dust_in.readline()
-    repeat_count = 1
-    while line:
-        result_match = re.search(r"(\d+)\ - (\d+)", line)
-        if result_match:
-            start = int(result_match.group(1)) + 1
-            end = int(result_match.group(2)) + 1
-            gtf_line = (
-                region_name
-                + "\tDust\trepeat\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t+\t.\t"
-                + 'repeat_id "'
-                + str(repeat_count)
-                + '";\n'
-            )
-            dust_out.write(gtf_line)
-            repeat_count += 1
-        line = dust_in.readline()
-    dust_in.close()
-    dust_out.close()
+    with open(dust_output_file_path, "r") as dust_in, open(
+        region_results_file_path, "w+"
+    ) as dust_out:
+        repeat_count = 1
+        for line in dust_in:
+            result_match = re.search(r"(\d+)\ - (\d+)", line)
+            if result_match:
+                start = int(result_match.group(1)) + 1
+                end = int(result_match.group(2)) + 1
+                gtf_line = f'{region_name}\tDust\trepeat\t{start}\t{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'
+                dust_out.write(gtf_line)
+                repeat_count += 1
 
 
 def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads):
