@@ -33,10 +33,31 @@ import tempfile
 
 from pathlib import Path
 
-def run_repeatmasker_regions(
-    genome_file, repeatmasker_path, library, species, main_output_dir, num_threads
-):
 
+def run_repeatmasker_regions(
+    genome_file: Union[pathlib.Path, str],
+    repeatmasker_path: str,
+    library: str,
+    species: str,
+    main_output_dir: Union[pathlib.Path, str],
+    num_threads: int,
+):
+    """
+    Run Repeatmasker on genomic slices
+
+    engine = crossmatch
+    Args:
+        genome_file : pathlib.Path
+        repeatmasker_path : str
+        library : str
+        species :str
+        main_output_dir : pathlib.Path
+        num_threads: int
+
+    Return:
+        gtfs with the repeatmasked sequence for each genome slice
+
+    """
     if not repeatmasker_path:
         repeatmasker_path = "RepeatMasker"
 
@@ -44,18 +65,15 @@ def run_repeatmasker_regions(
         library = "homo"
 
     check_exe(repeatmasker_path)
-    repeatmasker_output_dir = create_dir(main_output_dir, "repeatmasker_output")
+    repeatmasker_output_dir = Union[pathlib.Path, create_dir(main_output_dir, "repeatmasker_output")]
     os.chdir(repeatmasker_output_dir)
 
-    logger.info("Skip analysis if the gtf file already exists")
-    output_file = os.path.join(repeatmasker_output_dir, "annotation.gtf")
-    if os.path.exists(output_file):
+    output_file = repeatmasker_output_dir / "annotation.gtf"
+    if output_file.exists():
         transcript_count = check_gtf_content(output_file, "repeat")
         if transcript_count > 0:
             logger.info("Repeatmasker gtf file exists")
             return
-    else:
-        logger.info("No gtf file, go on with the analysis")
 
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
@@ -64,27 +82,16 @@ def run_repeatmasker_regions(
     if not library:
         if not species:
             species = "homo"
-            generic_repeatmasker_cmd = [
-                repeatmasker_path,
-                "-nolow",
-                "-species",
-                species,
-                "-engine",
-                "crossmatch",
-                "-dir",
-                repeatmasker_output_dir,
-            ]
-        else:
-            generic_repeatmasker_cmd = [
-                repeatmasker_path,
-                "-nolow",
-                "-species",
-                species,
-                "-engine",
-                "crossmatch",
-                "-dir",
-                repeatmasker_output_dir,
-            ]
+        generic_repeatmasker_cmd = [
+            repeatmasker_path,
+            "-nolow",
+            "-species",
+            species,
+            "-engine",
+            "crossmatch",
+            "-dir",
+            repeatmasker_output_dir,
+        ]
 
     else:
         generic_repeatmasker_cmd = [
@@ -99,7 +106,7 @@ def run_repeatmasker_regions(
         ]
 
     logger.info("Running RepeatMasker")
-    pool = multiprocessing.Pool(int(num_threads))
+    pool = multiprocessing.Pool(num_threads)
     tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
@@ -114,44 +121,42 @@ def run_repeatmasker_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(
-        repeatmasker_output_dir, ".rm.gtf", 1, "repeat_id", "repeatmask"
-    )
+    slice_output_to_gtf(repeatmasker_output_dir, ".rm.gtf", 1, "repeat_id", "repeatmask")
 
 
 def multiprocess_repeatmasker(
     generic_repeatmasker_cmd, slice_id, genome_file, repeatmasker_output_dir
 ):
+    """
+    Run Repeatmasker on multiprocess on genomic slices
+
+    engine = crossmatch
+    Args:
+        generic_repeatmasker_cmd: list
+        slice_id: str
+        genome_file : pathlib.Path
+        repeatmasker_output_dir : pathlib.Path
+    """
 
     region_name = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
-
     logger.info(
-        "Processing slice to find repeats with RepeatMasker: "
-        + region_name
-        + ":"
-        + str(start)
-        + ":"
-        + str(end)
+        "Processing slice to find repeats with RepeatMasker: {region_name}:{start}:{end}"
     )
     seq = get_sequence(region_name, start, end, 1, genome_file, repeatmasker_output_dir)
 
-    slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
-    region_fasta_file_name = slice_file_name + ".fa"
-    region_fasta_file_path = os.path.join(
-        repeatmasker_output_dir, region_fasta_file_name
-    )
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+    slice_file_name = f"{region_name}.rs{start}.re{end}"
+    region_fasta_file_path = repeatmasker_output_dir / f"{slice_file_name}.fa"
+    with open(region_fasta_file_path, "w+") as region_fasta_out:
+        region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_path = region_fasta_file_path + ".rm.gtf"
-    repeatmasker_output_file_path = region_fasta_file_path + ".out"
-    repeatmasker_masked_file_path = region_fasta_file_path + ".masked"
-    repeatmasker_tbl_file_path = region_fasta_file_path + ".tbl"
-    repeatmasker_log_file_path = region_fasta_file_path + ".log"
-    repeatmasker_cat_file_path = region_fasta_file_path + ".cat"
+    region_results_file_path = f"{region_fasta_file_path}.rm.gtf"
+    repeatmasker_output_file_path = f"{region_fasta_file_path}.out"
+    repeatmasker_masked_file_path = f"{region_fasta_file_path}.masked"
+    repeatmasker_tbl_file_path = f"{region_fasta_file_path}.tbl"
+    repeatmasker_log_file_path = f"{region_fasta_file_path}.log"
+    repeatmasker_cat_file_path = f"{region_fasta_file_path}.cat"
 
     repeatmasker_cmd = generic_repeatmasker_cmd.copy()
     repeatmasker_cmd.append(region_fasta_file_path)
@@ -162,90 +167,84 @@ def multiprocess_repeatmasker(
         repeatmasker_output_file_path, region_results_file_path, region_name
     )
 
-    os.remove(region_fasta_file_path)
-    if os.path.exists(region_results_file_path):
-        os.remove(region_results_file_path)
-    if os.path.exists(repeatmasker_masked_file_path):
-        os.remove(repeatmasker_masked_file_path)
-    if os.path.exists(repeatmasker_tbl_file_path):
-        os.remove(repeatmasker_tbl_file_path)
-    if os.path.exists(repeatmasker_log_file_path):
-        os.remove(repeatmasker_log_file_path)
-    if os.path.exists(repeatmasker_cat_file_path):
-        os.remove(repeatmasker_cat_file_path)
+    region_fasta_file_path.unlink()
+    if region_results_file_path.exists():
+        region_results_file_path.unlink()
+    if repeatmasker_masked_file_path.exists():
+        repeatmasker_masked_file_path.unlink()
+    if repeatmasker_tbl_file_path.exists():
+        repeatmasker_tbl_file_path.unlink()
+    if repeatmasker_log_file_path.exists():
+        repeatmasker_log_file_path.unlink()
+    if repeatmasker_cat_file_path.exists():
+        repeatmasker_cat_file_path.unlink()
 
 
 def create_repeatmasker_gtf(
     repeatmasker_output_file_path, region_results_file_path, region_name
 ):
+    """
+    Read the fasta file and save the content in gtf format
 
-    repeatmasker_in = open(repeatmasker_output_file_path, "r")
-    repeatmasker_out = open(region_results_file_path, "w+")
-    line = repeatmasker_in.readline()
-    repeat_count = 1
-    while line:
-        result_match = re.search(r"^\s*\d+\s+", line)
-        if result_match:
-            results = line.split()
-            if results[-1] == "*":
-                results.pop()
-            if not len(results) == 15:
-                continue
+    All the genomic slices are collected in a single gtf output
+    Args:
+        repeatmasker_output_dir : pathlib.Path
+        region_results_file_path : pathlib.Path
+        region_name :str
+    """
+    with open(repeatmasker_output_file_path, "r") as repeatmasker_in, open(
+        region_results_file_path, "w+"
+    ) as repeatmasker_out:
+        repeat_count = 1
+        for line in repeatmasker_in:
+            result_match = re.search(r"^\s*\d+\s+", line)
+            if result_match:
+                results = line.split()
+                if results[-1] == "*":
+                    results.pop()
+                if not len(results) == 15:
+                    continue
 
-            score = results[0]
-            start = results[5]
-            end = results[6]
-            strand = results[8]
-            repeat_name = results[9]
-            repeat_class = results[10]
-            if strand == "+":
-                repeat_start = results[11]
-                repeat_end = results[12]
-            else:
-                repeat_start = results[13]
-                repeat_end = results[12]
-                strand = "-"
+                score = results[0]
+                start = results[5]
+                end = results[6]
+                strand = results[8]
+                repeat_name = results[9]
+                repeat_class = results[10]
+                if strand == "+":
+                    repeat_start = results[11]
+                    repeat_end = results[12]
+                else:
+                    repeat_start = results[13]
+                    repeat_end = results[12]
+                    strand = "-"
 
-            gtf_line = (
-                region_name
-                + "\tRepeatMasker\trepeat\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + strand
-                + "\t.\t"
-                + 'repeat_id "'
-                + str(repeat_count)
-                + '"; repeat_name "'
-                + repeat_name
-                + '"; repeat_class "'
-                + repeat_class
-                + '"; repeat_start "'
-                + str(repeat_start)
-                + '"; repeat_end "'
-                + str(repeat_end)
-                + '"; score "'
-                + str(score)
-                + '";\n'
-            )
-            repeatmasker_out.write(gtf_line)
-            repeat_count += 1
-        line = repeatmasker_in.readline()
-    repeatmasker_in.close()
-    repeatmasker_out.close()
+                gtf_line = f'{region_name}\tRepeatMasker\trepeat\t{start}\t{end}\t.\t{strand}\t.\trepeat_id{repeat_count}; repeat_name "{repeat_name}"; repeat_class "{repeat_class}"; repeat_start "{repeat_start}"; repeat_end "{repeat_end}"; score "{score}";\n'
+                repeatmasker_out.write(gtf_line)
+                repeat_count += 1
 
 
-def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads):
+def run_dust_regions(genome_file:Union[pathlib.Path, str], dust_path:Union[pathlib.Path, str], main_output_dir, num_threads):
+    """
+    Run Dust on genomic slices
 
+    Args:
+        genome_file : pathlib.Path
+        dust_path : str
+        main_output_dir : pathlib.Path
+        num_threads: int
+
+    Return:
+        gtfs with the masked sequence for each genome slice
+
+    """
     if not dust_path:
         dust_path = "dustmasker"
 
     check_exe(dust_path)
-    dust_output_dir = create_dir(main_output_dir, "dust_output")
+    dust_output_dir = Union[pathlib.Path, create_dir(main_output_dir, "dust_output")]
 
-    logger.info("Skip analysis if the gtf file already exists")
-    output_file = os.path.join(dust_output_dir, "annotation.gtf")
+    output_file = dust_output_dir / "annotation.gtf"
     logger.info(output_file)
     if Path(output_file).is_file():
         transcript_count = check_gtf_content(output_file, "repeat")
@@ -280,7 +279,14 @@ def run_dust_regions(genome_file, dust_path, main_output_dir, num_threads):
 
 
 def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
-
+    """
+    Run Dust on multiprocess on genomic slices
+    Args:
+        generic_dust_cmd:list
+        slice_id:str
+        genome_file : pathlib.Path
+        dust_output_dir : pathlib.Path
+    """
     region_name = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
@@ -319,7 +325,15 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
 
 
 def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name):
+    """
+    Read the fasta file and save the content in gtf format
 
+    All the genomic slices are collected in a single gtf output
+    Args:
+        dust_output_file_path : pathlib.Path
+        region_results_file_path : pathlib.Path
+        region_name :str
+    """
     dust_in = open(dust_output_file_path, "r")
     dust_out = open(region_results_file_path, "w+")
     line = dust_in.readline()
@@ -429,7 +443,11 @@ def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads):
 
 
 def multiprocess_trf(
-    generic_trf_cmd, slice_id, genome_file, trf_output_dir, trf_output_extension
+    generic_trf_cmd,
+    slice_id,
+    genome_file,
+    trf_output_dir,
+    trf_output_extension,
 ):
 
     region_name = slice_id[0]
@@ -510,6 +528,8 @@ def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
         line = trf_in.readline()
     trf_in.close()
     trf_out.close()
+
+
 def run_red(red_path, main_output_dir, genome_file):
 
     if not red_path:
@@ -560,7 +580,15 @@ def run_red(red_path, main_output_dir, genome_file):
 
     logger.info("Running Red, this may take some time depending on the genome size")
     subprocess.run(
-        [red_path, "-gnm", red_genome_dir, "-msk", red_mask_dir, "-rpt", red_repeat_dir]
+        [
+            red_path,
+            "-gnm",
+            red_genome_dir,
+            "-msk",
+            red_mask_dir,
+            "-rpt",
+            red_repeat_dir,
+        ]
     )
 
     logger.info("Completed running Red")
@@ -599,4 +627,3 @@ def create_red_gtf(repeat_coords_file, gtf_output_file_path):
         line = red_in.readline()
     red_in.close()
     red_out.close()
-
