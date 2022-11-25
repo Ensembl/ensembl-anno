@@ -32,7 +32,41 @@ import sys
 import errno
 import logging
 
-from typing import List, Union
+from typing import List, Union, Tuple
+
+from utils import (
+    add_log_file_handler,
+    check_exe,
+    check_file,
+    check_gtf_content,
+    create_dir,
+    get_seq_region_lengths,
+    logger,
+    prlimit_command,
+    load_results_to_ensembl_db,
+    generic_load_records_to_ensembl_db,
+    multiprocess_load_records_to_ensembl_db,
+    batch_gtf_records,
+    run_find_orfs,
+    find_orf_phased_region,
+    slice_output_to_gtf,
+    convert_gff_to_gtf,
+    set_attributes,
+    create_slice_ids,
+    update_gtf_genes,
+    read_gtf_genes,
+    fasta_to_dict,
+    splice_junction_to_gff,
+    split_genome,
+    multiprocess_generic,
+    reverse_complement,
+    get_seq_region_names,
+    slice_genome,
+    subprocess_run_and_log,
+    get_sequence,
+    seq_region_names,
+#    coallate_results,
+)
 
 def run_eponine_regions(
     genome_file: Union[pathlib.Path, str],
@@ -117,14 +151,12 @@ def multiprocess_eponine(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = eponine_output_dir / region_fasta_file_name
+    region_fasta_file_path = eponine_output_dir / f"{slice_file_name}.fa"
 
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.epo.gtf"
-    region_results_file_path = eponine_output_dir / region_results_file_name
+    region_results_file_path = eponine_output_dir / f"{slice_file_name}.epo.gtf"
 
     eponine_output_file_path = f"{region_fasta_file_path}.epo"
     eponine_out = open(eponine_output_file_path, "w+")
@@ -132,7 +164,7 @@ def multiprocess_eponine(
     eponine_cmd = generic_eponine_cmd.copy()
     eponine_cmd.append(region_fasta_file_path)
 
-    logger.info("eponine_cmd: %s" % " ".join(eponine_cmd))
+    logger.info("eponine_cmd: %s" % (eponine_cmd))
     subprocess.run(eponine_cmd, stdout=eponine_out)
     eponine_out.close()
 
@@ -208,7 +240,10 @@ def run_cpg_regions(
 
 
 def multiprocess_cpg(
-    cpg_path, slice_id, genome_file, cpg_output_dir: Union[pathlib.Path, str]
+    cpg_path,
+    slice_id:  Tuple[str, int, int],
+    genome_file,
+    cpg_output_dir: Union[pathlib.Path, str]
 ):
     region_name = slice_id[0]
     start = slice_id[1]
@@ -228,20 +263,18 @@ def multiprocess_cpg(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = cpg_output_dir / region_fasta_file_name
+    region_fasta_file_path = cpg_output_dir / f"{slice_file_name}.fa"
 
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.cpg.gtf"
-    region_results_file_path = cpg_output_dir / region_results_file_name
+    region_results_file_path = cpg_output_dir / f"{slice_file_name}.cpg.gtf"
 
     cpg_output_file_path = f"{region_fasta_file_path}.cpg"
     cpg_out = open(cpg_output_file_path, "w+")
 
     cpg_cmd = [cpg_path, region_fasta_file_path]
-    logger.info("cpg_cmd: %s" % " ".join(cpg_cmd))
+    logger.info("cpg_cmd: %s" % (cpg_cmd))
     subprocess.run(cpg_cmd, stdout=cpg_out)
     cpg_out.close()
 

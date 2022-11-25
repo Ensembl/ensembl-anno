@@ -32,8 +32,42 @@ import sys
 import errno
 import logging
 
-from typing import List, Union
+from typing import List, Union, Tuple
 
+from utils import (
+    add_log_file_handler,
+    check_exe,
+    check_file,
+    check_gtf_content,
+    create_dir,
+    get_seq_region_lengths,
+    logger,
+    prlimit_command,
+    load_results_to_ensembl_db,
+    generic_load_records_to_ensembl_db,
+    multiprocess_load_records_to_ensembl_db,
+    batch_gtf_records,
+    run_find_orfs,
+    find_orf_phased_region,
+    slice_output_to_gtf,
+    convert_gff_to_gtf,
+    set_attributes,
+    create_slice_ids,
+    update_gtf_genes,
+    read_gtf_genes,
+    fasta_to_dict,
+    splice_junction_to_gff,
+    split_genome,
+    multiprocess_generic,
+    reverse_complement,
+    get_seq_region_names,
+    slice_genome,
+    subprocess_run_and_log,
+    get_sequence,
+    seq_region_names,
+    list_to_string,
+#    coallate_results,
+)
 def run_subsample_script(subsample_script_path, fastq_file, fastq_file_pair):
     subsample_script_cmd = [
         "python3",
@@ -81,9 +115,9 @@ def check_for_fastq_subsamples(
                 "Found a subsampled file extension, will use that instead of the original file:\n%s"
                 % fastq_file_subsampled
             )
-            fastq_paired_paths[index] = fastq_file_subsampled
+            fastq_paired_paths[index] = [fastq_file_subsampled]
         else:
-            fastq_paired_paths[index] = fastq_file
+            fastq_paired_paths[index] = [fastq_file]
 
         if fastq_file_pair_subsampled.exists():
             logger.info(
@@ -150,16 +184,15 @@ def run_minimap2_align(
 
     if not minimap2_index_file.exists():
         logger.info("Did not find an index file for minimap2. Will create now")
-        subprocess.run(
-            [
-                minimap2_path,
-                "-t",
-                str(num_threads),
-                "-d",
-                minimap2_index_file,
-                genome_file,
-            ]
-        )
+        minimap2_command = [
+             minimap2_path,
+             "-t",
+             str(num_threads),
+             "-d",
+             minimap2_index_file,
+             genome_file,
+         ]
+        subprocess.run(minimap2_command)
 
     if not minimap2_index_file.exists():
         raise FileNotFoundError(
@@ -173,27 +206,27 @@ def run_minimap2_align(
         bed_file = minimap2_output_dir / f"{fastq_file_name}.bed"
         bed_file_out = open(bed_file, "w+")
         logger.info("Processing %s" % fastq_file)
-        subprocess.run(
-            [
-                minimap2_path,
-                "-G",
-                str(max_intron_length),
-                "-t",
-                str(num_threads),
-                "--cs",
-                "--secondary=no",
-                "-ax",
-                "splice",
-                "-u",
-                "b",
-                minimap2_index_file,
-                fastq_file_path,
-                "-o",
-                sam_file,
-            ]
-        )
+        minimap2_command = [
+             minimap2_path,
+             "-G",
+             str(max_intron_length),
+             "-t",
+             str(num_threads),
+             "--cs",
+             "--secondary=no",
+             "-ax",
+             "splice",
+             "-u",
+             "b",
+             minimap2_index_file,
+             fastq_file_path,
+             "-o",
+             sam_file,
+         ]
+        subprocess.run(minimap2_command)
         logger.info("Creating bed file from SAM")
-        subprocess.run([paftools_path, "splice2bed", sam_file], stdout=bed_file_out)
+        paftools_command = [paftools_path, "splice2bed", sam_file]
+        subprocess.run(paftools_command, stdout=bed_file_out)
         bed_file_out.close()
 
     bed_to_gtf(minimap2_output_dir)
@@ -469,7 +502,7 @@ def augustus_output_to_gtf(
 def run_augustus_predict(
     augustus_path,
     main_output_dir: pathlib.Path,
-    masked_genome_file,
+    masked_genome_file: pathlib.Path,
     num_threads: int,
 ):
     min_seq_length = 1000
@@ -589,7 +622,7 @@ def multiprocess_augustus_hints(
         f"--out={bam2hints_file_path}",
         "--maxintronlen=100000",
     ]
-    logger.info("bam2hints command:\n%s" % " ".join(bam2hints_cmd))
+    logger.info("bam2hints command:%s" % list_to_string(bam2hints_cmd))
     subprocess.run(bam2hints_cmd)
 
     # bam2wig_cmd = [bam2wig_path,'-D',augustus_hints_dir,bam_file]
@@ -611,9 +644,9 @@ def multiprocess_augustus_hints(
 
 
 def multiprocess_augustus_id(
-    cmd,
-    slice_id,
-    genome_file: Union[pathlib.Path, str],
+    generic_augustus_cmd,
+    slice_id: Tuple[str, int, int],
+    genome_file: pathlib.Path,
     hints_file,
     output_dir: pathlib.Path,
 ):
@@ -642,21 +675,21 @@ def multiprocess_augustus_id(
 
     aug_out = open(region_augustus_file_path, "w+")
 
-    augustus_forward = cmd.copy()
-    augustus_forward.extend(
+    augustus_forward_command = generic_augustus_cmd.copy()
+    augustus_forward_command.extend(
         [f"--hintsfile={region_hints_file}", "--strand=forward", region_fasta_file_path]
     )
     subprocess.run(augustus_forward, stdout=aug_out)
 
-    augustus_backward = cmd.copy()
-    augustus_forward.extend(
+    augustus_backward_command = generic_augustus_cmd.copy()
+    augustus_backward_command.extend(
         [
             f"--hintsfile={region_hints_file}",
             "--strand=backward",
             region_fasta_file_path,
         ]
     )
-    subprocess.run(augustus_backward, stdout=aug_out)
+    subprocess.run(augustus_backward_command, stdout=aug_out)
 
     aug_out.close()
 
@@ -744,24 +777,23 @@ def run_stringtie_assemble(
                 "Running Stringtie on: %s, writing output to:\n%s"
                 % (sorted_bam_file_name, transcript_file_path)
             )
-            subprocess.run(
-                [
-                    stringtie_path,
-                    sorted_bam_file,
-                    "-o",
-                    transcript_file_path,
-                    "-p",
-                    str(num_threads),
-                    "-t",
-                    "-a",
-                    "15",
-                ]
-            )
+            stringtie_command = [
+                 stringtie_path,
+                 sorted_bam_file,
+                 "-o",
+                 transcript_file_path,
+                 "-p",
+                 str(num_threads),
+                 "-t",
+                 "-a",
+                 "15",
+             ]
+            subprocess.run(stringtie_command)
 
     # Now need to merge
     logger.info("Creating Stringtie merge input file: %s" % stringtie_merge_input_file)
     with open(stringtie_merge_input_file, "w+") as gtf_list_out:
-        for gtf_file in stringtie_dir.glob("*.stringtie.gtf"):
+        for gtf_file in stringtie_dir.glob("*.stringtie.gtf"):#glob.glob(str(stringtie_dir / "*.stringtie.gtf")):
             transcript_count = check_gtf_content(gtf_file, "transcript")
             if transcript_count > 0:
                 gtf_list_out.write(f"{gtf_file}\n")
@@ -771,15 +803,14 @@ def run_stringtie_assemble(
                 )
 
     logger.info("Merging Stringtie results to:\n%s" % stringtie_merge_output_file)
-    subprocess.run(
-        [
-            stringtie_path,
-            "--merge",
-            "-o",
-            stringtie_merge_output_file,
-            stringtie_merge_input_file,
-        ]
-    )
+    stringtie_command = [
+         stringtie_path,
+         "--merge",
+         "-o",
+         stringtie_merge_output_file,
+         stringtie_merge_input_file,
+     ]
+    subprocess.run(stringtie_command)
 
 
 def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.Path):
@@ -860,7 +891,7 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.
     logger.info("Creating Stringtie merge input file: %s" % stringtie_merge_input_file)
 
     with open(stringtie_merge_input_file, "w+") as gtf_list_out:
-        for gtf_file in scallop_dir.glob("*.scallop.gtf"):
+        for gtf_file in scallop_dir.glob("*.scallop.gtf"):#glob.glob(str(scallop_dir / "*.scallop.gtf")):
             transcript_count = check_gtf_content(gtf_file, "transcript")
             if transcript_count > 0:
                 gtf_list_out.write(f"{gtf_file}\n")
@@ -870,15 +901,14 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir: pathlib.
                 )
 
     logger.info("Merging Scallop results to:\n%s" % stringtie_merge_output_file)
-    subprocess.run(
-        [
-            stringtie_path,
-            "--merge",
-            "-o",
-            stringtie_merge_output_file,
-            stringtie_merge_input_file,
-        ]
-    )
+    stringtie_command = [
+         stringtie_path,
+         "--merge",
+         "-o",
+         stringtie_merge_output_file,
+         stringtie_merge_input_file,
+     ]
+    subprocess.run(stringtie_command)
 
 
 def run_trimming(
@@ -1124,17 +1154,15 @@ def run_star_align(
 
     logger.info("Running STAR on the files in the fastq dir")
     for fastq_files in fastq_paired_paths:
-        # NOTE
-        # There might be a bug here. The paired FASTQ files elements of the output list
-        # of check_for_fastq_subsamples were strings containing paths separated by comma,
-        # but the following code originally was handled these elements as if they were
-        # a single path. The next command was added to select the first file from the pair,
-        # but maybe there is something more to be done here.
-        fastq_file = fastq_files[0]
-        logger.info("fastq_file: %s" % list_to_string(fastq_file))
-        fastq_file_name = fastq_file.name
-        check_compression = re.search(r".gz$", fastq_file_name)
-
+        # STAR input string of comma separated fastq_files paths
+        fastq_files_string = list_to_string(fastq_files, separator=",")
+        # The name of the last file in the fastq_files list is used to generate
+        # derivative files, in order to mirror the original program implementation.
+        # Maybe a better base name to denote all files in fastq_files could be used here.
+        representative_fastq_file = fastq_files[-1]
+        logger.info("representative_fastq_file: %s" % representative_fastq_file)
+        representative_fastq_file_name = representative_fastq_file.name
+        check_compression = re.search(r".gz$", representative_fastq_file_name)
         # If there's a tmp dir already, the most likely cause is that STAR failed on the previous input file(s)
         # In this case STAR would effectively break for all the rest of the files, as it won't run if the tmp
         # dir exists. So clean it up and put out a warning. Another approach would be to just name the tmp dir
@@ -1146,7 +1174,7 @@ def run_star_align(
             )
             shutil.rmtree(star_tmp_dir)
 
-        sam_file_path = star_dir / f"{fastq_file_name}.sam"
+        sam_file_path = star_dir / f"{representative_fastq_file_name}.sam"
         sam_temp_file_path = star_dir / f"{sam_file_path.name}.tmp"
         bam_sort_file_path = sam_file_path.with_suffix(".bam")
 
@@ -1156,7 +1184,7 @@ def run_star_align(
             )
             continue
 
-        logger.info("Processing %s" % fastq_file)
+        logger.info("Processing %s" % fastq_files_string)
         # star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
 
         star_command = [
@@ -1174,7 +1202,7 @@ def run_star_align(
             "--genomeDir",
             star_dir,
             "--readFilesIn",
-            fastq_file,
+            fastq_files_string,
             "--outFileNamePrefix",
             f"{star_dir}/",
             "--outTmpDir",
@@ -1192,23 +1220,22 @@ def run_star_align(
 
         subprocess.run(star_command)
         (star_dir / "Aligned.out.sam").rename(sam_file_path)
-        junctions_file_path = star_dir / f"{fastq_file_name}.sj.tab"
+        junctions_file_path = star_dir / f"{representative_fastq_file_name}.sj.tab"
         (star_dir / "SJ.out.tab").rename(junctions_file_path)
 
         logger.info("Converting samfile into sorted bam file:\n%s" % bam_sort_file_path)
-        subprocess.run(
-            [
-                "samtools",
-                "sort",
-                "-@",
-                str(num_threads),
-                "-T",
-                sam_temp_file_path,
-                "-o",
-                bam_sort_file_path,
-                sam_file_path,
-            ]
-        )
+        samtools_command = [
+             "samtools",
+             "sort",
+             "-@",
+             str(num_threads),
+             "-T",
+             sam_temp_file_path,
+             "-o",
+             bam_sort_file_path,
+             sam_file_path,
+         ]
+        subprocess.run(samtools_command)
 
         os.remove(sam_file_path)
 

@@ -386,7 +386,7 @@ def validate_coding_transcripts(
         cdna_file,
         rnasamba_weights,
     ]
-    logger.info("rnasamba_cmd: %s" % " ".join(rnasamba_cmd))
+    logger.info("rnasamba_cmd: %s" % list_to_string(rnasamba_cmd))
     subprocess.run(rnasamba_cmd)
     cpc2_volume = f"{validation_dir}/:/app:rw"
     cpc2_cmd = [
@@ -403,7 +403,7 @@ def validate_coding_transcripts(
         "-o",
         cpc2_output_path,
     ]
-    logger.info("cpc2_cmd: %s" % " ".join(cpc2_cmd))
+    logger.info("cpc2_cmd: %s" % list_to_string(cpc2_cmd))
     subprocess.run(cpc2_cmd)
     cpc2_output_path = f"{cpc2_output_path}.txt"
 
@@ -478,7 +478,7 @@ def multiprocess_diamond(
     ]
 
     logger.info(
-        "Running diamond on %s:\n%s" % (batched_protein_file, " ".join(diamond_cmd))
+        "Running diamond on %s:\n%s" % (batched_protein_file, list_to_string(diamond_cmd))
     )
     subprocess.run(diamond_cmd)
     subprocess.run(["mv", diamond_output_file, diamond_output_dir])

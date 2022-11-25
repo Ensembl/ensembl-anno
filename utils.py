@@ -23,8 +23,18 @@ import re
 import shutil
 import sys
 
-from typing import Union
+import argparse
+import gc
+import glob
+import io
+import math
+import multiprocessing
+import random
+import signal
+import subprocess
+import tempfile
 
+from typing import Dict, List, Union, Tuple
 
 # logging formats
 logging_formatter_time_message = logging.Formatter(
@@ -113,7 +123,16 @@ def create_dir(main_output_dir: Union[pathlib.Path, str], dir_name: str = None):
 
 
 
-def get_seq_region_lengths(genome_file: Union[pathlib.Path, str], min_seq_length: int):
+def get_seq_region_lengths(genome_file: Union[pathlib.Path, str], min_seq_length: int) -> Dict[str, int]:
+    """
+     Calculate the sequence region lengths in the genome_file.
+
+     Args:
+         genome_file: the genome file containing the sequence regions
+         min_seq_length: ?
+     Returns:
+         a dictionary with keys the sequence region names and values their lengths
+     """
     current_header = ""
     current_seq = ""
 
@@ -458,7 +477,7 @@ def multiprocess_load_records_to_ensembl_db(
         if load_to_ensembl_db == "single_transcript_genes":
             loading_cmd.append("-make_single_transcript_genes")
 
-    logger.info("loading_cmd: %s" % " ".join(loading_cmd))
+    logger.info("loading_cmd: %s" % list_to_string(loading_cmd))
     subprocess.run(loading_cmd)
     gtf_temp_out.close()
     os.remove(gtf_temp_file_path)  # NOTE: doesn't seem to be working
@@ -555,19 +574,18 @@ def slice_output_to_gtf(
     transcript_id_count_index = {}
 
     feature_counter = 1
-
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
-    gtf_output_file_path = output_dir / "annotation.gtf"
+    gtf_output_file_path = pathlib.Path(output_dir / "annotation.gtf")
     with open(gtf_output_file_path, "w+") as gtf_out:
-        for gtf_input_file_path in output_dir.glob("*{extension}"):
-            if gtf_input_file_path.stat().st_size == 0:
-                logger.info("File is empty, will skip:\n%s" % gtf_input_file_path)
+        for gtf_output_file_path in output_dir.glob(f"*{extension}"):  
+            if gtf_output_file_path.stat().st_size == 0:
+                logger.info("File is empty, will skip:\n %s" % gtf_output_file_path)
                 continue
 
-            gtf_file_name = gtf_input_file_path.name
+            gtf_file_name = gtf_output_file_path.name
             match = re.search(r"\.rs(\d+)\.re(\d+)\.", gtf_file_name)
             start_offset = int(match.group(1))
-            with open(gtf_input_file_path, "r") as gtf_in:
+            with open(gtf_output_file_path, "r") as gtf_in:
                 for line in gtf_in:
                     values = line.split("\t")
                     if len(values) == 9 and (values[2] in feature_types):
@@ -709,18 +727,18 @@ def set_attributes(attributes, feature_type):
 
 
 def create_slice_ids(
-    seq_region_lengths,
+    seq_region_lengths: Dict[str, int],
     slice_size: int = 1_000_000,
     overlap: int = 0,
     min_length: int = 0,
-):
+) -> List[Tuple[str, int, int]]:
     slice_ids = []
     for region, region_length in seq_region_lengths.items():
         if region_length < min_length:
             continue
 
         if region_length <= slice_size:
-            slice_ids.append([region, 1, region_length])
+            slice_ids.append((region, 1, region_length))
             continue
 
         start = 1
@@ -734,7 +752,7 @@ def create_slice_ids(
             if end > region_length:
                 end = region_length
             if (end - start + 1) >= min_length:
-                slice_ids.append([region, start, end])
+                slice_ids.append((region, start, end))
             start = end + 1
 
     return slice_ids
@@ -778,7 +796,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             biotype = match.group(1)
             if biotype == "busco" or biotype == "protein":
                 transcript_line = re.sub(
-                    '; biotype "{biotype}";',
+                    f'; biotype "{biotype}";',
                     '; biotype "protein_coding";',
                     transcript_line,
                 )
@@ -798,7 +816,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             if single_cds_exon_transcript == 1 and validation_type == "relaxed":
                 if diamond_e_value is not None:
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -808,7 +826,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_single_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -821,7 +839,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -833,7 +851,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_single_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -846,7 +864,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and avg_coding_probability >= min_single_exon_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -855,7 +873,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             else:
                 if diamond_e_value is not None:
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -865,7 +883,7 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and peptide_length >= min_multi_exon_pep_length
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
@@ -878,13 +896,15 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";',
+                        f'; biotype "{biotype}";',
                         '; biotype "protein_coding";',
                         transcript_line,
                     )
                 elif transcript_length >= 200:
                     transcript_line = re.sub(
-                        '; biotype "{biotype}";', '; biotype "lncRNA";', transcript_line
+                        f'; biotype "{biotype}";', 
+                        '; biotype "lncRNA";',
+                        transcript_line,
                     )
                     transcript_line = re.sub(
                         ' translation_coords "[^"]+";', "", transcript_line
@@ -937,21 +957,26 @@ def fasta_to_dict(fasta_list):
 
 
 def subprocess_run_and_log(command):
-    logger.info("subprocess_run_and_log command: %s" % " ".join(command))
+    logger.info("subprocess_run_and_log command: %s" % list_to_string(command))
     subprocess.run(command)
 
 
 def get_sequence(
-    seq_region,
+    seq_region: str,
     start: int,
     end: int,
     strand: int,
-    fasta_file,
+    fasta_file: Union[pathlib.Path, str],
     output_dir: Union[pathlib.Path, str],
 ):
+    """
+     TODO:
+     The functionality of this function could be better implemented by using pybedtools
+     or even better pyfaidx.
+     """
     start -= 1
     bedtools_path = "bedtools"
-
+    logger.info("get_sequence %s" % f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}")
     # This creates a tempfile and writes the bed info to it based on whatever information
     # has been passed in about the sequence. Then runs bedtools getfasta. The fasta file
     # should have a faidx. This can be created with the create_faidx static method prior
@@ -1174,7 +1199,6 @@ def split_genome(genome_file, target_dir, min_seq_length):
     file_in.close()    
 
 def multiprocess_generic(cmd):
-    print(" ".join(cmd))
     subprocess.run(cmd)
 def slice_genome(genome_file, target_dir, target_slice_size):
     # The below is sort of tested

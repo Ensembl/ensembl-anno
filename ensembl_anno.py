@@ -136,7 +136,7 @@ from utils import (
     subprocess_run_and_log,
     get_sequence,
     seq_region_names,
-    coallate_results,
+#    coallate_results,
 )
 
 from finalisation_utils import (
@@ -149,10 +149,6 @@ from finalisation_utils import (
     read_diamond_results,
     combine_results,
     merge_finalise_output_files,
-    subprocess_run_and_log,
-    get_sequence,
-    reverse_complement,
-    get_seq_region_names,
     multiprocess_finalise_geneset,
 )
 
@@ -592,8 +588,13 @@ def main():
     if run_cmsearch:
         logger.info("Annotating sncRNAs")
         run_cmsearch_regions(
-            genome_file, None, None, None, rfam_accessions_file, work_dir, num_threads
-        )
+             genome_file=genome_file,
+             cmsearch_path=None,
+             rfam_cm_db_path=None,
+             rfam_seeds_file_path=None,
+             rfam_accession_file=rfam_accessions_file,
+             main_output_dir=work_dir,
+             num_threads=num_threads,)
 
     if run_trnascan:
         logger.info("Annotating tRNAs")

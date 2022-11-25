@@ -33,6 +33,40 @@ import errno
 import logging
 
 from typing import List, Union
+from utils import (
+    add_log_file_handler,
+    check_exe,
+    check_file,
+    check_gtf_content,
+    create_dir,
+    get_seq_region_lengths,
+    logger,
+    prlimit_command,
+    load_results_to_ensembl_db,
+    generic_load_records_to_ensembl_db,
+    multiprocess_load_records_to_ensembl_db,
+    batch_gtf_records,
+    run_find_orfs,
+    find_orf_phased_region,
+    slice_output_to_gtf,
+    convert_gff_to_gtf,
+    set_attributes,
+    create_slice_ids,
+    update_gtf_genes,
+    read_gtf_genes,
+    fasta_to_dict,
+    splice_junction_to_gff,
+    split_genome,
+    multiprocess_generic,
+    reverse_complement,
+    get_seq_region_names,
+    slice_genome,
+    subprocess_run_and_log,
+    get_sequence,
+    seq_region_names,
+    list_to_string,
+#    coallate_results,
+)
 
 def run_genblast_align(
     genblast_path,
@@ -40,7 +74,7 @@ def run_genblast_align(
     makeblastdb_path,
     genblast_dir: pathlib.Path,
     protein_file,
-    masked_genome_file: pathlib.Path,
+    masked_genome_file,
     max_intron_length,
     num_threads: int,
     genblast_timeout_secs,
@@ -79,7 +113,7 @@ def run_genblast_align(
         original_alignscore_path = main_script_dir / "support_files" / "alignscore.txt"
         subprocess.run(["cp", original_alignscore_path, "./"])
 
-    if not masked_genome_file.exists():
+    if not os.path.exists(masked_genome_file):
         raise FileNotFoundError(
             "Masked genome file does not exist: %s" % masked_genome_file
         )

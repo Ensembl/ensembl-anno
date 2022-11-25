@@ -32,8 +32,40 @@ import sys
 import errno
 import logging
 
-from typing import List, Union
-
+from typing import List, Tuple, Union
+from utils import (
+    add_log_file_handler,
+    check_exe,
+    check_file,
+    check_gtf_content,
+    create_dir,
+    get_seq_region_lengths,
+    logger,
+    prlimit_command,
+    load_results_to_ensembl_db,
+    generic_load_records_to_ensembl_db,
+    multiprocess_load_records_to_ensembl_db,
+    batch_gtf_records,
+    run_find_orfs,
+    find_orf_phased_region,
+    slice_output_to_gtf,
+    convert_gff_to_gtf,
+    set_attributes,
+    create_slice_ids,
+    update_gtf_genes,
+    read_gtf_genes,
+    fasta_to_dict,
+    splice_junction_to_gff,
+    split_genome,
+    multiprocess_generic,
+    reverse_complement,
+    get_seq_region_names,
+    slice_genome,
+    subprocess_run_and_log,
+    get_sequence,
+    seq_region_names,
+#    coallate_results,
+)
 def run_repeatmasker_regions(
     genome_file: Union[pathlib.Path, str],
     repeatmasker_path,
@@ -111,7 +143,7 @@ def run_repeatmasker_regions(
 
 def multiprocess_repeatmasker(
     generic_repeatmasker_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     repeatmasker_output_dir: Union[pathlib.Path, str],
 ):
@@ -133,8 +165,7 @@ def multiprocess_repeatmasker(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = repeatmasker_output_dir / region_fasta_file_name
+    region_fasta_file_path = repeatmasker_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
@@ -147,7 +178,7 @@ def multiprocess_repeatmasker(
 
     repeatmasker_cmd = generic_repeatmasker_cmd.copy()
     repeatmasker_cmd.append(region_fasta_file_path)
-    logger.info("repeatmasker_cmd: %s" % " ".join(repeatmasker_cmd))
+    logger.info("repeatmasker_cmd: %s" % (repeatmasker_cmd))
     subprocess.run(repeatmasker_cmd)
 
     create_repeatmasker_gtf(
@@ -204,7 +235,7 @@ def create_repeatmasker_gtf(
 
 
 def run_dust_regions(
-    genome_file: Union[pathlib.Path, str], dust_path, main_output_dir, num_threads: int
+    genome_file: pathlib.Path, dust_path, main_output_dir: pathlib.Path, num_threads: int
 ):
     if not dust_path:
         dust_path = "dustmasker"
@@ -247,9 +278,9 @@ def run_dust_regions(
 
 
 def multiprocess_dust(
-    generic_dust_cmd,
-    slice_id,
-    genome_file: Union[pathlib.Path, str],
+    generic_dust_cmd: List,
+    slice_id: Tuple[str, int, int],
+    genome_file: pathlib.Path,
     dust_output_dir: pathlib.Path,
 ):
     region_name = slice_id[0]
@@ -270,19 +301,17 @@ def multiprocess_dust(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = dust_output_dir / region_fasta_file_name
+    region_fasta_file_path = dust_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.dust.gtf"
-    region_results_file_path = dust_output_dir / region_results_file_name
+    region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
 
-    dust_output_file_path = f"{region_fasta_file_path}.dust"
+    dust_output_file_path = ( region_results_file_path.parent / f"{region_fasta_file_path}.dust" )
     dust_out = open(dust_output_file_path, "w+")
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
-    logger.info("dust_cmd" % " ".join(dust_cmd))
+    logger.info("dust_cmd %s" % (dust_cmd))
     subprocess.run(dust_cmd, stdout=dust_out)
     dust_out.close()
 
@@ -291,7 +320,7 @@ def multiprocess_dust(
     os.remove(region_fasta_file_path)
 
 
-def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name):
+def create_dust_gtf(dust_output_file_path: pathlib.Path, region_results_file_path: pathlib.Path, region_name: str):
     with open(dust_output_file_path, "r") as dust_in, open(
         region_results_file_path, "w+"
     ) as dust_out:
@@ -375,7 +404,7 @@ def run_trf_repeats(
 
 def multiprocess_trf(
     generic_trf_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     trf_output_dir: pathlib.Path,
     trf_output_extension,
@@ -398,20 +427,19 @@ def multiprocess_trf(
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = trf_output_dir / region_fasta_file_name
+    region_fasta_file_path = trf_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.trf.gtf"
-    region_results_file_path = trf_output_dir / region_results_file_name
+    region_results_file_path = trf_output_dir / f"{slice_file_name}.trf.gtf"
 
     # TRF writes to the current dir, so switch to the output dir for it
-    os.chdir(trf_output_dir)
+    os.chdir(str(trf_output_dir))
     trf_output_file_path = f"{region_fasta_file_path}{trf_output_extension}"
+    logger.info(trf_output_file_path)
     trf_cmd = generic_trf_cmd.copy()
     trf_cmd[1] = region_fasta_file_path
-    logger.info("trf_cmd: %s" % " ".join(trf_cmd))
+    logger.info("trf_cmd: %s" % (trf_cmd))
     subprocess.run(trf_cmd)
     create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
     os.remove(trf_output_file_path)
@@ -492,9 +520,16 @@ def run_red(
         )
 
     logger.info("Running Red, this may take some time depending on the genome size")
-    subprocess.run(
-        [red_path, "-gnm", red_genome_dir, "-msk", red_mask_dir, "-rpt", red_repeat_dir]
-    )
+    red_command = [
+         red_path,
+         "-gnm",
+         red_genome_dir,
+         "-msk",
+         red_mask_dir,
+         "-rpt",
+         red_repeat_dir,
+     ]
+    subprocess.run(red_command)
 
     logger.info("Completed running Red")
 

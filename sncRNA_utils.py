@@ -32,7 +32,42 @@ import sys
 import errno
 import logging
 
-from typing import List, Union
+from typing import Dict, List, Union,Tuple
+
+from utils import (
+    add_log_file_handler,
+    check_exe,
+    check_file,
+    check_gtf_content,
+    create_dir,
+    get_seq_region_lengths,
+    logger,
+    prlimit_command,
+    load_results_to_ensembl_db,
+    generic_load_records_to_ensembl_db,
+    multiprocess_load_records_to_ensembl_db,
+    batch_gtf_records,
+    run_find_orfs,
+    find_orf_phased_region,
+    slice_output_to_gtf,
+    convert_gff_to_gtf,
+    set_attributes,
+    create_slice_ids,
+    update_gtf_genes,
+    read_gtf_genes,
+    fasta_to_dict,
+    splice_junction_to_gff,
+    split_genome,
+    multiprocess_generic,
+    reverse_complement,
+    get_seq_region_names,
+    slice_genome,
+    subprocess_run_and_log,
+    get_sequence,
+    seq_region_names,
+    list_to_string,
+#    coallate_results,
+)
 
 def run_trnascan_regions(
     genome_file: Union[pathlib.Path, str],
@@ -64,7 +99,7 @@ def run_trnascan_regions(
     logger.info("Creating list of genomic slices")
     seq_region_lengths = get_seq_region_lengths(genome_file, min_seq_length=5000)
     slice_ids = create_slice_ids(
-        seq_region_lengths, slice_size=1_000_000, overlap=0, min_length=5000
+        seq_region_lengths, slice_size=100_000, overlap=0, min_length=5000
     )
 
     generic_trnascan_cmd = [
@@ -101,7 +136,7 @@ def run_trnascan_regions(
 
 def multiprocess_trnascan(
     generic_trnascan_cmd,
-    slice_id,
+    slice_id:  Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
     trnascan_filter_path,
     trnascan_output_dir: Union[pathlib.Path, str],
@@ -116,8 +151,8 @@ def multiprocess_trnascan(
     )
     seq = get_sequence(
         seq_region=region_name,
-        start=start,
-        end=end,
+        start=int(start),
+        end=int(end),
         strand=1,
         fasta_file=genome_file,
         output_dir=trnascan_output_dir,
@@ -129,27 +164,25 @@ def multiprocess_trnascan(
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = f"{slice_file_name}.trna.gtf"
-    region_results_file_path = trnascan_output_dir / region_results_file_name
+    region_results_file_path = trnascan_output_dir / f"{slice_file_name}.trna.gtf"
 
     trnascan_output_file_path = f"{region_fasta_file_path}.trna"
     trnascan_ss_output_file_path = f"{trnascan_output_file_path}.ss"
-
     # The filter takes an output dir and a prefix and then uses those to make a path to a .out file
     trnascan_filter_file_prefix = f"{region_fasta_file_name}.filt"
     trnascan_filter_file_name = f"{trnascan_filter_file_prefix}.out"
     trnascan_filter_log_file_name = f"{trnascan_filter_file_prefix}.log"
     trnascan_filter_ss_file_name = f"{trnascan_filter_file_prefix}.ss"
+    logger.info("region_results_file_path")
     trnascan_filter_file_path = trnascan_output_dir / trnascan_filter_file_name
     trnascan_filter_log_file_path = trnascan_output_dir / trnascan_filter_log_file_name
     trnascan_filter_ss_file_path = trnascan_output_dir / trnascan_filter_ss_file_name
-
     trnascan_cmd = generic_trnascan_cmd.copy()
     trnascan_cmd[1] = region_fasta_file_path
     trnascan_cmd[3] = trnascan_output_file_path
     trnascan_cmd[5] = trnascan_ss_output_file_path
 
-    logger.info("tRNAscan-SE command:\n%s" % " ".join(trnascan_cmd))
+    logger.info("tRNAscan-SE command: %s" % (trnascan_cmd))
     subprocess.run(trnascan_cmd)
 
     # If we have a blank output file at this point we want to stop and remove whatever files
@@ -172,7 +205,7 @@ def multiprocess_trnascan(
         "--prefix",
         trnascan_filter_file_prefix,
     ]
-    logger.info("tRNAscan-SE filter command:\n%s" % " ".join(filter_cmd))
+    logger.info("tRNAscan-SE filter command: %s" % filter_cmd)
     subprocess.run(filter_cmd)
 
     create_trnascan_gtf(
@@ -242,7 +275,7 @@ def run_cmsearch_regions(
     check_exe(cmsearch_path)
     rfam_output_dir = create_dir(main_output_dir, "rfam_output")
 
-    os.chdir(rfam_output_dir)
+    os.chdir(str(rfam_output_dir))
 
     output_file = rfam_output_dir / "annotation.gtf"
     if output_file.exists():
@@ -333,7 +366,7 @@ def run_cmsearch_regions(
         num_threads = 5
     pool = multiprocessing.Pool(num_threads)
     for exception_file_path in rfam_output_dir.glob("*.rfam.except"):
-        logger.info("Running himem job for failed region:\n%s" % exception_file_path)
+        logger.info("Running himem job for failed region:%s" % exception_file_path)
         exception_file_name = exception_file_path.name
         match = re.search(r"(.+)\.rs(\d+)\.re(\d+)\.", exception_file_name)
         if match:
@@ -362,13 +395,13 @@ def run_cmsearch_regions(
 
 def multiprocess_cmsearch(
     generic_cmsearch_cmd,
-    slice_id,
+    slice_id: Tuple[str, int, int],
     genome_file: Union[pathlib.Path, str],
-    rfam_output_dir: pathlib.Path,
+    rfam_output_dir: Union[pathlib.Path, str],
     rfam_selected_models_file,
-    cv_models,
-    seed_descriptions,
-    memory_limit,
+    cv_models: Dict[str, Dict],
+    seed_descriptions: Dict,
+    memory_limit: int,
 ):
     region_name = slice_id[0]
     start = slice_id[1]
@@ -379,37 +412,33 @@ def multiprocess_cmsearch(
         % (region_name, start, end)
     )
     seq = get_sequence(
-        seq_region=region_name,
-        start=start,
-        end=end,
+        seq_region=str(region_name),
+        start=int(start),
+        end=int(end),
         strand=1,
-        fasta_file=genome_file,
+        fasta_file=str(genome_file),
         output_dir=rfam_output_dir,
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_name = f"{slice_file_name}.fa"
-    region_fasta_file_path = rfam_output_dir / region_fasta_file_name
+    region_fasta_file_path = rfam_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_tblout_file_name = f"{slice_file_name}.tblout"
-    region_tblout_file_path = rfam_output_dir / region_tblout_file_name
-    region_results_file_name = f"{slice_file_name}.rfam.gtf"
-    region_results_file_path = rfam_output_dir / region_results_file_name
+    region_tblout_file_path = rfam_output_dir / f"{slice_file_name}.tblout"
+    region_results_file_path = rfam_output_dir / f"{slice_file_name}.rfam.gtf"
 
-    exception_results_file_name = f"{slice_file_name}.rfam.except"
-    exception_results_file_path = rfam_output_dir / exception_results_file_name
+    exception_results_file_path = rfam_output_dir / f"{slice_file_name}.rfam.except"
 
     cmsearch_cmd = generic_cmsearch_cmd.copy()
-    cmsearch_cmd.append(region_tblout_file_path)
-    cmsearch_cmd.append(rfam_selected_models_file)
-    cmsearch_cmd.append(region_fasta_file_path)
+    cmsearch_cmd.extend(
+         [region_tblout_file_path, rfam_selected_models_file, region_fasta_file_path]
+     )
 
     if memory_limit is not None:
         cmsearch_cmd = prlimit_command(cmsearch_cmd, memory_limit)
 
-    logger.info("cmsearch_cmd: %s" % " ".join(cmsearch_cmd))
+    logger.info("cmsearch_cmd: %s" % (cmsearch_cmd))
 
     return_value = None
     try:
@@ -441,12 +470,12 @@ def multiprocess_cmsearch(
             genome_file=genome_file,
             rfam_output_dir=rfam_output_dir,
         )
-    os.remove(region_fasta_file_path)
-    os.remove(region_tblout_file_path)
+    os.remove(str(region_fasta_file_path))
+    os.remove(str(region_tblout_file_path))
     gc.collect()
 
 
-def get_rfam_seed_descriptions(rfam_seeds_path):
+def get_rfam_seed_descriptions(rfam_seeds_path) -> Dict:
     descriptions = {}
 
     # NOTE: for some reason the decoder breaks on the seeds file, so I have made this ignore errors
@@ -481,7 +510,7 @@ def get_rfam_seed_descriptions(rfam_seeds_path):
     return descriptions
 
 
-def extract_rfam_metrics(rfam_selected_models_file):
+def extract_rfam_metrics(rfam_selected_models_file: pathlib.Path) -> Dict[str, Dict]:
     with open(rfam_selected_models_file, "r") as rfam_cm_in:
         rfam_data = rfam_cm_in.read()
 
@@ -529,8 +558,9 @@ def extract_rfam_metrics(rfam_selected_models_file):
 
     return parsed_cm_data
 
-
-def parse_rfam_tblout(region_tblout_file_path, region_name):
+def parse_rfam_tblout(
+     region_tblout_file_path: pathlib.Path, region_name: str
+ ) -> List[Dict]:
     parsed_results = []
     with open(region_tblout_file_path, "r") as rfam_tbl_in:
         for result in rfam_tbl_in:
@@ -550,8 +580,8 @@ def parse_rfam_tblout(region_tblout_file_path, region_name):
                 strand = 1
             else:
                 strand = -1
-            evalue = hit[15]
-            score = hit[14]
+            evalue = float(hit[15])
+            score = float(hit[14])
 
             parsed_tbl_data["accession"] = accession
             parsed_tbl_data["start"] = start
@@ -560,7 +590,7 @@ def parse_rfam_tblout(region_tblout_file_path, region_name):
             parsed_tbl_data["query_name"] = query_name
             parsed_tbl_data["score"] = score
             parsed_results.append(parsed_tbl_data)
-
+            logger.info("parse_rfam_tblout: %s" % parsed_tbl_data)
     return parsed_results
 
 
@@ -583,7 +613,7 @@ def parse_rfam_tblout(region_tblout_file_path, region_name):
 #   );
 
 
-def remove_rfam_overlap(parsed_tbl_data):
+def remove_rfam_overlap(parsed_tbl_data: List[Dict]) -> List[Dict]:
     excluded_structures = {}
     chosen_structures = []
     for structure_x in parsed_tbl_data:
@@ -592,13 +622,13 @@ def remove_rfam_overlap(parsed_tbl_data):
         structure_x_end = int(structure_x["end"])
         structure_x_score = float(structure_x["score"])
         structure_x_accession = structure_x["accession"]
-        structure_x_string = "{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
+        structure_x_string = f"{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
         for structure_y in parsed_tbl_data:
             structure_y_start = int(structure_y["start"])
             structure_y_end = int(structure_y["end"])
             structure_y_score = float(structure_y["score"])
             structure_y_accession = structure_y["accession"]
-            structure_y_string = "{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
+            structure_y_string = f"{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
             if structure_y_string in excluded_structures:
                 continue
 
@@ -611,18 +641,19 @@ def remove_rfam_overlap(parsed_tbl_data):
                     excluded_structures[structure_x_string] = 1
                 else:
                     excluded_structures[structure_y_string] = 1
-
+        logger.info("remove_rfam_overlap: %s" % excluded_structures)
         chosen_structures.append(chosen_structure)
 
     return chosen_structures
 
-
-def filter_rfam_results(unfiltered_tbl_data, cv_models):
+def filter_rfam_results(
+     unfiltered_tbl_data: List[Dict], cv_models: Dict[str, Dict]
+ ) -> List[Dict]:
     filtered_results = []
     for structure in unfiltered_tbl_data:
         query = structure["query_name"]
         if query in cv_models:
-            threshold = cv_models[query]["-threshold"]
+            threshold = float(cv_models[query]["-threshold"])
             if query == "LSU_rRNA_eukarya":
                 threshold = 1700
 
@@ -643,7 +674,7 @@ def filter_rfam_results(unfiltered_tbl_data, cv_models):
 
             if threshold and float(structure["score"]) >= float(threshold):
                 filtered_results.append(structure)
-
+        logger.info("filter_rfam_results: %s " % filter_rfam_results)
     return filtered_results
 
 
@@ -656,13 +687,13 @@ def filter_rfam_results(unfiltered_tbl_data, cv_models):
 
 
 def create_rfam_gtf(
-    filtered_results,
-    cm_models,
+    filtered_results: List[Dict],
+    cm_models: List[Dict],
     descriptions,
     region_name,
     region_results_file_path,
     genome_file: Union[pathlib.Path, str],
-    rfam_output_dir,
+    rfam_output_dir: pathlib.Path,
 ):
     if not filtered_results:
         return
@@ -696,6 +727,15 @@ def create_rfam_gtf(
                     score = structure["score"]
                     gtf_strand = "-"
                     rnafold_strand = -1
+                rna_seq = get_sequence(
+                    seq_region=str(region_name),
+                    start=int(start),
+                    end=int(end),
+                    strand=int(rnafold_strand),
+                    fasta_file=str(genome_file),
+                    output_dir=str(rfam_output_dir),
+                )
+
 
                 biotype = "misc_RNA"
                 if re.match(r"^snRNA;", rfam_type):
@@ -718,15 +758,15 @@ def create_rfam_gtf(
                     biotype = "Vault_RNA"
                 if re.match(r"" + domain, rfam_type):
                     biotype = "Y_RNA"
-
-                rna_seq = get_sequence(
-                    seq_region=region_name,
-                    start=start,
-                    end=end,
-                    strand=rnafold_strand,
-                    fasta_file=genome_file,
-                    output_dir=rfam_output_dir,
-                )
+                #rna_seq = get_sequence(
+                #    seq_region=region_name,
+                #    start=start,
+                #    end=end,
+                #    strand=rnafold_strand,
+                #    fasta_file=genome_file,
+                #    output_dir=rfam_output_dir
+                #)
+                logger.info("create_rfam_gtf4 %s" % rna_seq)
                 valid_structure = check_rnafold_structure(rna_seq, rfam_output_dir)
 
                 if not valid_structure:
@@ -734,13 +774,13 @@ def create_rfam_gtf(
 
                 transcript_string = f'{region_name}\tRfam\ttranscript\t{start}\t{end}\t.\t{gtf_strand}\t.\tgene_id "{gene_counter}"; transcript_id "{gene_counter}"; biotype "{biotype}";\n'
                 exon_string = f'{region_name}\tRfam\texon\t{start}\t{end}\t.\t{gtf_strand}\t.\tgene_id "{gene_counter}"; transcript_id "{gene_counter}"; exon_number "1"; biotype "{biotype}";\n'
-
+                logger.info("create_rfam_gtf: %s " % transcript_string)
+                logger.info("create_rfam_gtf: %s " % exon_string)
                 rfam_gtf_out.write(transcript_string)
                 rfam_gtf_out.write(exon_string)
                 gene_counter += 1
 
-
-def check_rnafold_structure(seq, rfam_output_dir):
+def check_rnafold_structure(seq: str, rfam_output_dir: pathlib.Path):
     # Note there's some extra code in the RNAfold Perl module for encoding the structure into an attrib
     # Could consider implementing this when running for loading into an Ensembl db
     structure = 0
@@ -749,7 +789,6 @@ def check_rnafold_structure(seq, rfam_output_dir):
     ) as rna_temp_in:
         rna_temp_in.write(f">seq1\n{seq}\n")
         rna_in_file_path = rna_temp_in.name
-
     rnafold_cmd = ["RNAfold", "--infile", rna_in_file_path]
     rnafold_output = subprocess.Popen(rnafold_cmd, stdout=subprocess.PIPE)
     for line in io.TextIOWrapper(rnafold_output.stdout, encoding="utf-8"):
@@ -757,9 +796,9 @@ def check_rnafold_structure(seq, rfam_output_dir):
         if match:
             structure = match.group(1)
             score = match.group(2)
+            logger.info("check_rnafold_structure %s" % structure) 
             break
     rna_temp_in.close()
-    os.remove(rna_in_file_path)
+    os.remove(str(rna_in_file_path))
 
     return structure
-
