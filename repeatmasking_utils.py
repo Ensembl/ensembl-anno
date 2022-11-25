@@ -22,6 +22,8 @@ import subprocess
 from pathlib import Path
 
 from typing import Union
+from utils import *
+
 
 def run_repeatmasker_regions(
     genome_file: Union[pathlib.Path, str],
@@ -53,8 +55,10 @@ def run_repeatmasker_regions(
     if not library:
         library = "homo"
 
-    check_exe(repeatmasker_path)
-    repeatmasker_output_dir = Path(create_dir(main_output_dir, "repeatmasker_output"))
+    utils.check_exe(repeatmasker_path)
+    repeatmasker_output_dir = Path(
+        utils.create_dir(main_output_dir, "repeatmasker_output")
+    )
     os.chdir(repeatmasker_output_dir)
 
     output_file = repeatmasker_output_dir / "annotation.gtf"
@@ -133,7 +137,9 @@ def multiprocess_repeatmasker(
     logger.info(
         "Processing slice to find repeats with RepeatMasker: {region_name}:{start}:{end}"
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, repeatmasker_output_dir)
+    seq = utils.get_sequence(
+        region_name, start, end, 1, genome_file, repeatmasker_output_dir
+    )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_fasta_file_path = repeatmasker_output_dir / f"{slice_file_name}.fa"
@@ -235,7 +241,7 @@ def run_dust_regions(
     if not dust_path:
         dust_path = "dustmasker"
 
-    check_exe(dust_path)
+    utils.check_exe(dust_path)
     dust_output_dir = Path(create_dir(main_output_dir, "dust_output"))
 
     output_file = dust_output_dir / "annotation.gtf"
@@ -333,6 +339,18 @@ def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name
 
 
 def run_trf_repeats(genome_file, trf_path, main_output_dir, num_threads):
+    """
+    Run Dust on genomic slices
+
+    Args:
+        genome_file : pathlib.Path
+        dust_path : str
+        main_output_dir : pathlib.Path
+        num_threads: int
+
+    Return:
+        gtfs with the masked sequence for each genome slice
+    """
 
     if not trf_path:
         trf_path = "trf"
