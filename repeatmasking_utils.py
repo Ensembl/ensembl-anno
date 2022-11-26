@@ -55,7 +55,7 @@ def run_repeatmasker_regions(
     if not library:
         library = "homo"
 
-    utils.check_exe(repeatmasker_path)
+    check_exe(repeatmasker_path)
     repeatmasker_output_dir = Path(create_dir(main_output_dir, "repeatmasker_output"))
     os.chdir(repeatmasker_output_dir)
 
@@ -100,7 +100,6 @@ def run_repeatmasker_regions(
 
     logger.info("Running RepeatMasker")
     pool = multiprocessing.Pool(num_threads)
-    tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
             multiprocess_repeatmasker,
@@ -137,9 +136,7 @@ def multiprocess_repeatmasker(
     logger.info(
         "Processing slice to find repeats with RepeatMasker: {region_name}:{start}:{end}"
     )
-    seq = utils.get_sequence(
-        region_name, start, end, 1, genome_file, repeatmasker_output_dir
-    )
+    seq = get_sequence(region_name, start, end, 1, genome_file, repeatmasker_output_dir)
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_fasta_file_path = repeatmasker_output_dir / f"{slice_file_name}.fa"
@@ -156,7 +153,7 @@ def multiprocess_repeatmasker(
     repeatmasker_cmd = generic_repeatmasker_cmd.copy()
     repeatmasker_cmd.append(region_fasta_file_path)
     logger.info(" ".join(repeatmasker_cmd))
-    subprocess.run(repeatmasker_cmd)
+    subprocess.run(repeatmasker_cmd, check=True)
 
     create_repeatmasker_gtf(
         repeatmasker_output_file_path, region_results_file_path, region_name
@@ -241,7 +238,7 @@ def run_dust_regions(
     if not dust_path:
         dust_path = "dustmasker"
 
-    utils.check_exe(dust_path)
+    check_exe(dust_path)
     dust_output_dir = Path(create_dir(main_output_dir, "dust_output"))
     os.chdir(str(dust_output_dir))
     output_file = dust_output_dir / "annotation.gtf"
@@ -261,7 +258,6 @@ def run_dust_regions(
     generic_dust_cmd = [dust_path, "-in"]
     logger.info("Running Dust")
     pool = multiprocessing.Pool(int(num_threads))
-    tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
             multiprocess_dust,
@@ -292,7 +288,8 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
     end = slice_id[2]
 
     logger.info(
-        f"Processing slice to find low complexity regions with Dust: {region_name}:{start}:{end}"
+        "Processing slice to find low complexity regions with Dust: %s:%s:%s"
+        % (region_name, start, end)
     )
     seq = get_sequence(region_name, start, end, 1, genome_file, dust_output_dir)
 
@@ -308,7 +305,7 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
     logger.info(" ".join(dust_cmd))
-    subprocess.run(dust_cmd, stdout=dust_out)
+    subprocess.run(dust_cmd, stdout=dust_out, check=True)
     dust_out.close()
 
     create_dust_gtf(dust_output_file_path, region_results_file_path, region_name)
@@ -402,7 +399,6 @@ def run_trf_repeats(
     ]
     logger.info("Running TRF")
     pool = multiprocessing.Pool(int(num_threads))
-    tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
             multiprocess_trf,
@@ -450,7 +446,6 @@ def multiprocess_trf(
     with open(region_fasta_file_path, "w+") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_name = slice_file_name + ".trf.gtf"
     region_results_file_path = trf_output_dir / f"{slice_file_name}.trf.gtf"
 
     # TRF writes to the current dir, so swtich to the output dir for it
@@ -459,7 +454,7 @@ def multiprocess_trf(
     trf_cmd = generic_trf_cmd.copy()
     trf_cmd[1] = region_fasta_file_path
     logger.info(" ".join(trf_cmd))
-    subprocess.run(trf_cmd)
+    subprocess.run(trf_cmd, check=True)
     create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
     trf_output_file_path.unlink()
     region_fasta_file_path.unlink()
@@ -570,7 +565,8 @@ def run_red(red_path, main_output_dir, genome_file):
             red_mask_dir,
             "-rpt",
             red_repeat_dir,
-        ]
+        ],
+        check=True,
     )
 
     logger.info("Completed running Red")
