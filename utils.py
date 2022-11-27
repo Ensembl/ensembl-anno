@@ -14,26 +14,15 @@
 # limitations under the License.
 
 
-import argparse
-import errno
-import gc
-import glob
-import io
 import logging
-import math
-import multiprocessing
 import os
 import pathlib
-import random
 import re
-import shutil
-import signal
 import subprocess
+import shutil
 import sys
-import tempfile
-
-from pathlib import Path
-
+import glob
+from typing import  Union
 
 # logging formats
 logging_formatter_time_message = logging.Formatter(
@@ -51,8 +40,29 @@ console_handler.setFormatter(logging_formatter_time_message)
 logger.addHandler(console_handler)
 
 
-def create_dir(main_output_dir, dir_name):
+def add_log_file_handler(
+    logger: logging.Logger,
+    log_file_path: Union[pathlib.Path, str],
+    logging_formatter: logging.Formatter = logging_formatter_time_message,
+):
+    """
+    Create file handler and add to logger.
+    """
+    file_handler = logging.FileHandler(log_file_path, mode="a+")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging_formatter)
+    logger.addHandler(file_handler)
 
+
+def create_dir(main_output_dir, dir_name):
+    """
+    Create directory or subdirectory and log operations.
+    Args:
+        main_output_dir: main output directory path
+        dir_name: optional subdirectory to be created
+    Returns:
+        created directory
+    """
     if dir_name:
         target_dir = os.path.join(main_output_dir, dir_name)
     else:
@@ -66,7 +76,6 @@ def create_dir(main_output_dir, dir_name):
 
     try:
         os.mkdir(target_dir)
-
     except OSError:
         logger.error("Creation of the dir failed, path used: %s" % target_dir)
     else:
@@ -76,54 +85,63 @@ def create_dir(main_output_dir, dir_name):
 
 
 def check_exe(exe_path):
-
+    """
+    Check executable path
+    """
     if not shutil.which(exe_path):
         raise OSError("Exe does not exist. Path checked: %s" % exe_path)
 
 
 def check_gtf_content(gtf_file, content_obj):
-    logger.info("check gtf transcript function")
-    # This just checks how many transcript lines are in a GTF
+    """
+    Check number of transcript lines in the GTF
+
+    Arg:
+      gtf_file: path for the gtf file
+      content_obj: object to check in the gtf i.e gene_id, repeat
+
+    Return: number of transcript lines
+    """
     transcript_count = 0
-    gtf_in = open(gtf_file)
-    line = gtf_in.readline()
-    while line:
-        eles = line.split("\t")
-        if not len(eles) == 9:
-            line = gtf_in.readline()
-            continue
-        if eles[2] == content_obj:
-            transcript_count += 1
-        line = gtf_in.readline()
-    gtf_in.close()
-    logger.info(transcript_count)
+    with open(gtf_file) as gtf_in:
+        for line in gtf_in:
+            eles = line.split("\t")
+            if not len(eles) == 9:
+                continue
+            if eles[2] == content_obj:
+                transcript_count += 1
+    logger.info("%s GTF transcript count: %s" % (gtf_file, transcript_count))
     return transcript_count
 
 
 def get_seq_region_lengths(genome_file, min_seq_length):
+    """
+    Split the genomic sequence in slices defined by  min_seq_length
+    Args:
+        genome_file: path for the genome file
+        min_seq_length: slice length
+    Return: genomic sequences
+    """
     current_header = ""
     current_seq = ""
 
     seq_regions = {}
-    file_in = open(genome_file)
-    line = file_in.readline()
-    while line:
-        match = re.search(r">(.+)$", line)
-        if match and current_header:
-            if len(current_seq) > min_seq_length:
-                seq_regions[current_header] = len(current_seq)
+    with open(genome_file) as file_in:
+        for line in file_in:
+            match = re.search(r">(.+)$", line)
+            if match and current_header:
+                if len(current_seq) > min_seq_length:
+                    seq_regions[current_header] = len(current_seq)
 
-            current_seq = ""
-            current_header = match.group(1)
-        elif match:
-            current_header = match.group(1)
-        else:
-            current_seq += line.rstrip()
+                current_seq = ""
+                current_header = match.group(1)
+            elif match:
+                current_header = match.group(1)
+            else:
+                current_seq += line.rstrip()
 
-        line = file_in.readline()
-
-    if len(current_seq) > min_seq_length:
-        seq_regions[current_header] = len(current_seq)
+        if len(current_seq) > min_seq_length:
+            seq_regions[current_header] = len(current_seq)
 
     return seq_regions
 
