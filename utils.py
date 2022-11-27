@@ -22,7 +22,7 @@ import subprocess
 import shutil
 import sys
 import glob
-from typing import  Union
+from typing import Union
 
 # logging formats
 logging_formatter_time_message = logging.Formatter(
@@ -147,6 +147,15 @@ def get_seq_region_lengths(genome_file, min_seq_length):
 
 
 def create_slice_ids(seq_region_lengths, slice_size, overlap, min_length):
+    """
+    Get list of ids for a genomic slice
+    Arg:
+    seq_region_lengths: list of genomic slices
+    slice_size: size of the slice
+    overlap: size of the overlap between two slices
+    min_length: min length of the slice
+    Return: list of ids
+    """
     if not slice_size:
         slice_size = 1000000
 
@@ -316,20 +325,34 @@ def slice_output_to_gtf(
 
 
 def get_sequence(seq_region, start, end, strand, fasta_file, output_dir):
+    """
+    Creates a tempfile and writes the bed info to it based on whatever information
+    has been passed in about the sequence. Then runs bedtools getfasta. The fasta file
+    should have a faidx. This can be created with the create_faidx static method prior
+    to fetching sequence
+
+    Arg:
+    seq_region: region name
+    start: region start
+    end: region end
+    strand
+    fasta_file: genome file
+    output_dir: working dir
+    Return: sequence
+    """
     start = int(start)
     end = int(end)
     strand = int(strand)
     start -= 1
     bedtools_path = "bedtools"
-
-    # This creates a tempfile and writes the bed info to it based on whatever information
-    # has been passed in about the sequence. Then runs bedtools getfasta. The fasta file
-    # should have a faidx. This can be created with the create_faidx static method prior
-    # to fetching sequence
+    logger.info(
+        "get_sequence %s"
+        % f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}"
+    )
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=output_dir
     ) as bed_temp_file:
-        bed_temp_file.writelines(seq_region + "\t" + str(start) + "\t" + str(end))
+        bed_temp_file.writelines(f"{seq_region}\t{start}\t{end}")
         bed_temp_file.close()
 
     bedtools_command = [
