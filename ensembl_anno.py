@@ -33,7 +33,8 @@ import sys
 import tempfile
 
 from pathlib import Path
-
+from utils import *
+from repeatmasking_utils import *
 
 # logging formats
 logging_formatter_time_message = logging.Formatter(
@@ -5016,11 +5017,7 @@ if __name__ == "__main__":
 
     # create file handler and add to logger
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
-    file_handler = logging.FileHandler(log_file_path, mode="a+")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging_formatter_time_message)
-    logger.addHandler(file_handler)
-
+    add_log_file_handler(logger, log_file_path)
     logger.info("work directory: %s" % work_dir)
 
     if not os.path.exists(work_dir):
