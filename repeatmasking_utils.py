@@ -113,7 +113,7 @@ def run_repeatmasker_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(repeatmasker_output_dir, ".rm.gtf", 1, "repeat_id", "repeatmask")
+    slice_output_to_gtf(str(repeatmasker_output_dir), ".rm.gtf", 1, "repeat_id", "repeatmask")
 
 
 def multiprocess_repeatmasker(
@@ -136,7 +136,7 @@ def multiprocess_repeatmasker(
     logger.info(
         "Processing slice to find repeats with RepeatMasker: {region_name}:{start}:{end}"
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, repeatmasker_output_dir)
+    seq = get_sequence(region_name, start, end, 1, genome_file, str(repeatmasker_output_dir))
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_fasta_file_path = repeatmasker_output_dir / f"{slice_file_name}.fa"
@@ -152,7 +152,6 @@ def multiprocess_repeatmasker(
 
     repeatmasker_cmd = generic_repeatmasker_cmd.copy()
     repeatmasker_cmd.append(region_fasta_file_path)
-    logger.info(" ".join(repeatmasker_cmd))
     subprocess.run(repeatmasker_cmd, check=True)
 
     create_repeatmasker_gtf(
@@ -271,7 +270,7 @@ def run_dust_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(dust_output_dir, ".dust.gtf", 1, "repeat_id", "dust")
+    slice_output_to_gtf(str(dust_output_dir), ".dust.gtf", 1, "repeat_id", "dust")
 
 
 def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
@@ -291,7 +290,7 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
         "Processing slice to find low complexity regions with Dust: %s:%s:%s"
         % (region_name, start, end)
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, dust_output_dir)
+    seq = get_sequence(region_name, start, end, 1, genome_file, str(dust_output_dir))
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_fasta_file_path = dust_output_dir / f"{slice_file_name}.fa"
@@ -300,11 +299,11 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
 
     region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
 
-    dust_output_file_path = region_fasta_file_path + ".dust"
+    dust_output_file_path = f"{region_fasta_file_path}.dust"
     dust_out = open(dust_output_file_path, "w+")
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
-    logger.info(" ".join(dust_cmd))
+    logger.info(dust_cmd)
     subprocess.run(dust_cmd, stdout=dust_out, check=True)
     dust_out.close()
 
@@ -413,7 +412,7 @@ def run_trf_repeats(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(trf_output_dir, ".trf.gtf", 1, "repeat_id", "trf")
+    slice_output_to_gtf(str(trf_output_dir), ".trf.gtf", 1, "repeat_id", "trf")
 
 
 def multiprocess_trf(
@@ -439,7 +438,7 @@ def multiprocess_trf(
     logger.info(
         f"Processing slice to find tandem repeats with TRF: {region_name}:{start}:{end}"
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, trf_output_dir)
+    seq = get_sequence(region_name, start, end, 1, genome_file, str(trf_output_dir))
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_fasta_file_path = trf_output_dir / f"{slice_file_name}.fa"
@@ -449,12 +448,12 @@ def multiprocess_trf(
     region_results_file_path = trf_output_dir / f"{slice_file_name}.trf.gtf"
 
     # TRF writes to the current dir, so swtich to the output dir for it
-    os.chdir(trf_output_dir)
+    os.chdir(str(trf_output_dir))
     trf_output_file_path = f"{region_fasta_file_path}{trf_output_extension}"
     trf_cmd = generic_trf_cmd.copy()
-    trf_cmd[1] = region_fasta_file_path
-    logger.info(" ".join(trf_cmd))
-    subprocess.run(trf_cmd, check=True)
+    trf_cmd[1] = str(region_fasta_file_path)
+    logger.info("trf_cmd: %s" % (trf_cmd))
+    subprocess.run(trf_cmd)
     create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
     trf_output_file_path.unlink()
     region_fasta_file_path.unlink()
@@ -473,7 +472,6 @@ def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
     with open(trf_output_file_path, "r") as trf_in, open(
         region_results_file_path, "w+"
     ) as trf_out:
-
         repeat_count = 1
         for line in trf_in:
             result_match = re.search(r"^\d+", line)
@@ -500,7 +498,7 @@ def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
                     repeat_count += 1
 
 
-def run_red(red_path, main_output_dir, genome_file):
+def run_red(red_path, main_output_dir, genome_file: Union[pathlib.Path, str]):
     """
     Run Red on genome file
 
@@ -514,15 +512,15 @@ def run_red(red_path, main_output_dir, genome_file):
     """
     if not red_path:
         red_path = "Red"
-
+    genome_file=Path(genome_file)
     check_exe(red_path)
     red_dir = Path(create_dir(main_output_dir, "red_output"))
     red_mask_dir = Path(create_dir(red_dir, "mask_output"))
     red_repeat_dir = Path(create_dir(red_dir, "repeat_output"))
     red_genome_dir = Path(create_dir(red_dir, "genome_dir"))
 
-    sym_link_genome_cmd = "ln -s " + genome_file + " " + red_genome_dir
-
+    sym_link_genome_cmd = "ln -s " + str(genome_file) + " " + str(red_genome_dir)
+    logger.info(genome_file)
     genome_file_name = genome_file.name
     red_genome_file = red_genome_dir / genome_file_name
     genome_file_stem = genome_file.stem
@@ -535,7 +533,7 @@ def run_red(red_path, main_output_dir, genome_file):
             "Masked Genome file already found on the path to the Red mask output dir. Will not create a new file"
         )
         create_red_gtf(repeat_coords_file, gtf_output_file_path)
-        return masked_genome_file
+        return str(masked_genome_file)
 
     if red_genome_file.exists():
         logger.warning(
@@ -547,8 +545,8 @@ def run_red(red_path, main_output_dir, genome_file):
             "Preparing to sym link the genome file to the Red genome dir. Cmd\n%s"
             % sym_link_genome_cmd
         )
-        subprocess.run(["ln", "-s", genome_file, red_genome_dir])
-
+        #subprocess.run(["ln", "-s", genome_file, red_genome_dir])
+        red_genome_file.symlink_to(genome_file)
     if not red_genome_file.exists():
         logger.error(
             "Could not find the genome file in the Red genome dir or sym link to the original file. Path expected:\n%s"
@@ -573,7 +571,8 @@ def run_red(red_path, main_output_dir, genome_file):
 
     create_red_gtf(repeat_coords_file, gtf_output_file_path)
 
-    return masked_genome_file
+    
+    return str(masked_genome_file)
 
 
 def create_red_gtf(repeat_coords_file, gtf_output_file_path):
