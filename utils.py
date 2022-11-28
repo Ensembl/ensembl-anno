@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -13,7 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# pylint: disable=invalid-name
 
+import argparse
+import gc
+import io
+import math
+import random
+import signal
 import logging
 import os
 import pathlib
@@ -22,6 +31,7 @@ import subprocess
 import shutil
 import sys
 import glob
+import tempfile
 from typing import Union
 
 # logging formats
@@ -69,7 +79,9 @@ def create_dir(main_output_dir, dir_name):
         target_dir = main_output_dir
 
     if os.path.exists(target_dir):
-        logger.warning("Directory already exists, will not create again")
+        logger.warning(
+            "Directory already exists, will not create again"
+        )
         return target_dir
 
     logger.info("Attempting to create target dir: %s" % target_dir)
@@ -77,9 +89,14 @@ def create_dir(main_output_dir, dir_name):
     try:
         os.mkdir(target_dir)
     except OSError:
-        logger.error("Creation of the dir failed, path used: %s" % target_dir)
+        logger.error(
+            "Creation of the dir failed, path used: %s" % target_dir
+        )
     else:
-        logger.info("Successfully created the dir on the following path: %s" % target_dir)
+        logger.info(
+            "Successfully created the dir on the following path: %s"
+            % target_dir
+        )
 
     return target_dir
 
@@ -89,7 +106,9 @@ def check_exe(exe_path):
     Check executable path
     """
     if not shutil.which(exe_path):
-        raise OSError("Exe does not exist. Path checked: %s" % exe_path)
+        raise OSError(
+            "Exe does not exist. Path checked: %s" % exe_path
+        )
 
 
 def check_gtf_content(gtf_file, content_obj):
@@ -110,7 +129,9 @@ def check_gtf_content(gtf_file, content_obj):
                 continue
             if eles[2] == content_obj:
                 transcript_count += 1
-    logger.info("%s GTF transcript count: %s" % (gtf_file, transcript_count))
+    logger.info(
+        "%s GTF transcript count: %s" % (gtf_file, transcript_count)
+    )
     return transcript_count
 
 
@@ -146,7 +167,9 @@ def get_seq_region_lengths(genome_file, min_seq_length):
     return seq_regions
 
 
-def create_slice_ids(seq_region_lengths, slice_size, overlap, min_length):
+def create_slice_ids(
+    seq_region_lengths, slice_size, overlap, min_length
+):
     """
     Get list of ids for a genomic slice
     Arg:
@@ -196,22 +219,30 @@ def create_slice_ids(seq_region_lengths, slice_size, overlap, min_length):
 def slice_output_to_gtf(
     output_dir, extension, unique_ids, feature_id_label, new_id_prefix
 ):
+    """
+    Note that this does not make unique ids at the moment
+    In many cases this is fine because the ids are unique by seq region,
+    but in cases like batching it can cause problems
+    So will add in a helper method to make ids unique
 
-    # Note that this does not make unique ids at the moment
-    # In many cases this is fine because the ids are unique by seq region, but in cases like batching it can cause problems
-    # So will add in a helper method to make ids unique
-
-    # This holds keys of the current slice details with the gene id to form unique keys. Each time a new key is added
-    # the overall gene counter is incremented and the value of the key is set to the new gene id. Any subsequent
-    # lines with the same region/gene id key will then just get the new id without incrementing the counter
+    This holds keys of the current slice details with the gene id to form unique keys.
+    Each time a new key is added the overall gene counter is incremented
+    and the value of the key is set to the new gene id. Any subsequent
+    lines with the same region/gene id key will then just get
+    the new id without incrementing the counter
+    """
     gene_id_index = {}
     gene_transcript_id_index = {}
     gene_counter = 1
-
-    # Similar to the gene id index, this will have a key that is based on the slice details, gene id and transcript id. If there
-    # is no existing entry, the transcript key will be added and the transcript counter is incremented. If there is a key then
-    # the transcript id will be replaced with the new transcript id (which is based on the new gene id and transcript counter)
-    # Example key KS8000.rs1.re1000000.gene_1.transcript_1 =
+    """
+    Similar to the gene id index, this will have a key that is based on
+    the slice details, gene id and transcript id. If there
+    is no existing entry, the transcript key will be added and the transcript
+    counter is incremented. If there is a key then
+    the transcript id will be replaced with the new transcript id
+    (which is based on the new gene id and transcript counter)
+     Example key KS8000.rs1.re1000000.gene_1.transcript_1 =
+    """
     transcript_id_count_index = {}
 
     feature_counter = 1
@@ -239,20 +270,33 @@ def slice_output_to_gtf(
                 values[4] = str(int(values[4]) + (start_offset - 1))
                 if unique_ids:
                     # Maybe make a unique id based on the feature type
-                    # Basically region/feature id should be unique at this point, so could use region_id and current_id is key, value is the unique id that is incremented
+                    # Basically region/feature id should be unique at this point, 
+                    #so could use region_id and current_id is key, 
+                    #value is the unique id that is incremented
                     attribs = values[8]
 
                     # This bit assigns unique gene/transcript ids if the line contains gene_id/transcript_id
                     match_gene_type = re.search(
-                        r'(gene_id +"([^"]+)").+(transcript_id +"([^"]+)")', line
+                        r'(gene_id +"([^"]+)").+(transcript_id +"([^"]+)")',
+                        line,
                     )
                     if match_gene_type:
                         full_gene_id_string = match_gene_type.group(1)
                         current_gene_id = match_gene_type.group(2)
-                        full_transcript_id_string = match_gene_type.group(3)
-                        current_transcript_id = match_gene_type.group(4)
-                        gene_id_key = gtf_file_name + "." + str(current_gene_id)
-                        transcript_id_key = gene_id_key + "." + str(current_transcript_id)
+                        full_transcript_id_string = (
+                            match_gene_type.group(3)
+                        )
+                        current_transcript_id = match_gene_type.group(
+                            4
+                        )
+                        gene_id_key = (
+                            gtf_file_name + "." + str(current_gene_id)
+                        )
+                        transcript_id_key = (
+                            gene_id_key
+                            + "."
+                            + str(current_transcript_id)
+                        )
                         if gene_id_key not in gene_id_index:
                             new_gene_id = "gene" + str(gene_counter)
                             gene_id_index[gene_id_key] = new_gene_id
@@ -270,28 +314,43 @@ def slice_output_to_gtf(
                                 'gene_id "' + new_gene_id + '"',
                                 attribs,
                             )
-                        if transcript_id_key not in gene_transcript_id_index:
+                        if (
+                            transcript_id_key
+                            not in gene_transcript_id_index
+                        ):
                             new_transcript_id = (
                                 gene_id_index[gene_id_key]
                                 + ".t"
-                                + str(transcript_id_count_index[gene_id_key])
+                                + str(
+                                    transcript_id_count_index[
+                                        gene_id_key
+                                    ]
+                                )
                             )
                             gene_transcript_id_index[
                                 transcript_id_key
                             ] = new_transcript_id
                             attribs = re.sub(
                                 full_transcript_id_string,
-                                'transcript_id "' + new_transcript_id + '"',
+                                'transcript_id "'
+                                + new_transcript_id
+                                + '"',
                                 attribs,
                             )
-                            transcript_id_count_index[gene_id_key] += 1
+                            transcript_id_count_index[
+                                gene_id_key
+                            ] += 1
                         else:
-                            new_transcript_id = gene_transcript_id_index[
-                                transcript_id_key
-                            ]
+                            new_transcript_id = (
+                                gene_transcript_id_index[
+                                    transcript_id_key
+                                ]
+                            )
                             attribs = re.sub(
                                 full_transcript_id_string,
-                                'transcript_id "' + new_transcript_id + '"',
+                                'transcript_id "'
+                                + new_transcript_id
+                                + '"',
                                 attribs,
                             )
                         values[8] = attribs
@@ -299,15 +358,25 @@ def slice_output_to_gtf(
                     # If you don't match a gene line, try a feature line
                     else:
                         match_feature_type = re.search(
-                            r"(" + feature_id_label + ' +"([^"]+)")', line
+                            r"(" + feature_id_label + ' +"([^"]+)")',
+                            line,
                         )
                         if match_feature_type:
-                            full_feature_id_string = match_feature_type.group(1)
-                            current_feature_id = match_feature_type.group(2)
-                            new_feature_id = new_id_prefix + str(feature_counter)
+                            full_feature_id_string = (
+                                match_feature_type.group(1)
+                            )
+                            current_feature_id = (
+                                match_feature_type.group(2)
+                            )
+                            new_feature_id = new_id_prefix + str(
+                                feature_counter
+                            )
                             attribs = re.sub(
                                 full_feature_id_string,
-                                feature_id_label + ' "' + new_feature_id + '"',
+                                feature_id_label
+                                + ' "'
+                                + new_feature_id
+                                + '"',
                                 attribs,
                             )
                             feature_counter += 1
@@ -317,14 +386,17 @@ def slice_output_to_gtf(
                 line = gtf_in.readline()
             else:
                 logger.info(
-                    "Feature type not recognised, will skip. Feature type: " + values[2]
+                    "Feature type not recognised, will skip. Feature type: "
+                    + values[2]
                 )
                 line = gtf_in.readline()
         gtf_in.close()
     gtf_out.close()
 
 
-def get_sequence(seq_region, start, end, strand, fasta_file, output_dir):
+def get_sequence(
+    seq_region, start, end, strand, fasta_file, output_dir
+):
     """
     Creates a tempfile and writes the bed info to it based on whatever information
     has been passed in about the sequence. Then runs bedtools getfasta. The fasta file
@@ -354,7 +426,6 @@ def get_sequence(seq_region, start, end, strand, fasta_file, output_dir):
     ) as bed_temp_file:
         bed_temp_file.writelines(f"{seq_region}\t{start}\t{end}")
         bed_temp_file.close()
-
     bedtools_command = [
         bedtools_path,
         "getfasta",
@@ -363,7 +434,9 @@ def get_sequence(seq_region, start, end, strand, fasta_file, output_dir):
         "-bed",
         bed_temp_file.name,
     ]
-    bedtools_output = subprocess.Popen(bedtools_command, stdout=subprocess.PIPE)
+    bedtools_output = subprocess.Popen(
+        bedtools_command, stdout=subprocess.PIPE
+    )
     for idx, line in enumerate(
         io.TextIOWrapper(bedtools_output.stdout, encoding="utf-8")
     ):
