@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-
+#pylint: disable=missing-module-docstring
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -15,14 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# pylint: disable=invalid-name
 
-import argparse
-import gc
 import io
-import math
-import random
-import signal
 import logging
 import os
 import pathlib
@@ -51,10 +44,10 @@ logger.addHandler(console_handler)
 
 
 def add_log_file_handler(
-    logger: logging.Logger,
     log_file_path: Union[pathlib.Path, str],
     logging_formatter: logging.Formatter = logging_formatter_time_message,
 ):
+    #logger: logging.Logger,
     """
     Create file handler and add to logger.
     """
@@ -84,18 +77,17 @@ def create_dir(main_output_dir, dir_name):
         )
         return target_dir
 
-    logger.info("Attempting to create target dir: %s" % target_dir)
+    logger.info("Attempting to create target dir: %s", target_dir)
 
     try:
         os.mkdir(target_dir)
     except OSError:
         logger.error(
-            "Creation of the dir failed, path used: %s" % target_dir
+            "Creation of the dir failed, path used: %s", target_dir
         )
     else:
         logger.info(
-            "Successfully created the dir on the following path: %s"
-            % target_dir
+            "Successfully created the dir on the following path: %s", target_dir
         )
 
     return target_dir
@@ -129,9 +121,7 @@ def check_gtf_content(gtf_file, content_obj):
                 continue
             if eles[2] == content_obj:
                 transcript_count += 1
-    logger.info(
-        "%s GTF transcript count: %s" % (gtf_file, transcript_count)
-    )
+    logger.info('%s GTF transcript count: %d', gtf_file, int(transcript_count))
     return transcript_count
 
 
@@ -216,7 +206,7 @@ def create_slice_ids(
     return slice_ids
 
 
-def slice_output_to_gtf(
+def slice_output_to_gtf( #pylint: disable=too-many-locals, too-many-branches, too-many-statements
     output_dir, extension, unique_ids, feature_id_label, new_id_prefix
 ):
     """
@@ -234,15 +224,15 @@ def slice_output_to_gtf(
     gene_id_index = {}
     gene_transcript_id_index = {}
     gene_counter = 1
-    """
-    Similar to the gene id index, this will have a key that is based on
-    the slice details, gene id and transcript id. If there
-    is no existing entry, the transcript key will be added and the transcript
-    counter is incremented. If there is a key then
-    the transcript id will be replaced with the new transcript id
-    (which is based on the new gene id and transcript counter)
-     Example key KS8000.rs1.re1000000.gene_1.transcript_1 =
-    """
+
+    #Similar to the gene id index, this will have a key that is based on
+    #the slice details, gene id and transcript id. If there
+    #is no existing entry, the transcript key will be added and the transcript
+    #counter is incremented. If there is a key then
+    #the transcript id will be replaced with the new transcript id
+    #(which is based on the new gene id and transcript counter)
+    #Example key KS8000.rs1.re1000000.gene_1.transcript_1
+
     transcript_id_count_index = {}
 
     feature_counter = 1
@@ -253,9 +243,9 @@ def slice_output_to_gtf(
     gtf_files = glob.glob(output_dir + "/*" + extension)
     gtf_file_path = os.path.join(output_dir, "annotation.gtf")
     gtf_out = open(gtf_file_path, "w+")
-    for gtf_file_path in gtf_files:
+    for gtf_file_path in gtf_files: #pylint: disable=too-many-nested-blocks
         if os.stat(gtf_file_path).st_size == 0:
-            logger.info("File is empty, will skip:\n" + gtf_file_path)
+            logger.info('File is empty, will skip %s',gtf_file_path)
             continue
 
         gtf_file_name = os.path.basename(gtf_file_path)
@@ -270,12 +260,13 @@ def slice_output_to_gtf(
                 values[4] = str(int(values[4]) + (start_offset - 1))
                 if unique_ids:
                     # Maybe make a unique id based on the feature type
-                    # Basically region/feature id should be unique at this point, 
-                    #so could use region_id and current_id is key, 
+                    # Basically region/feature id should be unique at this point,
+                    #so could use region_id and current_id is key,
                     #value is the unique id that is incremented
                     attribs = values[8]
 
-                    # This bit assigns unique gene/transcript ids if the line contains gene_id/transcript_id
+                    # This bit assigns unique gene/transcript ids if the line
+                    #contains gene_id/transcript_id
                     match_gene_type = re.search(
                         r'(gene_id +"([^"]+)").+(transcript_id +"([^"]+)")',
                         line,
@@ -365,9 +356,9 @@ def slice_output_to_gtf(
                             full_feature_id_string = (
                                 match_feature_type.group(1)
                             )
-                            current_feature_id = (
-                                match_feature_type.group(2)
-                            )
+                            #current_feature_id = (
+                            #    match_feature_type.group(2)
+                            #)
                             new_feature_id = new_id_prefix + str(
                                 feature_counter
                             )
@@ -386,15 +377,14 @@ def slice_output_to_gtf(
                 line = gtf_in.readline()
             else:
                 logger.info(
-                    "Feature type not recognised, will skip. Feature type: "
-                    + values[2]
+                    'Feature type not recognised, will skip. Feature type: %s',values[2]
                 )
                 line = gtf_in.readline()
         gtf_in.close()
     gtf_out.close()
 
 
-def get_sequence(
+def get_sequence(#pylint: disable=too-many-arguments
     seq_region, start, end, strand, fasta_file, output_dir
 ):
     """
@@ -418,8 +408,8 @@ def get_sequence(
     start -= 1
     bedtools_path = "bedtools"
     logger.info(
-        "get_sequence %s"
-        % f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}"
+        'get_sequence %s',
+         f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}"
     )
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=output_dir
@@ -448,3 +438,11 @@ def get_sequence(
 
     os.remove(bed_temp_file.name)
     return sequence
+
+def reverse_complement(sequence):
+    """
+    Arg : sequence
+    Return reversed sequence
+    """
+    rev_matrix = str.maketrans("atgcATGC", "tacgTACG")
+    return sequence.translate(rev_matrix)[::-1]
