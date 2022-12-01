@@ -4265,11 +4265,6 @@ def multiprocess_finalise_geneset(cmd):
     subprocess.run(cmd)
 
 
-def reverse_complement(sequence):
-    rev_matrix = str.maketrans("atgcATGC", "tacgTACG")
-    return sequence.translate(rev_matrix)[::-1]
-
-
 def seq_region_names(genome_file):
     region_list = []
 
@@ -4732,11 +4727,23 @@ if __name__ == "__main__":
         work_dir = os.getcwd()
         # work_dir=glob.glob(work_dir)
 
-    # create file handler and add to logger
+    # logging formats
+    logging_formatter_time_message = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    # set up base logger
+    #logger = logging.getLogger("main_logger")
+    #logger.setLevel(logging.DEBUG)
+    #logger.propagate = False
+    logger=logging.basicConfig()
+     level=logging.DEBUG,
+ )
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
-    add_log_file_handler(logger, log_file_path)
+    # create file handler and add to logger
+    add_log_file_handler(log_file_path, logging_formatter_time_message)
+    add_log_console_handler(logging_formatter_time_message)
     logger.info("work directory: %s" % work_dir)
-
     if not os.path.exists(work_dir):
         logger.info("Work dir does not exist, will create")
         create_dir(work_dir, None)
