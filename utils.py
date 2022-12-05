@@ -27,46 +27,48 @@ import glob
 import tempfile
 from typing import Union
 
-# logging formats
-# logging_formatter_time_message = logging.Formatter(
+# logger formats
+# logger_formatter_time_message = logging.Formatter(
 #    fmt="%(asctime)s | %(levelname)s | %(message)s",
 #    datefmt="%Y-%m-%d %H:%M:%S",
 # )
 # set up base logger
 #logger = logging.getLogger("main_logger")
-# logger.setLevel(logging.DEBUG)
+# logger.setLevel(logger.DEBUG)
 # logger.propagate = False
 # create console handler and add to logger
 # console_handler = logging.StreamHandler(sys.stderr)
-# console_handler.setLevel(logging.DEBUG)
-# console_handler.setFormatter(logging_formatter_time_message)
+# console_handler.setLevel(logger.DEBUG)
+# console_handler.setFormatter(logger_formatter_time_message)
 # logger.addHandler(console_handler)
 logger = logging.getLogger(__name__)
 
 def add_log_file_handler(
     log_file_path: Union[pathlib.Path, str],
-    logging_formatter: logging.Formatter,
+    logger_formatter: logging.Formatter,
+    main_logger: logging.Logger,
 ):
-    # logger: logging.Logger,
+    # logger: logger.Logger,
     """
     Create file handler and add to logger.
     """
-    file_handler = logging.FileHandler(log_file_path, mode="a+")
+    file_handler = main_logger.FileHandler(log_file_path, mode="a+")
     file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging_formatter)
-    logger.addHandler(file_handler)
+    file_handler.setFormatter(logger_formatter)
+    return main_logger.addHandler(file_handler)
 
 
 def add_log_console_handler(
-    logging_formatter: logging.Formatter,
+    logger_formatter: logging.Formatter,
+    main_logger: logging.Logger,
 ):
     """
     Create console handler and add to logger.
     """
-    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler = main_logger.StreamHandler(sys.stderr)
     console_handler.setLevel(logging.DEBUG)
-    console_handler.setFormatter(logging_formatter)
-    logger.addHandler(console_handler)
+    console_handler.setFormatter(logger_formatter)
+    return main_logger.addHandler(console_handler)
 
 
 def create_dir(main_output_dir, dir_name):
