@@ -1,3 +1,4 @@
+# pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -12,8 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
+import sys
 import argparse
 import errno
 import gc
@@ -29,27 +29,43 @@ import re
 import shutil
 import signal
 import subprocess
-import sys
 import tempfile
 
 from pathlib import Path
-from utils import *
-from repeatmasking_utils import *
+
+# from utils import *
+from utils import (
+    add_log_file_handler,
+    add_log_console_handler,
+    create_dir,
+    check_exe,
+    check_gtf_content,
+    get_seq_region_lengths,
+    create_slice_ids,
+    slice_output_to_gtf,
+    get_sequence,
+)
+from repeatmasking_utils import (
+    run_repeatmasker_regions,
+    run_dust_regions,
+    run_trf_repeats,
+    run_red,
+)
 
 # logging formats
-logging_formatter_time_message = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# logging_formatter_time_message = logging.Formatter(
+#    fmt="%(asctime)s | %(levelname)s | %(message)s",
+#    datefmt="%Y-%m-%d %H:%M:%S",
+# )
 # set up base logger
-logger = logging.getLogger("main_logger")
-logger.setLevel(logging.DEBUG)
-logger.propagate = False
+# logger = logging.getLogger("main_logger")
+# logger.setLevel(logging.DEBUG)
+# logger.propagate = False
 # create console handler and add to logger
-console_handler = logging.StreamHandler(sys.stderr)
-console_handler.setLevel(logging.DEBUG)
-console_handler.setFormatter(logging_formatter_time_message)
-logger.addHandler(console_handler)
+# console_handler = logging.StreamHandler(sys.stderr)
+# console_handler.setLevel(logging.DEBUG)
+# console_handler.setFormatter(logging_formatter_time_message)
+# logger.addHandler(console_handler)
 
 
 def load_results_to_ensembl_db(
@@ -95,9 +111,7 @@ def load_results_to_ensembl_db(
             + annotation_results_gtf_file
         )
 
-    rfam_results_gtf_file = os.path.join(
-        main_output_dir, "rfam_output", "annotation.gtf"
-    )
+    rfam_results_gtf_file = os.path.join(main_output_dir, "rfam_output", "annotation.gtf")
     if os.path.exists(rfam_results_gtf_file):
         logger.info("Loading Rfam-based sncRNA genes to db")
         batch_size = 500
@@ -151,9 +165,7 @@ def load_results_to_ensembl_db(
             + trnascan_results_gtf_file
         )
 
-    dust_results_gtf_file = os.path.join(
-        main_output_dir, "dust_output", "annotation.gtf"
-    )
+    dust_results_gtf_file = os.path.join(main_output_dir, "dust_output", "annotation.gtf")
     if os.path.exists(dust_results_gtf_file):
         logger.info("Loading Dust repeats to db")
         batch_size = 500
@@ -390,9 +402,11 @@ def batch_gtf_records(input_gtf_file, batch_size, output_dir, record_type):
     gtf_in = open(input_gtf_file)
     if record_type == "gene":
 
-        # NOTE that the neverending variations on GTF reading/writing/merging is becoming very messy
+        # NOTE that the neverending variations on GTF reading/writing/merging
+        # is becoming very messy
         # need to create a set of utility methods outside of this script
-        # This one assumes the file has unique ids for the parent features. It then batches them into
+        # This one assumes the file has unique ids for the parent features.
+        # It then batches them into
         # sets of records based on the batch size passed in
         record_counter = 0
         current_record_batch = []
@@ -466,9 +480,7 @@ def run_find_orfs(genome_file, main_output_dir):
     seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
     for region_name in seq_region_lengths:
         region_length = seq_region_lengths[region_name]
-        seq = get_sequence(
-            region_name, 1, region_length, 1, genome_file, orf_output_dir
-        )
+        seq = get_sequence(region_name, 1, region_length, 1, genome_file, orf_output_dir)
         for phase in range(0, 6):
             find_orf_phased_region(
                 region_name, seq, phase, min_orf_length, orf_output_dir
@@ -511,13 +523,13 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
                         orf_seq = ""
                         break
 
-                # If there's another met in phase, then put i to the start of the codon after j so that only the longest ORF is found
+                # If there's another met in phase, then put i to the start of
+                # the codon after j so that only the longest ORF is found
                 if next_codon == "ATG":
                     current_index = j + 3
                 orf_seq += next_codon
         current_index += 3
     orf_out.close()
-
 
 
 def run_eponine_regions(
@@ -528,7 +540,10 @@ def run_eponine_regions(
         java_path = "java"
 
     if not eponine_path:
-        eponine_path = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar"
+        eponine_path = (
+            "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/"
+            "linuxbrew/opt/eponine/libexec/eponine-scan.jar"
+        )
 
     check_file(eponine_path)
     check_exe(java_path)
@@ -577,9 +592,7 @@ def run_eponine_regions(
     slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
 
 
-def multiprocess_eponine(
-    generic_eponine_cmd, slice_id, genome_file, eponine_output_dir
-):
+def multiprocess_eponine(generic_eponine_cmd, slice_id, genome_file, eponine_output_dir):
 
     region_name = slice_id[0]
     start = slice_id[1]
@@ -604,9 +617,7 @@ def multiprocess_eponine(
     region_fasta_out.close()
 
     region_results_file_name = slice_file_name + ".epo.gtf"
-    region_results_file_path = os.path.join(
-        eponine_output_dir, region_results_file_name
-    )
+    region_results_file_path = os.path.join(eponine_output_dir, region_results_file_name)
 
     eponine_output_file_path = region_fasta_file_path + ".epo"
     eponine_out = open(eponine_output_file_path, "w+")
@@ -800,14 +811,24 @@ def create_cpg_gtf(cpg_output_file_path, region_results_file_path, region_name):
 
 
 def run_trnascan_regions(
-    genome_file, trnascan_path, trnascan_filter_path, main_output_dir, num_threads
+    genome_file,
+    trnascan_path,
+    trnascan_filter_path,
+    main_output_dir,
+    num_threads,
 ):
 
     if not trnascan_path:
-        trnascan_path = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/tRNAscan-SE"
+        trnascan_path = (
+            "/hps/software/users/ensembl/ensw/"
+            "C8-MAR21-sandybridge/linuxbrew/bin/tRNAscan-SE"
+        )
     logger.info(trnascan_path)
     if not trnascan_filter_path:
-        trnascan_filter_path = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
+        trnascan_filter_path = (
+            "/hps/software/users/ensembl/ensw/"
+            "C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
+        )
     logger.info(trnascan_filter_path)
     check_exe(trnascan_path)
     logger.info(trnascan_path)
@@ -893,14 +914,13 @@ def multiprocess_trnascan(
     region_fasta_out.close()
 
     region_results_file_name = slice_file_name + ".trna.gtf"
-    region_results_file_path = os.path.join(
-        trnascan_output_dir, region_results_file_name
-    )
+    region_results_file_path = os.path.join(trnascan_output_dir, region_results_file_name)
 
     trnascan_output_file_path = region_fasta_file_path + ".trna"
     trnascan_ss_output_file_path = trnascan_output_file_path + ".ss"
 
-    # The filter takes an output dir and a prefix and then uses those to make a path to a .out file
+    # The filter takes an output dir and a prefix
+    # and then uses those to make a path to a .out file
     trnascan_filter_file_prefix = region_fasta_file_name + ".filt"
     trnascan_filter_file_name = trnascan_filter_file_prefix + ".out"
     trnascan_filter_log_file_name = trnascan_filter_file_prefix + ".log"
@@ -924,7 +944,8 @@ def multiprocess_trnascan(
     logger.info(" ".join(trnascan_cmd))
     subprocess.run(trnascan_cmd)
 
-    # If we have a blank output file at this point we want to stop and remove whatever files
+    # If we have a blank output file at this point
+    # we want to stop and remove whatever files
     # have been created instead of moving onto the filter
     if os.stat(trnascan_output_file_path).st_size == 0:
         os.remove(trnascan_output_file_path)
@@ -948,9 +969,7 @@ def multiprocess_trnascan(
     logger.info(" ".join(filter_cmd))
     subprocess.run(filter_cmd)
 
-    create_trnascan_gtf(
-        region_results_file_path, trnascan_filter_file_path, region_name
-    )
+    create_trnascan_gtf(region_results_file_path, trnascan_filter_file_path, region_name)
     if os.path.exists(trnascan_output_file_path):
         os.remove(trnascan_output_file_path)
     if os.path.exists(trnascan_ss_output_file_path):
@@ -965,9 +984,7 @@ def multiprocess_trnascan(
         os.remove(region_fasta_file_path)
 
 
-def create_trnascan_gtf(
-    region_results_file_path, trnascan_filter_file_path, region_name
-):
+def create_trnascan_gtf(region_results_file_path, trnascan_filter_file_path, region_name):
 
     trna_in = open(trnascan_filter_file_path, "r")
     trna_out = open(region_results_file_path, "w+")
@@ -1069,11 +1086,30 @@ def run_cmsearch_regions(
     rfam_user = "rfamro"
     rfam_host = "mysql-rfam-public.ebi.ac.uk"
     rfam_port = "4497"
-    #  rfam_accession_query_cmd = ["mysql -h", rfam_host,"-u",rfam_user,"-P",rfam_port,"-NB -e",rfam_dbname,"'select rfam_acc FROM (SELECT DISTINCT f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff, f.trusted_cutoff FROM full_region fr, rfamseq rf, taxonomy tx, family f WHERE rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc AND fr.rfamseq_acc = rf.rfamseq_acc AND LOWER(tx.tax_string) LIKE \'%" + clade + "%\' AND (f.type LIKE \'%snRNA%\' OR f.type LIKE \'%rRNA%\' OR LOWER(f.rfam_id) LIKE \'%rnase%\' OR LOWER(f.rfam_id) LIKE \'%vault%\' OR LOWER(f.rfam_id) LIKE \'%y_rna%\' OR f.rfam_id LIKE \'%Metazoa_SRP%\') AND is_significant = 1) AS TEMP WHERE rfam_id NOT LIKE \'%bacteria%\' AND rfam_id NOT LIKE \'%archaea%\' AND rfam_id NOT LIKE \'%microsporidia%\';'"]
+    #  rfam_accession_query_cmd = ["mysql -h", rfam_host,"-u",rfam_user,
+    # "-P",rfam_port,"-NB -e",rfam_dbname,"'select rfam_acc FROM (SELECT DISTINCT
+    # f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff,
+    # f.trusted_cutoff FROM full_region fr, rfamseq rf, taxonomy tx, family f WHERE
+    # rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc AND fr.rfamseq_acc = rf.rfamseq_acc
+    # AND LOWER(tx.tax_string) LIKE \'%" + clade + "%\' AND (f.type LIKE \'%snRNA%\'
+    # OR f.type LIKE \'%rRNA%\' OR LOWER(f.rfam_id) LIKE \'%rnase%\' OR
+    # LOWER(f.rfam_id) LIKE \'%vault%\' OR LOWER(f.rfam_id) LIKE \'%y_rna%\'
+    # OR f.rfam_id LIKE \'%Metazoa_SRP%\') AND is_significant = 1) AS TEMP
+    # WHERE rfam_id NOT LIKE \'%bacteria%\' AND rfam_id NOT LIKE \'%archaea%\'
+    # AND rfam_id NOT LIKE \'%microsporidia%\';'"]
 
-    # mysql -hmysql-rfam-public.ebi.ac.uk -urfamro -P4497 Rfam -NB -e "select rfam_acc FROM (SELECT DISTINCT f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff, f.trusted_cutoff FROM full_region fr, rfamseq rf, taxonomy tx, family f WHERE rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc AND fr.rfamseq_acc = rf.rfamseq_acc AND LOWER(tx.tax_string) LIKE '%insect%' AND (f.type LIKE '%snRNA%' OR f.type LIKE '%rRNA%' OR LOWER(f.rfam_id) LIKE '%rnase%' OR LOWER(f.rfam_id) LIKE '%vault%' OR LOWER(f.rfam_id) LIKE '%y_rna%' OR f.rfam_id LIKE '%Metazoa_SRP%') AND is_significant = 1) AS TEMP WHERE rfam_id NOT LIKE '%bacteria%' AND rfam_id NOT LIKE '%archaea%' AND rfam_id NOT LIKE '%microsporidia%';"
+    # mysql -hmysql-rfam-public.ebi.ac.uk -urfamro -P4497 Rfam -NB -e "select rfam_acc
+    # FROM (SELECT DISTINCT f.rfam_acc, f.rfam_id, f.type, f.description,
+    # f.gathering_cutoff, f.trusted_cutoff FROM full_region fr, rfamseq rf,
+    # taxonomy tx, family f WHERE rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc
+    # AND fr.rfamseq_acc = rf.rfamseq_acc AND LOWER(tx.tax_string) LIKE '%insect%' AND
+    # (f.type LIKE '%snRNA%' OR f.type LIKE '%rRNA%' OR LOWER(f.rfam_id) LIKE '%rnase%'
+    # OR LOWER(f.rfam_id) LIKE '%vault%' OR LOWER(f.rfam_id) LIKE '%y_rna%'
+    # OR f.rfam_id LIKE '%Metazoa_SRP%') AND is_significant = 1) AS TEMP WHERE rfam_id NOT
+    # LIKE '%bacteria%' AND rfam_id NOT LIKE '%archaea%' AND rfam_id NOT LIKE '%microsporidia%';"
 
-    #  rfam_accession_file = '/hps/nobackup2/production/ensembl/fergal/production/test_runs/non_verts/butterfly/rfam_insect_ids.txt'
+    # rfam_accession_file = '/hps/nobackup2/production/ensembl/fergal/production/
+    # test_runs/non_verts/butterfly/rfam_insect_ids.txt'
     # rfam_accession_file = os.path.join(main_output_dir,'rfam_accessions.txt')
     rfam_cm_db_path = (
         "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm"
@@ -1139,8 +1175,10 @@ def run_cmsearch_regions(
     pool.close()
     pool.join()
 
-    # Need to figure something more automated out here. At the moment it's just limiting to 5 cores and 5GB vram
-    # Ideally we could look at the amount of mem requested and put something like 10GB per core and then figure
+    # Need to figure something more automated out here. At the moment
+    # it's just limiting to 5 cores and 5GB vram
+    # Ideally we could look at the amount of mem requested and put something like
+    # 10GB per core and then figure
     # out how many cores to use (obviously not using more than the amount specified)
     memory_limit = 5 * 1024**3
     if num_threads > 5:
@@ -1248,8 +1286,10 @@ def multiprocess_cmsearch(
     try:
         return_value = subprocess.check_output(cmsearch_cmd)
     except subprocess.CalledProcessError as ex:
-        # Note that writing to file was the only option here. If return_value was passed back, eventually it would clog the
-        # tiny pipe that is used by the workers to send info back. That would mean that it would eventually just be one
+        # Note that writing to file was the only option here.
+        # If return_value was passed back, eventually it would clog the
+        # tiny pipe that is used by the workers to send info back.
+        # That would mean that it would eventually just be one
         # worked running at a time
         logger.error(
             "Issue processing the following region with cmsearch: "
@@ -1289,30 +1329,39 @@ def get_rfam_seed_descriptions(rfam_seeds_path):
     descriptions = {}
     rfam_seeds = []
 
-    # NOTE: for some reason the decoder breaks on the seeds file, so I have made this ignore errors
+    # NOTE: for some reason the decoder breaks on the seeds file,
+    # so I have made this ignore errors
     with open(rfam_seeds_path, encoding="utf-8", errors="ignore") as rfam_seeds_in:
         rfam_seeds = rfam_seeds_in.read().splitlines()
 
     for seed in rfam_seeds:
-        domain_match = re.search("^\#=GF AC   (.+)", seed)
+        domain_match = re.search(
+            "^\#=GF AC   (.+)", seed  # pylint: disable=anomalous-backslash-in-string
+        )  # pylint: disable =anomalous-backslash-in-string
         if domain_match:
             domain = domain_match.group(1)
             descriptions[domain] = {}
             continue
 
-        description_match = re.search("^\#=GF DE   (.+)", seed)
+        description_match = re.search(
+            "^\#=GF DE   (.+)", seed
+        )  # pylint: disable =anomalous-backslash-in-string
         if description_match:
             description = description_match.group(1)
             descriptions[domain]["description"] = description
             continue
 
-        name_match = re.search("^\#=GF ID   (.+)", seed)
+        name_match = re.search(
+            "^\#=GF ID   (.+)", seed
+        )  # pylint: disable =anomalous-backslash-in-string
         if name_match:
             name = name_match.group(1)
             descriptions[domain]["name"] = name
             continue
 
-        type_match = re.search("^\#=GF TP   Gene; (.+)", seed)
+        type_match = re.search(
+            "^\#=GF TP   Gene; (.+)", seed
+        )  # pylint: disable =anomalous-backslash-in-string
         if type_match:
             rfam_type = type_match.group(1)
             descriptions[domain]["type"] = rfam_type
@@ -1343,9 +1392,9 @@ def extract_rfam_metrics(rfam_selected_models_file):
 
                 description_match = re.search(r"^DESC\s+(\S+)", line)
                 if description_match:
-                    parsed_cm_data[model_name][
-                        "-description"
-                    ] = description_match.group(1)
+                    parsed_cm_data[model_name]["-description"] = description_match.group(
+                        1
+                    )
                     continue
 
                 length_match = re.search(r"^CLEN\s+(\d+)", line)
@@ -1421,7 +1470,8 @@ def parse_rfam_tblout(region_tblout_file_path, region_name):
 #      -hend           => $hend,
 #      -hstrand        => $strand,
 #      -score          => $score,
-#      -hseqname       => length($target_name) > 39 ? substr($target_name, 0, 39) : $target_name,,
+#      -hseqname       => length($target_name) > 39 ?
+# substr($target_name, 0, 39) : $target_name,,
 #      -p_value  => $evalue,
 #      -align_type => 'ensembl',
 #      -cigar_string  => abs($hend - $hstart) . "M",
@@ -1508,8 +1558,10 @@ def filter_rfam_results(unfiltered_tbl_data, cv_models):
     return filtered_results
 
 
-# NOTE: The below are notes from the perl code (which has extra code) about possible improvements that are not implemented there
-# Although not included in RefSeq filters, additional filters that consider sizes and score_to_size ratios can be applied
+# NOTE: The below are notes from the perl code (which has extra code)
+# about possible improvements that are not implemented there
+# Although not included in RefSeq filters, additional filters that
+# consider sizes and score_to_size ratios can be applied
 # in future work to further exclude FPs
 #
 # my $is_valid_size = $mapping_length > $min_length && $mapping_length < $max_length ? 1 : 0;
@@ -1582,7 +1634,12 @@ def create_rfam_gtf(
                 biotype = "Y_RNA"
 
             rna_seq = get_sequence(
-                region_name, start, end, rnafold_strand, genome_file, rfam_output_dir
+                region_name,
+                start,
+                end,
+                rnafold_strand,
+                genome_file,
+                rfam_output_dir,
             )
             valid_structure = check_rnafold_structure(rna_seq, rfam_output_dir)
 
@@ -1632,8 +1689,10 @@ def create_rfam_gtf(
 
 def check_rnafold_structure(seq, rfam_output_dir):
 
-    # Note there's some extra code in the RNAfold Perl module for encoding the structure into an attrib
-    # Could consider implementing this when running for loading into an Ensembl db
+    # Note there's some extra code in the RNAfold Perl module
+    # for encoding the structure into an attrib
+    # Could consider implementing this when running
+    # for loading into an Ensembl db
     structure = 0
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=rfam_output_dir
@@ -1653,6 +1712,7 @@ def check_rnafold_structure(seq, rfam_output_dir):
     os.remove(rna_in_file_path)
 
     return structure
+
 
 def run_genblast_align(
     genblast_path,
@@ -1795,8 +1855,9 @@ def multiprocess_genblast(
     ]
 
     logger.info(" ".join(genblast_cmd))
-    # Using the child process termination as described here: 
-    # https://alexandra-zaharia.github.io/posts/kill-subprocess-and-its-children-on-timeout-python/
+    # Using the child process termination as described here:
+    # https://alexandra-zaharia.github.io/posts/kill-subprocess
+    # -and-its-children-on-timeout-python/
     try:
         p = subprocess.Popen(genblast_cmd, start_new_session=True)
         p.wait(timeout=genblast_timeout_secs)
@@ -1812,6 +1873,7 @@ def multiprocess_genblast(
 
 
 def generate_genblast_gtf(genblast_dir):
+    logger.info("generate_genblast_gtf")
     file_out_name = os.path.join(genblast_dir, "annotation.gtf")
     file_out = open(file_out_name, "w+")
     genblast_extension = "_1.1c_2.3_s1_0_16_1"
@@ -1877,7 +1939,7 @@ def set_attributes(attributes, feature_type):
     return converted_attributes
 
 
-# Example genBlast output
+# Example genBlast output #pylint: disable=line-too-long
 # 1       genBlastG       transcript      131128674       131137049       252.729 -       .       ID=259447-R1-1-A1;Name=259447;PID=84.65;Coverage=94.22;Note=PID:84.65-Cover:94.22
 # 1       genBlastG       coding_exon     131137031       131137049       .       -       .       ID=259447-R1-1-A1-E1;Parent=259447-R1-1-A1
 # 1       genBlastG       coding_exon     131136260       131136333       .       -       .       ID=259447-R1-1-A1-E2;Parent=259447-R1-1-A1
@@ -2091,7 +2153,8 @@ def run_star_align(
 
     check_exe(star_path)
 
-    # If trimming has been enabled then switch the path for short_read_fastq_dir from the original location to the trimmed fastq dir
+    # If trimming has been enabled then switch the path for
+    # short_read_fastq_dir from the original location to the trimmed fastq dir
     if trim_fastq:
         short_read_fastq_dir = os.path.join(main_output_dir, "trim_galore_output")
 
@@ -2139,7 +2202,8 @@ def run_star_align(
                 and os.path.exists(fastq_file_pair + ".sub")
             ):
                 logger.info(
-                    "Found an existing .sub files on the fastq path for both members of the pair, will use those instead of subsampling again. Files:"
+                    "Found an existing .sub files on the fastq path for both members of the pair, \
+                    will use those instead of subsampling again. Files:"
                 )
                 logger.info(fastq_file + ".sub")
                 logger.info(fastq_file_pair + ".sub")
@@ -2211,14 +2275,19 @@ def run_star_align(
         fastq_file_name = os.path.basename(fastq_file_path)
         check_compression = re.search(r".gz$", fastq_file_name)
 
-        # If there's a tmp dir already, the most likely cause is that STAR failed on the previous input file(s)
-        # In this case STAR would effectively break for all the rest of the files, as it won't run if the tmp
-        # dir exists. So clean it up and put out a warning. Another approach would be to just name the tmp dir
-        # uniquely. Also there should be code checking the return on STAR anyway. So later when this is being
+        # If there's a tmp dir already, the most likely cause is that \
+        # STAR failed on the previous input file(s)
+        # In this case STAR would effectively break for all the rest
+        # of the files, as it won't run if the tmp
+        # dir exists. So clean it up and put out a warning. Another approach
+        # would be to just name the tmp dir
+        # uniquely. Also there should be code checking the return on
+        # STAR anyway. So later when this is being
         # cleaned up to have proper tests, need to decide on the best implementation
         if os.path.exists(star_tmp_dir):
             logger.error(
-                "Found an existing tmp dir, implies potential failure on previous file. Removing tmp dir"
+                "Found an existing tmp dir, implies potential failure on \
+                previous file. Removing tmp dir"
             )
             try:
                 shutil.rmtree(star_tmp_dir)
@@ -2229,21 +2298,27 @@ def run_star_align(
         junctions_file_path = os.path.join(star_dir, (fastq_file_name + ".sj.tab"))
         sam_file_name = os.path.basename(sam_file_path)
         sam_temp_file_path = os.path.join(star_dir, (sam_file_name + ".tmp"))
-        bam_sort_file_path = os.path.join(
-            star_dir, re.sub(".sam", ".bam", sam_file_name)
-        )
+        bam_sort_file_path = os.path.join(star_dir, re.sub(".sam", ".bam", sam_file_name))
 
         if (
             os.path.isfile(bam_sort_file_path)
             and not os.stat(bam_sort_file_path).st_size == 0
         ):
             logger.info(
-                "Found an existing bam file for the fastq file, presuming the file has been processed, will skip"
+                "Found an existing bam file for the fastq file, \
+                presuming the file has been processed, will skip"
             )
             continue
 
         logger.info("Processing %s" % fastq_file_path)
-        #    star_command = [star_path,'--outFilterIntronMotifs','RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif','--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode','alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file_path,'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000','50000','50000','50000','50000','50000','100000']
+        #    star_command = [star_path,'--outFilterIntronMotifs',
+        #'RemoveNoncanonicalUnannotated','--outSAMstrandField','intronMotif',
+        #'--runThreadN',str(num_threads),'--twopassMode','Basic','--runMode',
+        #'alignReads','--genomeDir',star_dir,'--readFilesIn',fastq_file_path,
+        #'--outFileNamePrefix',(star_dir + '/'),'--outTmpDir',star_tmp_dir,
+        #'--outSAMtype','SAM','--alignIntronMax',str(max_intron_length),
+        #'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000',
+        #'50000','50000','50000','50000','50000','100000']
 
         star_command = [
             star_path,
@@ -2278,9 +2353,7 @@ def run_star_align(
 
         subprocess.run(star_command)
         subprocess.run(["mv", os.path.join(star_dir, "Aligned.out.sam"), sam_file_path])
-        subprocess.run(
-            ["mv", os.path.join(star_dir, "SJ.out.tab"), junctions_file_path]
-        )
+        subprocess.run(["mv", os.path.join(star_dir, "SJ.out.tab"), junctions_file_path])
 
         logger.info("Converting samfile into sorted bam file. Bam file:")
         logger.info(bam_sort_file_path)
@@ -2324,7 +2397,8 @@ def run_subsample_script(fastq_file, fastq_file_pair, subsample_script_path):
 def check_for_fastq_subsamples(fastq_file_list):
     # This should probably removed at some point as it is needlessly complicated
     # Would be better to just build into the previous step
-    # Mainly just about making sure that if you have subsamples they're used and if you have pairs they're paired
+    # Mainly just about making sure that if you have subsamples
+    # they're used and if you have pairs they're paired
     for idx, fastq_files in enumerate(fastq_file_list):
         fastq_file = fastq_files[0]
         subsample_file = fastq_file + ".sub"
@@ -2335,10 +2409,12 @@ def check_for_fastq_subsamples(fastq_file_list):
             fastq_file_pair = fastq_files[1]
             subsample_file_pair = fastq_file_pair + ".sub"
 
-        # This bit will replace the list entry with a string, don't need a list after this function for each pair/file
+        # This bit will replace the list entry with a string,
+        # don't need a list after this function for each pair/file
         if os.path.exists(subsample_file):
             logger.info(
-                "Found a subsampled file extension, will use that instead of the original file. Path:"
+                "Found a subsampled file extension, \
+                will use that instead of the original file. Path:"
             )
             logger.info(subsample_file)
             fastq_file_list[idx] = subsample_file
@@ -2348,7 +2424,8 @@ def check_for_fastq_subsamples(fastq_file_list):
         # This bit just concats the paired file (or subsampled paired file) if it exists
         if os.path.exists(subsample_file_pair):
             logger.info(
-                "Found a subsampled paired file extension, will use that instead of the original file. Path:"
+                "Found a subsampled paired file extension,\
+                will use that instead of the original file. Path:"
             )
             logger.info(subsample_file_pair)
             fastq_file_list[idx] = subsample_file + "," + subsample_file_pair
@@ -2406,14 +2483,20 @@ def run_minimap2_align(
         fastq_file_list.append(fastq_file)
 
     if not fastq_file_list:
-        # NOTE: should update this to have a param that says it's okay to be empty if there's an override param
-        # This is because it's important that an external user would have an exception if they provided a long read dir
-        # but there was nothing in it. Whereas in the Ensembl pipeline there might not be long read data, but we don't
-        # know this when the command line is being constructed. This is also true for the short read data. An alternative
-        # would be to put in another analysis into the Ensembl pipeline to construct this commandline after the transcriptomic
+        # NOTE: should update this to have a param that says
+        # it's okay to be empty if there's an override param
+        # This is because it's important that an external user
+        # would have an exception if they provided a long read dir
+        # but there was nothing in it. Whereas in the Ensembl pipeline
+        # there might not be long read data, but we don't
+        # know this when the command line is being constructed.
+        # This is also true for the short read data. An alternative
+        # would be to put in another analysis into the Ensembl pipeline
+        # to construct this commandline after the transcriptomic
         # data has been searched for
         return
-    #    raise IndexError('The list of fastq files is empty. Fastq dir:\n%s' % long_read_fastq_dir)
+        # raise IndexError('The list of fastq files is empty.
+        # Fastq dir:\n%s' % long_read_fastq_dir)
 
     if not os.path.exists(minimap2_index_file):
         logger.info("Did not find an index file for minimap2. Will create now")
@@ -2631,8 +2714,13 @@ def bed_to_exons(block_sizes, block_starts, offset):
 
 def check_transcriptomic_output(main_output_dir):
 
-    # This will check across the various transcriptomic dirs and check there's actually some data
-    transcriptomic_dirs = ["scallop_output", "stringtie_output", "minimap2_output"]
+    # This will check across the various transcriptomic
+    # dirs and check there's actually some data
+    transcriptomic_dirs = [
+        "scallop_output",
+        "stringtie_output",
+        "minimap2_output",
+    ]
     total_lines = 0
     min_lines = 100000
     for transcriptomic_dir in transcriptomic_dirs:
@@ -2657,11 +2745,14 @@ def check_transcriptomic_output(main_output_dir):
         )
     if total_lines == 0:
         raise IOError(
-            "Anno was run with transcriptomic mode enabled, but the transcriptomic annotation files are empty"
+            "Anno was run with transcriptomic mode enabled,\
+            but the transcriptomic annotation files are empty"
         )
     elif total_lines <= min_lines:
         raise IOError(
-            "Anno was run with transcriptomic mode enabled, but the total number of lines in the output files were less than the min expected value"
+            "Anno was run with transcriptomic mode enabled, \
+            but the total number of lines in the output \
+            files were less than the min expected value"
             + "\n"
             "Found: " + str(total_lines) + "\n"
             "Min allowed: " + str(min_lines)
@@ -2675,7 +2766,7 @@ def check_transcriptomic_output(main_output_dir):
         )
 
 
-# start gene g1
+# start gene g1 #pylint: disable=line-too-long
 # 1       AUGUSTUS        gene    1       33908   1       +       .       g1
 # 1       AUGUSTUS        transcript      1       33908   .       +       .       g1.t1
 # 1       AUGUSTUS        CDS     3291    3585    .       +       2       transcript_id "g1.t1"; gene_id "g1";
@@ -2770,16 +2861,12 @@ def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
     gtf_out.close()
 
 
-def run_augustus_predict(
-    augustus_path, main_output_dir, masked_genome_file, num_threads
-):
+def run_augustus_predict(augustus_path, main_output_dir, masked_genome_file, num_threads):
 
     min_seq_length = 1000
 
     if not augustus_path:
-        augustus_path = (
-            "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus"
-        )
+        augustus_path = "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus"
 
     bam2hints_path = "/homes/fergal/bin/bam2hints"
     bam2wig_path = "/homes/fergal/bin/bam2wig"
@@ -2825,8 +2912,8 @@ def run_augustus_predict(
         "--species=human",
         "--UTR=on",
         (
-            "--extrinsicCfgFile="
-            + "/hps/nobackup2/production/ensembl/jma/src/Augustus/config/extrinsic/extrinsic.M.RM.E.W.P.cfg"
+            "--extrinsicCfgFile=" + "/hps/nobackup2/production/ensembl/jma/src/Augustus/"
+            "config/extrinsic/extrinsic.M.RM.E.W.P.cfg"
         ),
     ]
 
@@ -2849,7 +2936,6 @@ def run_augustus_predict(
     pool.join()
 
     augustus_output_to_gtf(augustus_dir, augustus_genome_dir)
-
 
 
 def generate_hints(
@@ -2955,10 +3041,14 @@ def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir)
 def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_path):
 
     # Note this is trying to be memory and file efficient at the cost of speed
-    # So files are only created as needed and the hints are being read line by line as written as needed
-    # This comes with the downside of being slow, but it's only a very small amount of time relative
-    # to how slow the step is in total. Given that this step in general eats up a low of memory, saving as much
-    # as possible here is not a bad thing even if it's adding in an overhead by continuously reading the hints file
+    # So files are only created as needed and the hints are
+    # being read line by line as written as needed
+    # This comes with the downside of being slow, but it's
+    # only a very small amount of time relative
+    # to how slow the step is in total. Given that this step
+    # in general eats up a low of memory, saving as much
+    # as possible here is not a bad thing even if it's adding
+    # in an overhead by continuously reading the hints file
 
     region_hints_file_path = region_fasta_file_path + ".gff"
     hints_in = open(hints_file)
@@ -3027,11 +3117,13 @@ def run_stringtie_assemble(
 
     if not sorted_bam_files:
         raise IndexError(
-            "The list of sorted bam files is empty, expected them in Star output dir. Star dir:\n%s"
+            "The list of sorted bam files is empty, expected \
+            them in Star output dir. Star dir:\n%s"
             % star_dir
         )
 
-    # Don't know why this isn't multiprocessed, probably cos it was fast enough in serial. But consider multiprocessing if
+    # Don't know why this isn't multiprocessed, probably cos it
+    # was fast enough in serial. But consider multiprocessing if
     # the mem usage is low
     for sorted_bam_file in sorted_bam_files:
         sorted_bam_file_name = os.path.basename(sorted_bam_file)
@@ -3125,11 +3217,13 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
 
     if not sorted_bam_files:
         raise IndexError(
-            "The list of sorted bam files is empty, expected them in Star output dir. Star dir:\n%s"
+            "The list of sorted bam files is empty, expected \
+            them in Star output dir. Star dir:\n%s"
             % star_dir
         )
 
-    # Don't know why this isn't multiprocessed, probably cos it was fast enough in serial. But consider multiprocessing if
+    # Don't know why this isn't multiprocessed, probably cos it was
+    # fast enough in serial. But consider multiprocessing if
     # the mem usage is low
     for sorted_bam_file in sorted_bam_files:
         sorted_bam_file_name = os.path.basename(sorted_bam_file)
@@ -3163,7 +3257,8 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
                 logger.error("Issue processing the following region with scallop")
                 logger.error("Return value: " + str(return_value))
 
-    #      subprocess.run([scallop_path,'-i',sorted_bam_file,'-o',transcript_file_path,'--min_flank_length','10'])
+    #      subprocess.run([scallop_path,'-i',sorted_bam_file,'-o',
+    # transcript_file_path,'--min_flank_length','10'])
 
     # Now need to merge
     logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
@@ -3266,7 +3361,8 @@ def model_builder(work_dir):
             if not elements[4] and elements[7] < 10:
                 continue
 
-            # For the moment treat multimapping and single mapping things as a combined score
+            # For the moment treat multimapping and single
+            # mapping things as a combined score
             score = float(elements[6]) + float(elements[7])
             score = str(score)
             output_line = [
@@ -3286,13 +3382,19 @@ def model_builder(work_dir):
 
 
 def split_genome(genome_file, target_dir, min_seq_length):
-    # This is the lazy initial way of just splitting into a dir of files based on the toplevel sequence with a min sequence length filter
+    # This is the lazy initial way of just splitting into a dir
+    # of files based on the toplevel sequence with a min sequence length filter
     # There are a couple of obvious improvements:
-    # 1) Instead of making files for all seqs, just process N seqs parallel, where N = num_threads. Then you could clean up the seq file
-    #    after each seq finishes, thus avoiding potentially having thousands of file in a dir
-    # 2) Split the seq into even slices and process these in parallel (which the same cleanup as in 1). For sequences smaller than the
-    #    target slice size, bundle them up together into a single file. Vastly more complex, partially implemented in the splice_genome method
-    #    Allows for more consistency with parallelisation (since there should be no large outliers). But require a mapping strategy for the
+    # 1) Instead of making files for all seqs, just process N seqs
+    #    parallel, where N = num_threads. Then you could clean up the seq file
+    #    after each seq finishes, thus avoiding potentially
+    #    having thousands of file in a dir
+    # 2) Split the seq into even slices and process these in parallel
+    #    (which the same cleanup as in 1). For sequences smaller than the
+    #    target slice size, bundle them up together into a single file. Vastly
+    #    more complex, partially implemented in the splice_genome method
+    #    Allows for more consistency with parallelisation (since there should
+    #    be no large outliers). But require a mapping strategy for the
     #    coords and sequence names and all the hints will need to be adjusted
     current_header = ""
     current_seq = ""
@@ -3362,8 +3464,10 @@ def run_finalise_geneset(
     validation_dir = create_dir(final_annotation_dir, "cds_validation")
     seq_region_lengths = get_seq_region_lengths(genome_file, 0)
 
-    # This used to be a list of output dirs and a loop which was neat, I'm coverting to a list of conditions as
-    # it's more straightforward with the renaming and having to merge scallop and stringtie
+    # This used to be a list of output dirs and a loop which was neat,
+    # I'm coverting to a list of conditions as
+    # it's more straightforward with the renaming
+    # and having to merge scallop and stringtie
     protein_annotation_raw = os.path.join(
         main_output_dir, "genblast_output", "annotation.gtf"
     )
@@ -3376,9 +3480,7 @@ def run_finalise_geneset(
     scallop_annotation_raw = os.path.join(
         main_output_dir, "scallop_output", "annotation.gtf"
     )
-    busco_annotation_raw = os.path.join(
-        main_output_dir, "busco_output", "annotation.gtf"
-    )
+    busco_annotation_raw = os.path.join(main_output_dir, "busco_output", "annotation.gtf")
 
     transcript_selector_script = os.path.join(
         main_script_dir, "support_scripts_perl", "select_best_transcripts.pl"
@@ -3420,7 +3522,8 @@ def run_finalise_geneset(
         file_in.close()
     file_out.close()
 
-    # Copy the raw files into the annotation dir, this is not needed as such, but collecting them in one place and relabelling is
+    # Copy the raw files into the annotation dir, this is not needed
+    # as such, but collecting them in one place and relabelling is
     # helpful for a user
     if os.path.exists(busco_annotation_raw):
         subprocess.run(
@@ -3449,7 +3552,8 @@ def run_finalise_geneset(
     ]
     pool = multiprocessing.Pool(int(num_threads))
     for seq_region_name in seq_region_names:
-        # The selection script needs different params depending on whether the seqs are from transcriptomic data or not
+        # The selection script needs different params depending on
+        # whether the seqs are from transcriptomic data or not
         region_details = (
             seq_region_name + ".rs1" + ".re" + str(seq_region_lengths[seq_region_name])
         )
@@ -3486,9 +3590,7 @@ def run_finalise_geneset(
 
         if os.path.exists(busco_annotation_raw):
             logger.info("Finalising BUSCO data for: " + seq_region_name)
-            busco_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", busco_annotation_raw
-            )
+            busco_annotation_select = re.sub("_raw.gtf", "_sel.gtf", busco_annotation_raw)
             cmd = generic_select_cmd.copy()
             cmd.extend(
                 [
@@ -3532,7 +3634,10 @@ def run_finalise_geneset(
 
     # At this point we will have the region files for all the,
     merge_finalise_output_files(
-        final_annotation_dir, region_annotation_dir, ".trans.gtf", "transcriptomic"
+        final_annotation_dir,
+        region_annotation_dir,
+        ".trans.gtf",
+        "transcriptomic",
     )
     merge_finalise_output_files(
         final_annotation_dir, region_annotation_dir, ".busco.gtf", "busco"
@@ -3541,7 +3646,8 @@ def run_finalise_geneset(
         final_annotation_dir, region_annotation_dir, ".protein.gtf", "protein"
     )
 
-    # Create a single GTF file with all the selected transcripts now that they have proper ids
+    # Create a single GTF file with all the selected transcripts
+    # now that they have proper ids
     fully_merged_gtf_path = os.path.join(
         final_annotation_dir, "all_selected_transcripts.gtf"
     )
@@ -3586,7 +3692,10 @@ def run_finalise_geneset(
     pool.join()
 
     merge_finalise_output_files(
-        final_annotation_dir, final_region_annotation_dir, ".final.gtf", "prevalidation"
+        final_annotation_dir,
+        final_region_annotation_dir,
+        ".final.gtf",
+        "prevalidation",
     )
     merged_gtf_file = os.path.join(final_annotation_dir, ("prevalidation_sel.gtf"))
     merged_cdna_file = os.path.join(final_annotation_dir, ("prevalidation_sel.cdna.fa"))
@@ -3608,9 +3717,7 @@ def run_finalise_geneset(
         file_out.write(line)
     file_out.close()
 
-    cleaned_initial_gtf_file = os.path.join(
-        final_annotation_dir, ("cleaned_pre_utr.gtf")
-    )
+    cleaned_initial_gtf_file = os.path.join(final_annotation_dir, ("cleaned_pre_utr.gtf"))
     cleaned_utr_gtf_file = os.path.join(final_annotation_dir, ("annotation.gtf"))
 
     logger.info("Cleaning initial set")
@@ -3661,7 +3768,10 @@ def run_finalise_geneset(
     pool.join()
 
     merge_finalise_output_files(
-        final_annotation_dir, utr_region_annotation_dir, ".utr.gtf", "annotation"
+        final_annotation_dir,
+        utr_region_annotation_dir,
+        ".utr.gtf",
+        "annotation",
     )
     subprocess.run(
         [
@@ -3697,7 +3807,10 @@ def validate_coding_transcripts(
 ):
 
     logger.info("Running CDS validation with RNAsamba and CPC2")
-    rnasamba_weights = "/nfs/production/flicek/ensembl/genebuild/genebuild_virtual_user/rnasamba_data/full_length_weights.hdf5"
+    rnasamba_weights = (
+        "/nfs/production/flicek/ensembl/genebuild/"
+        "genebuild_virtual_user/rnasamba_data/full_length_weights.hdf5"
+    )
     rnasamba_output_path = os.path.join(validation_dir, "rnasamba.tsv.txt")
     cpc2_output_path = os.path.join(validation_dir, "cpc2.tsv")
     rnasamba_volume = validation_dir + "/:/app:rw"
@@ -3706,7 +3819,8 @@ def validate_coding_transcripts(
         "exec",
         "--bind",
         rnasamba_volume,
-        "/hps/software/users/ensembl/genebuild/genebuild_virtual_user/singularity/rnasamba_latest.sif",
+        "/hps/software/users/ensembl/genebuild/"
+        "genebuild_virtual_user/singularity/rnasamba_latest.sif",
         "rnasamba",
         "classify",
         rnasamba_output_path,
@@ -3721,7 +3835,8 @@ def validate_coding_transcripts(
         "exec",
         "--bind",
         cpc2_volume,
-        "/hps/software/users/ensembl/genebuild/genebuild_virtual_user/singularity/test_cpc2.sif",
+        "/hps/software/users/ensembl/genebuild/"
+        "genebuild_virtual_user/singularity/test_cpc2.sif",
         "python3",
         "/CPC2_standalone-1.0.1/bin/CPC2.py",
         "-i",
@@ -3742,7 +3857,10 @@ def validate_coding_transcripts(
     if diamond_validation_db is not None:
         diamond_output_dir = create_dir(validation_dir, "diamond_output")
         diamond_validation(
-            diamond_validation_db, amino_acid_file, diamond_output_dir, num_threads
+            diamond_validation_db,
+            amino_acid_file,
+            diamond_output_dir,
+            num_threads,
         )
         diamond_results = read_diamond_results(diamond_output_dir)
 
@@ -3821,7 +3939,8 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             if translation_match:
                 translation_coords = translation_match.group(1)
                 translation_coords_list = translation_coords.split(":")
-                # If the start exon coords of both exons are the same, then it's the same exon and thus a single exon cds
+                # If the start exon coords of both exons are the same,
+                # then it's the same exon and thus a single exon cds
                 if translation_coords_list[0] == translation_coords_list[3]:
                     single_cds_exon_transcript = 1
 
@@ -3861,9 +3980,12 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
             min_single_source_probability = 0.8
             min_single_exon_probability = 0.9
 
-            # Note that the below looks at validating things under different levels of strictness
-            # There are a few different continue statements, where transcripts will be skipped resulting
-            # in a smaller post validation file. It mainly removes single coding exon genes with no real
+            # Note that the below looks at validating things
+            # under different levels of strictness
+            # There are a few different continue statements,
+            # where transcripts will be skipped resulting
+            # in a smaller post validation file. It mainly
+            # removes single coding exon genes with no real
             # support or for multi-exon lncRNAs that are less than 200bp long
             if single_cds_exon_transcript == 1 and validation_type == "relaxed":
                 if diamond_e_value is not None:
@@ -4070,7 +4192,10 @@ def combine_results(rnasamba_results, cpc2_results, diamond_results):
         coding_potential = result[2]
 
         if transcript_id not in transcript_ids:
-            transcript_ids[transcript_id] = [coding_probability, coding_potential]
+            transcript_ids[transcript_id] = [
+                coding_probability,
+                coding_potential,
+            ]
 
     for result in cpc2_results:
         transcript_id = result[0]
@@ -4079,15 +4204,22 @@ def combine_results(rnasamba_results, cpc2_results, diamond_results):
         transcript_length = result[3]
         peptide_length = result[4]
         transcript_ids[transcript_id].extend(
-            [coding_probability, coding_potential, transcript_length, peptide_length]
+            [
+                coding_probability,
+                coding_potential,
+                transcript_length,
+                peptide_length,
+            ]
         )
 
     if diamond_results is not None:
         for result in diamond_results:
             transcript_id = result[0]
             e_value = result[1]
-            # There seems to be an issue where there are a small number of sequences that don't make it into the cpc2/rnasamba output
-            # Should code in a system for this, but it would be good to understand why it happens to begin with. Seems to be the same
+            # There seems to be an issue where there are a small number
+            # of sequences that don't make it into the cpc2/rnasamba output
+            # Should code in a system for this, but it would be good to
+            # understand why it happens to begin with. Seems to be the same
             # number of missing seqs in both, so maybe a shared cut-off
             if transcript_id in transcript_ids:
                 transcript_ids[transcript_id].extend([e_value])
@@ -4141,12 +4273,14 @@ def merge_finalise_output_files(
         final_annotation_dir, (id_label + "_sel.prot.fa")
     )
 
-    # The below is not great, it's a bit messy because there might be some cases where there aren't
-    # translations. So it's not as straightforward as reading the records across all three files
-    # in parallel. The solution is to just load the seqs into memory and index them on the current
-    # header, which should correspond to a transcript/gene id in the GTF. When writing the results
-    # into the single merged files the ids will be updated to be unique and consistent across the
-    # three file types
+    # The below is not great, it's a bit messy because there might be
+    # some cases where there aren't translations. So it's not as
+    # straightforward as reading the records across all three files
+    # in parallel. The solution is to just load the seqs into
+    # memory and index them on the current header, which should
+    # correspond to a transcript/gene id in the GTF. When writing the
+    # results into the single merged files the ids will be updated to
+    # be unique and consistent across the header,  three file types
 
     gene_id_counter = 0
     transcript_id_counter = 0
@@ -4197,7 +4331,9 @@ def merge_finalise_output_files(
             new_gene_id = id_label + "_" + str(gene_id_counter)
             new_transcript_id = id_label + "_" + str(transcript_id_counter)
             line = re.sub(
-                'gene_id "' + gene_id + '"', ('gene_id "' + new_gene_id + '"'), line
+                'gene_id "' + gene_id + '"',
+                ('gene_id "' + new_gene_id + '"'),
+                line,
             )
             line = re.sub(
                 'transcript_id "' + transcript_id + '"',
@@ -4212,9 +4348,7 @@ def merge_finalise_output_files(
                 cdna_out.write(new_header + cdna_seq_index[transcript_id])
 
                 if transcript_id in amino_acid_seq_index:
-                    amino_acid_out.write(
-                        new_header + amino_acid_seq_index[transcript_id]
-                    )
+                    amino_acid_out.write(new_header + amino_acid_seq_index[transcript_id])
 
     gtf_out.close()
     cdna_out.close()
@@ -4293,7 +4427,7 @@ def slice_genome(genome_file, target_dir, target_slice_size):
     current_header = ""
     current_seq = ""
     seq_dict = {}
-    for line in seq:
+    for line in seq:  # pylint:disable=used-before-assignment
         match = re.search(r">(.+)$", line)
         if match and current_header:
             seq_dict[current_header] = current_seq
@@ -4329,9 +4463,7 @@ def slice_genome(genome_file, target_dir, target_slice_size):
         if len(seq) >= min_seq_length:
             file_name = "genome_file_" + str(file_number)
             file_out = open(os.path.join(file_name), "w+")
-            file_out.write(
-                ">" + header + "_sli" + str(seq_iterator) + "\n" + seq + "\n"
-            )
+            file_out.write(">" + header + "_sli" + str(seq_iterator) + "\n" + seq + "\n")
             file_out.close()
             file_number += 1
             file_name = "genome_file_" + str(file_number)
@@ -4345,7 +4477,8 @@ def create_paired_paths(fastq_file_paths):
         match = re.search(r"(.+)_\d+\.(fastq|fq)", path)
         if not match:
             logger.error(
-                "Could not find _1 or _2 at the end of the prefix for file. Assuming file is not paired:"
+                "Could not find _1 or _2 at the end of the prefix \
+                for file. Assuming file is not paired:"
             )
             logger.error(path)
             final_list.append([path])
@@ -4362,12 +4495,6 @@ def create_paired_paths(fastq_file_paths):
         final_list.append(path_dict[pair])
 
     return final_list
-
-
-def check_exe(exe_path):
-
-    if not shutil.which(exe_path):
-        raise OSError("Exe does not exist. Path checked: %s" % exe_path)
 
 
 def check_file(file_path):
@@ -4405,10 +4532,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        help="Path where the output and temp files will write to. Uses current dir by default",
+        help="Path where the output and temp files will write to. \
+        Uses current dir by default",
     )
     parser.add_argument(
-        "--genome_file", type=str, help="Path to the fasta genome file", required=True
+        "--genome_file",
+        type=str,
+        help="Path to the fasta genome file",
+        required=True,
     )
     parser.add_argument(
         "--num_threads", type=int, default=1, help="Number of threads to use"
@@ -4416,7 +4547,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--run_masking",
         action="store_true",
-        help="Run Red to find repeats and softmask the genome. Otherwise provide a softmasked genome",
+        help="Run Red to find repeats and softmask the genome. \
+        Otherwise provide a softmasked genome",
     )
     parser.add_argument(
         "--red_path",
@@ -4426,7 +4558,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--genblast_path",
         type=str,
-        help="Path to GenBlast executable. See http://genome.sfu.ca/genblast/download.html",
+        help="Path to GenBlast executable. See http://genome.sfu.ca/\
+        genblast/download.html",
     )
     parser.add_argument(
         "--convert2blastmask_path",
@@ -4465,10 +4598,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--rfam_accessions_file",
         type=str,
-        help="Path to a file with Rfam CM accessions, one accession per line, to use with cmsearch",
+        help="Path to a file with Rfam CM accessions, one accession\
+        per line, to use with cmsearch",
     )
     parser.add_argument(
-        "--run_star", action="store_true", help="Run Star for short read alignment"
+        "--run_star",
+        action="store_true",
+        help="Run Star for short read alignment",
     )
     parser.add_argument(
         "--star_path", type=str, help="Path to Star for short read alignment"
@@ -4576,7 +4712,9 @@ if __name__ == "__main__":
         "--repeatmasker_path", action="store_true", help="Path to RepeatMasker"
     )
     parser.add_argument(
-        "--run_trnascan", action="store_true", help="Run tRNAscan-SE to find tRNAs"
+        "--run_trnascan",
+        action="store_true",
+        help="Run tRNAscan-SE to find tRNAs",
     )
     parser.add_argument("--trnascan_path", type=str, help="Path to tRNAscan-SE")
     parser.add_argument(
@@ -4594,13 +4732,12 @@ if __name__ == "__main__":
         help="Run Eponine to find transcription start sites",
     )
     parser.add_argument("--eponine_path", type=str, help="Path to Eponine jar file")
-    parser.add_argument(
-        "--java_path", type=str, help="Path to Java for use with Eponine"
-    )
+    parser.add_argument("--java_path", type=str, help="Path to Java for use with Eponine")
     parser.add_argument(
         "--run_full_annotation",
         action="store_true",
-        help="Run a full annotation, will automatically check for input data and run tools based on that",
+        help="Run a full annotation, will automatically check \
+        for input data and run tools based on that",
     )
     parser.add_argument("--run_repeats", action="store_true", help="Run Red, Dust, TRF")
     parser.add_argument(
@@ -4612,7 +4749,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--run_transcriptomic",
         action="store_true",
-        help="Run STAR, Stringtie2, Scallop, minimap2 (if short_read_fastq_dir and/or long_read_fastq_dir are provided)",
+        help="Run STAR, Stringtie2, Scallop, minimap2 (if short_read_fastq_dir \
+        and/or long_read_fastq_dir are provided)",
     )
     parser.add_argument(
         "--run_proteins",
@@ -4627,7 +4765,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--validation_type",
         type=str,
-        help='The strength of evidence needed to validate and ORF as protein coding, can be "relaxed" or "moderate"',
+        help='The strength of evidence needed to validate and ORF as \
+        protein coding, can be "relaxed" or "moderate"',
     )
     parser.add_argument(
         "--load_to_ensembl_db",
@@ -4645,7 +4784,9 @@ if __name__ == "__main__":
         help="Delete the original fastq files after trimming",
     )
     parser.add_argument(
-        "--repeatmasker_library", type=str, help="Specify library for repeatmasker"
+        "--repeatmasker_library",
+        type=str,
+        help="Specify library for repeatmasker",
     )
     parser.add_argument(
         "--repeatmasker_species",
@@ -4733,16 +4874,35 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     # set up base logger
-    #logger = logging.getLogger("main_logger")
-    #logger.setLevel(logging.DEBUG)
-    #logger.propagate = False
-    logger=logging.basicConfig()
-     level=logging.DEBUG,
- )
+    logger = logging.getLogger()
+    # logger = logging.basicConfig() #pylint: disable= assignment-from-no-return
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
     # create file handler and add to logger
-    add_log_file_handler(log_file_path, logging_formatter_time_message)
-    add_log_console_handler(logging_formatter_time_message)
+    #add_log_file_handler(log_file_path, logging_formatter_time_message, logger)
+    #add_log_console_handler(logging_formatter_time_message, logger)
+
+    file_handler = logging.FileHandler(log_file_path, mode="a+")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging_formatter_time_message)
+
+
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setLevel(logging.DEBUG)
+    console_handler.setFormatter(logging_formatter_time_message)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    #logger = logging.basicConfig(
+    #    level=logging.DEBUG,
+    #    format=logging_formatter_time_message,
+    #    handlers = [file_handler, console_handler]
+    #)
+
+
+
     logger.info("work directory: %s" % work_dir)
     if not os.path.exists(work_dir):
         logger.info("Work dir does not exist, will create")
@@ -4751,7 +4911,8 @@ if __name__ == "__main__":
     if num_threads == 1:
         logger.info("Thread count is set to the default value 1; this might be slow.")
 
-    # If the run_full_annotation flag is set then we want to set a standardised set of analyses
+    # If the run_full_annotation flag is set then we want to set
+    # a standardised set of analyses
     if run_full_annotation:
         run_repeats = True
         run_simple_features = True
@@ -4816,7 +4977,12 @@ if __name__ == "__main__":
     if run_repeatmasker:
         logger.info("Annotating repeats with RepeatMasker")
         run_repeatmasker_regions(
-            genome_file, repeatmasker_path, library, species, work_dir, num_threads
+            genome_file,
+            repeatmasker_path,
+            library,
+            species,
+            work_dir,
+            num_threads,
         )
 
     #################################
@@ -4837,13 +5003,23 @@ if __name__ == "__main__":
     if run_cmsearch:
         logger.info("Annotating sncRNAs")
         run_cmsearch_regions(
-            genome_file, None, None, None, rfam_accessions_file, work_dir, num_threads
+            genome_file,
+            None,
+            None,
+            None,
+            rfam_accessions_file,
+            work_dir,
+            num_threads,
         )
 
     if run_trnascan:
         logger.info("Annotating tRNAs")
         run_trnascan_regions(
-            genome_file, trnascan_path, trnascan_filter_path, work_dir, num_threads
+            genome_file,
+            trnascan_path,
+            trnascan_filter_path,
+            work_dir,
+            num_threads,
         )
 
     #################################
@@ -4914,7 +5090,8 @@ if __name__ == "__main__":
             genblast_timeout,
         )
 
-    # Run GenBlast on BUSCO set, gives higher priority when creating the final genes in cases where transcriptomic data are missing or fragmented
+    # Run GenBlast on BUSCO set, gives higher priority when creating thei
+    # final genes in cases where transcriptomic data are missing or fragmented
     if run_busco:
         logger.info("Running GenBlast of BUSCO proteins")
         run_genblast_align(
