@@ -1,4 +1,4 @@
-# See the NOTICE file distributed with this work for additional information
+# See the NOTICE file distributed with this work for additional information #pylint: disable=missing-module-docstring
 # regarding copyright ownership.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,8 +62,8 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     if not repeatmasker_path:
         repeatmasker_path = "RepeatMasker"
 
-    if not library:
-        library = "homo"
+    #if not library:
+    #    library = "homo"
 
     check_exe(repeatmasker_path)
     repeatmasker_output_dir = Path(create_dir(main_output_dir, "repeatmasker_output"))
@@ -85,7 +85,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     if not library:
         if not species:
             species = "homo"
-        generic_repeatmasker_cmd = [
+            generic_repeatmasker_cmd = [
             repeatmasker_path,
             "-nolow",
             "-species",
@@ -94,8 +94,19 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
             "crossmatch",
             "-dir",
             repeatmasker_output_dir,
-        ]
+            ]
 
+        else:
+            generic_repeatmasker_cmd = [
+                repeatmasker_path,
+                "-nolow",
+                "-species",
+                species,
+                "-engine",
+                "crossmatch",
+                "-dir",
+                repeatmasker_output_dir,
+            ]
     else:
         generic_repeatmasker_cmd = [
             repeatmasker_path,
@@ -107,6 +118,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
             "-dir",
             repeatmasker_output_dir,
         ]
+
 
     logger.info("Running RepeatMasker")
     pool = multiprocessing.Pool(num_threads)
@@ -362,7 +374,7 @@ def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name
                 repeat_count += 1
 
 
-def run_trf_repeats(#pylint: disable=too-many-locals
+def run_trf_repeats(  # pylint: disable=too-many-locals
     genome_file: Union[pathlib.Path, str], trf_path, main_output_dir, num_threads: int
 ):
     """
@@ -400,8 +412,8 @@ def run_trf_repeats(#pylint: disable=too-many-locals
     match_score = 2
     mismatch_score = 5
     delta = 7
-    pm = 80#pylint: disable=invalid-name
-    pi = 10#pylint: disable=invalid-name
+    pm = 80  # pylint: disable=invalid-name
+    pi = 10  # pylint: disable=invalid-name
     minscore = 40
     maxperiod = 500
 
@@ -462,7 +474,10 @@ def multiprocess_trf(
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find tandem repeats with TRF:%s:%s:%s", region_name,start,end
+        "Processing slice to find tandem repeats with TRF:%s:%s:%s",
+        region_name,
+        start,
+        end,
     )
     seq = get_sequence(region_name, start, end, 1, genome_file, str(trf_output_dir))
 
@@ -478,14 +493,16 @@ def multiprocess_trf(
     trf_output_file_path = f"{region_fasta_file_path}{trf_output_extension}"
     trf_cmd = generic_trf_cmd.copy()
     trf_cmd[1] = str(region_fasta_file_path)
-    logger.info("trf_cmd: %s",trf_cmd)
-    subprocess.run(trf_cmd)
+    logger.info("trf_cmd: %s", trf_cmd)
+    subprocess.run(trf_cmd)  # pylint: disable=subprocess-run-check
     create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
     trf_output_file_path.unlink()
     region_fasta_file_path.unlink()
 
 
-def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
+def create_trf_gtf(
+    trf_output_file_path, region_results_file_path, region_name
+):  # pylint: disable=too-many-locals
     """
     Read the fasta file and save the content in gtf format
 
@@ -512,7 +529,7 @@ def create_trf_gtf(trf_output_file_path, region_results_file_path, region_name):
                 percent_matches = float(results[5])
                 score = float(results[7])
                 repeat_consensus = results[13]
-                if (
+                if (  # pylint: disable=too-many-boolean-expressions
                     score < 50
                     and percent_matches >= 80
                     and copy_number > 2
@@ -574,16 +591,16 @@ def run_red(red_path, main_output_dir, genome_file: Union[pathlib.Path, str]):
 
     else:
         logger.info(
-            "Preparing to sym link the genome file to the Red genome dir. Cmd\n%s"
-            % sym_link_genome_cmd
+            "Preparing to sym link the genome file to the Red genome dir. Cmd\n %s",
+            sym_link_genome_cmd,
         )
         # subprocess.run(["ln", "-s", genome_file, red_genome_dir])
         red_genome_file.symlink_to(genome_file)
     if not red_genome_file.exists():
         logger.error(
             "Could not find the genome file in the Red genome dir or sym link \
-            to the original file. Path expected:\n%s"
-            % red_genome_file
+            to the original file. Path expected:\n%s",
+            red_genome_file,
         )
 
     logger.info("Running Red, this may take some time depending on the genome size")
