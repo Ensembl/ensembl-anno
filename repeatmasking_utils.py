@@ -62,7 +62,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     if not repeatmasker_path:
         repeatmasker_path = "RepeatMasker"
 
-    #if not library:
+    # if not library:
     #    library = "homo"
 
     check_exe(repeatmasker_path)
@@ -86,14 +86,14 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
         if not species:
             species = "homo"
             generic_repeatmasker_cmd = [
-            repeatmasker_path,
-            "-nolow",
-            "-species",
-            species,
-            "-engine",
-            "crossmatch",
-            "-dir",
-            repeatmasker_output_dir,
+                repeatmasker_path,
+                "-nolow",
+                "-species",
+                species,
+                "-engine",
+                "crossmatch",
+                "-dir",
+                repeatmasker_output_dir,
             ]
 
         else:
@@ -118,7 +118,6 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
             "-dir",
             repeatmasker_output_dir,
         ]
-
 
     logger.info("Running RepeatMasker")
     pool = multiprocessing.Pool(num_threads)
@@ -201,13 +200,17 @@ def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
     repeatmasker_output_file_path, region_results_file_path, region_name
 ):
     """
-    Read the fasta file and save the content in gtf format
+     Read the fasta file and save the content in gtf format
 
-    All the genomic slices are collected in a single gtf output
-    Args:
-        repeatmasker_output_dir : pathlib.Path
-        region_results_file_path : pathlib.Path
-        region_name :str
+     All the genomic slices are collected in a single gtf output
+     Args:
+         repeatmasker_output_dir : pathlib.Path
+         region_results_file_path : pathlib.Path
+         region_name :str
+
+    region_results_file_path format
+    SW    perc perc perc query    position in query matching repeat       position in repeat
+    score div. del. ins. sequence begin end (left)  repeat   class/family begin end  (left)  ID
     """
     with open(repeatmasker_output_file_path, "r") as repeatmasker_in, open(
         region_results_file_path, "w+"
@@ -504,13 +507,26 @@ def create_trf_gtf(
     trf_output_file_path, region_results_file_path, region_name
 ):  # pylint: disable=too-many-locals
     """
-    Read the fasta file and save the content in gtf format
+        Read the fasta file and save the content in gtf format
 
-    All the genomic slices are collected in a single gtf output
-    Args:
-        trf_output_file_path : pathlib.Path
-        region_results_file_path : pathlib.Path
-        region_name :str
+        All the genomic slices are collected in a single gtf output
+        Args:
+            trf_output_file_path : pathlib.Path
+            region_results_file_path : pathlib.Path
+            region_name :str
+
+        trf_output_file_path is txt file space delimited where the colummns are
+        cols 1+2:  Indices of the repeat relative to the start of the sequence
+    col 3:     Period size of the repeat
+    col 4:     Number of copies aligned with the consensus pattern
+    col 5:     Size of consensus pattern (may differ slightly from the period size)
+    col 6:     Percent of matches between adjacent copies overall
+    col 7:     Percent of indels between adjacent copies overall
+    col 8:     Alignment score
+    cols 9-12: Percent composition for each of the four nucleotides
+    col 13:    Entropy measure based on percent composition
+    col 14:    Consensus sequence
+    col 15:    Repeat sequence
     """
     with open(trf_output_file_path, "r") as trf_in, open(
         region_results_file_path, "w+"
