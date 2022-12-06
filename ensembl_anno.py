@@ -1,4 +1,4 @@
-# pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines
+# pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines, unused-import
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -4798,7 +4798,7 @@ if __name__ == "__main__":
     work_dir = args.output_dir
     genome_file = args.genome_file
     num_threads = args.num_threads
-    masked_genome_file = genome_file  # This will be updated later if Red is run
+    #masked_genome_file = genome_file  # This will be updated later if Red is run
     run_masking = args.run_masking
     red_path = args.red_path
     genblast_path = args.genblast_path
@@ -4911,6 +4911,13 @@ if __name__ == "__main__":
     if num_threads == 1:
         logger.info("Thread count is set to the default value 1; this might be slow.")
 
+    if  os.path.exists(os.path.join(work_dir, 'red_output', 'mask_output').endswith('.msk')):
+        logger.info("yessss %s", os.path.join(work_dir, "red_output", "mask_output"))
+        red_genome_file = [f for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output")) if f.endswith('.msk')]
+        masked_genome_file = os.path.join(work_dir, "red_output", "mask_output", red_genome_file[0])
+    else:
+        masked_genome_file = genome_file
+    logger.info("MASKED FILE %s", masked_genome_file)
     # If the run_full_annotation flag is set then we want to set
     # a standardised set of analyses
     if run_full_annotation:
