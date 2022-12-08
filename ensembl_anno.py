@@ -4798,7 +4798,7 @@ if __name__ == "__main__":
     work_dir = args.output_dir
     genome_file = args.genome_file
     num_threads = args.num_threads
-    #masked_genome_file = genome_file  # This will be updated later if Red is run
+    # masked_genome_file = genome_file  # This will be updated later if Red is run
     run_masking = args.run_masking
     red_path = args.red_path
     genblast_path = args.genblast_path
@@ -4881,13 +4881,12 @@ if __name__ == "__main__":
 
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
     # create file handler and add to logger
-    #add_log_file_handler(log_file_path, logging_formatter_time_message, logger)
-    #add_log_console_handler(logging_formatter_time_message, logger)
+    # add_log_file_handler(log_file_path, logging_formatter_time_message, logger)
+    # add_log_console_handler(logging_formatter_time_message, logger)
 
     file_handler = logging.FileHandler(log_file_path, mode="a+")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging_formatter_time_message)
-
 
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(logging.DEBUG)
@@ -4895,13 +4894,11 @@ if __name__ == "__main__":
 
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
-    #logger = logging.basicConfig(
+    # logger = logging.basicConfig(
     #    level=logging.DEBUG,
     #    format=logging_formatter_time_message,
     #    handlers = [file_handler, console_handler]
-    #)
-
-
+    # )
 
     logger.info("work directory: %s" % work_dir)
     if not os.path.exists(work_dir):
@@ -4911,13 +4908,20 @@ if __name__ == "__main__":
     if num_threads == 1:
         logger.info("Thread count is set to the default value 1; this might be slow.")
 
-    if  os.path.exists(os.path.join(work_dir, 'red_output', 'mask_output').endswith('.msk')):
-        logger.info("yessss %s", os.path.join(work_dir, "red_output", "mask_output"))
-        red_genome_file = [f for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output")) if f.endswith('.msk')]
-        masked_genome_file = os.path.join(work_dir, "red_output", "mask_output", red_genome_file[0])
+    if os.path.exists(
+        os.path.join(work_dir, "red_output", "mask_output")
+    ) and os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
+        red_genome_file = [
+            f
+            for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output"))
+            if f.endswith(".msk")
+        ]
+        masked_genome_file = os.path.join(
+            work_dir, "red_output", "mask_output", red_genome_file[0]
+        )
     else:
         masked_genome_file = genome_file
-    logger.info("MASKED FILE %s", masked_genome_file)
+    logger.info("Masked genome file %s", masked_genome_file)
     # If the run_full_annotation flag is set then we want to set
     # a standardised set of analyses
     if run_full_annotation:
