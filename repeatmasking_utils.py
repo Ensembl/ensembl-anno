@@ -44,19 +44,17 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     num_threads: int,
 ):
     """
-    Run Repeatmasker on genomic slices
-
-    engine = crossmatch
+    Run Repeatmasker on genomic slices using the crossmatch engine.
     Args:
         genome_file : pathlib.Path
-        repeatmasker_path : str
+        repeatmasker_path : str path to the RepeatMasker executable
         library : str
         species :str
         main_output_dir : pathlib.Path
         num_threads: int
 
     Return:
-        gtfs with the repeatmasked sequence for each genome slice
+        A GTF file with the repeatmasked sequence for each genome slice
 
     """
     if not repeatmasker_path:

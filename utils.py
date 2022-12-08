@@ -27,21 +27,8 @@ import glob
 import tempfile
 from typing import Union
 
-# logger formats
-# logger_formatter_time_message = logging.Formatter(
-#    fmt="%(asctime)s | %(levelname)s | %(message)s",
-#    datefmt="%Y-%m-%d %H:%M:%S",
-# )
-# set up base logger
-#logger = logging.getLogger("main_logger")
-# logger.setLevel(logger.DEBUG)
-# logger.propagate = False
-# create console handler and add to logger
-# console_handler = logging.StreamHandler(sys.stderr)
-# console_handler.setLevel(logger.DEBUG)
-# console_handler.setFormatter(logger_formatter_time_message)
-# logger.addHandler(console_handler)
 logger = logging.getLogger(__name__)
+
 
 def add_log_file_handler(
     log_file_path: Union[pathlib.Path, str],
@@ -75,10 +62,10 @@ def create_dir(main_output_dir, dir_name):
     """
     Create directory or subdirectory and log operations.
     Args:
-        main_output_dir: main output directory path
-        dir_name: optional subdirectory to be created
+        main_output_dir: str main output directory path
+        dir_name: str optional subdirectory to be created
     Returns:
-        created directory
+        str Path to the created directory
     """
     if dir_name:
         target_dir = os.path.join(main_output_dir, dir_name)
@@ -104,6 +91,12 @@ def create_dir(main_output_dir, dir_name):
 def check_exe(exe_path):
     """
     Check executable path
+    Args:
+        exe_path: str
+            Path to the executable file
+
+    Raises:
+        OSError: If the executable file does not exist at the given path
     """
     if not shutil.which(exe_path):
         raise OSError("Exe does not exist. Path checked: %s" % exe_path)
@@ -114,8 +107,8 @@ def check_gtf_content(gtf_file, content_obj):
     Check number of transcript lines in the GTF
 
     Arg:
-      gtf_file: path for the gtf file
-      content_obj: object to check in the gtf i.e gene_id, repeat
+      gtf_file: str path for the GTF file
+      content_obj: str object to check in the gtf i.e gene_id, repeat
 
     Return: number of transcript lines
     """
@@ -135,9 +128,9 @@ def get_seq_region_lengths(genome_file, min_seq_length):
     """
     Split the genomic sequence in slices defined by  min_seq_length
     Args:
-        genome_file: path for the genome file
-        min_seq_length: slice length
-    Return: genomic sequences
+        genome_file: str path for the genome file
+        min_seq_length: int slice length
+    Return: Dict Dictionary with the sequence headers as keys and the sequence lengths as values
     """
     current_header = ""
     current_seq = ""
@@ -167,11 +160,12 @@ def create_slice_ids(seq_region_lengths, slice_size, overlap, min_length):
     """
     Get list of ids for a genomic slice
     Arg:
-    seq_region_lengths: list of genomic slices
-    slice_size: size of the slice
-    overlap: size of the overlap between two slices
-    min_length: min length of the slice
-    Return: list of ids
+    seq_region_lengths: dict
+    Dictionary with the sequence headers as keys and the sequence lengths as values
+    slice_size: int size of the slice
+    overlap: int size of the overlap between two slices
+    min_length: int min length of the slice
+    Return: list List of IDs for the genomic slices
     """
     if not slice_size:
         slice_size = 1000000
@@ -366,13 +360,13 @@ def get_sequence(  # pylint: disable=too-many-arguments
     to fetching sequence
 
     Arg:
-    seq_region: region name
-    start: region start
-    end: region end
-    strand
-    fasta_file: genome file
-    output_dir: working dir
-    Return: sequence
+    seq_region: str region name
+    start: int region start
+    end: int region end
+    strand: int strand of the sequence
+    fasta_file: str genome FASTA file
+    output_dir: str working dir
+    Return: str sequence
     """
     start = int(start)
     end = int(end)
@@ -412,8 +406,13 @@ def get_sequence(  # pylint: disable=too-many-arguments
 
 def reverse_complement(sequence):
     """
-    Arg : sequence
-    Return reversed sequence
+    Get the reverse complement of a nucleotide sequence.
+    Args:
+        sequence: str
+            The nucleotide sequence
+    Returns:
+        str
+            The reverse complement of the sequence
     """
     rev_matrix = str.maketrans("atgcATGC", "tacgTACG")
     return sequence.translate(rev_matrix)[::-1]
