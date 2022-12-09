@@ -1,4 +1,4 @@
-# pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines, unused-import
+# pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines, unused-import, consider-using-with, unspecified-encoding, consider-using-dict-items, consider-using-f-string
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
