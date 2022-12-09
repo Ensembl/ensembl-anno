@@ -40,6 +40,8 @@ jobs:
       env: TESTENV=black
 
 before_install:
+    - git clone --branch main --depth 1 https://github.com/Ensembl/ensembl-hive.git
+    - export PYTHONPATH=$PYTHONPATH:$(pwd)/ensembl-hive/wrappers/python3/
     - python -m pip install poetry
 
 # command to install dependencies
@@ -49,5 +51,5 @@ install:
 
 # command to run tests
 script:
-    - if [[ "$TESTENV" == "pylint" ]]; then poetry run pylint --disable=fixme ; fi
-    - if [[ "$TESTENV" == "black" ]]; then poetry run black --check ; fi
+    - if [[ "$TESTENV" == "pylint" ]]; then poetry run pylint --disable=fixme . ; fi
+    - if [[ "$TESTENV" == "black" ]]; then poetry run black --check . ; fi
