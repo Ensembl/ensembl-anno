@@ -51,5 +51,5 @@ install:
 
 # command to run tests
 script:
-    - if [[ "$TESTENV" == "pylint" ]]; then poetry run pylint ensembl_anno ; fi
-    - if [[ "$TESTENV" == "black" ]]; then poetry run black --check ensembl_anno ; fi
+    - if [[ "$TESTENV" == "pylint" ]]; then poetry run pylint ensembl_anno; fi
+    - if [[ "$TESTENV" == "black" ]]; then poetry run black --check ensembl_anno; fi
