@@ -3464,6 +3464,16 @@ def run_finalise_geneset(
     validation_dir = create_dir(final_annotation_dir, "cds_validation")
     seq_region_lengths = get_seq_region_lengths(genome_file, 0)
 
+    logger.info("Skip analysis if the gtf file already exists")
+    output_file = os.path.join(final_annotation_dir, "annotation.gtf")
+    if os.path.exists(output_file):
+        logger.info("final_annotation_dir exists")
+        transcript_count = check_gtf_content(output_file, "transcript")
+        if transcript_count > 0:
+            logger.info("Final gtf file exists")
+            return
+    else:
+        logger.info("No gtf file, go on with the analysis")
     # This used to be a list of output dirs and a loop which was neat,
     # I'm coverting to a list of conditions as
     # it's more straightforward with the renaming
