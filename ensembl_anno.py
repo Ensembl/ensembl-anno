@@ -31,41 +31,8 @@ import signal
 import subprocess
 import tempfile
 
-from pathlib import Path
-
-# from utils import *
-from utils import (
-    add_log_file_handler,
-    add_log_console_handler,
-    create_dir,
-    check_exe,
-    check_gtf_content,
-    get_seq_region_lengths,
-    create_slice_ids,
-    slice_output_to_gtf,
-    get_sequence,
-)
-from repeatmasking_utils import (
-    run_repeatmasker_regions,
-    run_dust_regions,
-    run_trf_repeats,
-    run_red,
-)
-
-# logging formats
-# logging_formatter_time_message = logging.Formatter(
-#    fmt="%(asctime)s | %(levelname)s | %(message)s",
-#    datefmt="%Y-%m-%d %H:%M:%S",
-# )
-# set up base logger
-# logger = logging.getLogger("main_logger")
-# logger.setLevel(logging.DEBUG)
-# logger.propagate = False
-# create console handler and add to logger
-# console_handler = logging.StreamHandler(sys.stderr)
-# console_handler.setLevel(logging.DEBUG)
-# console_handler.setFormatter(logging_formatter_time_message)
-# logger.addHandler(console_handler)
+import repeatmasking_utils
+import utils
 
 
 def load_results_to_ensembl_db(
@@ -80,7 +47,7 @@ def load_results_to_ensembl_db(
     db_loading_script = os.path.join(
         main_script_dir, "support_scripts_perl", "load_gtf_ensembl.pl"
     )
-    db_loading_dir = create_dir(main_output_dir, "db_loading")
+    db_loading_dir = utils.create_dir(main_output_dir, "db_loading")
 
     # Should collapse this into a function
     annotation_results_gtf_file = os.path.join(
@@ -476,11 +443,11 @@ def run_find_orfs(genome_file, main_output_dir):
 
     min_orf_length = 600
 
-    orf_output_dir = create_dir(main_output_dir, "orf_output")
-    seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
+    orf_output_dir = utils.create_dir(main_output_dir, "orf_output")
+    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
     for region_name in seq_region_lengths:
         region_length = seq_region_lengths[region_name]
-        seq = get_sequence(region_name, 1, region_length, 1, genome_file, orf_output_dir)
+        seq = utils.get_sequence(region_name, 1, region_length, 1, genome_file, orf_output_dir)
         for phase in range(0, 6):
             find_orf_phased_region(
                 region_name, seq, phase, min_orf_length, orf_output_dir
@@ -548,12 +515,12 @@ def run_eponine_regions(
     check_file(eponine_path)
     check_exe(java_path)
 
-    eponine_output_dir = create_dir(main_output_dir, "eponine_output")
+    eponine_output_dir = utils.create_dir(main_output_dir, "eponine_output")
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(eponine_output_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "simple_feature")
+        transcript_count = utils.check_gtf_content(output_file, "simple_feature")
         if transcript_count > 0:
             logger.info("Eponine gtf file exists")
             return
@@ -561,8 +528,8 @@ def run_eponine_regions(
         logger.info("No gtf file, go on with the analysis")
 
     logger.info("Creating list of genomic slices")
-    seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
-    slice_ids = create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
+    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = utils.create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
 
     threshold = "0.999"
     generic_eponine_cmd = [
@@ -589,7 +556,7 @@ def run_eponine_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
+    utils.slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
 
 
 def multiprocess_eponine(generic_eponine_cmd, slice_id, genome_file, eponine_output_dir):
@@ -606,7 +573,7 @@ def multiprocess_eponine(generic_eponine_cmd, slice_id, genome_file, eponine_out
         + ":"
         + str(end)
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, eponine_output_dir)
+    seq = utils.get_sequence(region_name, start, end, 1, genome_file, eponine_output_dir)
 
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
@@ -683,13 +650,13 @@ def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
     if not cpg_path:
         cpg_path = "cpg_lh"
 
-    check_exe(cpg_path)
-    cpg_output_dir = create_dir(main_output_dir, "cpg_output")
+    utils.check_exe(cpg_path)
+    cpg_output_dir = utils.create_dir(main_output_dir, "cpg_output")
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(cpg_output_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "simple_feature")
+        transcript_count = utils.check_gtf_content(output_file, "simple_feature")
         if transcript_count > 0:
             logger.info("Cpg gtf file exists")
             return
@@ -697,8 +664,8 @@ def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
         logger.info("No gtf file, go on with the analysis")
 
     logger.info("Creating list of genomic slices")
-    seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
-    slice_ids = create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
+    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = utils.create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
 
     logger.info("Running CpG")
     pool = multiprocessing.Pool(int(num_threads))
@@ -716,7 +683,7 @@ def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(cpg_output_dir, ".cpg.gtf", 1, "feature_id", "cpg")
+    utils.slice_output_to_gtf(cpg_output_dir, ".cpg.gtf", 1, "feature_id", "cpg")
 
 
 def multiprocess_cpg(cpg_path, slice_id, genome_file, cpg_output_dir):
@@ -733,7 +700,7 @@ def multiprocess_cpg(cpg_path, slice_id, genome_file, cpg_output_dir):
         + ":"
         + str(end)
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, cpg_output_dir)
+    seq = utils.get_sequence(region_name, start, end, 1, genome_file, cpg_output_dir)
 
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
@@ -830,18 +797,18 @@ def run_trnascan_regions(
             "C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
         )
     logger.info(trnascan_filter_path)
-    check_exe(trnascan_path)
+    utils.check_exe(trnascan_path)
     logger.info(trnascan_path)
     # check_exe(trnascan_filter_path)
     check_file(trnascan_filter_path)
     logger.info(trnascan_filter_path)
 
-    trnascan_output_dir = create_dir(main_output_dir, "trnascan_output")
+    trnascan_output_dir = utils.create_dir(main_output_dir, "trnascan_output")
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(trnascan_output_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "transcript")
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Trnascan gtf file exists")
             return
@@ -849,8 +816,8 @@ def run_trnascan_regions(
         logger.info("No gtf file, go on with the analysis")
 
     logger.info("Creating list of genomic slices")
-    seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
-    slice_ids = create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
+    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = utils.create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
 
     generic_trnascan_cmd = [
         trnascan_path,
@@ -881,7 +848,7 @@ def run_trnascan_regions(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(trnascan_output_dir, ".trna.gtf", 1, None, None)
+    utils.slice_output_to_gtf(trnascan_output_dir, ".trna.gtf", 1, None, None)
 
 
 def multiprocess_trnascan(
@@ -904,7 +871,7 @@ def multiprocess_trnascan(
         + ":"
         + str(end)
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, trnascan_output_dir)
+    seq = utils.get_sequence(region_name, start, end, 1, genome_file, trnascan_output_dir)
 
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
@@ -1067,15 +1034,15 @@ def run_cmsearch_regions(
     if not cmsearch_path:
         cmsearch_path = "cmsearch"
 
-    check_exe(cmsearch_path)
-    rfam_output_dir = create_dir(main_output_dir, "rfam_output")
+    utils.check_exe(cmsearch_path)
+    rfam_output_dir = utils.create_dir(main_output_dir, "rfam_output")
 
     os.chdir(rfam_output_dir)
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(rfam_output_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "transcript")
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Cmsearch gtf file exists")
             return
@@ -1141,8 +1108,8 @@ def run_cmsearch_regions(
     cv_models = extract_rfam_metrics(rfam_selected_models_file)
 
     logger.info("Creating list of genomic slices")
-    seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
-    slice_ids = create_slice_ids(seq_region_lengths, 100000, 0, 5000)
+    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = utils.create_slice_ids(seq_region_lengths, 100000, 0, 5000)
 
     generic_cmsearch_cmd = [
         cmsearch_path,
@@ -1210,7 +1177,7 @@ def run_cmsearch_regions(
     pool.close()
     pool.join()
 
-    slice_output_to_gtf(rfam_output_dir, ".rfam.gtf", 1, None, None)
+    utils.slice_output_to_gtf(rfam_output_dir, ".rfam.gtf", 1, None, None)
 
 
 def prlimit_command(command_list, virtual_memory_limit):
@@ -1252,7 +1219,7 @@ def multiprocess_cmsearch(
         + ":"
         + str(end)
     )
-    seq = get_sequence(region_name, start, end, 1, genome_file, rfam_output_dir)
+    seq = utils.get_sequence(region_name, start, end, 1, genome_file, rfam_output_dir)
 
     slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
     region_fasta_file_name = slice_file_name + ".fa"
@@ -1633,7 +1600,7 @@ def create_rfam_gtf(
             if re.match(r"" + domain, rfam_type):
                 biotype = "Y_RNA"
 
-            rna_seq = get_sequence(
+            rna_seq = utils.get_sequence(
                 region_name,
                 start,
                 end,
@@ -1729,24 +1696,24 @@ def run_genblast_align(
     if not genblast_path:
         genblast_path = "genblast"
 
-    check_exe(genblast_path)
+    utils.check_exe(genblast_path)
 
     if not convert2blastmask_path:
         convert2blastmask_path = "convert2blastmask"
 
-    check_exe(convert2blastmask_path)
+    utils.check_exe(convert2blastmask_path)
 
     if not makeblastdb_path:
         makeblastdb_path = "makeblastdb"
 
-    check_exe(makeblastdb_path)
+    utils.check_exe(makeblastdb_path)
 
-    create_dir(genblast_dir, None)
+    utils.create_dir(genblast_dir, None)
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(genblast_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "transcript")
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Genblast gtf file exists")
             return
@@ -1960,7 +1927,7 @@ def split_protein_file(protein_file, protein_output_dir, batch_size):
     batched_protein_files = []
 
     for i in range(0, 10):
-        create_dir(protein_output_dir, ("bin_" + str(i)))
+        utils.create_dir(protein_output_dir, ("bin_" + str(i)))
 
     file_in = open(protein_file)
     line = file_in.readline()
@@ -2055,9 +2022,9 @@ def run_trimming(
 ):
 
     trim_galore_path = "trim_galore"
-    check_exe(trim_galore_path)
+    utils.check_exe(trim_galore_path)
 
-    trim_dir = create_dir(main_output_dir, "trim_galore_output")
+    trim_dir = utils.create_dir(main_output_dir, "trim_galore_output")
 
     fastq_file_list = []
     file_types = ("*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz")
@@ -2151,7 +2118,7 @@ def run_star_align(
     if not star_path:
         star_path = "STAR"
 
-    check_exe(star_path)
+    utils.check_exe(star_path)
 
     # If trimming has been enabled then switch the path for
     # short_read_fastq_dir from the original location to the trimmed fastq dir
@@ -2161,12 +2128,12 @@ def run_star_align(
     #  if not os.path.exists(subsample_script_path):
     subsample_script_path = "subsample_fastq.py"
 
-    star_dir = create_dir(main_output_dir, "star_output")
+    star_dir = utils.create_dir(main_output_dir, "star_output")
 
     logger.info("Skip analysis if the final log file already exists")
-    log_final_out = Path(os.path.join(star_dir, "Log.final.out"))
-    log_out = Path(os.path.join(star_dir, "Log.out"))
-    log_progress_out = Path(os.path.join(star_dir, "Log.progress.out"))
+    log_final_out = pathlib.Path(os.path.join(star_dir, "Log.final.out"))
+    log_out = pathlib.Path(os.path.join(star_dir, "Log.out"))
+    log_progress_out = pathlib.Path(os.path.join(star_dir, "Log.progress.out"))
     if log_final_out.is_file() and log_out.is_file() and log_progress_out.is_file():
         logger.info("Star gtf file exists")
         return
@@ -2243,7 +2210,7 @@ def run_star_align(
 
     if not os.path.exists(star_index_file):
         logger.info("Did not find an index file for Star. Will create now")
-        seq_region_lengths = get_seq_region_lengths(genome_file, 0)
+        seq_region_lengths = utils.get_seq_region_lengths(genome_file, 0)
         genome_size = sum(seq_region_lengths.values())
         index_bases = min(14, math.floor((math.log(genome_size, 2) / 2) - 1))
         subprocess.run(
@@ -2451,19 +2418,19 @@ def run_minimap2_align(
     if not minimap2_path:
         minimap2_path = "minimap2"
 
-    check_exe(minimap2_path)
+    utils.check_exe(minimap2_path)
 
     if not paftools_path:
         paftools_path = "paftools.js"
 
-    check_exe(paftools_path)
+    utils.check_exe(paftools_path)
 
-    minimap2_output_dir = create_dir(main_output_dir, "minimap2_output")
+    minimap2_output_dir = utils.create_dir(main_output_dir, "minimap2_output")
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(minimap2_output_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "transcript")
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Minimap2 gtf file exists")
             return
@@ -2871,15 +2838,15 @@ def run_augustus_predict(augustus_path, main_output_dir, masked_genome_file, num
     bam2hints_path = "/homes/fergal/bin/bam2hints"
     bam2wig_path = "/homes/fergal/bin/bam2wig"
     wig2hints_path = "/homes/fergal/bin/wig2hints"
-    check_exe(augustus_path)
+    utils.check_exe(augustus_path)
 
     # Run bam2hints, bam2wig, wig2hints, then combine the hints into a single file
     # Multiprocess with all three steps in the MP as that would be fastest
 
-    augustus_dir = create_dir(main_output_dir, "augustus_output")
-    augustus_hints_dir = create_dir(augustus_dir, "hints")
-    augustus_genome_dir = create_dir(augustus_dir, "genome_dir")
-    augustus_evidence_dir = create_dir(augustus_dir, "evidence")
+    augustus_dir = utils.create_dir(main_output_dir, "augustus_output")
+    augustus_hints_dir = utils.create_dir(augustus_dir, "hints")
+    augustus_genome_dir = utils.create_dir(augustus_dir, "genome_dir")
+    augustus_evidence_dir = utils.create_dir(augustus_dir, "evidence")
     augustus_hints_file = os.path.join(augustus_evidence_dir, "augustus_hints.gff")
     star_dir = os.path.join(main_output_dir, "star_output")
     minimap2_output_dir = os.path.join(main_output_dir, "minimap2_output")
@@ -2904,8 +2871,8 @@ def run_augustus_predict(augustus_path, main_output_dir, masked_genome_file, num
             gff_in.close()
         hints_out.close()
 
-    seq_region_lengths = get_seq_region_lengths(genome_file, 5000)
-    slice_ids = create_slice_ids(seq_region_lengths, 1000000, 100000, 5000)
+    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = utils.create_slice_ids(seq_region_lengths, 1000000, 100000, 5000)
 
     generic_augustus_cmd = [
         augustus_path,
@@ -3005,7 +2972,7 @@ def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir)
     region = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
-    seq = get_sequence(region, start, end, 1, genome_file, output_dir)
+    seq = utils.get_sequence(region, start, end, 1, genome_file, output_dir)
 
     region_fasta_file_name = region + ".rs" + str(start) + ".re" + str(end) + ".fa"
     region_fasta_file_path = os.path.join(output_dir, region_fasta_file_name)
@@ -3086,18 +3053,18 @@ def run_stringtie_assemble(
 
     if not stringtie_path:
         stringtie_path = shutil.which("stringtie")
-    check_exe(stringtie_path)
+    utils.check_exe(stringtie_path)
 
     if not samtools_path:
         samtools_path = shutil.which("samtools")
-    check_exe(samtools_path)
+    utils.check_exe(samtools_path)
 
-    stringtie_dir = create_dir(main_output_dir, "stringtie_output")
+    stringtie_dir = utils.create_dir(main_output_dir, "stringtie_output")
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(stringtie_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "transcript")
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Stringtie gtf file exists")
             return
@@ -3159,7 +3126,7 @@ def run_stringtie_assemble(
     logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
     gtf_list_out = open(stringtie_merge_input_file, "w+")
     for gtf_file in glob.glob(stringtie_dir + "/*.stringtie.gtf"):
-        transcript_count = check_gtf_content(gtf_file, "transcript")
+        transcript_count = utils.check_gtf_content(gtf_file, "transcript")
         if transcript_count > 0:
             gtf_list_out.write(gtf_file + "\n")
         else:
@@ -3185,18 +3152,18 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
 
     if not scallop_path:
         scallop_path = shutil.which("scallop")
-    check_exe(scallop_path)
+    utils.check_exe(scallop_path)
 
     if not stringtie_path:
         stringtie_path = shutil.which("stringtie")
-    check_exe(stringtie_path)
+    utils.check_exe(stringtie_path)
 
-    scallop_dir = create_dir(main_output_dir, "scallop_output")
+    scallop_dir = utils.create_dir(main_output_dir, "scallop_output")
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(scallop_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        transcript_count = check_gtf_content(output_file, "transcript")
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Scallop gtf file exists")
             return
@@ -3265,7 +3232,7 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
 
     gtf_list_out = open(stringtie_merge_input_file, "w+")
     for gtf_file in glob.glob(scallop_dir + "/*.scallop.gtf"):
-        transcript_count = check_gtf_content(gtf_file, "transcript")
+        transcript_count = utils.check_gtf_content(gtf_file, "transcript")
         if transcript_count > 0:
             gtf_list_out.write(gtf_file + "\n")
         else:
@@ -3457,18 +3424,18 @@ def run_finalise_geneset(
     else:
         logger.info("Setting validation type to " + validation_type)
 
-    final_annotation_dir = create_dir(main_output_dir, "annotation_output")
-    region_annotation_dir = create_dir(final_annotation_dir, "initial_region_gtfs")
-    final_region_annotation_dir = create_dir(final_annotation_dir, "final_region_gtfs")
-    utr_region_annotation_dir = create_dir(final_annotation_dir, "utr_region_gtfs")
-    validation_dir = create_dir(final_annotation_dir, "cds_validation")
-    seq_region_lengths = get_seq_region_lengths(genome_file, 0)
+    final_annotation_dir = utils.create_dir(main_output_dir, "annotation_output")
+    region_annotation_dir = utils.create_dir(final_annotation_dir, "initial_region_gtfs")
+    final_region_annotation_dir = utils.create_dir(final_annotation_dir, "final_region_gtfs")
+    utr_region_annotation_dir = utils.create_dir(final_annotation_dir, "utr_region_gtfs")
+    validation_dir = utils.create_dir(final_annotation_dir, "cds_validation")
+    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 0)
 
     logger.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(final_annotation_dir, "annotation.gtf")
     if os.path.exists(output_file):
         logger.info("final_annotation_dir exists")
-        transcript_count = check_gtf_content(output_file, "transcript")
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
             logger.info("Final gtf file exists")
             return
@@ -3865,7 +3832,7 @@ def validate_coding_transcripts(
     logger.info("diamond validation")
     diamond_results = None
     if diamond_validation_db is not None:
-        diamond_output_dir = create_dir(validation_dir, "diamond_output")
+        diamond_output_dir = utils.create_dir(validation_dir, "diamond_output")
         diamond_validation(
             diamond_validation_db,
             amino_acid_file,
@@ -4515,7 +4482,7 @@ def check_file(file_path):
 
 def coallate_results(main_output_dir):
 
-    results_dir = create_dir(main_output_dir, "results")
+    results_dir = utils.create_dir(main_output_dir, "results")
     output_dirs = [
         "augustus_output",
         "cpg_output",
@@ -4904,16 +4871,11 @@ if __name__ == "__main__":
 
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
-    # logger = logging.basicConfig(
-    #    level=logging.DEBUG,
-    #    format=logging_formatter_time_message,
-    #    handlers = [file_handler, console_handler]
-    # )
 
     logger.info("work directory: %s" % work_dir)
     if not os.path.exists(work_dir):
         logger.info("Work dir does not exist, will create")
-        create_dir(work_dir, None)
+        utils.create_dir(work_dir, None)
 
     if num_threads == 1:
         logger.info("Thread count is set to the default value 1; this might be slow.")
@@ -4981,7 +4943,7 @@ if __name__ == "__main__":
     #################################
     if run_masking:
         logger.info("Running masking via Red")
-        masked_genome_file = run_red(red_path, work_dir, genome_file)
+        masked_genome_file = repeatmasking_utils.run_red(red_path, work_dir, genome_file)
         logger.info("Masked genome file: " + masked_genome_file)
 
     else:
@@ -4989,15 +4951,15 @@ if __name__ == "__main__":
 
     if run_dust:
         logger.info("Annotating low complexity regions")
-        run_dust_regions(genome_file, dust_path, work_dir, num_threads)
+        repeatmasking_utils.run_dust_regions(genome_file, dust_path, work_dir, num_threads)
 
     if run_trf:
         logger.info("Annotating tandem repeats")
-        run_trf_repeats(genome_file, trf_path, work_dir, num_threads)
+        repeatmasking_utils.run_trf_repeats(genome_file, trf_path, work_dir, num_threads)
 
     if run_repeatmasker:
         logger.info("Annotating repeats with RepeatMasker")
-        run_repeatmasker_regions(
+        repeatmasking_utils.run_repeatmasker_regions(
             genome_file,
             repeatmasker_path,
             library,
