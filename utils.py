@@ -25,13 +25,13 @@ import shutil
 import sys
 import glob
 import tempfile
-from typing import Union
+import typing
 
 logger = logging.getLogger(__name__)
 
 
 def add_log_file_handler(
-    log_file_path: Union[pathlib.Path, str],
+    log_file_path: typing.Union[pathlib.Path, str],
     logger_formatter: logging.Formatter,
     main_logger: logging.Logger,
 ):
