@@ -447,7 +447,9 @@ def run_find_orfs(genome_file, main_output_dir):
     seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
     for region_name in seq_region_lengths:
         region_length = seq_region_lengths[region_name]
-        seq = utils.get_sequence(region_name, 1, region_length, 1, genome_file, orf_output_dir)
+        seq = utils.get_sequence(
+            region_name, 1, region_length, 1, genome_file, orf_output_dir
+        )
         for phase in range(0, 6):
             find_orf_phased_region(
                 region_name, seq, phase, min_orf_length, orf_output_dir
@@ -3426,7 +3428,9 @@ def run_finalise_geneset(
 
     final_annotation_dir = utils.create_dir(main_output_dir, "annotation_output")
     region_annotation_dir = utils.create_dir(final_annotation_dir, "initial_region_gtfs")
-    final_region_annotation_dir = utils.create_dir(final_annotation_dir, "final_region_gtfs")
+    final_region_annotation_dir = utils.create_dir(
+        final_annotation_dir, "final_region_gtfs"
+    )
     utr_region_annotation_dir = utils.create_dir(final_annotation_dir, "utr_region_gtfs")
     validation_dir = utils.create_dir(final_annotation_dir, "cds_validation")
     seq_region_lengths = utils.get_seq_region_lengths(genome_file, 0)
@@ -4951,7 +4955,9 @@ if __name__ == "__main__":
 
     if run_dust:
         logger.info("Annotating low complexity regions")
-        repeatmasking_utils.run_dust_regions(genome_file, dust_path, work_dir, num_threads)
+        repeatmasking_utils.run_dust_regions(
+            genome_file, dust_path, work_dir, num_threads
+        )
 
     if run_trf:
         logger.info("Annotating tandem repeats")
