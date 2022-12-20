@@ -50,9 +50,6 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     if not repeatmasker_path:
         repeatmasker_path = "RepeatMasker"
 
-    # if not library:
-    #    library = "homo"
-
     utils.check_exe(repeatmasker_path)
     repeatmasker_output_dir = pathlib.Path(
         utils.create_dir(main_output_dir, "repeatmasker_output")
@@ -81,7 +78,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
                 "-species",
                 species,
                 "-engine",
-                "crossmatch",
+                "rmblast",
                 "-dir",
                 repeatmasker_output_dir,
             ]
@@ -93,7 +90,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
                 "-species",
                 species,
                 "-engine",
-                "crossmatch",
+                "rmblast",
                 "-dir",
                 repeatmasker_output_dir,
             ]
@@ -104,7 +101,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
             "-lib",
             library,
             "-engine",
-            "crossmatch",
+            "rmblast",
             "-dir",
             repeatmasker_output_dir,
         ]
