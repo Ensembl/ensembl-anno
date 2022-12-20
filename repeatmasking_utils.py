@@ -54,7 +54,6 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     repeatmasker_output_dir = pathlib.Path(
         utils.create_dir(main_output_dir, "repeatmasker_output")
     )
-    #os.chdir(repeatmasker_output_dir)
 
     output_file = repeatmasker_output_dir / "annotation.gtf"
     if output_file.exists():
