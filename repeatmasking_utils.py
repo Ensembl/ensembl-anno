@@ -54,7 +54,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     repeatmasker_output_dir = pathlib.Path(
         utils.create_dir(main_output_dir, "repeatmasker_output")
     )
-    os.chdir(repeatmasker_output_dir)
+    #os.chdir(repeatmasker_output_dir)
 
     output_file = repeatmasker_output_dir / "annotation.gtf"
     if output_file.exists():
@@ -68,44 +68,32 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     slice_ids = utils.create_slice_ids(
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
-
+    generic_repeatmasker_cmd = [
+                repeatmasker_path,
+                "-nolow",
+                "-engine",
+                "rmblast",
+                "-dir",
+                repeatmasker_output_dir,
+                ]
     if not library:
         if not species:
             species = "homo"
-            generic_repeatmasker_cmd = [
-                repeatmasker_path,
-                "-nolow",
-                "-species",
-                species,
-                "-engine",
-                "rmblast",
-                "-dir",
-                repeatmasker_output_dir,
-            ]
+            generic_repeatmasker_cmd.extend(
+                ["-species",
+                species]
+            )
 
         else:
-            generic_repeatmasker_cmd = [
-                repeatmasker_path,
-                "-nolow",
-                "-species",
-                species,
-                "-engine",
-                "rmblast",
-                "-dir",
-                repeatmasker_output_dir,
-            ]
+            generic_repeatmasker_cmd.extend(
+                ["-species",
+                species]
+            )
     else:
-        generic_repeatmasker_cmd = [
-            repeatmasker_path,
-            "-nolow",
-            "-lib",
-            library,
-            "-engine",
-            "rmblast",
-            "-dir",
-            repeatmasker_output_dir,
-        ]
-
+        generic_repeatmasker_cmd.extend(
+            ["-lib",
+            library]
+            )
     logger.info("Running RepeatMasker")
     pool = multiprocessing.Pool(num_threads)
     for slice_id in slice_ids:
