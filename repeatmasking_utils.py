@@ -54,7 +54,9 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     #    library = "homo"
 
     utils.check_exe(repeatmasker_path)
-    repeatmasker_output_dir = pathlib.Path(utils.create_dir(main_output_dir, "repeatmasker_output"))
+    repeatmasker_output_dir = pathlib.Path(
+        utils.create_dir(main_output_dir, "repeatmasker_output")
+    )
     os.chdir(repeatmasker_output_dir)
 
     output_file = repeatmasker_output_dir / "annotation.gtf"
@@ -316,7 +318,9 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
         start,
         end,
     )
-    seq = utils.get_sequence(region_name, start, end, 1, genome_file, str(dust_output_dir))
+    seq = utils.get_sequence(
+        region_name, start, end, 1, genome_file, str(dust_output_dir)
+    )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_fasta_file_path = dust_output_dir / f"{slice_file_name}.fa"
@@ -366,7 +370,10 @@ def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name
 
 
 def run_trf_repeats(  # pylint: disable=too-many-locals
-    genome_file: typing.Union[pathlib.Path, str], trf_path, main_output_dir, num_threads: int
+    genome_file: typing.Union[pathlib.Path, str],
+    trf_path,
+    main_output_dir,
+    num_threads: int,
 ):
     """
     Run trf on genomic slices
