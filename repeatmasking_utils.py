@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 import logging
 import multiprocessing
 import os
@@ -23,6 +24,8 @@ import typing
 import utils
 
 logger = logging.getLogger(__name__)
+with open("./config.json", "r") as f:
+    config = json.load(f)
 
 
 def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
@@ -48,7 +51,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
 
     """
     if not repeatmasker_path:
-        repeatmasker_path = "RepeatMasker"
+        repeatmasker_path = config["repeatmasker"]["software"]
 
     utils.check_exe(repeatmasker_path)
     repeatmasker_output_dir = pathlib.Path(
@@ -68,31 +71,22 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
     generic_repeatmasker_cmd = [
-                repeatmasker_path,
-                "-nolow",
-                "-engine",
-                "rmblast",
-                "-dir",
-                repeatmasker_output_dir,
-                ]
+        repeatmasker_path,
+        "-nolow",
+        "-engine",
+        config["repeatmasker"]["engine"],
+        "-dir",
+        repeatmasker_output_dir,
+    ]
     if not library:
         if not species:
             species = "homo"
-            generic_repeatmasker_cmd.extend(
-                ["-species",
-                species]
-            )
+            generic_repeatmasker_cmd.extend(["-species", species])
 
         else:
-            generic_repeatmasker_cmd.extend(
-                ["-species",
-                species]
-            )
+            generic_repeatmasker_cmd.extend(["-species", species])
     else:
-        generic_repeatmasker_cmd.extend(
-            ["-lib",
-            library]
-            )
+        generic_repeatmasker_cmd.extend(["-lib", library])
     logger.info("Running RepeatMasker")
     pool = multiprocessing.Pool(num_threads)
     for slice_id in slice_ids:
@@ -244,7 +238,7 @@ def run_dust_regions(
 
     """
     if not dust_path:
-        dust_path = "dustmasker"
+        dust_path = config["dust"]["software"]
 
     utils.check_exe(dust_path)
     dust_output_dir = pathlib.Path(utils.create_dir(main_output_dir, "dust_output"))
@@ -373,7 +367,7 @@ def run_trf_repeats(  # pylint: disable=too-many-locals
     """
 
     if not trf_path:
-        trf_path = "trf"
+        trf_path = config["trf"]["software"]
 
     utils.check_exe(trf_path)
     trf_output_dir = pathlib.Path(utils.create_dir(main_output_dir, "trf_output"))
@@ -391,13 +385,13 @@ def run_trf_repeats(  # pylint: disable=too-many-locals
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
 
-    match_score = 2
-    mismatch_score = 5
-    delta = 7
-    pm = 80  # pylint: disable=invalid-name
-    pi = 10  # pylint: disable=invalid-name
-    minscore = 40
-    maxperiod = 500
+    match_score = config["trf"]["match_score"]
+    mismatch_score = config["trf"]["mismatch_score"]
+    delta = config["trf"]["delta"]
+    pm = config["trf"]["pm"]  # pylint: disable=invalid-name
+    pi = config["trf"]["pi"]  # pylint: disable=invalid-name
+    minscore = config["trf"]["minscore"]
+    maxperiod = config["trf"]["maxperiod"]
 
     trf_output_extension = (
         f".{match_score}.{mismatch_score}.{delta}.{pm}.{pi}.{minscore}.{maxperiod}.dat"
@@ -553,7 +547,7 @@ def run_red(red_path, main_output_dir, genome_file: typing.Union[pathlib.Path, s
         masked genome file
     """
     if not red_path:
-        red_path = "Red"
+        red_path = config["red"]["software"]
     genome_file = pathlib.Path(genome_file)
     utils.check_exe(red_path)
     red_dir = pathlib.Path(utils.create_dir(main_output_dir, "red_output"))

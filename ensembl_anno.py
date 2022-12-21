@@ -19,6 +19,7 @@ import errno
 import gc
 import glob
 import io
+import json
 import logging
 import math
 import multiprocessing
@@ -33,6 +34,9 @@ import tempfile
 
 import repeatmasking_utils
 import utils
+
+with open("./config.json", "r") as f:
+    config = json.load(f)
 
 
 def load_results_to_ensembl_db(
@@ -506,13 +510,10 @@ def run_eponine_regions(
 ):
 
     if not java_path:
-        java_path = "java"
+        java_path = config["java"]["path"]
 
     if not eponine_path:
-        eponine_path = (
-            "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/"
-            "linuxbrew/opt/eponine/libexec/eponine-scan.jar"
-        )
+        eponine_path = config["eponine"]["software"]
 
     check_file(eponine_path)
     check_exe(java_path)
@@ -533,7 +534,7 @@ def run_eponine_regions(
     seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
     slice_ids = utils.create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
 
-    threshold = "0.999"
+    threshold = config["eponine"]["threshold"]
     generic_eponine_cmd = [
         java_path,
         "-jar",
@@ -650,7 +651,7 @@ def create_eponine_gtf(eponine_output_file_path, region_results_file_path, regio
 def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
 
     if not cpg_path:
-        cpg_path = "cpg_lh"
+        cpg_path = config["cpg"]["software"]
 
     utils.check_exe(cpg_path)
     cpg_output_dir = utils.create_dir(main_output_dir, "cpg_output")
@@ -730,9 +731,9 @@ def multiprocess_cpg(cpg_path, slice_id, genome_file, cpg_output_dir):
 
 def create_cpg_gtf(cpg_output_file_path, region_results_file_path, region_name):
 
-    cpg_min_length = 400
-    cpg_min_gc_content = 50
-    cpg_min_oe = 0.6
+    cpg_min_length = config["cpg"]["cpg_min_length"]
+    cpg_min_gc_content = config["cpg"]["cpg_min_gc_content"]
+    cpg_min_oe = config["cpg"]["cpg_min_oe"]
 
     cpg_in = open(cpg_output_file_path, "r")
     cpg_out = open(region_results_file_path, "w+")
@@ -788,16 +789,10 @@ def run_trnascan_regions(
 ):
 
     if not trnascan_path:
-        trnascan_path = (
-            "/hps/software/users/ensembl/ensw/"
-            "C8-MAR21-sandybridge/linuxbrew/bin/tRNAscan-SE"
-        )
+        trnascan_path = config["trnascan"]["software"]
     logger.info(trnascan_path)
     if not trnascan_filter_path:
-        trnascan_filter_path = (
-            "/hps/software/users/ensembl/ensw/"
-            "C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
-        )
+        trnascan_filter_path = config["trnascan"]["filter_path"]
     logger.info(trnascan_filter_path)
     utils.check_exe(trnascan_path)
     logger.info(trnascan_path)
@@ -1034,7 +1029,7 @@ def run_cmsearch_regions(
 ):
 
     if not cmsearch_path:
-        cmsearch_path = "cmsearch"
+        cmsearch_path = config["cmsearch"]["software"]
 
     utils.check_exe(cmsearch_path)
     rfam_output_dir = utils.create_dir(main_output_dir, "rfam_output")
@@ -1051,10 +1046,10 @@ def run_cmsearch_regions(
     else:
         logger.info("No gtf file, go on with the analysis")
 
-    rfam_dbname = "Rfam"
-    rfam_user = "rfamro"
-    rfam_host = "mysql-rfam-public.ebi.ac.uk"
-    rfam_port = "4497"
+    rfam_dbname = config["cmsearch"]["rfam_dbname"]
+    rfam_user = config["cmsearch"]["rfam_user"]
+    rfam_host = config["cmsearch"]["rfam_host"]
+    rfam_port = config["cmsearch"]["rfam_port"]
     #  rfam_accession_query_cmd = ["mysql -h", rfam_host,"-u",rfam_user,
     # "-P",rfam_port,"-NB -e",rfam_dbname,"'select rfam_acc FROM (SELECT DISTINCT
     # f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff,
@@ -1080,12 +1075,8 @@ def run_cmsearch_regions(
     # rfam_accession_file = '/hps/nobackup2/production/ensembl/fergal/production/
     # test_runs/non_verts/butterfly/rfam_insect_ids.txt'
     # rfam_accession_file = os.path.join(main_output_dir,'rfam_accessions.txt')
-    rfam_cm_db_path = (
-        "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm"
-    )
-    rfam_seeds_file_path = (
-        "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed"
-    )
+    rfam_cm_db_path = config["cmsearch"]["rfam_cm_db_path"]
+    rfam_seeds_file_path = config["cmsearch"]["rfam_seeds_file_path"]
     rfam_selected_models_file = os.path.join(rfam_output_dir, "rfam_models.cm")
     with open(rfam_accession_file) as rfam_accessions_in:
         rfam_accessions = rfam_accessions_in.read().splitlines()
@@ -1696,17 +1687,17 @@ def run_genblast_align(
 ):
 
     if not genblast_path:
-        genblast_path = "genblast"
+        genblast_path = config["genblast"]["software"]
 
     utils.check_exe(genblast_path)
 
     if not convert2blastmask_path:
-        convert2blastmask_path = "convert2blastmask"
+        convert2blastmask_path = config["convert2blastmask"]["software"]
 
     utils.check_exe(convert2blastmask_path)
 
     if not makeblastdb_path:
-        makeblastdb_path = "makeblastdb"
+        makeblastdb_path = config["makeblastdb"]["software"]
 
     utils.check_exe(makeblastdb_path)
 
@@ -1908,7 +1899,7 @@ def set_attributes(attributes, feature_type):
     return converted_attributes
 
 
-# Example genBlast output #pylint: disable=line-too-long
+# Example genBlast output #pylint: disable=line-too-long, trailing-whitespace
 # 1       genBlastG       transcript      131128674       131137049       252.729 -       .       ID=259447-R1-1-A1;Name=259447;PID=84.65;Coverage=94.22;Note=PID:84.65-Cover:94.22
 # 1       genBlastG       coding_exon     131137031       131137049       .       -       .       ID=259447-R1-1-A1-E1;Parent=259447-R1-1-A1
 # 1       genBlastG       coding_exon     131136260       131136333       .       -       .       ID=259447-R1-1-A1-E2;Parent=259447-R1-1-A1
@@ -2118,7 +2109,7 @@ def run_star_align(
     # !!! Need to add in samtools path above instead of just using 'samtools' in command
 
     if not star_path:
-        star_path = "STAR"
+        star_path = config["star"]["software"]
 
     utils.check_exe(star_path)
 
@@ -2418,12 +2409,12 @@ def run_minimap2_align(
 ):
 
     if not minimap2_path:
-        minimap2_path = "minimap2"
+        minimap2_path = config["minimap2"]["software"]
 
     utils.check_exe(minimap2_path)
 
     if not paftools_path:
-        paftools_path = "paftools.js"
+        paftools_path = config["minimap2"]["paftools_path"]
 
     utils.check_exe(paftools_path)
 
@@ -2835,11 +2826,11 @@ def run_augustus_predict(augustus_path, main_output_dir, masked_genome_file, num
     min_seq_length = 1000
 
     if not augustus_path:
-        augustus_path = "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus"
+        augustus_path = config["augustus"]["software"]
 
-    bam2hints_path = "/homes/fergal/bin/bam2hints"
-    bam2wig_path = "/homes/fergal/bin/bam2wig"
-    wig2hints_path = "/homes/fergal/bin/wig2hints"
+    bam2hints_path = config["augustus"]["bam2hints_path"]
+    bam2wig_path = config["augustus"]["bam2wig_path"]
+    wig2hints_path = config["augustus"]["wig2hints_path"]
     utils.check_exe(augustus_path)
 
     # Run bam2hints, bam2wig, wig2hints, then combine the hints into a single file
@@ -3225,9 +3216,6 @@ def run_scallop_assemble(scallop_path, stringtie_path, main_output_dir):
             except subprocess.CalledProcessError as ex:
                 logger.error("Issue processing the following region with scallop")
                 logger.error("Return value: " + str(return_value))
-
-    #      subprocess.run([scallop_path,'-i',sorted_bam_file,'-o',
-    # transcript_file_path,'--min_flank_length','10'])
 
     # Now need to merge
     logger.info("Creating Stringtie merge input file: " + stringtie_merge_input_file)
