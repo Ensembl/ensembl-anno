@@ -113,7 +113,6 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     """
     Run Repeatmasker on multiprocess on genomic slices
 
-    engine = crossmatch
     Args:
         generic_repeatmasker_cmd: list
         slice_id: str
@@ -125,7 +124,7 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     start = slice_id[1]
     end = slice_id[2]
     logger.info(
-        "Processing slice to find repeats with RepeatMasker: {region_name}:{start}:{end}"
+        "Processing slice to find repeats with RepeatMasker: %s:%s:%s", region_name, start, end
     )
     seq = utils.get_sequence(
         region_name, start, end, 1, genome_file, str(repeatmasker_output_dir)
@@ -308,12 +307,11 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
     region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
 
     dust_output_file_path = f"{region_fasta_file_path}.dust"
-    dust_out = open(dust_output_file_path, "w+")
     dust_cmd = generic_dust_cmd.copy()
     dust_cmd.append(region_fasta_file_path)
     logger.info(dust_cmd)
-    subprocess.run(dust_cmd, stdout=dust_out, check=True)
-    dust_out.close()
+    with open(dust_output_file_path, "w+") as dust_out:
+        subprocess.run(dust_cmd, stdout=dust_out, check=True)
 
     create_dust_gtf(dust_output_file_path, region_results_file_path, region_name)
     dust_output_file_path.unlink()
