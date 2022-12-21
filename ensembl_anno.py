@@ -35,7 +35,7 @@ import tempfile
 import repeatmasking_utils
 import utils
 
-with open("./config.json", "r") as f:
+with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
     config = json.load(f)
 
 
@@ -1719,13 +1719,14 @@ def run_genblast_align(
     logger.info("ASNB file: %s" % asnb_file)
 
     if not os.path.exists("alignscore.txt"):
-        subprocess.run(
-            [
-                "cp",
-                os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt",
-                "./",
-            ]
-        )
+        shutil.copy(os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt", "./")
+#        subprocess.run(
+#            [
+#                "cp",
+#                os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt",
+#                "./",
+#            ]
+#        )
 
     if not os.path.exists(masked_genome_file):
         raise IOError("Masked genome file does not exist: %s" % masked_genome_file)
@@ -1848,7 +1849,8 @@ def generate_genblast_gtf(genblast_dir):
                 or genblast_file.endswith(".fa.blast.report")
                 or genblast_file.endswith(genblast_extension)
             ):
-                subprocess.run(["rm", genblast_file])
+                #subprocess.run(["rm", genblast_file])
+                pathlib.Path(genblast_file).unlink()
     file_out.close()
 
 
