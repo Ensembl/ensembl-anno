@@ -17,6 +17,9 @@
     "convert2blastmask": {
         "software": "convert2blastmask"
     },
+    "cpc2": {
+        "software": "/hps/software/users/ensembl/genebuild/genebuild_virtual_user/singularity/test_cpc2.sif"
+    },
     "cpg": {
         "software": "cpg_lh",
         "cpg_min_length" : 400,
@@ -45,6 +48,10 @@
     },
     "red": {
         "software": "Red"
+    },
+    "rnasamba": {
+        "software": "/hps/software/users/ensembl/genebuild/genebuild_virtual_user/singularity/rnasamba_latest.sif",
+        "weights" : "/nfs/production/flicek/ensembl/genebuild/genebuild_virtual_user/rnasamba_data/full_length_weights.hdf5"
     },
     "repeatmasker": {
         "software": "RepeatMasker",

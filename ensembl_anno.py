@@ -3776,10 +3776,7 @@ def validate_coding_transcripts(
 ):
 
     logger.info("Running CDS validation with RNAsamba and CPC2")
-    rnasamba_weights = (
-        "/nfs/production/flicek/ensembl/genebuild/"
-        "genebuild_virtual_user/rnasamba_data/full_length_weights.hdf5"
-    )
+    rnasamba_weights = config["rnasamba"]["weights"]
     rnasamba_output_path = os.path.join(validation_dir, "rnasamba.tsv.txt")
     cpc2_output_path = os.path.join(validation_dir, "cpc2.tsv")
     rnasamba_volume = validation_dir + "/:/app:rw"
@@ -3788,8 +3785,7 @@ def validate_coding_transcripts(
         "exec",
         "--bind",
         rnasamba_volume,
-        "/hps/software/users/ensembl/genebuild/"
-        "genebuild_virtual_user/singularity/rnasamba_latest.sif",
+        config["rnasamba"]["software"],
         "rnasamba",
         "classify",
         rnasamba_output_path,
@@ -3804,8 +3800,7 @@ def validate_coding_transcripts(
         "exec",
         "--bind",
         cpc2_volume,
-        "/hps/software/users/ensembl/genebuild/"
-        "genebuild_virtual_user/singularity/test_cpc2.sif",
+        config["cpc2"]["software"],
         "python3",
         "/CPC2_standalone-1.0.1/bin/CPC2.py",
         "-i",
