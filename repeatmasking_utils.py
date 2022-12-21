@@ -19,12 +19,13 @@ import os
 import pathlib
 import re
 import subprocess
+import tempfile
 import typing
 
 import utils
 
 logger = logging.getLogger(__name__)
-with open("./config.json", "r") as f:
+with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
     config = json.load(f)
 
 
@@ -124,7 +125,10 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     start = slice_id[1]
     end = slice_id[2]
     logger.info(
-        "Processing slice to find repeats with RepeatMasker: %s:%s:%s", region_name, start, end
+        "Processing slice to find repeats with RepeatMasker: %s:%s:%s",
+        region_name,
+        start,
+        end,
     )
     seq = utils.get_sequence(
         region_name, start, end, 1, genome_file, str(repeatmasker_output_dir)
@@ -273,10 +277,17 @@ def run_dust_regions(
     pool.close()
     pool.join()
     utils.slice_output_to_gtf(str(dust_output_dir), ".dust.gtf", 1, "repeat_id", "dust")
+    for gtf_file in pathlib.Path(dust_output_dir).glob("*.dust.gtf"):
+        gtf_file.unlink()
     return 0
 
 
-def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
+def multiprocess_dust(  # pylint: disable=too-many-locals
+    generic_dust_cmd: list,
+    slice_id: str,
+    genome_file: pathlib.Path,
+    dust_output_dir: pathlib.Path,
+):
     """
     Run Dust on multiprocess on genomic slices
     Args:
@@ -300,25 +311,28 @@ def multiprocess_dust(generic_dust_cmd, slice_id, genome_file, dust_output_dir):
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_path = dust_output_dir / f"{slice_file_name}.fa"
-    with open(region_fasta_file_path, "w+") as region_fasta_out:
-        region_fasta_out.write(f">{region_name}\n{seq}\n")
+    with tempfile.TemporaryDirectory(dir=dust_output_dir) as tmpdirname:
+        region_fasta_file_path = dust_output_dir / tmpdirname / f"{slice_file_name}.fa"
+        with open(region_fasta_file_path, "w+") as region_fasta_out:
+            region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
+        region_results_file_path = dust_output_dir / f"{slice_file_name}.dust.gtf"
 
-    dust_output_file_path = f"{region_fasta_file_path}.dust"
-    dust_cmd = generic_dust_cmd.copy()
-    dust_cmd.append(region_fasta_file_path)
-    logger.info(dust_cmd)
-    with open(dust_output_file_path, "w+") as dust_out:
-        subprocess.run(dust_cmd, stdout=dust_out, check=True)
+        dust_output_file_path = pathlib.Path(f"{region_fasta_file_path}.dust")
+        dust_cmd = generic_dust_cmd.copy()
+        dust_cmd.append(region_fasta_file_path)
+        logger.info(dust_cmd)
+        with open(dust_output_file_path, "w+") as dust_out:
+            subprocess.run(dust_cmd, stdout=dust_out, check=True)
 
-    create_dust_gtf(dust_output_file_path, region_results_file_path, region_name)
-    dust_output_file_path.unlink()
-    region_fasta_file_path.unlink()
+        create_dust_gtf(dust_output_file_path, region_results_file_path, region_name)
 
 
-def create_dust_gtf(dust_output_file_path, region_results_file_path, region_name):
+def create_dust_gtf(
+    dust_output_file_path: pathlib.Path,
+    region_results_file_path: pathlib.Path,
+    region_name: str,
+):
     """
     Read the fasta file and save the content in gtf format
 
