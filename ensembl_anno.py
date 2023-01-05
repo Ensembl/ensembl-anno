@@ -21,6 +21,7 @@ import glob
 import io
 import json
 import logging
+import logging.config
 import math
 import multiprocessing
 import os
@@ -4836,33 +4837,13 @@ if __name__ == "__main__":
         work_dir = os.getcwd()
         # work_dir=glob.glob(work_dir)
 
-    # logging formats
-    logging_formatter_time_message = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    # set up base logger
-    logger = logging.getLogger()
-    # logger = logging.basicConfig() #pylint: disable= assignment-from-no-return
-    logger.setLevel(logging.DEBUG)
-    logger.propagate = False
-
+    #set up logger
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
-    # create file handler and add to logger
-    # add_log_file_handler(log_file_path, logging_formatter_time_message, logger)
-    # add_log_console_handler(logging_formatter_time_message, logger)
-
-    file_handler = logging.FileHandler(log_file_path, mode="a+")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging_formatter_time_message)
-
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(logging.DEBUG)
-    console_handler.setFormatter(logging_formatter_time_message)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
+    loginipath=pathlib.Path(os.environ["ENSCODE"] + "/ensembl-anno/logging.conf")
+    logging.config.fileConfig(loginipath, defaults={'logfilename': log_file_path}, disable_existing_loggers=False)
+    logger = logging.getLogger()
+    logger.propagate = False
+    
     logger.info("work directory: %s" % work_dir)
     if not os.path.exists(work_dir):
         logger.info("Work dir does not exist, will create")

@@ -29,35 +29,6 @@ import typing
 
 logger = logging.getLogger(__name__)
 
-
-def add_log_file_handler(
-    log_file_path: typing.Union[pathlib.Path, str],
-    logger_formatter: logging.Formatter,
-    main_logger: logging.Logger,
-):
-    # logger: logger.Logger,
-    """
-    Create file handler and add to logger.
-    """
-    file_handler = main_logger.FileHandler(log_file_path, mode="a+")
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logger_formatter)
-    return main_logger.addHandler(file_handler)
-
-
-def add_log_console_handler(
-    logger_formatter: logging.Formatter,
-    main_logger: logging.Logger,
-):
-    """
-    Create console handler and add to logger.
-    """
-    console_handler = main_logger.StreamHandler(sys.stderr)
-    console_handler.setLevel(logging.DEBUG)
-    console_handler.setFormatter(logger_formatter)
-    return main_logger.addHandler(console_handler)
-
-
 def create_dir(main_output_dir, dir_name):
     """
     Create directory or subdirectory and log operations.
