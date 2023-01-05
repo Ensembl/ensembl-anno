@@ -25,6 +25,7 @@ import typing
 import utils
 
 logger = logging.getLogger(__name__)
+
 with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
     config = json.load(f)
 
@@ -106,10 +107,15 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     utils.slice_output_to_gtf(
         str(repeatmasker_output_dir), ".rm.gtf", 1, "repeat_id", "repeatmask"
     )
+    for gtf_file in pathlib.Path(repeatmasker_output_dir).glob('*.rm.gtf'):
+        gtf_file.unlink()
 
 
 def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
-    generic_repeatmasker_cmd, slice_id, genome_file, repeatmasker_output_dir
+    generic_repeatmasker_cmd: list,
+    slice_id: str,
+    genome_file: pathlib.Path,
+    repeatmasker_output_dir: pathlib.Path,
 ):
     """
     Run Repeatmasker on multiprocess on genomic slices
@@ -137,26 +143,25 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_fasta_file_path = repeatmasker_output_dir / f"{slice_file_name}.fa"
     with open(region_fasta_file_path, "w+") as region_fasta_out:
-        region_fasta_out.write(f">{region_name}\n{seq}\n")
-
-    region_results_file_path = f"{region_fasta_file_path}.rm.gtf"
-    repeatmasker_output_file_path = f"{region_fasta_file_path}.out"
-    repeatmasker_masked_file_path = f"{region_fasta_file_path}.masked"
-    repeatmasker_tbl_file_path = f"{region_fasta_file_path}.tbl"
-    repeatmasker_log_file_path = f"{region_fasta_file_path}.log"
-    repeatmasker_cat_file_path = f"{region_fasta_file_path}.cat"
-
+       region_fasta_out.write(f">{region_name}\n{seq}\n")
+    region_results_file_path = pathlib.Path(f"{region_fasta_file_path}.rm.gtf")
+    repeatmasker_output_file_path = pathlib.Path(f"{region_fasta_file_path}.out")
+    repeatmasker_masked_file_path = pathlib.Path(f"{region_fasta_file_path}.masked")
+    repeatmasker_tbl_file_path = pathlib.Path(f"{region_fasta_file_path}.tbl")
+    repeatmasker_log_file_path = pathlib.Path(f"{region_fasta_file_path}.log")
+    repeatmasker_cat_file_path = pathlib.Path(f"{region_fasta_file_path}.cat")
     repeatmasker_cmd = generic_repeatmasker_cmd.copy()
     repeatmasker_cmd.append(region_fasta_file_path)
+    logger.info(repeatmasker_cmd)
     subprocess.run(repeatmasker_cmd, check=True)
-
     create_repeatmasker_gtf(
         repeatmasker_output_file_path, region_results_file_path, region_name
     )
 
+    repeatmasker_output_file_path.unlink()
     region_fasta_file_path.unlink()
-    if region_results_file_path.exists():
-        region_results_file_path.unlink()
+    #if region_results_file_path.exists():
+    #    region_results_file_path.unlink()
     if repeatmasker_masked_file_path.exists():
         repeatmasker_masked_file_path.unlink()
     if repeatmasker_tbl_file_path.exists():
@@ -168,7 +173,9 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
 
 
 def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
-    repeatmasker_output_file_path, region_results_file_path, region_name
+    repeatmasker_output_file_path: pathlib.Path,
+    region_results_file_path: pathlib.Path,
+    region_name: str,
 ):
     """
      Read the fasta file and save the content in gtf format
@@ -439,7 +446,9 @@ def run_trf_repeats(  # pylint: disable=too-many-locals
     pool.close()
     pool.join()
     utils.slice_output_to_gtf(str(trf_output_dir), ".trf.gtf", 1, "repeat_id", "trf")
-
+    for gtf_file in pathlib.Path(trf_output_dir).glob('*.trf.gtf'):
+        gtf_file.unlink()
+    return 0
 
 def multiprocess_trf(
     generic_trf_cmd,
@@ -449,7 +458,7 @@ def multiprocess_trf(
     trf_output_extension,
 ):
     """
-    Run Dust on multiprocess on genomic slices
+    Run TRF on multiprocess on genomic slices
     Args:
         generic_trf_cmd:list
         slice_id:str
@@ -470,26 +479,28 @@ def multiprocess_trf(
     seq = utils.get_sequence(region_name, start, end, 1, genome_file, str(trf_output_dir))
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_fasta_file_path = trf_output_dir / f"{slice_file_name}.fa"
-    with open(region_fasta_file_path, "w+") as region_fasta_out:
-        region_fasta_out.write(f">{region_name}\n{seq}\n")
+    with tempfile.TemporaryDirectory(dir = trf_output_dir) as tmpdirname:
+        region_fasta_file_path = trf_output_dir / tmpdirname / f"{slice_file_name}.fa"
+        with open(region_fasta_file_path, "w+") as region_fasta_out:
+            region_fasta_out.write(f">{region_name}\n{seq}\n")
 
-    region_results_file_path = trf_output_dir / f"{slice_file_name}.trf.gtf"
+        region_results_file_path = trf_output_dir / f"{slice_file_name}.trf.gtf"
 
-    # TRF writes to the current dir, so swtich to the output dir for it
-    os.chdir(str(trf_output_dir))
-    trf_output_file_path = f"{region_fasta_file_path}{trf_output_extension}"
-    trf_cmd = generic_trf_cmd.copy()
-    trf_cmd[1] = str(region_fasta_file_path)
-    logger.info("trf_cmd: %s", trf_cmd)
-    subprocess.run(trf_cmd)  # pylint: disable=subprocess-run-check
-    create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
-    trf_output_file_path.unlink()
-    region_fasta_file_path.unlink()
+        # TRF writes to the current dir, so swtich to the output dir for it
+        #os.chdir(str(trf_output_dir))
+        trf_output_file_path = pathlib.Path(f"{region_fasta_file_path}{trf_output_extension}")
+        trf_cmd = generic_trf_cmd.copy()
+        trf_cmd[1] = str(region_fasta_file_path)
+        logger.info("trf_cmd: %s", trf_cmd)
+        #with open(trf_output_file_path, "w+") as trf_out:
+        subprocess.run(trf_cmd, cwd=trf_output_dir / tmpdirname)  # pylint: disable=subprocess-run-check
+        create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
+        #trf_output_file_path.unlink()
+        #region_fasta_file_path.unlink()
 
 
 def create_trf_gtf(
-    trf_output_file_path, region_results_file_path, region_name
+    trf_output_file_path : pathlib.Path, region_results_file_path : pathlib.Path, region_name : str
 ):  # pylint: disable=too-many-locals
     """
         Read the fasta file and save the content in gtf format
