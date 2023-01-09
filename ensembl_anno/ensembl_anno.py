@@ -1,4 +1,4 @@
-# pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines, unused-import, consider-using-with, unspecified-encoding, consider-using-dict-items, consider-using-f-string
+# pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines, unused-import
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -34,7 +34,7 @@ import tempfile
 from pathlib import Path
 
 # from utils import *
-from utils import (
+from ensembl_anno.utils import (
     add_log_file_handler,
     add_log_console_handler,
     create_dir,
@@ -45,7 +45,7 @@ from utils import (
     slice_output_to_gtf,
     get_sequence,
 )
-from repeatmasking_utils import (
+from ensembl_anno.repeatmasking_utils import (
     run_repeatmasker_regions,
     run_dust_regions,
     run_trf_repeats,

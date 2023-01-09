@@ -22,7 +22,7 @@ import subprocess
 from pathlib import Path
 
 from typing import Union
-from utils import (
+from ensembl_anno.utils import (
     create_dir,
     check_exe,
     check_gtf_content,
