@@ -50,6 +50,5 @@ install:
 
 # command to run tests
 script: >
-    pylint --generate-rcfile > $HOME/.pylintrc 
     if [[ "$TESTENV" == "pylint" ]]; then poetry run pylint ensembl_anno;
     elif [[ "$TESTENV" == "black" ]]; then poetry run black --check ensembl_anno; fi
