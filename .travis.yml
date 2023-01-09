@@ -18,9 +18,9 @@ language: python
 os: linux
 
 python:
-    - 3.7.6
-    - 3.8
-    - nightly
+    - "3.7.6"
+    - "3.8"
+    - "nightly"
 
 env:
   global:
@@ -40,7 +40,6 @@ jobs:
       env: TESTENV=black
 
 before_install:
-    - git clone --branch main --depth 1 https://github.com/Ensembl/ensembl-hive.git
     - export PYTHONPATH=$PYTHONPATH:$(pwd)/ensembl-hive/wrappers/python3/
     - python -m pip install poetry
 
@@ -50,6 +49,7 @@ install:
     - poetry install
 
 # command to run tests
-script:
-    - if [[ "$TESTENV" == "pylint" ]]; then poetry run pylint ensembl_anno; fi
-    - if [[ "$TESTENV" == "black" ]]; then poetry run black --check ensembl_anno; fi
+script: >
+    pylint --generate-rcfile > $HOME/.pylintrc 
+    if [[ "$TESTENV" == "pylint" ]]; then poetry run pylint ensembl_anno;
+    elif [[ "$TESTENV" == "black" ]]; then poetry run black --check ensembl_anno; fi
