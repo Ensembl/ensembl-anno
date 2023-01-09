@@ -18,16 +18,14 @@
 import io
 import logging
 import os
-import pathlib
 import re
 import subprocess
 import shutil
-import sys
 import glob
 import tempfile
-import typing
 
 logger = logging.getLogger(__name__)
+
 
 def create_dir(main_output_dir, dir_name):
     """
