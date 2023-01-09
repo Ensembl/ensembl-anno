@@ -4837,13 +4837,17 @@ if __name__ == "__main__":
         work_dir = os.getcwd()
         # work_dir=glob.glob(work_dir)
 
-    #set up logger
+    # set up logger
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
-    loginipath=pathlib.Path(os.environ["ENSCODE"] + "/ensembl-anno/logging.conf")
-    logging.config.fileConfig(loginipath, defaults={'logfilename': log_file_path}, disable_existing_loggers=False)
+    loginipath = pathlib.Path(os.environ["ENSCODE"] + "/ensembl-anno/logging.conf")
+    logging.config.fileConfig(
+        loginipath,
+        defaults={"logfilename": log_file_path},
+        disable_existing_loggers=False,
+    )
     logger = logging.getLogger()
     logger.propagate = False
-    
+
     logger.info("work directory: %s" % work_dir)
     if not os.path.exists(work_dir):
         logger.info("Work dir does not exist, will create")
