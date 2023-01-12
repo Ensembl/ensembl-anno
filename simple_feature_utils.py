@@ -29,34 +29,48 @@ with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
     config = json.load(f)
 
 
-def run_eponine_regions(
-    genome_file, java_path, eponine_path, main_output_dir, num_threads
+def run_eponine_regions(  # pylint: disable=too-many-locals
+    genome_file: typing.Union[pathlib.Path, str],
+    java_path: str,
+    eponine_path: str,
+    main_output_dir: str,
+    num_threads: int,
 ):
-
+    """
+    Run Eponine on genomic slices
+    Args:
+        genome_file : pathlib.Path
+        java_path : str
+        eponine_path : str
+        main_output_dir : pathlib.Path
+        num_threads: int
+    Return:
+        gtfs with the simple feature evidence for each genome slice
+    """
     if not java_path:
         java_path = config["java"]["path"]
 
     if not eponine_path:
         eponine_path = config["eponine"]["software"]
 
-    check_file(eponine_path)
-    check_exe(java_path)
+    utils.check_file(eponine_path)
+    utils.check_exe(java_path)
 
-    eponine_output_dir = utils.create_dir(main_output_dir, "eponine_output")
+    eponine_output_dir = pathlib.Path(utils.create_dir(main_output_dir, "eponine_output"))
 
     logger.info("Skip analysis if the gtf file already exists")
-    output_file = os.path.join(eponine_output_dir, "annotation.gtf")
-    if os.path.exists(output_file):
+    output_file = eponine_output_dir / "annotation.gtf"
+    if output_file.is_file():
         transcript_count = utils.check_gtf_content(output_file, "simple_feature")
         if transcript_count > 0:
             logger.info("Eponine gtf file exists")
-            return
-    else:
-        logger.info("No gtf file, go on with the analysis")
+            return 0
 
     logger.info("Creating list of genomic slices")
     seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
-    slice_ids = utils.create_slice_ids(seq_region_lengths, 1000000, 0, 5000)
+    slice_ids = utils.create_slice_ids(
+        seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+    )
 
     threshold = config["eponine"]["threshold"]
     generic_eponine_cmd = [
@@ -69,7 +83,7 @@ def run_eponine_regions(
     ]
     logger.info("Running Eponine")
     pool = multiprocessing.Pool(int(num_threads))
-    tasks = []
+    # tasks = []
     for slice_id in slice_ids:
         pool.apply_async(
             multiprocess_eponine,
@@ -84,92 +98,104 @@ def run_eponine_regions(
     pool.close()
     pool.join()
     utils.slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
+    for gtf_file in pathlib.Path(eponine_output_dir).glob("*.epo.gtf"):
+        gtf_file.unlink()
+    return 0
 
 
-def multiprocess_eponine(generic_eponine_cmd, slice_id, genome_file, eponine_output_dir):
-
+def multiprocess_eponine(  # pylint: disable=too-many-locals
+    generic_eponine_cmd: list,
+    slice_id: str,
+    genome_file: pathlib.Path,
+    eponine_output_dir: pathlib.Path,
+):
+    """
+    Run Eponine on multiprocess on genomic slices
+    Args:
+        generic_eponine_cmd:list
+        slice_id:str
+        genome_file : pathlib.Path
+        eponine_output_dir : pathlib.Path
+    """
     region_name = slice_id[0]
     start = slice_id[1]
     end = slice_id[2]
 
     logger.info(
-        "Processing slice to find transcription start sites with Eponine: "
-        + region_name
-        + ":"
-        + str(start)
-        + ":"
-        + str(end)
+        "Processing slice to find transcription start sites with Eponine: %s:%s:%s",
+        region_name,
+        start,
+        end,
     )
-    seq = utils.get_sequence(region_name, start, end, 1, genome_file, eponine_output_dir)
+    seq = utils.get_sequence(
+        region_name, start, end, 1, genome_file, str(eponine_output_dir)
+    )
 
-    slice_file_name = region_name + ".rs" + str(start) + ".re" + str(end)
-    region_fasta_file_name = slice_file_name + ".fa"
-    region_fasta_file_path = os.path.join(eponine_output_dir, region_fasta_file_name)
+    slice_file_name = f"{region_name}.rs{start}.re{end}"
+    with tempfile.TemporaryDirectory(dir=eponine_output_dir) as tmpdirname:
+        region_fasta_file_path = eponine_output_dir / tmpdirname / f"{slice_file_name}.fa"
+        with open(region_fasta_file_path, "w+") as region_fasta_out:
+            region_fasta_out.write(f">{region_name}\n{seq}\n")
+        # region_fasta_file_path = os.path.join(eponine_output_dir, region_fasta_file_name)
+        # region_fasta_out = open(region_fasta_file_path, "w+")
+        # region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
+        # region_fasta_out.close()
 
-    region_fasta_out = open(region_fasta_file_path, "w+")
-    region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-    region_fasta_out.close()
+        region_results_file_path = eponine_output_dir / f"{slice_file_name}.epo.gtf"
 
-    region_results_file_name = slice_file_name + ".epo.gtf"
-    region_results_file_path = os.path.join(eponine_output_dir, region_results_file_name)
+        eponine_output_file_path = pathlib.Path(f"{region_fasta_file_path}.epo")
+        eponine_cmd = generic_eponine_cmd.copy()
+        eponine_cmd.append(region_fasta_file_path)
+        logger.info(eponine_cmd)
 
-    eponine_output_file_path = region_fasta_file_path + ".epo"
-    eponine_out = open(eponine_output_file_path, "w+")
+        with open(eponine_output_file_path, "w+") as eponine_out:
+            subprocess.run(eponine_cmd, stdout=eponine_out, check=True)
 
-    eponine_cmd = generic_eponine_cmd.copy()
-    eponine_cmd.append(region_fasta_file_path)
-
-    logger.info(" ".join(eponine_cmd))
-    subprocess.run(eponine_cmd, stdout=eponine_out)
-    eponine_out.close()
-
-    create_eponine_gtf(eponine_output_file_path, region_results_file_path, region_name)
-    os.remove(eponine_output_file_path)
-    os.remove(region_fasta_file_path)
+        create_eponine_gtf(
+            eponine_output_file_path, region_results_file_path, region_name
+        )
+        # os.remove(eponine_output_file_path)
+        # os.remove(region_fasta_file_path)
 
 
-def create_eponine_gtf(eponine_output_file_path, region_results_file_path, region_name):
+def create_eponine_gtf(
+    eponine_output_file_path: pathlib.Path,
+    region_results_file_path: pathlib.Path,
+    region_name: str,
+):
+    """
+    Read the fasta file and save the content in gtf format
+    All the genomic slices are collected in a single gtf output
+    Args:
+        eponine_output_file_path : pathlib.Path
+        region_results_file_path : pathlib.Path
+        region_name :str
+    """
+    with open(eponine_output_file_path, "r") as eponine_in, open(
+        region_results_file_path, "w+"
+    ) as eponine_out:
+        feature_count = 1
+        for line in eponine_in:
+            result_match = re.search(r"^" + region_name, line)
+            if result_match:
+                results = line.split()
+                start = int(results[3])
+                end = int(results[4])
+                score = float(results[5])
+                strand = results[6]
 
-    eponine_in = open(eponine_output_file_path, "r")
-    eponine_out = open(region_results_file_path, "w+")
+                # There's a one base offset on the reverse strand
+                if strand == "-":
+                    start -= 1
+                    end -= 1
 
-    line = eponine_in.readline()
-    feature_count = 1
-    while line:
-        result_match = re.search(r"^" + region_name, line)
-
-        if result_match:
-            results = line.split()
-            start = int(results[3])
-            end = int(results[4])
-            score = float(results[5])
-            strand = results[6]
-
-            # There's a one base offset on the reverse strand
-            if strand == "-":
-                start -= 1
-                end -= 1
-
-            gtf_line = (
-                region_name
-                + "\tEponine\tsimple_feature\t"
-                + str(start)
-                + "\t"
-                + str(end)
-                + "\t.\t"
-                + strand
-                + "\t.\t"
-                + 'feature_id "'
-                + str(feature_count)
-                + '"; score "'
-                + str(score)
-                + '";\n'
-            )
-            eponine_out.write(gtf_line)
-            feature_count += 1
-        line = eponine_in.readline()
-    eponine_in.close()
-    eponine_out.close()
+                gtf_line = (
+                    f"{region_name}\tEponine\tsimple_feature\t"
+                    f"{start}\t{end}\t.\t{strand}\t.\t"
+                    f'feature_id "{feature_count}"; score "{score}";\n'
+                )
+                eponine_out.write(gtf_line)
+                feature_count += 1
 
 
 def run_cpg_regions(genome_file, cpg_path, main_output_dir, num_threads):
