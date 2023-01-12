@@ -14,10 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import errno
 import io
 import logging
 import os
+import pathlib
 import re
 import subprocess
 import shutil
@@ -385,3 +386,15 @@ def reverse_complement(sequence):
     """
     rev_matrix = str.maketrans("atgcATGC", "tacgTACG")
     return sequence.translate(rev_matrix)[::-1]
+
+
+def check_file(file_path: pathlib.Path):
+    """
+    Raise an error when the file doesn't exist
+    Args:
+        file_path: pathlib.Path
+    Returns:
+        FileNotFoundError
+    """
+    if not file_path.exist():
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
