@@ -4677,11 +4677,11 @@ if __name__ == "__main__":
     #################################
     if run_cpg:
         logger.info("Annotating CpG islands")
-        run_cpg_regions(genome_file, cpg_path, work_dir, num_threads)
+        simple_features_utils.run_cpg_regions(genome_file, cpg_path, work_dir, num_threads)
 
     if run_eponine:
         logger.info("Running Eponine to find transcription start sites")
-        run_eponine_regions(genome_file, java_path, eponine_path, work_dir, num_threads)
+        simple_features_utils.run_eponine_regions(genome_file, java_path, eponine_path, work_dir, num_threads)
 
     #################################
     # sncRNA analyses
