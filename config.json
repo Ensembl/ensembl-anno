@@ -1,0 +1,77 @@
+{
+    "augustus": {
+        "software" : "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus",
+        "bam2hints_path" : "/homes/fergal/bin/bam2hints",
+        "bam2wig_path" : "/homes/fergal/bin/bam2wig",
+        "wig2hints_path" : "/homes/fergal/bin/wig2hints"
+    },
+    "cmsearch": {
+        "software": "cmsearch",
+        "rfam_dbname" : "Rfam",
+        "rfam_user" : "rfamro",
+        "rfam_host" : "mysql-rfam-public.ebi.ac.uk",
+        "rfam_port" : "4497",
+        "rfam_cm_db_path" : "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm",
+        "rfam_seeds_file_path" : "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed"
+    },
+    "convert2blastmask": {
+        "software": "convert2blastmask"
+    },
+    "cpc2": {
+        "software": "/hps/software/users/ensembl/genebuild/genebuild_virtual_user/singularity/test_cpc2.sif"
+    },
+    "cpg": {
+        "software": "cpg_lh",
+        "cpg_min_length" : 400,
+        "cpg_min_gc_content" : 50,
+        "cpg_min_oe" : 0.6
+    },
+    "dust": {
+        "software": "dustmasker"
+    },
+    "eponine": {
+        "software": "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar",
+        "threshold" : 0.999
+    },
+    "genblast": {
+        "software": "genblast"
+    },
+    "java": {
+        "path": "java"
+    },
+    "makeblastdb" : {
+        "software" : "makeblastdb"
+    },
+    "minimap2" : {
+        "software" : "minimap2",
+        "paftools_path" : "paftools.js"
+    },
+    "red": {
+        "software": "Red"
+    },
+    "rnasamba": {
+        "software": "/hps/software/users/ensembl/genebuild/genebuild_virtual_user/singularity/rnasamba_latest.sif",
+        "weights" : "/nfs/production/flicek/ensembl/genebuild/genebuild_virtual_user/rnasamba_data/full_length_weights.hdf5"
+    },
+    "repeatmasker": {
+        "software": "RepeatMasker",
+        "engine" : "rmblast"
+    },
+    "star": {
+        "software": "STAR"
+    },
+    "trf": {
+        "software": "trf",
+        "match_score": 2,
+        "mismatch_score" : 5,
+        "delta" : 7,
+        "pm" : 80,
+        "pi" : 10,
+        "minscore" : 40,
+        "maxperiod" : 500
+    },
+    "trnascan": {
+        "software": "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/tRNAscan-SE",
+        "filter_path" : "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
+    }
+}    

@@ -1,0 +1,22 @@
+# Byte-compiled
+__pycache__/
+*.pyc
+# pyenv
+.python-version
+# environments
+.env
+env/*
+.venv
+venv/*
+# packaging
+build/
+*_build*
+eggs/
+.eggs*
+*.egg-info*
+dist/
+downloads/
+#unit test
+.cache
+.pytest_cache
+
