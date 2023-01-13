@@ -22,16 +22,16 @@
     },
     "cpg": {
         "software": "cpg_lh",
-        "cpg_min_length" : 400,
-        "cpg_min_gc_content" : 50,
-        "cpg_min_oe" : 0.6
+        "cpg_min_length" : "400",
+        "cpg_min_gc_content" : "50",
+        "cpg_min_oe" : "0.6"
     },
     "dust": {
         "software": "dustmasker"
     },
     "eponine": {
         "software": "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar",
-        "threshold" : 0.999
+        "threshold" : "0.999"
     },
     "genblast": {
         "software": "genblast"
