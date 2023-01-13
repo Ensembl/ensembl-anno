@@ -4583,8 +4583,8 @@ if __name__ == "__main__":
         logger.info("Thread count is set to the default value 1; this might be slow.")
 
     if os.path.exists(
-        os.path.join(work_dir, "red_output", "mask_output").endswith(".msk")):
-    #) and os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
+        os.path.join(work_dir, "red_output", "mask_output")
+    ) and os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
         red_genome_file = [
             f
             for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output"))
@@ -4654,16 +4654,19 @@ if __name__ == "__main__":
 
     if run_dust:
         logger.info("Annotating low complexity regions")
+        logger.info("run_dust genome file %s", genome_file)
         repeatmasking_utils.run_dust_regions(
             genome_file, dust_path, work_dir, num_threads
         )
 
     if run_trf:
         logger.info("Annotating tandem repeats")
+        logger.info("run_trf genome file %s", genome_file)
         repeatmasking_utils.run_trf_repeats(genome_file, trf_path, work_dir, num_threads)
 
     if run_repeatmasker:
         logger.info("Annotating repeats with RepeatMasker")
+        logger.info("run_repeatmasker genome file %s", genome_file)
         repeatmasking_utils.run_repeatmasker_regions(
             genome_file,
             repeatmasker_path,
@@ -4678,11 +4681,15 @@ if __name__ == "__main__":
     #################################
     if run_cpg:
         logger.info("Annotating CpG islands")
+        logger.info("run_cpg genome file %s", genome_file)
         simple_feature_utils.run_cpg_regions(genome_file, cpg_path, work_dir, num_threads)
 
     if run_eponine:
         logger.info("Running Eponine to find transcription start sites")
-        simple_feature_utils.run_eponine_regions(genome_file, java_path, eponine_path, work_dir, num_threads)
+        logger.info("run_eponine genome file %s", genome_file)
+        simple_feature_utils.run_eponine_regions(
+            genome_file, java_path, eponine_path, work_dir, num_threads
+        )
 
     #################################
     # sncRNA analyses
@@ -4690,6 +4697,7 @@ if __name__ == "__main__":
     # Search Rfam with cmsearch
     if run_cmsearch:
         logger.info("Annotating sncRNAs")
+        logger.info("run_cmsearch genome file %s", genome_file)
         run_cmsearch_regions(
             genome_file,
             None,
@@ -4702,6 +4710,7 @@ if __name__ == "__main__":
 
     if run_trnascan:
         logger.info("Annotating tRNAs")
+        logger.info("run_trnascan genome file %s", genome_file)
         run_trnascan_regions(
             genome_file,
             trnascan_path,
@@ -4719,6 +4728,7 @@ if __name__ == "__main__":
     # Run STAR
     if run_star:
         logger.info("Running Star")
+        logger.info("run_star genome file %s", genome_file)
         run_star_align(
             star_path,
             trim_fastq,
@@ -4740,6 +4750,7 @@ if __name__ == "__main__":
     # Run Stringtie
     if run_stringtie:
         logger.info("Running Stringtie")
+        logger.info("run_stringtie genome file %s", genome_file)
         run_stringtie_assemble(
             stringtie_path, samtools_path, work_dir, genome_file, num_threads
         )
@@ -4747,6 +4758,7 @@ if __name__ == "__main__":
     # Run minimap2
     if run_minimap2:
         logger.info("Running minimap2")
+        logger.info("run_minimap2 genome file %s", genome_file)
         run_minimap2_align(
             minimap2_path,
             paftools_path,
@@ -4766,6 +4778,7 @@ if __name__ == "__main__":
     # Run GenBlast
     if run_genblast:
         logger.info("Running GenBlast")
+        logger.info("run_genblast genome file %s", masked_genome_file)
         run_genblast_align(
             genblast_path,
             convert2blastmask_path,
@@ -4782,6 +4795,7 @@ if __name__ == "__main__":
     # final genes in cases where transcriptomic data are missing or fragmented
     if run_busco:
         logger.info("Running GenBlast of BUSCO proteins")
+        logger.info("run_busco genome file %s", masked_genome_file)
         run_genblast_align(
             genblast_path,
             convert2blastmask_path,
@@ -4800,6 +4814,7 @@ if __name__ == "__main__":
     # Do some magic
     if finalise_geneset:
         logger.info("Finalise geneset")
+        logger.info("finalise geneset genome file %s", genome_file)
         run_finalise_geneset(
             main_script_dir,
             work_dir,
