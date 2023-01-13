@@ -53,7 +53,7 @@ def run_eponine_regions(  # pylint: disable=too-many-locals
     if not eponine_path:
         eponine_path = config["eponine"]["software"]
 
-    utils.check_file(eponine_path)
+    utils.check_file(pathlib.Path(eponine_path))
     utils.check_exe(java_path)
 
     eponine_output_dir = pathlib.Path(utils.create_dir(main_output_dir, "eponine_output"))
@@ -68,6 +68,7 @@ def run_eponine_regions(  # pylint: disable=too-many-locals
 
     logger.info("Creating list of genomic slices")
     seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
+    logger.info("Creating list of genomic slices %s", seq_region_lengths)
     slice_ids = utils.create_slice_ids(
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
@@ -97,7 +98,9 @@ def run_eponine_regions(  # pylint: disable=too-many-locals
 
     pool.close()
     pool.join()
-    utils.slice_output_to_gtf(eponine_output_dir, ".epo.gtf", 1, "feature_id", "eponine")
+    utils.slice_output_to_gtf(
+        str(eponine_output_dir), ".epo.gtf", 1, "feature_id", "eponine"
+    )
     for gtf_file in pathlib.Path(eponine_output_dir).glob("*.epo.gtf"):
         gtf_file.unlink()
     return 0
@@ -113,7 +116,7 @@ def multiprocess_eponine(  # pylint: disable=too-many-locals
     Run Eponine on multiprocess on genomic slices
     Args:
         generic_eponine_cmd:list
-        slice_id:str
+        slice_id: list
         genome_file : pathlib.Path
         eponine_output_dir : pathlib.Path
     """
@@ -128,7 +131,7 @@ def multiprocess_eponine(  # pylint: disable=too-many-locals
         end,
     )
     seq = utils.get_sequence(
-        region_name, start, end, 1, genome_file, str(eponine_output_dir)
+        region_name, start, end, 1, str(genome_file), str(eponine_output_dir)
     )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
@@ -136,26 +139,17 @@ def multiprocess_eponine(  # pylint: disable=too-many-locals
         region_fasta_file_path = eponine_output_dir / tmpdirname / f"{slice_file_name}.fa"
         with open(region_fasta_file_path, "w+") as region_fasta_out:
             region_fasta_out.write(f">{region_name}\n{seq}\n")
-        # region_fasta_file_path = os.path.join(eponine_output_dir, region_fasta_file_name)
-        # region_fasta_out = open(region_fasta_file_path, "w+")
-        # region_fasta_out.write(">" + region_name + "\n" + seq + "\n")
-        # region_fasta_out.close()
 
         region_results_file_path = eponine_output_dir / f"{slice_file_name}.epo.gtf"
 
-        eponine_output_file_path = pathlib.Path(f"{region_fasta_file_path}.epo")
+        eponine_output_file_path = f"{region_fasta_file_path}.epo"
         eponine_cmd = generic_eponine_cmd.copy()
-        eponine_cmd.append(region_fasta_file_path)
-        logger.info(eponine_cmd)
-
+        eponine_cmd.append(str(region_fasta_file_path))
         with open(eponine_output_file_path, "w+") as eponine_out:
             subprocess.run(eponine_cmd, stdout=eponine_out, check=True)
-
         create_eponine_gtf(
             eponine_output_file_path, region_results_file_path, region_name
         )
-        # os.remove(eponine_output_file_path)
-        # os.remove(region_fasta_file_path)
 
 
 def create_eponine_gtf(
@@ -205,7 +199,7 @@ def run_cpg_regions(
     num_threads: int,
 ):
     """
-    Run CPG on genomic slices
+    Run CpG islands on genomic slices
     Args:
         genome_file : pathlib.Path
         cpg_path : str
@@ -249,7 +243,7 @@ def run_cpg_regions(
 
     pool.close()
     pool.join()
-    utils.slice_output_to_gtf(cpg_output_dir, ".cpg.gtf", 1, "feature_id", "cpg")
+    utils.slice_output_to_gtf(str(cpg_output_dir), ".cpg.gtf", 1, "feature_id", "cpg")
     for gtf_file in pathlib.Path(cpg_output_dir).glob("*.cpg.gtf"):
         gtf_file.unlink()
     return 0
@@ -259,7 +253,7 @@ def multiprocess_cpg(  # pylint: disable=too-many-locals
     cpg_path: str, slice_id: str, genome_file: pathlib.Path, cpg_output_dir: pathlib.Path
 ):
     """
-    Run Cpg on multiprocess on genomic slices
+    Annotation of CpG islands on multiprocess on genomic slices
     Args:
         cpg_path:str
         slice_id:str
@@ -276,7 +270,9 @@ def multiprocess_cpg(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = utils.get_sequence(region_name, start, end, 1, genome_file, str(cpg_output_dir))
+    seq = utils.get_sequence(
+        region_name, start, end, 1, str(genome_file), str(cpg_output_dir)
+    )
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     with tempfile.TemporaryDirectory(dir=cpg_output_dir) as tmpdirname:
@@ -287,16 +283,13 @@ def multiprocess_cpg(  # pylint: disable=too-many-locals
 
         region_results_file_path = cpg_output_dir / f"{slice_file_name}.cpg.gtf"
 
-        cpg_output_file_path = pathlib.Path(f"{region_fasta_file_path}.cpg")
-        cpg_cmd = [cpg_path, region_fasta_file_path]
-        logger.info(" ".join(cpg_cmd))
+        cpg_output_file_path = f"{region_fasta_file_path}.cpg"
+        cpg_cmd = [cpg_path, str(region_fasta_file_path)]
 
         with open(cpg_output_file_path, "w+") as cpg_out:
             subprocess.run(cpg_cmd, stdout=cpg_out, check=True)
 
         create_cpg_gtf(cpg_output_file_path, region_results_file_path, region_name)
-        # os.remove(cpg_output_file_path)
-        # os.remove(region_fasta_file_path)
 
 
 def create_cpg_gtf(  # pylint: disable=too-many-locals
@@ -330,16 +323,14 @@ def create_cpg_gtf(  # pylint: disable=too-many-locals
                 score = float(results[3])
                 gc_content = float(results[6])
                 oe_score = results[7]
-
                 if oe_score in ("-", "inf"):
                     oe_score = 0
                 else:
                     oe_score = float(oe_score)
-
                 if (
-                    length >= cpg_min_length
-                    and gc_content >= cpg_min_gc_content
-                    and oe_score >= cpg_min_oe
+                    int(length) >= int(cpg_min_length)
+                    and gc_content >= int(cpg_min_gc_content)
+                    and oe_score >= float(cpg_min_oe)
                 ):
                     gtf_line = (
                         f"{region_name}\tCpG\tsimple_feature\t{start}\t"
