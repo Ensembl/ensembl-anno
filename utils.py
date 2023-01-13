@@ -396,5 +396,5 @@ def check_file(file_path: pathlib.Path):
     Returns:
         FileNotFoundError
     """
-    if not file_path.exist():
+    if not file_path.is_file():
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
