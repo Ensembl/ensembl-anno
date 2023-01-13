@@ -34,7 +34,7 @@ import subprocess
 import tempfile
 
 import repeatmasking_utils
-import simple_features_utils
+import simple_feature_utils
 import utils
 
 with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
@@ -4583,13 +4583,14 @@ if __name__ == "__main__":
         logger.info("Thread count is set to the default value 1; this might be slow.")
 
     if os.path.exists(
-        os.path.join(work_dir, "red_output", "mask_output")
-    ) and os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
+        os.path.join(work_dir, "red_output", "mask_output").endswith(".msk")):
+    #) and os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
         red_genome_file = [
             f
             for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output"))
             if f.endswith(".msk")
         ]
+        logger.info("red_genome_file %s", red_genome_file)
         masked_genome_file = os.path.join(
             work_dir, "red_output", "mask_output", red_genome_file[0]
         )
@@ -4677,11 +4678,11 @@ if __name__ == "__main__":
     #################################
     if run_cpg:
         logger.info("Annotating CpG islands")
-        simple_features_utils.run_cpg_regions(genome_file, cpg_path, work_dir, num_threads)
+        simple_feature_utils.run_cpg_regions(genome_file, cpg_path, work_dir, num_threads)
 
     if run_eponine:
         logger.info("Running Eponine to find transcription start sites")
-        simple_features_utils.run_eponine_regions(genome_file, java_path, eponine_path, work_dir, num_threads)
+        simple_feature_utils.run_eponine_regions(genome_file, java_path, eponine_path, work_dir, num_threads)
 
     #################################
     # sncRNA analyses
