@@ -15,7 +15,10 @@
 
 ## A script to help download and process data from OrthoDB [See: https://www.orthodb.org/orthodb_userguide.html#contact]
 ## Author: Lahcen Campbell [lcampbell@ebi.ac.uk]
-## version 1.3
+## version 1.4
+
+## Update 1.4: -Improved handling of main download URL and orthoDB version needed for OrthoDB master file/data retreval
+##             -Implement embedding of OrthoDB version into protein file names
 
 # Main input variable
 TAXID_CLADE=$1
@@ -23,7 +26,8 @@ CWD=`readlink -f $PWD`
 PERL_SCRIPTS_DIR="../support_scripts_perl"
 
 ## IMPORTANT URL - Which could be changed in a future OrthoDB update.... ##
-ORTHODB_FILE_URL="https://v101.orthodb.org/download"
+ORTHODB_FILE_URL="https://data.orthodb.org/download"
+# [ReadMe = $ORTHODB_FILE_URL/README.txt]
 
 if [ -z $TAXID_CLADE ]; then
 echo -e -n 'Taxon ID OR Clade name required. Exiting...\n\nUsage: sh download_orthodb_proteinset.sh <TaxonID -OR- Clade Name>\n'
@@ -35,13 +39,19 @@ fi
 # Function for testing taxonID vs clade name input
 is_int () { test "$@" -eq "$@" 2> /dev/null; }
 
+## Get the lastest information related to the current version set of *.tab.gz files hosted on OrthoDB:
+wget -q $ORTHODB_FILE_URL -O OrthoDB_Download.html
+ODB_LEVEL2SPECIES=`grep -e '_level2species.tab.gz' OrthoDB_Download.html | perl -pe 'if ( $_ =~ m/odb[0-9]+v[0-9]+_level2species.tab.gz/){print $&."\n";};' | head -n 1`
+ODB_LEVELS=`grep -e '_levels.tab.gz' OrthoDB_Download.html | perl -pe 'if ( $_ =~ m/odb[0-9]+v[0-9]+_levels.tab.gz/){print $&."\n";};' | head -n 1`
+ODB_VERSION=`grep -e '_all_fasta.tab.gz' OrthoDB_Download.html | perl -pe 'if ( $_ =~ m/odb[0-9]+v[0-9]+/ ){print $&."\n";};' | head -n 1`
+echo "Using OrthoDB Version: $ODB_VERSION"
+
 # Test for presence of non fasta files from OrthoDB. Used to gain clade/species information.
-# [https://v101.orthodb.org/download/README.txt]
-if [[ ! -f ${CWD}/odb10v1_level2species.tab.gz ]] && [[ ! -f ${CWD}/odb10v1_levels.tab.gz ]]; then
-    echo "## Downloading OrthoDB non fasta files...."
-    for ORTHFILE in odb10v1_level2species.tab.gz odb10v1_levels.tab.gz
+if [[ ! -f ${CWD}/$ODB_LEVEL2SPECIES ]] && [[ ! -f ${CWD}/$ODB_LEVELS ]]; then
+    echo "## Downloading OrthoDB taxonomy to Ortho master files...."
+    for ORTHFILE in $ODB_LEVEL2SPECIES $ODB_LEVELS
     do
-        wget ${ORTHODB_FILE_URL}/$ORTHFILE
+        wget -q ${ORTHODB_FILE_URL}/$ORTHFILE
     done
 fi
 
@@ -52,10 +62,10 @@ if [[ -v "$TAXON_CLADE" ]]; then
 elif is_int "$TAXID_CLADE"; then
     echo "## Processing on Taxon ID: '$TAXID_CLADE'"
     TAXON_ID=$TAXID_CLADE
-    CLADE_NAME=`zcat odb10v1_levels.tab.gz | grep -w -i -e "$TAXID_CLADE" | cut -f2`
-    CLADE_TID_LIST=`zcat odb10v1_level2species.tab.gz | grep -w -e "$TAXID_CLADE" | cut -f4 | awk 'BEGIN { FS="," } { print $NF }' | sed 's/}//' | tr "\n" "," | sed 's/,$//g'`
+    CLADE_NAME=`zcat $ODB_LEVELS | grep -w -i -e "$TAXID_CLADE" | cut -f2`
+    CLADE_TID_LIST=`zcat $ODB_LEVEL2SPECIES | grep -w -e "$TAXID_CLADE" | cut -f4 | awk 'BEGIN { FS="," } { print $NF }' | sed 's/}//' | tr "\n" "," | sed 's/,$//g'`
     if [[ -z $CLADE_TID_LIST ]]; then 
-        echo "!!! Taxon ID: $TAXID_CLADE not defined within OrthoDB. See odb10v1_levels.tab.gz"
+        echo "!!! Taxon ID: $TAXID_CLADE not defined within OrthoDB. See $ODB_LEVELS"
         exit 1
     else
         #Obtain taxon information from uniprot
@@ -67,10 +77,10 @@ elif is_int "$TAXID_CLADE"; then
 else
     echo "## Processing on CLADE name '$TAXID_CLADE'"
     CLADE_NAME=$TAXID_CLADE
-    TAXON_ID=`zcat odb10v1_levels.tab.gz | grep -w -i -e "$TAXID_CLADE" | cut -f1`
-    CLADE_TID_LIST=`zcat odb10v1_level2species.tab.gz | grep -w -e "$TAXON_ID" | cut -f4 | awk 'BEGIN { FS="," } { print $NF }' | sed 's/}//' | tr "\n" "," | sed 's/,$//g'`
+    TAXON_ID=`zcat $ODB_LEVELS | grep -w -i -e "$TAXID_CLADE" | cut -f1`
+    CLADE_TID_LIST=`zcat $ODB_LEVEL2SPECIES | grep -w -e "$TAXON_ID" | cut -f4 | awk 'BEGIN { FS="," } { print $NF }' | sed 's/}//' | tr "\n" "," | sed 's/,$//g'`
     if [[ -z $TAXON_ID ]] || [[ -z $CLADE_TID_LIST ]]; then 
-        echo "!!! Clade name: '$TAXID_CLADE' not located within OrthoDB. See odb10v1_levels.tab.gz"
+        echo "!!! Clade name: '$TAXID_CLADE' not located within OrthoDB. See $ODB_LEVELS"
         exit 1
     else
         #Obtain taxon information from uniprot
@@ -83,7 +93,7 @@ fi
 
 # Ensure we dont have a species level taxonID. Taxon ID or clade name can not be a single species.
 if [[ -z "$CLADE_NAME" ]]; then
-    echo "!!! Clade name using '$TAXID_CLADE' not located. See [ odb10v1_level2species.tab.gz = 'Correspondence between level ids and organism ids' ]."
+    echo "!!! Clade name using '$TAXID_CLADE' not located. See [ $ODB_LEVEL2SPECIES = 'Correspondence between level ids and organism ids' ]."
     if is_int "$TAXON_ID"; then
     `wget -q https://rest.uniprot.org/taxonomy/${TAXON_ID}.tsv -O Uniprot_taxid${TAXON_ID}.tsv`
     RANK=`tail -n 1 Uniprot_taxid${TAXON_ID}.tsv | cut -f7`
@@ -166,6 +176,6 @@ grep -c -e ">" -I ${BASENAME}*.fa
 
 ## Print command to rename files:
 echo -e -n "\n## Renaming final output files:\n"
-perl ${PERL_SCRIPTS_DIR}/quick_rename.pl ${BASENAME}_final.out. ${CLADE_NAME}_orthodb_proteins. prefix
+perl ${PERL_SCRIPTS_DIR}/Quick_rename.pl ${BASENAME}_final.out. ${CLADE_NAME}_orth${ODB_VERSION}_proteins. prefix
 
 exit 1
