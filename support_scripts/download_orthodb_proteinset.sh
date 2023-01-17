@@ -176,6 +176,6 @@ grep -c -e ">" -I ${BASENAME}*.fa
 
 ## Print command to rename files:
 echo -e -n "\n## Renaming final output files:\n"
-perl ${PERL_SCRIPTS_DIR}/Quick_rename.pl ${BASENAME}_final.out. ${CLADE_NAME}_orth${ODB_VERSION}_proteins. prefix
+perl ${PERL_SCRIPTS_DIR}/quick_rename.pl ${BASENAME}_final.out. ${CLADE_NAME}_orth${ODB_VERSION}_proteins. prefix
 
 exit 1
