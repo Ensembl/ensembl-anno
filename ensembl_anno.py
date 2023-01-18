@@ -4584,7 +4584,7 @@ if __name__ == "__main__":
 
     if os.path.exists(
         os.path.join(work_dir, "red_output", "mask_output")
-    ) and os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
+    ) or os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
         red_genome_file = [
             f
             for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output"))
