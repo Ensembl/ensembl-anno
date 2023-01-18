@@ -562,7 +562,9 @@ def create_trf_gtf(
                     repeat_count += 1
 
 
-def run_red(red_path: str, main_output_dir: str, genome_file: typing.Union[pathlib.Path, str]):
+def run_red(
+    red_path: str, main_output_dir: str, genome_file: typing.Union[pathlib.Path, str]
+):
     """
     Run Red on genome file
 
