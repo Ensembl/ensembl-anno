@@ -367,8 +367,8 @@ def create_dust_gtf(
 
 def run_trf_repeats(  # pylint: disable=too-many-locals
     genome_file: typing.Union[pathlib.Path, str],
-    trf_path,
-    main_output_dir,
+    trf_path: str,
+    main_output_dir: str,
     num_threads: int,
 ):
     """
@@ -450,11 +450,11 @@ def run_trf_repeats(  # pylint: disable=too-many-locals
 
 
 def multiprocess_trf(  # pylint: disable=too-many-locals
-    generic_trf_cmd,
-    slice_id,
-    genome_file,
-    trf_output_dir,
-    trf_output_extension,
+    generic_trf_cmd: list,
+    slice_id: str,
+    genome_file: pathlib.Path,
+    trf_output_dir: pathlib.Path,
+    trf_output_extension: str,
 ):
     """
     Run TRF on multiprocess on genomic slices
@@ -562,7 +562,9 @@ def create_trf_gtf(
                     repeat_count += 1
 
 
-def run_red(red_path, main_output_dir, genome_file: typing.Union[pathlib.Path, str]):
+def run_red(
+    red_path: str, main_output_dir: str, genome_file: typing.Union[pathlib.Path, str]
+):
     """
     Run Red on genome file
 
@@ -641,7 +643,7 @@ def run_red(red_path, main_output_dir, genome_file: typing.Union[pathlib.Path, s
     return str(masked_genome_file)
 
 
-def create_red_gtf(repeat_coords_file, gtf_output_file_path):
+def create_red_gtf(repeat_coords_file: pathlib.Path, gtf_output_file_path: pathlib.Path):
     """
     Create Red gtf file  from masked  genome file
 
