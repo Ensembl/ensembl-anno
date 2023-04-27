@@ -22,7 +22,7 @@ import subprocess
 import tempfile
 import typing
 
-import utils
+from src.python.ensembl.tools.anno.utils._utils import check_exe
 
 logger = logging.getLogger(__name__)
 with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
@@ -54,21 +54,21 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     if not repeatmasker_path:
         repeatmasker_path = config["repeatmasker"]["software"]
 
-    utils.check_exe(repeatmasker_path)
+    check_exe(repeatmasker_path)
     repeatmasker_output_dir = pathlib.Path(
-        utils.create_dir(main_output_dir, "repeatmasker_output")
+        _utils.create_dir(main_output_dir, "repeatmasker_output")
     )
 
     output_file = repeatmasker_output_dir / "annotation.gtf"
     if output_file.exists():
-        transcript_count = utils.check_gtf_content(output_file, "repeat")
+        transcript_count = _utils.check_gtf_content(output_file, "repeat")
         if transcript_count > 0:
             logger.info("Repeatmasker gtf file exists")
             return
 
     logger.info("Creating list of genomic slices")
-    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
-    slice_ids = utils.create_slice_ids(
+    seq_region_lengths = _utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = _utils.create_slice_ids(
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
     generic_repeatmasker_cmd = [
@@ -103,12 +103,11 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
 
     pool.close()
     pool.join()
-    utils.slice_output_to_gtf(
+    _utils.slice_output_to_gtf(
         str(repeatmasker_output_dir), ".rm.gtf", 1, "repeat_id", "repeatmask"
     )
     for gtf_file in pathlib.Path(repeatmasker_output_dir).glob("*.rm.gtf"):
         gtf_file.unlink()
-
 
 def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     generic_repeatmasker_cmd: list,
@@ -135,7 +134,7 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = utils.get_sequence(
+    seq = _utils.get_sequence(
         region_name, start, end, 1, genome_file, str(repeatmasker_output_dir)
     )
 
@@ -169,7 +168,6 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         repeatmasker_log_file_path.unlink()
     if repeatmasker_cat_file_path.exists():
         repeatmasker_cat_file_path.unlink()
-
 
 def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
     repeatmasker_output_file_path: pathlib.Path,
@@ -226,7 +224,6 @@ def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
                 repeatmasker_out.write(gtf_line)
                 repeat_count += 1
 
-
 def run_dust_regions(
     genome_file: typing.Union[pathlib.Path, str],
     dust_path: str,
@@ -249,20 +246,20 @@ def run_dust_regions(
     if not dust_path:
         dust_path = config["dust"]["software"]
 
-    utils.check_exe(dust_path)
-    dust_output_dir = pathlib.Path(utils.create_dir(main_output_dir, "dust_output"))
+    _utils.check_exe(dust_path)
+    dust_output_dir = pathlib.Path(_utils.create_dir(main_output_dir, "dust_output"))
     os.chdir(str(dust_output_dir))
     output_file = dust_output_dir / "annotation.gtf"
     logger.info("dust output %s", output_file)
     if output_file.is_file():
-        transcript_count = utils.check_gtf_content(output_file, "repeat")
+        transcript_count = _utils.check_gtf_content(output_file, "repeat")
         if transcript_count > 0:
             logger.info("Dust gtf file exists")
             return 0
 
     logger.info("Creating list of genomic slices")
-    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
-    slice_ids = utils.create_slice_ids(
+    seq_region_lengths = _utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = _utils.create_slice_ids(
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
 
@@ -282,11 +279,9 @@ def run_dust_regions(
 
     pool.close()
     pool.join()
-    utils.slice_output_to_gtf(str(dust_output_dir), ".dust.gtf", 1, "repeat_id", "dust")
+    _utils.slice_output_to_gtf(str(dust_output_dir), ".dust.gtf", 1, "repeat_id", "dust")
     for gtf_file in pathlib.Path(dust_output_dir).glob("*.dust.gtf"):
         gtf_file.unlink()
-    return 0
-
 
 def multiprocess_dust(  # pylint: disable=too-many-locals
     generic_dust_cmd: list,
@@ -312,7 +307,7 @@ def multiprocess_dust(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = utils.get_sequence(
+    seq = _utils.get_sequence(
         region_name, start, end, 1, genome_file, str(dust_output_dir)
     )
 
@@ -332,7 +327,6 @@ def multiprocess_dust(  # pylint: disable=too-many-locals
             subprocess.run(dust_cmd, stdout=dust_out, check=True)
 
         create_dust_gtf(dust_output_file_path, region_results_file_path, region_name)
-
 
 def create_dust_gtf(
     dust_output_file_path: pathlib.Path,
@@ -364,7 +358,6 @@ def create_dust_gtf(
                 dust_out.write(gtf_line)
                 repeat_count += 1
 
-
 def run_trf_repeats(  # pylint: disable=too-many-locals
     genome_file: typing.Union[pathlib.Path, str],
     trf_path: str,
@@ -377,7 +370,7 @@ def run_trf_repeats(  # pylint: disable=too-many-locals
     Args:
         genome_file : pathlib.Path
         trf_path : str
-        main_output_dir : pathlib.Path
+        main_output_dir : str
         num_threads: int
 
     Return:
@@ -387,19 +380,19 @@ def run_trf_repeats(  # pylint: disable=too-many-locals
     if not trf_path:
         trf_path = config["trf"]["software"]
 
-    utils.check_exe(trf_path)
-    trf_output_dir = pathlib.Path(utils.create_dir(main_output_dir, "trf_output"))
+    _utils.check_exe(trf_path)
+    trf_output_dir = pathlib.Path(_utils.create_dir(main_output_dir, "trf_output"))
     os.chdir(str(trf_output_dir))
     output_file = trf_output_dir / "annotation.gtf"
     if output_file.exists():
-        transcript_count = utils.check_gtf_content(output_file, "repeat")
+        transcript_count = _utils.check_gtf_content(output_file, "repeat")
         if transcript_count > 0:
             logger.info("Trf gtf file exists, skipping analysis")
             return
 
     logger.info("Creating list of genomic slices")
-    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 5000)
-    slice_ids = utils.create_slice_ids(
+    seq_region_lengths = _utils.get_seq_region_lengths(genome_file, 5000)
+    slice_ids = _utils.create_slice_ids(
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
 
@@ -444,10 +437,9 @@ def run_trf_repeats(  # pylint: disable=too-many-locals
 
     pool.close()
     pool.join()
-    utils.slice_output_to_gtf(str(trf_output_dir), ".trf.gtf", 1, "repeat_id", "trf")
+    _utils.slice_output_to_gtf(str(trf_output_dir), ".trf.gtf", 1, "repeat_id", "trf")
     for gtf_file in pathlib.Path(trf_output_dir).glob("*.trf.gtf"):
         gtf_file.unlink()
-
 
 def multiprocess_trf(  # pylint: disable=too-many-locals
     generic_trf_cmd: list,
@@ -475,7 +467,7 @@ def multiprocess_trf(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = utils.get_sequence(region_name, start, end, 1, genome_file, str(trf_output_dir))
+    seq = _utils.get_sequence(region_name, start, end, 1, genome_file, str(trf_output_dir))
 
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     with tempfile.TemporaryDirectory(dir=trf_output_dir) as tmpdirname:
@@ -500,7 +492,6 @@ def multiprocess_trf(  # pylint: disable=too-many-locals
         create_trf_gtf(trf_output_file_path, region_results_file_path, region_name)
         # trf_output_file_path.unlink()
         # region_fasta_file_path.unlink()
-
 
 def create_trf_gtf(
     trf_output_file_path: pathlib.Path,
@@ -561,10 +552,9 @@ def create_trf_gtf(
                     trf_out.write(gtf_line)
                     repeat_count += 1
 
-
 def run_red(
     red_path: str, main_output_dir: str, genome_file: typing.Union[pathlib.Path, str]
-):
+) -> str:
     """
     Run Red on genome file
 
@@ -579,11 +569,11 @@ def run_red(
     if not red_path:
         red_path = config["red"]["software"]
     genome_file = pathlib.Path(genome_file)
-    utils.check_exe(red_path)
-    red_dir = pathlib.Path(utils.create_dir(main_output_dir, "red_output"))
-    red_mask_dir = pathlib.Path(utils.create_dir(red_dir, "mask_output"))
-    red_repeat_dir = pathlib.Path(utils.create_dir(red_dir, "repeat_output"))
-    red_genome_dir = pathlib.Path(utils.create_dir(red_dir, "genome_dir"))
+    _utils.check_exe(red_path)
+    red_dir = pathlib.Path(_utils.create_dir(main_output_dir, "red_output"))
+    red_mask_dir = pathlib.Path(_utils.create_dir(red_dir, "mask_output"))
+    red_repeat_dir = pathlib.Path(_utils.create_dir(red_dir, "repeat_output"))
+    red_genome_dir = pathlib.Path(_utils.create_dir(red_dir, "genome_dir"))
 
     sym_link_genome_cmd = "ln -s " + str(genome_file) + " " + str(red_genome_dir)
     logger.info(genome_file)
@@ -639,9 +629,9 @@ def run_red(
     logger.info("Completed running Red")
 
     create_red_gtf(repeat_coords_file, gtf_output_file_path)
-
+    reveal_locals()
     return str(masked_genome_file)
-
+    
 
 def create_red_gtf(repeat_coords_file: pathlib.Path, gtf_output_file_path: pathlib.Path):
     """
@@ -666,3 +656,4 @@ def create_red_gtf(repeat_coords_file: pathlib.Path, gtf_output_file_path: pathl
                     f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'
                 )
                 red_out.write(gtf_line)
+
