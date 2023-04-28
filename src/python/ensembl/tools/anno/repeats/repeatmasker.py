@@ -42,7 +42,9 @@ __all__ = ["run_repeatmasker_regions"]
 
 class RepeatMasker: # pylint: disable=too-few-public-methods
     """
-    Run Repeatmasker on genomic slices using the crossmatch engine.
+    RepeatMasker is a program that screens DNA sequences for interspersed repeats and low complexity DNA sequences.
+    Smit, AFA, Hubley, R & Green, P. RepeatMasker Open-4.0
+
     Args:
         genome_file : pathlib.Path, genome file path.
         repeatmasker_path : str, RepeatMasker executable path.
@@ -119,7 +121,6 @@ class RepeatMasker: # pylint: disable=too-few-public-methods
                 args=(
                     generic_repeatmasker_cmd,
                     slice_id,
-                    self.genome_file,
                     repeatmasker_output_dir,
                 ),
             )
@@ -135,7 +136,7 @@ class RepeatMasker: # pylint: disable=too-few-public-methods
     def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         self,
         generic_repeatmasker_cmd: list,
-        slice_id: str,
+        slice_id: list,
         repeatmasker_output_dir: pathlib.Path,
     )->None:
         """
@@ -143,7 +144,7 @@ class RepeatMasker: # pylint: disable=too-few-public-methods
 
         Args:
             generic_repeatmasker_cmd: list
-            slice_id: str
+            slice_id: list
             genome_file : pathlib.Path
             repeatmasker_output_dir : pathlib.Path
         """
@@ -189,6 +190,7 @@ class RepeatMasker: # pylint: disable=too-few-public-methods
             repeatmasker_log_file_path.unlink()
         if repeatmasker_cat_file_path.exists():
             repeatmasker_cat_file_path.unlink()
+        reveal_locals()
     def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
         self,
         repeatmasker_output_file_path: pathlib.Path,
