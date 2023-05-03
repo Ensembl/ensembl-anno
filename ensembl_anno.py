@@ -33,7 +33,7 @@ import signal
 import subprocess
 import tempfile
 
-import repeatmasking_utils
+from repeats.repeatmasker import run_repeatmasker_regions
 import simple_feature_utils
 import utils
 
@@ -511,12 +511,13 @@ if __name__ == "__main__":
     if run_repeatmasker:
         logger.info("Annotating repeats with RepeatMasker")
         logger.info("run_repeatmasker genome file %s", genome_file)
-        repeatmasking_utils.run_repeatmasker_regions(
+        repeatmasker.run_repeatmasker_regions(
             genome_file,
-            repeatmasker_path,
-            library,
-            species,
             work_dir,
+            config["repeatmasker"]["software"],
+            library,
+            config["repeatmasker"]["engine"],
+            species,
             num_threads,
         )
 
