@@ -1401,6 +1401,86 @@ def check_rnafold_structure(seq, rfam_output_dir):
     return structure
 
 
+def run_miniprot_align(
+    miniprot_path,
+    miniprot_dir,
+    protein_file,
+    masked_genome_file,
+    max_intron_length,
+    num_threads,
+):
+
+    if not miniprot_path:
+        miniprot_path = config["miniprot"]["software"]
+
+    utils.check_exe(miniprot_path)
+    utils.create_dir(miniprot_dir, None)
+
+    logger.info("Skip analysis if the gtf file already exists")
+    initial_output_file = os.path.join(miniprot_dir, "initial_annotation.gtf")
+    output_file = os.path.join(miniprot_dir, "annotation.gtf")
+    if os.path.exists(output_file):
+        transcript_count = utils.check_gtf_content(output_file, "transcript")
+        if transcript_count > 0:
+            logger.info("miniprot gtf file exists")
+            return
+    else:
+        logger.info("No gtf file, go on with the analysis")
+
+    miniprot_index_file = masked_genome_file + ".mpi"
+
+    if not os.path.exists(masked_genome_file):
+        raise IOError("Masked genome file does not exist: %s" % masked_genome_file)
+
+    if not os.path.exists(protein_file):
+        raise IOError("Protein file does not exist: %s" % protein_file)
+
+    if not os.path.exists(miniprot_index_file):
+        run_miniprot_index(miniprot_path, masked_genome_file, miniprot_index_file, num_threads)
+    else:
+        logger.info("Found an existing miniprot index, so will skip indexing")
+
+    if not os.path.exists(miniprot_index_file):
+        raise IOError("miniprot index file does not exist: %s" % miniprot_index_file)
+
+    logger.info("Running miniprot mapping:")
+    cmd = [
+        miniprot_path,
+        "-t" + str(num_threads),
+        "--gff",
+        miniprot_index_file,
+        protein_file,
+    ]
+    logger.info(" ".join(cmd))
+
+    with open(initial_output_file, 'w') as process_output_file:
+        subprocess.run(cmd, stdout=process_output_file)
+
+    logger.info("Completed running miniprot")
+    logger.info("Creating standardised GTF")
+    # Some code needs to be added to take the output from miniprot and make it the same as the annotation.gtf from genblast
+    # Note that miniprot may or may not have a stop_codon feature, if present then this should be used to adjust the boundary
+    # of the final exon to include the stop codon in the standardised gtf. miniprot also handles frameshifts and seems to
+    # put attributes in for these. Some work will be needed to understand how they are represented in the miniprot output
+    # i.e. are they represented as artifical gaps that split a real exon, or are they just attribs and we need to then add
+    # in a gap ourselves based on the location
+    
+
+def run_miniprot_index(miniprot_path, masked_genome_file, miniprot_index_file, num_threads):
+
+    logger.info("Running indexing prior to miniprot mapping:")
+    cmd = [
+        miniprot_path,
+        "-t" + str(num_threads),
+        "-d",
+        miniprot_index_file,
+        masked_genome_file,
+    ]
+    logger.info(" ".join(cmd))
+    subprocess.run(cmd)
+    logger.info("Completed running miniprot indexing")
+
+
 def run_genblast_align(
     genblast_path,
     convert2blastmask_path,
@@ -4257,6 +4337,11 @@ if __name__ == "__main__":
         genblast/download.html",
     )
     parser.add_argument(
+        "--miniprot_path",
+        type=str,
+        help="Path miniprot executable. See https://github.com/lh3/miniprot",
+    )
+    parser.add_argument(
         "--convert2blastmask_path",
         type=str,
         help="Path to convert2blastmask executable",
@@ -4274,6 +4359,11 @@ if __name__ == "__main__":
         type=int,
         help="GenBlast timeout in seconds",
         default=10800,
+    )
+    parser.add_argument(
+        "--run_miniprot",
+        action="store_true",
+        help="Run miniprot to align protein sequences",
     )
     parser.add_argument(
         "--run_busco",
@@ -4497,10 +4587,12 @@ if __name__ == "__main__":
     run_masking = args.run_masking
     red_path = args.red_path
     genblast_path = args.genblast_path
+    miniprot_path = args.miniprot_path
     convert2blastmask_path = args.convert2blastmask_path
     makeblastdb_path = args.makeblastdb_path
     run_genblast = args.run_genblast
     genblast_timeout = args.genblast_timeout
+    run_miniprot = args.run_miniprot
     run_busco = args.run_busco
     protein_file = args.protein_file
     busco_protein_file = args.busco_protein_file
@@ -4789,6 +4881,19 @@ if __name__ == "__main__":
             max_intron_length,
             num_threads,
             genblast_timeout,
+        )
+
+    # Run miniprot
+    if run_miniprot:
+        logger.info("Running miniprot")
+        logger.info("run_miniprot genome file %s", masked_genome_file)
+        run_miniprot_align(
+            miniprot_path,
+            os.path.join(work_dir, "miniprot_output"),
+            protein_file,
+            masked_genome_file,
+            max_intron_length,
+            num_threads,
         )
 
     # Run GenBlast on BUSCO set, gives higher priority when creating thei
