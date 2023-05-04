@@ -58,60 +58,59 @@ def create_dir(main_output_dir, dir_name):
     return target_dir
 
 
-def check_exe(exe_path):
+def check_exe(exe_bin : PathLike) -> None:
     """
     Check executable path
     Args:
-        exe_path: str
-            Path to the executable file
+        exe_bin: Executable path
 
     Raises:
-        OSError: If the executable file does not exist at the given path
+        OSError: Executable path does not exist
     """
-    if not shutil.which(exe_path):
-        raise OSError("Exe does not exist. Path checked: %s" % exe_path)
+    if not shutil.which(exe_bin):
+        raise OSError("Exe does not exist. Path checked: %s" % exe_bin)
 
 
-def check_gtf_content(gtf_file, content_obj):
+def check_gtf_content(gtf_file : PathLike, content_obj : str) -> int:
     """
     Check number of transcript lines in the GTF
 
     Arg:
-      gtf_file: str path for the GTF file
-      content_obj: str object to check in the gtf i.e gene_id, repeat
+      gtf_file: GTF file path
+      content_obj: Object to detect and count in the gtf i.e transcript, repeat
 
-    Return: number of transcript lines
+    Return: Number of occurences
     """
-    transcript_count = 0
+    obj_count = 0
     with open(gtf_file) as gtf_in:
         for line in gtf_in:
-            eles = line.split("\t")
-            if not len(eles) == 9:
+            gtf_raw = line.split("\t")
+            if not len(gtf_raw) == 9:
                 continue
-            if eles[2] == content_obj:
-                transcript_count += 1
-    logger.info("%s GTF transcript count: %d", gtf_file, int(transcript_count))
-    return transcript_count
+            if gtf_raw[2] == content_obj:
+                obj_count += 1
+    logger.info("%s; Number of %s detected: %d", gtf_file, content_obj, int(obj_count))
+    return obj_count
 
 
-def get_seq_region_lengths(genome_file, min_seq_length):
+def get_seq_region_length(genome_file : PathLike, min_seq_length : int = 0) -> Dict:
     """
-    Split the genomic sequence in slices defined by  min_seq_length
+    Split the genome file according to the header and store in a dictionary all the sequences whose length is greater than min_seq_length.
     Args:
-        genome_file: str path for the genome file
-        min_seq_length: int slice length
-    Return: Dict Dictionary with the sequence headers as keys and the sequence lengths as values
+        genome_file: Genome file path.
+        min_seq_length: Minimum slice length.
+    Return: Dictionary of sequence headers and the corresponding sequence length
     """
     current_header = ""
     current_seq = ""
 
-    seq_regions = {}
+    seq_region_to_length = {}
     with open(genome_file) as file_in:
         for line in file_in:
             match = re.search(r">(.+)$", line)
             if match and current_header:
                 if len(current_seq) > min_seq_length:
-                    seq_regions[current_header] = len(current_seq)
+                    seq_region_to_length[current_header] = len(current_seq)
 
                 current_seq = ""
                 current_header = match.group(1)
@@ -121,57 +120,48 @@ def get_seq_region_lengths(genome_file, min_seq_length):
                 current_seq += line.rstrip()
 
         if len(current_seq) > min_seq_length:
-            seq_regions[current_header] = len(current_seq)
+            seq_region_to_lenth[current_header] = len(current_seq)
 
-    return seq_regions
+    return seq_region_to_length
 
 
-def create_slice_ids(seq_region_lengths, slice_size, overlap, min_length):
+def get_slice_id(seq_region_to_length : Dict, slice_size : int = 1000000, overlap : int = 0, min_length : int = 0) -> List:
     """
     Get list of ids for a genomic slice
     Arg:
-    seq_region_lengths: dict
-    Dictionary with the sequence headers as keys and the sequence lengths as values
-    slice_size: int size of the slice
-    overlap: int size of the overlap between two slices
-    min_length: int min length of the slice
-    Return: list List of IDs for the genomic slices
+    seq_region_length_dict: Dictionary with the sequence headers as keys and the sequence lengths as values
+    slice_size: Size of the slice
+    overlap: Overlap length between two slices
+    min_length: Min length of the slice
+    Return: List of IDs for each genomic slice
     """
-    if not slice_size:
-        slice_size = 1000000
 
-    if not overlap:
-        overlap = 0
+    slice_ids_per_region = []
 
-    if not min_length:
-        min_length = 0
-
-    slice_ids = []
-
-    for region in seq_region_lengths:
-        region_length = int(seq_region_lengths[region])
-        if region_length < min_length:
+    for seq_region in seq_region_to_length:
+        seq_region_length = int(seq_region_to_lenth[seq_region])
+        if seq_region_length < min_length:
             continue
 
-        if region_length <= slice_size:
-            slice_ids.append([region, 1, region_length])
+        if seq_region_length <= slice_size:
+            slice_ids.append([seq_region, 1, seq_region_length])
             continue
 
         start = 1
         end = start + slice_size - 1
-        while end < region_length:
+        while end < seq_region_length:
             start = start - overlap
             if start < 1:
                 start = 1
 
             end = start + slice_size - 1
-            if end > region_length:
-                end = region_length
+            if end > seq_region_length:
+                end = seq_region_length
             if (end - start + 1) >= min_length:
-                slice_ids.append([region, start, end])
+                slice_ids_per_region.append([seq_region, start, end])
             start = end + 1
 
-    return slice_ids
+    return slice_ids_per_region
 
 
 def slice_output_to_gtf(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
