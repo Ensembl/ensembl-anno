@@ -38,7 +38,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     num_threads: int,
 ):
     """
-    Run Repeatmasker on genomic slices using the crossmatch engine.
+    Run Repeatmasker on genomic slices using the RM BLAST engine.
     Args:
         genome_file : pathlib.Path
         repeatmasker_path : str path to the RepeatMasker executable
