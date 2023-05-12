@@ -5,6 +5,9 @@
         "bam2wig_path" : "/homes/fergal/bin/bam2wig",
         "wig2hints_path" : "/homes/fergal/bin/wig2hints"
     },
+    "bedtools": {
+      "software" : "bedtools"
+    }
     "cmsearch": {
         "software": "cmsearch",
         "rfam_dbname" : "Rfam",
