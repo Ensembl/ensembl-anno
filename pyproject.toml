@@ -41,7 +41,7 @@ readme = "README.md"
 # Specify which Python versions the project support; 'pip install' will check this
 # and refuse to install the project if the version does not match. See
 # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 
 # This is either text indicating the license for the distribution, or a file
 # that contains the license
@@ -51,7 +51,11 @@ license = {file = "LICENSE"}
 # This field adds keywords for your project which will appear on the
 # project page. What does your project relate to?
 #
-keywords = ["ensembl", "annotation", "genetics", "bioinformatics", "setuptools"]  
+keywords = ["ensembl", 
+"annotation", 
+"genetics",
+"bioinformatics",
+"setuptools"]  
 
 authors = [
         { name = "Ensembl", email = "dev@ensembl.org" } 
@@ -130,15 +134,15 @@ repository = "https://github.com/Ensembl/ensembl-anno"
 # The following would provide a command line executable called `sample`
 # which executes the function `main` from this package when invoked.
 [project.scripts]  # Optional
-ensembl-anno = "ensembl.anno.ensembl_anno:main"
-
+#ensembl-anno = "ensembl.anno.ensembl_anno:main"
+run_repeatmasker = "ensembl.tools.anno.repeats.repeatmasker:main"
 # This is configuration specific to the `setuptools` build backend.
 # If you are using a different build backend, you will need to change this.
 [tool.setuptools]
 # If there are data files included in your packages that need to be
 # installed, specify them here.
 #package-data = {"ensembl-anno" = ["data"]}
-package-dir = {"" = "src"}
+package-dir = {"" = "src/python"}
 
 [build-system]
 build-backend = "setuptools.build_meta"
@@ -148,7 +152,7 @@ requires = ["setuptools", "setuptools-scm", "wheel"]
 
 [tool.setuptools.packages.find]
 #where = ["src/python/ensembl/tools/anno"]  # list of folders that contain the packages (["."] by default)
-where = ["src"]
+where = ["src/python"]
 
 [tool.black]
 line-length = 110
@@ -161,7 +165,7 @@ line-length = 110
 #testpaths = ["src/python/tests"]
 #
 [tool.mypy]
-mypy_path = "src"
+mypy_path = "src/python"
 explicit_package_bases = true
 ignore_missing_imports = true
 show_error_codes = true
@@ -180,8 +184,8 @@ disable = [
     "wildcard-import"
 ]
 
-[tool.coverage.run]
-branch = true
-source = [
-    "src/python/ensembl/tools/anno",
-    ]
+#[tool.coverage.run]
+#branch = true
+#source = [
+#    "src/python/ensembl/tools/anno",
+#    ]
