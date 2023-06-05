@@ -179,7 +179,7 @@ def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
     with open(output_file, "r", encoding="utf8") as repeatmasker_in, open(
         region_results_file, "w+", encoding="utf8"
     ) as repeatmasker_out:
-        repeat_count = 0
+        repeat_count = 1
         for line in repeatmasker_in:
             result_match = re.search(r"^\s*\d+\s+", line)
             if result_match:
@@ -247,7 +247,7 @@ def main() -> None:
     mod = argschema.ArgSchemaParser(schema_type=InputSchema)
     log_file_path = create_dir(mod.args["output_dir"], "log") /"repeatmasking.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
-    logging.config.fileConfig(loginipath, defaults={"logfilename": log_file_path}, disable_existing_loggers=False,)
+    logging.config.fileConfig(loginipath, defaults={"logfilename": str(log_file_path)}, disable_existing_loggers=False,)
     run_repeatmasker(
         mod.args["genome_file"],
         mod.args["output_dir"],
