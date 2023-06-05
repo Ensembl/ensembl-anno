@@ -12,230 +12,273 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
+"""
+    Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
+    Benson G. Tandem repeats finder: a program to analyze DNA sequences.
+    Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
+"""
+__all__ = ["run_trf_repeats"]
+
 import logging
+import logging.config
 import multiprocessing
 import os
-import pathlib
+from os import PathLike
+from pathlib import Path
 import re
 import subprocess
 import tempfile
-import typing
+from typing import List
+import argschema
 
-__all__ = ["TRF"]
-
-from utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
-    get_seq_region_lengths,
-    create_slice_ids,
+    get_seq_region_length,
+    get_slice_id,
     slice_output_to_gtf,
     get_sequence,
 )
 
 logger = logging.getLogger(__name__)
-with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r", encoding="utf8") as f:
-    config = json.load(f)
 
 
-class TRF: #pylint: disable=too-few-public-methods
+def run_trf(
+    genome_file: PathLike,
+    output_dir: Path,
+    num_threads: int,
+    trf_bin: Path = Path("trf"),
+    match_score: int = 2,
+    mismatch_score: int = 5,
+    delta: int = 7,
+    pm: int = 80,
+    pi: int = 10,
+    minscore: int = 40,
+    maxperiod: int = 500,
+) -> None:
     """
-    Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
-
-    Benson G. Tandem repeats finder: a program to analyze DNA sequences.
-    Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
-
+    Executes TRF on genomic slices
     Args:
-        genome_file : typing.Union[pathlib.Path, str], genome file path.
-        trf_path : str, software path.
-        main_output_dir : str, working directory path.
-        num_threads: int, number of thhreads.
-
-    Return:
-        gtfs with the masked sequence for each genomic slice
+            genome_file : Genome file path.
+            trf_bin : TRF software path.
+            output_dir :  working directory path.
+            num_threads: int, number of thhreads.
     """
-
-    def __init__(  # pylint: disable=too-many-arguments
-        self,
-        genome_file: typing.Union[pathlib.Path, str],
-        trf_path: str,
-        main_output_dir: str,
-        num_threads: int,
-    ) -> None:
-        self.genome_file = genome_file
-        self.trf_path = trf_path
-        self.main_output_dir = main_output_dir
-        self.num_threads = num_threads
-
-    def run_trf_repeats(self) -> int: #pylint: disable=too-many-locals
-        """Execute TRF on genomic slices"""
-
-        if not self.trf_path:
-            self.trf_path = config["trf"]["software"]
-        check_exe(self.trf_path)
-        trf_output_dir = pathlib.Path(create_dir(self.main_output_dir, "trf_output"))
-        os.chdir(str(trf_output_dir))
-        output_file = trf_output_dir / "annotation.gtf"
-        if output_file.exists():
-            transcript_count = check_gtf_content(output_file, "repeat")
-            if transcript_count > 0:
-                logger.info("Trf gtf file exists, skipping analysis")
-                return 0
-        logger.info("Creating list of genomic slices")
-        seq_region_lengths = get_seq_region_lengths(self.genome_file, 5000)
-        slice_ids = create_slice_ids(
-            seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
+    check_exe(trf_bin)
+    trf_dir = Path(create_dir(output_dir, "trf_output"))
+    os.chdir(str(trf_dir))
+    output_file = trf_dir / "annotation.gtf"
+    if output_file.exists():
+        transcript_count = check_gtf_content(output_file, "repeat")
+        if transcript_count > 0:
+            logger.info("Trf gtf file exists, skipping analysis")
+            return
+    logger.info("Creating list of genomic slices")
+    seq_region_to_length = get_seq_region_length(genome_file, 5000)
+    slice_ids_per_region = get_slice_id(
+        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
+    )
+    trf_output_extension = (
+        f".{match_score}.{mismatch_score}.{delta}."
+        f"{pm}.{pi}.{minscore}.{maxperiod}.dat"
+    )
+    trf_cmd = [
+        trf_bin,
+        None,
+        str(match_score),
+        str(mismatch_score),
+        str(delta),
+        str(pm),
+        str(pi),
+        str(minscore),
+        str(maxperiod),
+        "-d",
+        "-h",
+    ]
+    logger.info("Running TRF")
+    pool = multiprocessing.Pool(int(num_threads))#pylint:disable=consider-using-with
+    for slice_id in slice_ids_per_region:
+        pool.apply_async(
+            _multiprocess_trf,
+            args=(
+                trf_cmd,
+                slice_id,
+                trf_dir,
+                trf_output_extension,
+                genome_file,
+            ),
         )
-        match_score = config["trf"]["match_score"]
-        mismatch_score = config["trf"]["mismatch_score"]
-        delta = config["trf"]["delta"]
-        pm = config["trf"]["pm"]  # pylint: disable=invalid-name
-        pi = config["trf"]["pi"]  # pylint: disable=invalid-name
-        minscore = config["trf"]["minscore"]
-        maxperiod = config["trf"]["maxperiod"]
-        trf_output_extension = (
-                f".{match_score}.{mismatch_score}.{delta}."
-                f"{pm}.{pi}.{minscore}.{maxperiod}.dat"
-                )
-        generic_trf_cmd = [
-            self.trf_path,
-            None,
-            str(match_score),
-            str(mismatch_score),
-            str(delta),
-            str(pm),
-            str(pi),
-            str(minscore),
-            str(maxperiod),
-            "-d",
-            "-h",
-        ]
-        logger.info("Running TRF")
-        pool = multiprocessing.Pool(int(self.num_threads)) #pylint: disable=consider-using-with
-        for slice_id in slice_ids:
-            pool.apply_async(
-                self._multiprocess_trf,
-                args=(
-                    generic_trf_cmd,
-                    slice_id,
-                    trf_output_dir,
-                    trf_output_extension,
-                ),
-            )
-        pool.close()
-        pool.join()
-        slice_output_to_gtf(str(trf_output_dir), ".trf.gtf", 1, "repeat_id", "trf")
-        for gtf_file in pathlib.Path(trf_output_dir).glob("*.trf.gtf"):
-            gtf_file.unlink()
-        return 0
+    pool.close()
+    pool.join()
+    slice_output_to_gtf(trf_dir, "repeat_id", "trf", True, ".trf.gtf")
+    for gtf_file in trf_dir.glob("*.trf.gtf"):
+        gtf_file.unlink()
 
-    def _multiprocess_trf(  # pylint: disable=too-many-locals
-        self,
-        generic_trf_cmd: list,
-        slice_id: list,
-        trf_output_dir: pathlib.Path,
-        trf_output_extension: str,
-    ) -> None:
-        """
-        Run TRF on multiprocess on genomic slices
-        Args:
-            generic_trf_cmd:list
-            slice_id:list
-            trf_output_dir : pathlib.Path
-            trf_output_extension: str
-        """
-        region_name = slice_id[0]
-        start = slice_id[1]
-        end = slice_id[2]
-        logger.info(
-            "Processing slice to find tandem repeats with TRF:%s:%s:%s",
-            region_name,
-            start,
-            end,
-        )
-        seq = get_sequence(
-            region_name, start, end, 1, self.genome_file, str(trf_output_dir)
-        )
-        slice_file_name = f"{region_name}.rs{start}.re{end}"
-        with tempfile.TemporaryDirectory(dir=trf_output_dir) as tmpdirname:
-            region_fasta_file_path = trf_output_dir / tmpdirname / f"{slice_file_name}.fa"
-            with open(region_fasta_file_path, "w+", encoding="utf8") as region_fasta_out:
-                region_fasta_out.write(f">{region_name}\n{seq}\n")
-            region_results_file_path = trf_output_dir / f"{slice_file_name}.trf.gtf"
-            # TRF writes to the current dir, so swtich to the output dir for it
-            # os.chdir(str(trf_output_dir))
-            trf_output_file_path = pathlib.Path(
-                f"{region_fasta_file_path}{trf_output_extension}"
-            )
-            trf_cmd = generic_trf_cmd.copy()
-            trf_cmd[1] = str(region_fasta_file_path)
-            logger.info("trf_cmd: %s", trf_cmd)
-            # with open(trf_output_file_path, "w+") as trf_out:
-            subprocess.run(  # pylint: disable=subprocess-run-check
-                trf_cmd, cwd=trf_output_dir / tmpdirname
-            )  # pylint: disable=subprocess-run-check
-            self._create_trf_gtf(
-                trf_output_file_path, region_results_file_path, region_name
-            )
-            # trf_output_file_path.unlink()
-            # region_fasta_file_path.unlink()
 
-    def _create_trf_gtf(
-        self,
-        trf_output_file_path: pathlib.Path,
-        region_results_file_path: pathlib.Path,
-        region_name: str,
-    ):  # pylint: disable=too-many-locals
-        """
-        Read the fasta file and save the content in gtf format
+def _multiprocess_trf(
+    trf_cmd: List[str],
+    slice_id: List[str],
+    trf_dir: Path,
+    trf_output_extension: Path,
+    genome_file:Path,
+) -> None:
+    """
+    Run TRF on multiprocess on genomic slices
+    Args:
+        trf_cmd: TRF command to execute.
+        slice_id: Slice Id to run TRF on.
+        trf_dir : TRF output dir.
+        trf_output_extension: TRF file output extension.
+    """
+    region_name, start, end = slice_id
+    logger.info(
+        "Processing slice to find tandem repeats with TRF:%s:%s:%s",
+        region_name,
+        start,
+        end,
+    )
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, trf_dir)
+    slice_name = f"{region_name}.rs{start}.re{end}"
+    with tempfile.TemporaryDirectory(dir=trf_dir) as tmpdirname:
+        slice_file = trf_dir / tmpdirname / f"{slice_name}.fa"
+        with open(slice_file, "w+", encoding="utf8") as region_out:
+            region_out.write(f">{region_name}\n{seq}\n")
+        region_results = trf_dir / f"{slice_name}.trf.gtf"
+        # TRF writes to the current dir, so swtich to the output dir for it
+        # os.chdir(str(trf_output_dir))
+        output_file = Path(f"{slice_file}{trf_output_extension}")
+        trf_cmd = trf_cmd.copy()
+        trf_cmd[1] = str(slice_file)
+        logger.info("trf_cmd: %s", trf_cmd)
+        # with open(trf_output_file_path, "w+") as trf_out:
+        subprocess.run(trf_cmd, cwd=trf_dir / tmpdirname)#pylint:disable=subprocess-run-check
+        _create_trf_gtf(output_file, region_results, region_name)
+        # trf_output_file_path.unlink()
+        # region_fasta_file_path.unlink()
 
-        All the genomic slices are collected in a single gtf output
-        Args:
-            trf_output_file_path : pathlib.Path
-            region_results_file_path : pathlib.Path
-            region_name :str
 
-        trf_output_file_path is a txt file space delimited where the colummns are
-        cols 1+2:  Indices of the repeat relative to the start of the sequence
-        col 3:     Period size of the repeat
-        col 4:     Number of copies aligned with the consensus pattern
-        col 5:     Size of consensus pattern (may differ slightly from the period size)
-        col 6:     Percent of matches between adjacent copies overall
-        col 7:     Percent of indels between adjacent copies overall
-        col 8:     Alignment score
-        cols 9-12: Percent composition for each of the four nucleotides
-        col 13:    Entropy measure based on percent composition
-        col 14:    Consensus sequence
-        col 15:    Repeat sequence
-        """
-        with open(trf_output_file_path, "r", encoding="utf8") as trf_in, open(
-            region_results_file_path, "w+", encoding="utf8"
-        ) as trf_out:
-            repeat_count = 1
-            for line in trf_in:
-                result_match = re.search(r"^\d+", line)
-                if result_match:
-                    results = line.split()
-                    if not len(results) == 15:
-                        continue
-                    start = results[0]
-                    end = results[1]
-                    period = float(results[2])
-                    copy_number = float(results[3])
-                    percent_matches = float(results[5])
-                    score = float(results[7])
-                    repeat_consensus = results[13]
-                    if (  # pylint: disable=too-many-boolean-expressions
-                        score < 50
-                        and percent_matches >= 80
-                        and copy_number > 2
-                        and period < 10
-                    ) or (copy_number >= 2 and percent_matches >= 70 and score >= 50):
-                        gtf_line = (
-                            f"{region_name}\tTRF\trepeat\t{start}\t{end}\t.\t+\t.\t"
-                            f'repeat_id "{repeat_count}"; score "{score}"; '
-                            f'repeat_consensus "{repeat_consensus}";\n'
-                        )
-                        trf_out.write(gtf_line)
-                        repeat_count += 1
+def _create_trf_gtf(
+    output_file: Path,
+    region_results: Path,
+    region_name: str,
+) -> None:
+    """
+    Read the fasta file and save the content in gtf format
+
+    All the genomic slices are collected in a single gtf output with the following format:
+    cols 1+2:  Indices of the repeat relative to the start of the sequence
+    col 3:     Period size of the repeat
+    col 4:     Number of copies aligned with the consensus pattern
+    col 5:     Size of consensus pattern (may differ slightly from the period size)
+    col 6:     Percent of matches between adjacent copies overall
+    col 7:     Percent of indels between adjacent copies overall
+    col 8:     Alignment score
+    cols 9-12: Percent composition for each of the four nucleotides
+    col 13:    Entropy measure based on percent composition
+    col 14:    Consensus sequence
+    col 15:    Repeat sequence
+    Args:
+       output_file : GTF file with final results.
+       region_results_file_path : GTF file with results per region.
+       region_name : Coordinates of genomic slice.
+    """
+    with open(output_file, "r", encoding="utf8") as trf_in, open(
+        region_results, "w+", encoding="utf8"
+    ) as trf_out:
+        repeat_count = 1
+        for line in trf_in:
+            result_match = re.search(r"^\d+", line)
+            if result_match:
+                results = line.split()
+                if len(results) != 15:
+                    continue
+                start = results[0]
+                end = results[1]
+                period = float(results[2])
+                copy_number = float(results[3])
+                percent_matches = float(results[5])
+                score = float(results[7])
+                repeat_consensus = results[13]
+                if (  # pylint: disable=too-many-boolean-expressions
+                    score < 50
+                    and percent_matches >= 80
+                    and copy_number > 2
+                    and period < 10
+                ) or (copy_number >= 2 and percent_matches >= 70 and score >= 50):
+                    gtf_line = (
+                        f"{region_name}\tTRF\trepeat\t{start}\t{end}\t.\t+\t.\t"
+                        f'repeat_id "{repeat_count}"; score "{score}"; '
+                        f'repeat_consensus "{repeat_consensus}";\n'
+                    )
+                    trf_out.write(gtf_line)
+                    repeat_count += 1
+
+
+class InputSchema(argschema.ArgSchema):
+    """Input arguments expected to run RepeatMasker."""
+
+    genome_file = argschema.fields.InputFile(
+        required=True, description="Genome file path"
+    )
+    output_dir = argschema.fields.OutputDir(
+        required=True, description="Output directory path"
+    )
+    trf_bin = argschema.fields.String(
+        required=False,
+        default="trf",
+        description="TRF executable path",
+    )
+    match_score = argschema.fields.Integer(
+        required=False, default=2, description="Matching weight"
+    )
+    mismatch_score = argschema.fields.Integer(
+        required=False, default=5, description="Mismatching penalty"
+    )
+    delta = argschema.fields.Integer(
+        required=False, default=7, description="Indel penalty"
+    )
+    pm = argschema.fields.Integer(
+        required=False, default=80, description="Match probability"
+    )
+    pi = argschema.fields.Integer(
+        required=False, default=10, description="Indel probability"
+    )
+    minscore = argschema.fields.Integer(
+        required=False, default=40, description="Minimum alignment score to report"
+    )
+    maxperiod = argschema.fields.Integer(
+        required=False, default=500, description="Maximum period size to report"
+    )
+    num_threads = argschema.fields.Integer(
+        required=False, default=1, description="Number of threads"
+    )
+
+
+def main() -> None:
+    """TRF's entry-point."""
+    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
+    log_file_path = create_dir(mod.args["output_dir"], "log") / "trf.log"
+    loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+    logging.config.fileConfig(
+        loginipath,
+        defaults={"logfilename": str(log_file_path)},
+        disable_existing_loggers=False,
+    )
+    run_trf(
+        mod.args["genome_file"],
+        mod.args["output_dir"],
+        mod.args["num_threads"],
+        mod.args["trf_bin"],
+        mod.args["match_score"],
+        mod.args["mismatch_score"],
+        mod.args["delta"],
+        mod.args["pm"],
+        mod.args["pi"],
+        mod.args["minscore"],
+        mod.args["maxperiod"],
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -320,8 +320,11 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches
                                 logger.info(values)
                                 # Unique id based on the feature type
                             else:
-                                match_feature_type = re.search( #repeat_id\d+  r"(" + feature_id_label + ' +"([^"]+)")',
-                                    r"(" + feature_id_label + "\d+)",
+                                if(new_id_prefix = 'repeatmask')
+                                    match_feature_type = re.search(r"(" + feature_id_label + "\d+)", line,)
+                                else:
+                                    match_feature_type = re.search( #repeat_id\d+  r"(" + feature_id_label + ' +"([^"]+)")',
+                                    r"(" + feature_id_label +  ' +"([^"]+)")',#"\d+)",
                                     line,
                                 )
                                 if match_feature_type:
