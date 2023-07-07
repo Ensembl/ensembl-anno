@@ -115,16 +115,16 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     repeatmasker_cmd: List[str],
     slice_id: List[str],
     genome_file: Path,
-    repeatmasker_output_dir: Path,
+    repeatmasker_dir: Path,
 ) -> None:
     """
     Run Repeatmasker on genomic slice
 
     Args:
-        generic_repeatmasker_cmd: RepeatMasker command to execute.
+        repeatmasker_cmd: RepeatMasker command to execute.
         slice_id: Slice ID to run RepeatMasker on.
         genome_file : Genome file path.
-        repeatmasker_output_dir : RepeatMasker output directory path.
+        repeatmasker_dir : RepeatMasker output directory path.
     """
 
     region_name, start, end = slice_id
@@ -135,10 +135,10 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         end,
     )
     seq = get_sequence(
-        region_name, int(start), int(end), 1, genome_file, repeatmasker_output_dir
+        region_name, int(start), int(end), 1, genome_file, repeatmasker_dir
     )
     slice_file_name = f"{region_name}.rs{start}.re{end}"
-    region_file = repeatmasker_output_dir / f"{slice_file_name}.fa"
+    region_file = repeatmasker_dir / f"{slice_file_name}.fa"
     with open(region_file, "w+", encoding="utf8") as region_fasta_out:
         region_fasta_out.write(f">{region_name}\n{seq}\n")
     region_results_file = Path(f"{region_file}.rm.gtf")
