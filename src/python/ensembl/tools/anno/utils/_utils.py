@@ -148,7 +148,6 @@ def get_slice_id(
     """
 
     slice_ids_per_region = []
-    logging.info("BAMBA")
     for seq_region in seq_region_to_length:
         seq_region_length = int(seq_region_to_length[seq_region])
         if seq_region_length < min_length:
@@ -320,7 +319,7 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches
                                 logger.info(values)
                                 # Unique id based on the feature type
                             else:
-                                if(new_id_prefix = 'repeatmask')
+                                if(new_id_prefix == 'repeatmask'):
                                     match_feature_type = re.search(r"(" + feature_id_label + "\d+)", line,)
                                 else:
                                     match_feature_type = re.search( #repeat_id\d+  r"(" + feature_id_label + ' +"([^"]+)")',
@@ -397,7 +396,7 @@ def get_sequence(
                 sequence = reverse_complement(line.rstrip())
 
     os.remove(bed_temp_file.name)
-    logger.info(f"sequence : {sequence}")
+    #logger.info(f"sequence : {sequence}")
     return sequence
 
 
