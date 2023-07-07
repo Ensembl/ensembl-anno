@@ -17,7 +17,7 @@
     Benson G. Tandem repeats finder: a program to analyze DNA sequences.
     Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
 """
-__all__ = ["run_trf_repeats"]
+__all__ = ["run_trf"]
 
 import logging
 import logging.config
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 def run_trf(
     genome_file: PathLike,
     output_dir: Path,
-    num_threads: int,
+    num_threads: int = 1,
     trf_bin: Path = Path("trf"),
     match_score: int = 2,
     mismatch_score: int = 5,
@@ -63,7 +63,7 @@ def run_trf(
             genome_file : Genome file path.
             trf_bin : TRF software path.
             output_dir :  working directory path.
-            num_threads: int, number of thhreads.
+            num_threads: int, number of threads.
     """
     check_exe(trf_bin)
     trf_dir = Path(create_dir(output_dir, "trf_output"))
@@ -130,6 +130,7 @@ def _multiprocess_trf(
         slice_id: Slice Id to run TRF on.
         trf_dir : TRF output dir.
         trf_output_extension: TRF file output extension.
+        genome_file : Genome file.
     """
     region_name, start, end = slice_id
     logger.info(
@@ -156,6 +157,8 @@ def _multiprocess_trf(
         _create_trf_gtf(output_file, region_results, region_name)
         # trf_output_file_path.unlink()
         # region_fasta_file_path.unlink()
+        slice_file.unlink()
+        region_results.unlink()
 
 
 def _create_trf_gtf(
@@ -180,7 +183,7 @@ def _create_trf_gtf(
     col 15:    Repeat sequence
     Args:
        output_file : GTF file with final results.
-       region_results_file_path : GTF file with results per region.
+       region_results : GTF file with results per region.
        region_name : Coordinates of genomic slice.
     """
     with open(output_file, "r", encoding="utf8") as trf_in, open(
@@ -216,7 +219,7 @@ def _create_trf_gtf(
 
 
 class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run RepeatMasker."""
+    """Input arguments expected to run TRF."""
 
     genome_file = argschema.fields.InputFile(
         required=True, description="Genome file path"
