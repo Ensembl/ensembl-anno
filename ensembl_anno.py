@@ -1411,7 +1411,8 @@ def run_miniprot_align(
 ):
 
     if not miniprot_path:
-        miniprot_path = config["miniprot"]["software"]
+        #miniprot_path = config["miniprot"]["software"]
+        miniprot_path = "/hps/software/users/ensembl/repositories/swati/miniprot/miniprot"
 
     utils.check_exe(miniprot_path)
     utils.create_dir(miniprot_dir, None)
