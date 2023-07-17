@@ -1458,12 +1458,80 @@ def run_miniprot_align(
 
     logger.info("Completed running miniprot")
     logger.info("Creating standardised GTF")
+    generate_miniprot_gtf(miniprot_dir)
     # Some code needs to be added to take the output from miniprot and make it the same as the annotation.gtf from genblast
     # Note that miniprot may or may not have a stop_codon feature, if present then this should be used to adjust the boundary
     # of the final exon to include the stop codon in the standardised gtf. miniprot also handles frameshifts and seems to
     # put attributes in for these. Some work will be needed to understand how they are represented in the miniprot output
     # i.e. are they represented as artifical gaps that split a real exon, or are they just attribs and we need to then add
     # in a gap ourselves based on the location
+
+def generate_miniprot_gtf(miniprot_dir)
+    logger.info("generate_miniprot_gtf")
+    file_out_name = os.path.join(miniprot_dir, "annotation.gtf")
+    for files in os.walk(miniprot_dir):
+        for miniprot_file in files:
+            if miniprot_file.endswith(".gff"):
+                gtf_string = convert_gff_to_gtf(miniprot_file)
+                file_out.write(gtf_string)
+    file_out.close()
+    
+def convert_gff_to_gtf(gff_file):
+    gtf_string = ""
+    file_in = open(gff_file).readlines()
+    data = "\n".join(file_in)
+    data = data.split("\n#")
+
+    for block in data:
+        nblock = block.split("\n")
+        nblock = [x for x in nblock if x!='']
+
+        if "#PAF" in nblock[0]:
+            i=1
+            for line in nblock:
+                if "#" not in line:
+                    # print(line)
+                    results = line.split()
+                    if results[2] == "CDS":
+                        results[2] = "exon"
+                        attributes = set_attributes(results[8], results[2], exon_rank=i)
+                        converted_line = "\t".join(results[:8])+ "\t" +attributes
+                        gtf_string += converted_line + "\n"
+                        #print(attributes, i)
+                        i+=1
+
+                    elif results[2] == "mRNA":
+                        results[2]="transcript"
+                        attributes = set_attributes(results[8], results[2])
+                        converted_line = "\t".join(results[:8])+ "\t" +attributes
+                        gtf_string += converted_line + "\n"
+
+    # #     line = file_in.readline()
+    # # file_in.close()
+    return gtf_string
+
+def set_attributes(attributes, feature_type, exon_rank=None):
+    converted_attributes = ""
+    split_attributes = attributes.split(";")
+    if feature_type == "transcript":
+        for attribute in split_attributes:
+            if attribute.startswith('Target='):
+                name = attribute.split('=')[1].split()[0]
+        converted_attributes = 'gene_id "' + name + '"; transcript_id "' + name + '";'
+    elif feature_type == "exon":
+        for attribute in split_attributes:
+            if attribute.startswith('Target='):
+                name = attribute.split('=')[1].split()[0]
+        converted_attributes = (
+                'gene_id "'
+            + name
+            + '"; transcript_id "'
+            + name
+            + '"; exon_number "'
+            + str(exon_rank)
+            + '";'
+            )
+    return converted_attributes
     
 
 def run_miniprot_index(miniprot_path, masked_genome_file, miniprot_index_file, num_threads):
