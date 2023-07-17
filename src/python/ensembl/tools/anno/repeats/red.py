@@ -1,41 +1,74 @@
-def run_red(
-    red_path: str, main_output_dir: str, genome_file: typing.Union[pathlib.Path, str]
-) -> str:
+# See the NOTICE file distributed with this work for additional information
+# regarding copyright ownership.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+Red is the first repeat-detection tool capable of labeling its training data
+and training itself automatically on an entire genome.
+Girgis, H.Z. Red: an intelligent, rapid, accurate tool for detecting repeats
+de-novo on the genomic scale. BMC Bioinformatics 16, 227 (2015).
+https://doi.org/10.1186/s12859-015-0654-5
+"""
+__all__ = ["run_red"]
+
+import logging
+import logging.config
+from os import PathLike
+from pathlib import Path
+import re
+import subprocess
+import argschema
+
+from ensembl.tools.anno.utils._utils import (
+    check_exe,
+    create_dir,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def run_red(genome_file: Path, output_dir: Path, red_bin: Path = Path("Red"),) -> str:
     """
     Run Red on genome file
 
     Args:
-        red_path : str
-        main_output_dir : pathlib.Path
-        genome_file : pathlib.Path
+        genome_file : Genome file path.
+        output_dir : Working directory path.
+        red_bin : Red software path.
 
     Return:
         masked genome file
     """
-    if not red_path:
-        red_path = config["red"]["software"]
-    genome_file = pathlib.Path(genome_file)
-    check_exe(red_path)
-    red_dir = pathlib.Path(create_dir(main_output_dir, "red_output"))
-    red_mask_dir = pathlib.Path(create_dir(red_dir, "mask_output"))
-    red_repeat_dir = pathlib.Path(create_dir(red_dir, "repeat_output"))
-    red_genome_dir = pathlib.Path(create_dir(red_dir, "genome_dir"))
+    check_exe(red_bin)
+    red_dir = create_dir(output_dir, "red_output")
+    red_mask_dir = create_dir(red_dir, "mask_output")
+    red_repeat_dir = create_dir(red_dir, "repeat_output")
+    red_genome_dir = create_dir(red_dir, "genome_dir")
 
     sym_link_genome_cmd = "ln -s " + str(genome_file) + " " + str(red_genome_dir)
-    logger.info(genome_file)
     genome_file_name = genome_file.name
     red_genome_file = red_genome_dir / genome_file_name
     genome_file_stem = genome_file.stem
     masked_genome_file = red_mask_dir / f"{genome_file_stem}.msk"
     repeat_coords_file = red_repeat_dir / f"{genome_file_stem}.rpt"
-    gtf_output_file_path = red_dir / "annotation.gtf"
+    output_file = red_dir / "annotation.gtf"
 
     if masked_genome_file.exists():
         logger.warning(
             "Masked Genome file already found on the path to the Red mask output dir. \
             Will not create a new file"
         )
-        create_red_gtf(repeat_coords_file, gtf_output_file_path)
+        # _create_red_gtf(repeat_coords_file, output_file)
         return str(masked_genome_file)
     if red_genome_file.exists():
         logger.warning(
@@ -50,42 +83,41 @@ def run_red(
         )
         # subprocess.run(["ln", "-s", genome_file, red_genome_dir])
         red_genome_file.symlink_to(genome_file)
-    if not red_genome_file.exists():
+    try:
+        if red_genome_file.exists():
+         logger.info("Running Red")
+         subprocess.run(
+            [
+                red_bin,
+                "-gnm",
+                red_genome_dir,
+                "-msk",
+                red_mask_dir,
+                "-rpt",
+                red_repeat_dir,
+            ],
+            check=True,
+        )
+    except:
         logger.error(
             "Could not find the genome file in the Red genome dir or sym link \
             to the original file. Path expected:\n%s",
-            red_genome_file,
+            genome_file,
         )
-
-    logger.info("Running Red, this may take some time depending on the genome size")
-    subprocess.run(
-        [
-            red_path,
-            "-gnm",
-            red_genome_dir,
-            "-msk",
-            red_mask_dir,
-            "-rpt",
-            red_repeat_dir,
-        ],
-        check=True,
-    )
-
-    logger.info("Completed running Red")
-
-    create_red_gtf(repeat_coords_file, gtf_output_file_path)
-    reveal_locals()
+    _create_red_gtf(repeat_coords_file, output_file)
     return str(masked_genome_file)
-def create_red_gtf(repeat_coords_file: pathlib.Path, gtf_output_file_path: pathlib.Path):
+
+
+def _create_red_gtf(repeat_coords_file: Path, output_file: Path):
     """
-    Create Red gtf file  from masked  genome file
+    Create Red gtf file from masked genome file
 
     Args:
-        repeat_coords_file: pathlib.Path
-        gtf_output_file_path : pathlib.Path
+        repeat_coords_file: Coordinates for repeats.
+        output_file : GTF file with the final results.
     """
-    with open(repeat_coords_file, "r") as red_in, open(
-        gtf_output_file_path, "w+"
+    with open(repeat_coords_file, "r", encoding="utf8") as red_in, open(
+        output_file, "w+", encoding="utf8"
     ) as red_out:
         for repeat_id, line in enumerate(red_in, start=1):
             result_match = re.search(r"^\>(.+)\:(\d+)\-(\d+)", line)
@@ -100,3 +132,35 @@ def create_red_gtf(repeat_coords_file: pathlib.Path, gtf_output_file_path: pathl
                 )
                 red_out.write(gtf_line)
 
+
+class InputSchema(argschema.ArgSchema):
+    """Input arguments expected to run Red."""
+
+    genome_file = argschema.fields.InputFile(
+        required=True, description="Genome file path"
+    )
+    output_dir = argschema.fields.OutputDir(
+        required=True, description="Output directory path"
+    )
+    red_bin = argschema.fields.String(
+        required=False, default="Red", description="Red executable path",
+    )
+
+
+def main() -> None:
+    """Red's entry-point."""
+    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
+    log_file_path = create_dir(mod.args["output_dir"], "log") / "red.log"
+    loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+    logging.config.fileConfig(
+        loginipath,
+        defaults={"logfilename": str(log_file_path)},
+        disable_existing_loggers=False,
+    )
+    run_red(
+        Path(mod.args["genome_file"]), mod.args["output_dir"], mod.args["red_bin"],
+    )
+
+
+if __name__ == "__main__":
+    main()
