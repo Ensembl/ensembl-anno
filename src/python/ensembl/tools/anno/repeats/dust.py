@@ -77,7 +77,7 @@ def run_dust(
         seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
     )
     dust_cmd = [dust_bin, "-in"]
-    pool = multiprocessing.Pool(int(num_threads))  # pylint: disable=consider-using-with
+    pool = multiprocessing.Pool(num_threads)  # pylint: disable=consider-using-with
     for slice_id in slice_ids_per_region:
         pool.apply_async(
             _multiprocess_dust,
@@ -131,8 +131,8 @@ def _multiprocess_dust(  # pylint: disable=too-many-locals
         with open(output_file, "w+", encoding="utf8") as dust_out:
             subprocess.run(dust_cmd, stdout=dust_out, check=True)
         _create_dust_gtf(output_file, region_results, region_name)
-        #slice_file.unlink()
-        #region_results.unlink()
+        slice_file.unlink()
+        region_results.unlink()
 
 
 def _create_dust_gtf(

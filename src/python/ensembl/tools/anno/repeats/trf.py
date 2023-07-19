@@ -66,7 +66,7 @@ def run_trf(
             num_threads: int, number of threads.
     """
     check_exe(trf_bin)
-    trf_dir = Path(create_dir(output_dir, "trf_output"))
+    trf_dir = create_dir(output_dir, "trf_output")
     os.chdir(str(trf_dir))
     output_file = trf_dir / "annotation.gtf"
     if output_file.exists():
@@ -97,7 +97,7 @@ def run_trf(
         "-h",
     ]
     logger.info("Running TRF")
-    pool = multiprocessing.Pool(int(num_threads))#pylint:disable=consider-using-with
+    pool = multiprocessing.Pool(num_threads)#pylint:disable=consider-using-with
     for slice_id in slice_ids_per_region:
         pool.apply_async(
             _multiprocess_trf,
@@ -155,8 +155,6 @@ def _multiprocess_trf(
         # with open(trf_output_file_path, "w+") as trf_out:
         subprocess.run(trf_cmd, cwd=trf_dir / tmpdirname)#pylint:disable=subprocess-run-check
         _create_trf_gtf(output_file, region_results, region_name)
-        # trf_output_file_path.unlink()
-        # region_fasta_file_path.unlink()
         slice_file.unlink()
         region_results.unlink()
 
