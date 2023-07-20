@@ -124,15 +124,13 @@ def _multiprocess_dust(  # pylint: disable=too-many-locals
             region_out.write(f">{region_name}\n{seq}\n")
         region_results = dust_dir / f"{slice_name}.dust.gtf"
         output_file = Path(f"{slice_file}.dust")
-        dust_cmd = dust_cmd.copy()
-        logger.info("dust_cmdPRIMA: %s", dust_cmd)
         dust_cmd.append(str(slice_file))
         logger.info("dust_cmd: %s", dust_cmd)
         with open(output_file, "w+", encoding="utf8") as dust_out:
             subprocess.run(dust_cmd, stdout=dust_out, check=True)
         _create_dust_gtf(output_file, region_results, region_name)
         slice_file.unlink()
-        region_results.unlink()
+        output_file.unlink()
 
 
 def _create_dust_gtf(

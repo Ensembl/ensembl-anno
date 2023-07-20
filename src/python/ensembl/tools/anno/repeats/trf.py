@@ -156,7 +156,7 @@ def _multiprocess_trf(
         subprocess.run(trf_cmd, cwd=trf_dir / tmpdirname)#pylint:disable=subprocess-run-check
         _create_trf_gtf(output_file, region_results, region_name)
         slice_file.unlink()
-        region_results.unlink()
+        output_file.unlink()
 
 
 def _create_trf_gtf(
