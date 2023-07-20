@@ -412,13 +412,11 @@ def reverse_complement(sequence: str) -> str:
     return sequence.translate(rev_matrix)[::-1]
 
 
-def check_file(file_path: Path):
+def check_file(file_path: Path)->None:
     """
     Raise an error when the file doesn't exist
     Args:
         file_path: File path
-    Returns:
-        FileNotFoundError
     """
     if not file_path.is_file():
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
