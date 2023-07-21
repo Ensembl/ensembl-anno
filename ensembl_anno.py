@@ -37,6 +37,8 @@ import repeatmasking_utils
 import simple_feature_utils
 import utils
 
+import numpy as np
+
 with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
     config = json.load(f)
 
@@ -1418,7 +1420,7 @@ def run_miniprot_align(
     utils.create_dir(miniprot_dir, None)
 
     logger.info("Skip analysis if the gtf file already exists")
-    initial_output_file = os.path.join(miniprot_dir, "initial_annotation.gtf")
+    initial_output_file = os.path.join(miniprot_dir, "initial_annotation.gff")
     output_file = os.path.join(miniprot_dir, "annotation.gtf")
     if os.path.exists(output_file):
         transcript_count = utils.check_gtf_content(output_file, "transcript")
@@ -1458,7 +1460,7 @@ def run_miniprot_align(
         subprocess.run(cmd, stdout=process_output_file)
 
     logger.info("Completed running miniprot")
-    logger.info("Creating standardised GTF")
+    logger.info("Creating standardised GFF")
     generate_miniprot_gtf(miniprot_dir)
     # Some code needs to be added to take the output from miniprot and make it the same as the annotation.gtf from genblast
     # Note that miniprot may or may not have a stop_codon feature, if present then this should be used to adjust the boundary
@@ -1467,73 +1469,57 @@ def run_miniprot_align(
     # i.e. are they represented as artifical gaps that split a real exon, or are they just attribs and we need to then add
     # in a gap ourselves based on the location
 
-def generate_miniprot_gtf(miniprot_dir)
-    logger.info("generate_miniprot_gtf")
+def generate_miniprot_gtf(miniprot_dir):
+    logger.info("generate_miniprot_gff")
     file_out_name = os.path.join(miniprot_dir, "annotation.gtf")
-    for files in os.walk(miniprot_dir):
+    for root, dirs, files in os.walk(miniprot_dir):
         for miniprot_file in files:
+            miniprot_file=os.path.join(root, miniprot_file)
             if miniprot_file.endswith(".gff"):
-                gtf_string = convert_gff_to_gtf(miniprot_file)
-                file_out.write(gtf_string)
+                convert_miniprot_gff_to_gtf(input_file=miniprot_file,
+                                            output_file=file_out_name)
+
+def convert_miniprot_gff_to_gtf(input_file=None,output_file=None):
+    """
+    params  input_file: input filename
+    params  output_file: output gtf filename
+    """
+    blocks =  open(input_file, 'r').read().split('\n#') # read the gff file and split it in blocks, where each block contain mapping of a single transcript, #PAF alignment blocks
+
+    file_out=open(output_file, 'w+')
+
+    for block in blocks:
+        nblock = [x for x in block.split("\n") if x!=''][1:] # split the block by newline and remove empty lines
+        nblock = np.array([x.split("\t") for x in nblock if x!='']) # split each line in the nblock by tab
+
+        if nblock.shape[0] != 0:
+            nrows, ncols= nblock.shape
+            nblock[0,2] =    nblock[0,2].replace('mRNA', 'transcript') # get the first line and substitute mRNA to transcript in column 2
+            nblock[1:(nrows),2] = [x.replace('CDS', 'exon') for x in nblock[1:(nrows), 2]] # from second line onward substitute CDS to exon in column2
+
+            target_info = [x.replace("Target=", "") for x in (re.split(';|\\s', nblock[0,8])) if "Target" in x][0] #retrive the protein Id from the Target feature
+            gi_ti = 'gene_id "%s"; transcript_id "%s";'%(target_info, target_info)
+
+            for i in range(0, nrows):
+                if i ==0:
+                    nblock[i,8] = gi_ti
+                else:
+                    nblock[i,8] = '%s exon_number "%s";'%(gi_ti, i)
+
+            if nblock[(nrows-1),2] == "stop_codon":
+                if nblock[0,6] == "-":
+                    nblock[(nrows-2),3] = nblock[(nrows-1),3] # adjust the CDS position as per stop_codon line
+                    nblock = nblock[:-1] # remove the last line containing stop_codon info
+
+                if nblock[0,6] == "+":
+                    nblock[(nrows-2),4] = nblock[(nrows-1),4] # adjust the CDS position as per stop_codon line
+                    nblock = nblock[:-1] # remove the last line containing stop_codon info
+            else:
+                pass
+
+            for ele in nblock:
+                file_out.write("%s\n"% "\t".join(ele))
     file_out.close()
-    
-def convert_gff_to_gtf(gff_file):
-    gtf_string = ""
-    file_in = open(gff_file).readlines()
-    data = "\n".join(file_in)
-    data = data.split("\n#")
-
-    for block in data:
-        nblock = block.split("\n")
-        nblock = [x for x in nblock if x!='']
-
-        if "#PAF" in nblock[0]:
-            i=1
-            for line in nblock:
-                if "#" not in line:
-                    # print(line)
-                    results = line.split()
-                    if results[2] == "CDS":
-                        results[2] = "exon"
-                        attributes = set_attributes(results[8], results[2], exon_rank=i)
-                        converted_line = "\t".join(results[:8])+ "\t" +attributes
-                        gtf_string += converted_line + "\n"
-                        #print(attributes, i)
-                        i+=1
-
-                    elif results[2] == "mRNA":
-                        results[2]="transcript"
-                        attributes = set_attributes(results[8], results[2])
-                        converted_line = "\t".join(results[:8])+ "\t" +attributes
-                        gtf_string += converted_line + "\n"
-
-    # #     line = file_in.readline()
-    # # file_in.close()
-    return gtf_string
-
-def set_attributes(attributes, feature_type, exon_rank=None):
-    converted_attributes = ""
-    split_attributes = attributes.split(";")
-    if feature_type == "transcript":
-        for attribute in split_attributes:
-            if attribute.startswith('Target='):
-                name = attribute.split('=')[1].split()[0]
-        converted_attributes = 'gene_id "' + name + '"; transcript_id "' + name + '";'
-    elif feature_type == "exon":
-        for attribute in split_attributes:
-            if attribute.startswith('Target='):
-                name = attribute.split('=')[1].split()[0]
-        converted_attributes = (
-                'gene_id "'
-            + name
-            + '"; transcript_id "'
-            + name
-            + '"; exon_number "'
-            + str(exon_rank)
-            + '";'
-            )
-    return converted_attributes
-    
 
 def run_miniprot_index(miniprot_path, masked_genome_file, miniprot_index_file, num_threads):
 
