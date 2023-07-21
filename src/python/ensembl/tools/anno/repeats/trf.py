@@ -167,7 +167,7 @@ def _create_trf_gtf(
     """
     Read the fasta file and save the content in gtf format
 
-    All the genomic slices are collected in a single gtf output with the following format:
+    TRF output format:
     cols 1+2:  Indices of the repeat relative to the start of the sequence
     col 3:     Period size of the repeat
     col 4:     Number of copies aligned with the consensus pattern

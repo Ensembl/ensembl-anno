@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+Set of discriminant functions that can recognize structural and compositional features
+such as CpG islands, promoter regions and first splice-donor sites.
 Davuluri RV, Grosse I, Zhang MQ: Computational identification of promoters and
 first exons in the human genome. Nat Genet. 2001, 29(4):412-417. [PMID: 11726928]
 """
