@@ -61,9 +61,16 @@ def run_trf(
     Executes TRF on genomic slices
     Args:
             genome_file : Genome file path.
-            trf_bin : TRF software path.
             output_dir :  working directory path.
             num_threads: int, number of threads.
+            trf_bin : TRF software path.
+            match_score : Matching weight.
+            mismatch_score : Mismatching penalty.
+            delta : Indel penalty.
+            pm : Match probability (whole number).
+            pi : Indel probability (whole number).
+            minscore : Minimum alignment score to report.
+            maxperiod : Maximum period size to report.
     """
     check_exe(trf_bin)
     trf_dir = create_dir(output_dir, "trf_output")

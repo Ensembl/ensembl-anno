@@ -49,9 +49,7 @@ def run_trnascan(
     genome_file: PathLike,
     output_dir: Path,
     trnascan_bin: Path = Path("tRNAscan-SE"),
-    trnascan_filter: Path = Path(
-        "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
-    ),
+    trnascan_filter: Path = Path("EukHighConfidenceFilter"),
     num_threads: int = 1,
 ) -> None:
     """
@@ -82,8 +80,8 @@ def run_trnascan(
         None,
         "-f",
         None,
-        "-H",
-        "-q",
+        "-H",  # show both primary and secondary structure components to covariance model bit scores
+        "-q",  # quiet mode
         "--detail",
         "-Q",
     ]
@@ -164,9 +162,9 @@ def _multiprocess_trnascan(
 
     filter_cmd = [
         str(trnascan_filter),
-        "--result",
+        "--result",  # tRNAscan-SE output file used as input
         str(output_file),
-        "--ss",
+        "--ss",  # tRNAscan-SE secondary structure file used as input
         str(ss_output_file),
         "--output",
         str(trnascan_dir),
@@ -176,7 +174,7 @@ def _multiprocess_trnascan(
     logger.info(
         "tRNAscan-SE filter command: %s", " ".join(str(item) for item in filter_cmd)
     )
-    subprocess.run(filter_cmd)
+    subprocess.run(filter_cmd)#pylint:disable=subprocess-run-check
     _create_trnascan_gtf(region_results, filter_output_file, region_name)
     output_file.unlink(missing_ok=True)
     slice_file.unlink(missing_ok=True)

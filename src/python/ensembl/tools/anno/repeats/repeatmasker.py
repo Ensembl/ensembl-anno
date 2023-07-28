@@ -81,7 +81,7 @@ def run_repeatmasker(
     )
     repeatmasker_cmd = [
         str(repeatmasker_bin),
-        "-nolow",
+        "-nolow",#does not display simple repeats or low_complexity DNA in the annotation
         "-engine",
         repeatmasker_engine,
         "-dir",
