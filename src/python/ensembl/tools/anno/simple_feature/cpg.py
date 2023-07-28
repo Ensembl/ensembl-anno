@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 def run_cpg(
     genome_file: PathLike,
     output_dir: Path,
-    cpg_bin: Path = Path("cpg_ilh"),
+    cpg_bin: Path = Path("cpg_lh"),
     cpg_min_length: int = 400,
     cpg_min_gc_content: int = 50,
     cpg_min_oe: float = 0.6,
