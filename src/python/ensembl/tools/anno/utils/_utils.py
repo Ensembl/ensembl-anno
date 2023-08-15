@@ -860,67 +860,6 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
         current_index += 3
     orf_out.close()
 
-
-def convert_gff_to_gtf(gff_file):
-    gtf_string = ""
-    file_in = open(gff_file)
-    line = file_in.readline()
-    while line:
-        #    match = re.search(r"genBlastG",line)
-        #    if match:
-        results = line.split()
-        if not len(results) == 9:
-            line = file_in.readline()
-            continue
-        if results[2] == "coding_exon":
-            results[2] = "exon"
-        attributes = set_attributes(results[8], results[2])
-        results[8] = attributes
-        converted_line = "\t".join(results)
-        gtf_string += converted_line + "\n"
-        line = file_in.readline()
-    file_in.close()
-    return gtf_string
-
-
-def set_attributes(attributes, feature_type):
-    converted_attributes = ""
-    split_attributes = attributes.split(";")
-    if feature_type == "transcript":
-        match = re.search(r"Name\=(.+)$", split_attributes[1])
-        name = match.group(1)
-        converted_attributes = 'gene_id "' + name + '"; transcript_id "' + name + '";'
-    elif feature_type == "exon":
-        match = re.search(r"\-E(\d+);Parent\=(.+)\-R\d+\-\d+\-", attributes)
-        exon_rank = match.group(1)
-        name = match.group(2)
-        converted_attributes = (
-            'gene_id "'
-            + name
-            + '"; transcript_id "'
-            + name
-            + '"; exon_number "'
-            + exon_rank
-            + '";'
-        )
-
-    return converted_attributes
-
-
-# Example genBlast output #pylint: disable=line-too-long, trailing-whitespace
-# 1       genBlastG       transcript      131128674       131137049       252.729 -       .       ID=259447-R1-1-A1;Name=259447;PID=84.65;Coverage=94.22;Note=PID:84.65-Cover:94.22
-# 1       genBlastG       coding_exon     131137031       131137049       .       -       .       ID=259447-R1-1-A1-E1;Parent=259447-R1-1-A1
-# 1       genBlastG       coding_exon     131136260       131136333       .       -       .       ID=259447-R1-1-A1-E2;Parent=259447-R1-1-A1
-# 1       genBlastG       coding_exon     131128674       131130245       .       -       .       ID=259447-R1-1-A1-E3;Parent=259447-R1-1-A1
-##sequence-region       1_group1        1       4534
-# 1       genBlastG       transcript      161503457       161503804       30.94   +       .       ID=259453-R1-1-A1;Name=259453;PID=39.46;Coverage=64.97;Note=PID:39.46-Cover:64.97
-# 1       genBlastG       coding_exon     161503457       161503804       .       +       .       ID=259453-R1-1-A1-E1;Parent=259453-R1-1-A1
-##sequence-region       5_group1        1       4684
-# 5       genBlastG       transcript      69461063        69461741        86.16   +       .       ID=259454-R1-1-A1;Name=259454;PID=82.02;Coverage=91.67;Note=PID:82.02-Cover:91.67
-# 5       genBlastG       coding_exon     69461063        69461081        .       +       .       ID=259454-R1-1-A1-E1;Parent=259454-R1-1-A1
-# 5       genBlastG       coding_exon     69461131        69461741        .       +       .       ID=259454-R1-1-A1-E2;Parent=259454-R1-1-A1
-
-
 def bed_to_gtf(minimap2_output_dir):
     gtf_file_path = os.path.join(minimap2_output_dir, "annotation.gtf")
     gtf_out = open(gtf_file_path, "w+")
