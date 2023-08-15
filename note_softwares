@@ -1,0 +1,91 @@
+DustMasker is a program that identifies and masks out low complexity
+    parts of a genome using a new and improved DUST algorithm. The main
+    advantages of the new algorithm are symmetry with respect to taking
+    reverse complements, context insensitivity, and much better performance.
+    The new DUST algorithm is described in [1]. Please cite this paper in
+    any publication that uses DustMasker.
+
+[1] Morgulis A, Gertz EM, Schaffer AA, Agarwala R. A Fast and Symmetric 
+    DUST Implementation to Mask Low-Complexity DNA Sequences.
+
+RepeatMasker is a program that screens DNA sequences for interspersed repeats and low complexity DNA sequences.
+
+    Smit, AFA, Hubley, R & Green, P. RepeatMasker Open-4.0.
+2013-2015 <http://www.repeatmasker.org>.
+
+Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
+Benson G. Tandem repeats finder: a program to analyze DNA sequences. Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
+
+
+"""
+DustMasker is a program that identifies and masks out low complexity
+parts of a genome using a new and improved DUST algorithm.
+
+Morgulis A, Gertz EM, Schaffer AA, Agarwala R. A Fast and Symmetric
+DUST Implementation to Mask Low-Complexity DNA Sequences.
+"""
+
+Red is the first repeat-detection tool capable of labeling its training data and training itself automatically on an entire genome.
+Girgis, H.Z. Red: an intelligent, rapid, accurate tool for detecting repeats de-novo on the genomic scale. BMC Bioinformatics 16, 227 (2015). https://doi.org/10.1186/s12859-015-0654-5
+
+
+Eponine is a probabilistic method for detecting transcription start sites (TSS)
+in mammalian genomic sequence, with good specificity and excellent positional accuracy.
+Down TA, Hubbard TJ. Computational detection and location of transcription start sites
+in mammalian genomic DNA. Genome Res. 2002 Mar;12(3):458-61. doi: 10.1101/gr.216102.
+PMID: 11875034; PMCID: PMC155284.
+
+cpg
+Davuluri RV, Grosse I, Zhang MQ: Computational identification of promoters and first exons in the human genome. Nat Genet. 2001, 29(4):412-417. [PMID: 11726928]
+
+
+tRNAscan-SE identifies 99-100% of transfer RNA genes in DNA sequence while
+giving less than one false positive per 15 gigabases.
+Lowe TM, Eddy SR: tRNAscan-SE: a program for improved detection of transfer
+RNA genes in genomic sequence.
+Nucleic Acids Res. 1997, 25(5):955-64. [PMID: 9023104]
+
+Infernal and its "cmsearch" tool are used for detecting sncRNAs in sequence databases.
+sncRNA diversity: Small non-coding RNAs (sncRNAs) constitute a diverse group of RNA
+molecules that play critical roles in various cellular processes, including gene regulation,
+RNA interference, and post-transcriptional modifications. There are different types of sncRNAs,
+such as microRNAs (miRNAs), small interfering RNAs (siRNAs), and small nucleolar RNAs (snoRNAs).
+Despite their small size, many sncRNAs exhibit conserved structural features or sequence motifs
+across species, essential to identify and study them.
+Covariance models (CMs) can represent conserved RNA secondary structures as well as conserved
+sequence patterns. This makes them well-suited for detecting sncRNAs in sequence databases.
+
+Nawrocki, E. P., Kolbe, D. L., & Eddy, S. R. (2009). Infernal 1.0: inference of RNA alignments.
+Bioinformatics, 25(10), 1335-1337.
+
+
+
+GenBlast identifies homologous gene sequences in genomic databases.
+One of the key features of GenBlast is its flexibility to handle
+comparative genomics tasks and accurately identify homologs even when
+the sequences have undergone significant evolutionary changes.
+This capability makes it a valuable resource for researchers studying gene
+evolution, gene families, and gene function across diverse species.
+
+GenBlast has been widely used in various genomic analyses and is available as
+a standalone command-line tool or as part of different bioinformatics pipelines.
+Researchers in the field of comparative genomics and gene function analysis
+often rely on GenBlast to perform sensitive homology searches and obtain
+valuable insights into the evolutionary relationships and functional conservation
+of genes in different organisms.
+
+
+She, R., Chu, J.S., Uyar, B., Wang, J., Wang, K., and Chen, N. (2011).
+GenBlastA: enabling BLAST to identify homologous gene sequences.
+Genome Res., 21(5): 936-949.
+
+
+
+star
+The STAR (Spliced Transcripts Alignment to a Reference) alignment tool is widely used
+in genomics research for aligning RNA-seq data to a reference genome.
+Dobin A, Davis CA, Schlesinger F, et al. STAR: ultrafast universal RNA-seq aligner.
+Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635
+
+
+lista software Magali https://www.ensembl.org/info/genome/genebuild/2012_03_squirrel_genebuild.pdf

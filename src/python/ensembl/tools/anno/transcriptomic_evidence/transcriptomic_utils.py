@@ -97,56 +97,56 @@ def multiprocess_trim_galore(generic_trim_galore_cmd, fastq_files, trim_dir):
     logger.info(" ".join(trim_galore_cmd))
     subprocess.run(trim_galore_cmd)
 
-
+"""
+The STAR (Spliced Transcripts Alignment to a Reference) alignment tool is widely used
+in genomics research for aligning RNA-seq data to a reference genome.
+Dobin A, Davis CA, Schlesinger F, et al. STAR: ultrafast universal RNA-seq aligner.
+Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635
+"""
 def run_star_align(
-    star_path,
-    trim_fastq,
-    subsample_script_path,
-    main_output_dir,
-    short_read_fastq_dir,
-    genome_file,
-    max_reads_per_sample,
-    max_total_reads,
-    max_short_read_intron_length,
-    num_threads,
-):
-    # !!! Need to add in samtools path above instead of just using 'samtools' in command
+    genome_file:Path,
+    output_dir:Path,
+    trim_fastq:bool,
+    subsample_script_path,   separate script to include here???
+    short_read_fastq_dir:Path,
+    star_bin:Path=Path("star"),
+    max_reads_per_sample:int=0,
+    max_total_reads:int=0,
+    max_short_read_intron_length:int=100000,
+    num_threads:int=1,
+)->None:
 
-    if not star_path:
-        star_path = config["star"]["software"]
-
-    utils.check_exe(star_path)
+    check_exe(star_bin)
 
     # If trimming has been enabled then switch the path for
     # short_read_fastq_dir from the original location to the trimmed fastq dir
     if trim_fastq:
-        short_read_fastq_dir = os.path.join(main_output_dir, "trim_galore_output")
+        short_read_fastq_dir = output_dir / "trim_galore_output"
 
     #  if not os.path.exists(subsample_script_path):
     subsample_script_path = "subsample_fastq.py"
 
-    star_dir = utils.create_dir(main_output_dir, "star_output")
+    star_dir = create_dir(main_output_dir, "star_output")
 
-    logger.info("Skip analysis if the final log file already exists")
-    log_final_out = pathlib.Path(os.path.join(star_dir, "Log.final.out"))
-    log_out = pathlib.Path(os.path.join(star_dir, "Log.out"))
-    log_progress_out = pathlib.Path(os.path.join(star_dir, "Log.progress.out"))
-    if log_final_out.is_file() and log_out.is_file() and log_progress_out.is_file():
-        logger.info("Star gtf file exists")
-        return
-    else:
-        logger.info("No log files, go on with the analysis")
+    #logger.info("Skip analysis if the final log file already exists")
+    #log_final_out = pathlib.Path(os.path.join(star_dir, "Log.final.out"))
+    #log_out = pathlib.Path(os.path.join(star_dir, "Log.out"))
+    #log_progress_out = pathlib.Path(os.path.join(star_dir, "Log.progress.out"))
+    #if log_final_out.is_file() and log_out.is_file() and log_progress_out.is_file():
+    #    logger.info("Star gtf file exists")
+    #    return
 
-    star_tmp_dir = os.path.join(star_dir, "tmp")
-    if os.path.exists(star_tmp_dir):
-        subprocess.run(["rm", "-rf", star_tmp_dir])
+    star_tmp_dir = star_dir / "tmp"
+    if star_tmp_dir.exists():
+        shutil.rmtree(star_tmp_dir)
 
-    star_index_file = os.path.join(star_dir, "SAindex")
+    star_index_file = star_dir/ "SAindex"
 
     fastq_file_list = []
     file_types = ("*.fastq", "*.fq", "*.fastq.gz", "*.fq.gz")
-    for file_type in file_types:
-        fastq_file_list.extend(glob.glob(os.path.join(short_read_fastq_dir, file_type)))
+    fastq_file_list = [path for file_type in file_types for path in Path(short_read_fastq_dir).rglob(file_type)]
+    #for file_type in file_types:
+    #    fastq_file_list.extend(glob.glob(os.path.join(short_read_fastq_dir, file_type)))
 
     # This works out if the files are paired or not
     fastq_file_list = create_paired_paths(fastq_file_list)
