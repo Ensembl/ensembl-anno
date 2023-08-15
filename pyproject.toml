@@ -142,6 +142,7 @@ run_red = "ensembl.tools.anno.repeats.red:main"
 run_eponine = "ensembl.tools.anno.simple_feature.eponine:main"
 run_cpg = "ensembl.tools.anno.simple_feature.cpg:main"
 run_trnascan = "ensembl.tools.anno.snc_rna.trnascan:main"
+run_genblast = "ensembl.tools.anno.protein_annotation.genblast:main"
 # This is configuration specific to the `setuptools` build backend.
 # If you are using a different build backend, you will need to change this.
 [tool.setuptools]
