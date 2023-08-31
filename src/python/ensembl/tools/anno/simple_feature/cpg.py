@@ -62,8 +62,6 @@ def run_cpg(
         cpg_min_gc_content : Min GC frequency percentage
         cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
         num_threads: int, number of threads.
-    Return:
-        gtfs with the cpg evidence for each genome slice
     """
 
     check_exe(cpg_bin)
