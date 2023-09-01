@@ -397,4 +397,7 @@ def check_file(file_path: pathlib.Path):
         FileNotFoundError
     """
     if not file_path.is_file():
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
+        # Check if the given file path needs to be resolved, e.g. which EukHighConfidenceFilter
+        file_path = shutil.which(file_path)
+        if not pathlib.Path(file_path).is_file():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
