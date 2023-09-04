@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.transcriptomic_annotation.minimap &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/agogo.css?v=0438b505" />
+    <script src="../../../../../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../../../../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="../../../../../index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for ensembl.tools.anno.transcriptomic_annotation.minimap</h1><div class="highlight"><pre>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information</span>
+<span class="c1"># regarding copyright ownership.</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Minimap2 is a pairwise sequence alignment algorithm designed for efficiently comparing nucleotide sequences.</span>
+<span class="sd">The algorithm uses a versatile indexing strategy to quickly find approximate matches between sequences, </span>
+<span class="sd">allowing it to efficiently align long sequences against reference genomes or other sequences.</span>
+
+<span class="sd">Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics, 34(18), 3094-3100.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;run_minimap2&quot;</span><span class="p">]</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">logging.config</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+<span class="kn">import</span> <span class="nn">argschema</span>
+
+
+<span class="kn">from</span> <span class="nn">ensembl.tools.anno.utils._utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">check_exe</span><span class="p">,</span>
+    <span class="n">create_dir</span><span class="p">,</span>
+    <span class="n">check_gtf_content</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="run_minimap2">
+<a class="viewcode-back" href="../../../../../minimap.html#ensembl.tools.anno.transcriptomic_annotation.minimap.run_minimap2">[docs]</a>
+<span class="k">def</span> <span class="nf">run_minimap2</span><span class="p">(</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">long_read_fastq_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">genome_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">minimap2_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;minimap2&quot;</span><span class="p">),</span>
+    <span class="n">paftools_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;paftools.js&quot;</span><span class="p">),</span>
+    <span class="n">max_intron_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run Minimap2 to align long read data against genome file.</span>
+<span class="sd">    Default Minimap set for PacBio data.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        output_dir : Working directory path.</span>
+<span class="sd">        long_read_fastq_dir : Long read directory path.</span>
+<span class="sd">        genome_file : Genome file path.</span>
+<span class="sd">        minimap2_bin : Software path.</span>
+<span class="sd">        paftools_bin : Software path.</span>
+<span class="sd">        max_intron_length : The maximum intron size for alignments. Defaults to 100000.</span>
+<span class="sd">        num_threads : Number of available threads.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">minimap2_bin</span><span class="p">)</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">paftools_bin</span><span class="p">)</span>
+    <span class="n">minimap2_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;minimap2_output&quot;</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Skip analysis if the gtf file already exists&quot;</span><span class="p">)</span>
+    <span class="n">output_file</span> <span class="o">=</span> <span class="n">minimap2_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
+    <span class="k">if</span> <span class="n">output_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">transcript_count</span> <span class="o">=</span> <span class="n">check_gtf_content</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;transcript&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">transcript_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Minimap2 gtf file exists, skipping analysis&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+    <span class="n">minimap2_index_file</span> <span class="o">=</span> <span class="n">minimap2_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">genome_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.mmi&quot;</span>
+    <span class="c1"># minimap2_hints_file = minimap2_dir /&quot;minimap2_hints.gff&quot;</span>
+    <span class="n">file_types</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;*.fastq&quot;</span><span class="p">,</span> <span class="s2">&quot;*.fq&quot;</span><span class="p">)</span>
+    <span class="n">fastq_file_list</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">path</span> <span class="k">for</span> <span class="n">file_type</span> <span class="ow">in</span> <span class="n">file_types</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="n">long_read_fastq_dir</span><span class="p">)</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="n">file_type</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_file_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The list of fastq files is empty. Fastq dir:</span><span class="se">\n</span><span class="si">{</span><span class="n">long_read_fastq_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">minimap2_index_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Did not find an index file for minimap2. Will create now&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>  <span class="c1"># pylint:disable=subprocess-run-check</span>
+                <span class="p">[</span>
+                    <span class="n">minimap2_bin</span><span class="p">,</span>
+                    <span class="s2">&quot;-t&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">num_threads</span><span class="p">),</span>
+                    <span class="s2">&quot;-d&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">minimap2_index_file</span><span class="p">),</span>
+                    <span class="n">genome_file</span><span class="p">,</span>
+                <span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;An error occurred while creating minimap2 index: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;An OS error occurred: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running minimap2 on the files in the long read fastq dir&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">fastq_file</span> <span class="ow">in</span> <span class="n">fastq_file_list</span><span class="p">:</span>
+        <span class="n">sam_file</span> <span class="o">=</span> <span class="n">minimap2_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.sam&quot;</span>
+        <span class="n">bed_file</span> <span class="o">=</span> <span class="n">minimap2_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.bed&quot;</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Processing </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">fastq_file</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">bed_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">bed_file_out</span><span class="p">:</span>
+            <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>  <span class="c1"># pylint:disable=subprocess-run-check</span>
+                <span class="p">[</span>
+                    <span class="n">minimap2_bin</span><span class="p">,</span>
+                    <span class="s2">&quot;-G&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">max_intron_length</span><span class="p">),</span>
+                    <span class="s2">&quot;-t&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">num_threads</span><span class="p">),</span>
+                    <span class="s2">&quot;--cs&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;--secondary=no&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;-ax&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;splice&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;-u&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;b&quot;</span><span class="p">,</span>
+                    <span class="n">minimap2_index_file</span><span class="p">,</span>
+                    <span class="n">fastq_file</span><span class="p">,</span>
+                    <span class="s2">&quot;-o&quot;</span><span class="p">,</span>
+                    <span class="n">sam_file</span><span class="p">,</span>
+                <span class="p">]</span>
+            <span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating bed file from SAM&quot;</span><span class="p">)</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">paftools_bin</span><span class="p">,</span> <span class="s2">&quot;splice2bed&quot;</span><span class="p">,</span> <span class="n">sam_file</span><span class="p">],</span> <span class="n">stdout</span><span class="o">=</span><span class="n">bed_file_out</span>
+        <span class="p">)</span>  <span class="c1"># pylint:disable=subprocess-run-check</span>
+
+    <span class="n">bed_to_gtf</span><span class="p">(</span><span class="n">minimap2_dir</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Completed running minimap2&quot;</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span> <span class="nf">bed_to_gtf</span><span class="p">(</span><span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert bed file into gtf file</span>
+<span class="sd">    Args:</span>
+<span class="sd">        output_dir : Working directory path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">gtf_file_path</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">gtf_file_path</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">gtf_out</span><span class="p">:</span>
+        <span class="n">gene_id</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">bed_file</span> <span class="ow">in</span> <span class="n">output_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.bed&quot;</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Converting bed to GTF: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">bed_file</span><span class="p">))</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">bed_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">bed_in</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">bed_in</span><span class="p">:</span>
+                    <span class="n">elements</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="n">seq_region_name</span> <span class="o">=</span> <span class="n">elements</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">elements</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                    <span class="n">strand</span> <span class="o">=</span> <span class="n">elements</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+                    <span class="c1"># sizes of individual block of exons</span>
+                    <span class="n">block_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="n">size</span> <span class="k">for</span> <span class="n">size</span> <span class="ow">in</span> <span class="n">elements</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">size</span><span class="p">]</span>
+                    <span class="n">block_starts</span> <span class="o">=</span> <span class="p">[</span><span class="n">size</span> <span class="k">for</span> <span class="n">size</span> <span class="ow">in</span> <span class="n">elements</span><span class="p">[</span><span class="mi">11</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">size</span><span class="p">]</span>
+                    <span class="n">exons</span> <span class="o">=</span> <span class="n">bed_block_to_exons</span><span class="p">(</span><span class="n">block_sizes</span><span class="p">,</span> <span class="n">block_starts</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+                    <span class="n">transcript_start</span> <span class="o">=</span> <span class="kc">None</span>
+                    <span class="n">transcript_end</span> <span class="o">=</span> <span class="kc">None</span>
+                    <span class="n">exon_records</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">exon_coords</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">exons</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">transcript_start</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">exon_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">transcript_start</span><span class="p">:</span>
+                            <span class="n">transcript_start</span> <span class="o">=</span> <span class="n">exon_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+                        <span class="k">if</span> <span class="n">transcript_end</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">exon_coords</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">transcript_end</span><span class="p">:</span>
+                            <span class="n">transcript_end</span> <span class="o">=</span> <span class="n">exon_coords</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+                        <span class="n">exon_line</span> <span class="o">=</span> <span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">seq_region_name</span><span class="si">}</span><span class="se">\t</span><span class="s2">minimap</span><span class="se">\t</span><span class="s2">exon</span><span class="se">\t</span><span class="si">{</span><span class="n">exon_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="se">\t</span><span class="s2">&quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">exon_coords</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="si">{</span><span class="n">strand</span><span class="si">}</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">&quot;</span>
+                            <span class="sa">f</span><span class="s1">&#39;gene_id &quot;minimap_</span><span class="si">{</span><span class="n">gene_id</span><span class="si">}</span><span class="s1">&quot;; transcript_id &quot;minimap_</span><span class="si">{</span><span class="n">gene_id</span><span class="si">}</span><span class="s1">&quot;; &#39;</span>
+                            <span class="sa">f</span><span class="s1">&#39;exon_number &quot;</span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s1">&quot;;</span><span class="se">\n</span><span class="s1">&#39;</span>
+                        <span class="p">)</span>
+                        <span class="n">exon_records</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">exon_line</span><span class="p">)</span>
+                    <span class="n">transcript_line</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">seq_region_name</span><span class="si">}</span><span class="se">\t</span><span class="s2">minimap</span><span class="se">\t</span><span class="s2">transcript</span><span class="se">\t</span><span class="si">{</span><span class="n">transcript_start</span><span class="si">}</span><span class="se">\t</span><span class="s2">&quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">transcript_end</span><span class="si">}</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="si">{</span><span class="n">strand</span><span class="si">}</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">&quot;</span>
+                        <span class="sa">f</span><span class="s1">&#39;gene_id &quot;minimap_</span><span class="si">{</span><span class="n">gene_id</span><span class="si">}</span><span class="s1">&quot;; transcript_id &quot;minimap_</span><span class="si">{</span><span class="n">gene_id</span><span class="si">}</span><span class="s1">&quot;</span><span class="se">\n</span><span class="s1">&#39;</span>
+                    <span class="p">)</span>
+                    <span class="n">gtf_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">transcript_line</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">exon_line</span> <span class="ow">in</span> <span class="n">exon_records</span><span class="p">:</span>
+                        <span class="n">gtf_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">exon_line</span><span class="p">)</span>
+                    <span class="n">gene_id</span> <span class="o">+=</span> <span class="mi">1</span>
+
+
+<span class="k">def</span> <span class="nf">bed_block_to_exons</span><span class="p">(</span><span class="n">block_sizes</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span> <span class="n">block_starts</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Extract exon size and start from exon feature block</span>
+<span class="sd">    Args:</span>
+<span class="sd">        block_sizes : Block feature size.</span>
+<span class="sd">        block_starts : Block feature starts.</span>
+<span class="sd">        offset : Feature offset.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        List of exon coordinates</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">exons</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">block_sizes</span><span class="p">):</span>
+        <span class="n">block_start</span> <span class="o">=</span> <span class="n">offset</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">block_starts</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">block_end</span> <span class="o">=</span> <span class="n">block_start</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">block_sizes</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">block_end</span> <span class="o">&lt;</span> <span class="n">block_start</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Warning: block end is less than block start, skipping exon&quot;</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="n">exon_coords</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">block_start</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">block_end</span><span class="p">)]</span>
+        <span class="n">exons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">exon_coords</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">exons</span>
+
+
+<span class="k">class</span> <span class="nc">InputSchema</span><span class="p">(</span><span class="n">argschema</span><span class="o">.</span><span class="n">ArgSchema</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Input arguments expected to run Minimap2 software.&quot;&quot;&quot;</span>
+
+    <span class="n">output_dir</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">OutputDir</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span><span class="p">)</span>
+    <span class="n">long_read_fastq_dir</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">String</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Long read directory path&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">genome_file</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">InputFile</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Genome file path&quot;</span><span class="p">)</span>
+    <span class="n">minimap2_bin</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">String</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;minimap2&quot;</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Minimap2 software path&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">paftools_bin</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">String</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;paftools.js&quot;</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Paftools software path&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">max_intron_length</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">Integer</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;100000&quot;</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The maximum intron length.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">max_intron_length</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">Integer</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;100000&quot;</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The maximum intron size for alignments.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">num_threads</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">Integer</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Number of threads&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Minimap2&#39;s entry-point.&quot;&quot;&quot;</span>
+    <span class="n">mod</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">ArgSchemaParser</span><span class="p">(</span><span class="n">schema_type</span><span class="o">=</span><span class="n">InputSchema</span><span class="p">)</span>
+    <span class="n">log_file_path</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;output_dir&quot;</span><span class="p">],</span> <span class="s2">&quot;log&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;minimap.log&quot;</span>
+    <span class="n">loginipath</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;conf&quot;</span> <span class="o">/</span> <span class="s2">&quot;logging.conf&quot;</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fileConfig</span><span class="p">(</span>
+        <span class="n">loginipath</span><span class="p">,</span>
+        <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;logfilename&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">log_file_path</span><span class="p">)},</span>
+        <span class="n">disable_existing_loggers</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">run_minimap2</span><span class="p">(</span>
+        <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;output_dir&quot;</span><span class="p">],</span>
+        <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;long_read_fastq_dir&quot;</span><span class="p">],</span>
+        <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;genome_file&quot;</span><span class="p">],</span>
+        <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;minimap2_bin&quot;</span><span class="p">],</span>
+        <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;paftools_bin&quot;</span><span class="p">],</span>
+        <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;max_intron_length&quot;</span><span class="p">],</span>
+        <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;num_threads&quot;</span><span class="p">],</span>
+    <span class="p">)</span>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="../../../../../search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="../../../../../py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="../../../../../genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2023] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.5.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

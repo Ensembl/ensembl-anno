@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.repeat_annotation.red &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/agogo.css?v=0438b505" />
+    <script src="../../../../../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../../../../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="../../../../../index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for ensembl.tools.anno.repeat_annotation.red</h1><div class="highlight"><pre>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information</span>
+<span class="c1"># regarding copyright ownership.</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Red is the first repeat-detection tool capable of labeling its training data</span>
+<span class="sd">and training itself automatically on an entire genome.</span>
+<span class="sd">Girgis, H.Z. Red: an intelligent, rapid, accurate tool for detecting repeats</span>
+<span class="sd">de-novo on the genomic scale. BMC Bioinformatics 16, 227 (2015).</span>
+<span class="sd">https://doi.org/10.1186/s12859-015-0654-5</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;run_red&quot;</span><span class="p">]</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">logging.config</span>
+<span class="kn">from</span> <span class="nn">os</span> <span class="kn">import</span> <span class="n">PathLike</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">argschema</span>
+
+<span class="kn">from</span> <span class="nn">ensembl.tools.anno.utils._utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">check_exe</span><span class="p">,</span>
+    <span class="n">create_dir</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="run_red">
+<a class="viewcode-back" href="../../../../../red.html#ensembl.tools.anno.repeat_annotation.red.run_red">[docs]</a>
+<span class="k">def</span> <span class="nf">run_red</span><span class="p">(</span><span class="n">genome_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">red_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;Red&quot;</span><span class="p">),)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run Red on genome file</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        genome_file : Genome file path.</span>
+<span class="sd">        output_dir : Working directory path.</span>
+<span class="sd">        red_bin : Red software path.</span>
+
+<span class="sd">    Return:</span>
+<span class="sd">        masked genome file</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">red_bin</span><span class="p">)</span>
+    <span class="n">red_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;red_output&quot;</span><span class="p">)</span>
+    <span class="n">red_mask_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">red_dir</span><span class="p">,</span> <span class="s2">&quot;mask_output&quot;</span><span class="p">)</span>
+    <span class="n">red_repeat_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">red_dir</span><span class="p">,</span> <span class="s2">&quot;repeat_output&quot;</span><span class="p">)</span>
+    <span class="n">red_genome_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">red_dir</span><span class="p">,</span> <span class="s2">&quot;genome_dir&quot;</span><span class="p">)</span>
+
+    <span class="n">sym_link_genome_cmd</span> <span class="o">=</span> <span class="s2">&quot;ln -s &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">genome_file</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">red_genome_dir</span><span class="p">)</span>
+    <span class="n">genome_file_name</span> <span class="o">=</span> <span class="n">genome_file</span><span class="o">.</span><span class="n">name</span>
+    <span class="n">red_genome_file</span> <span class="o">=</span> <span class="n">red_genome_dir</span> <span class="o">/</span> <span class="n">genome_file_name</span>
+    <span class="n">genome_file_stem</span> <span class="o">=</span> <span class="n">genome_file</span><span class="o">.</span><span class="n">stem</span>
+    <span class="n">masked_genome_file</span> <span class="o">=</span> <span class="n">red_mask_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">genome_file_stem</span><span class="si">}</span><span class="s2">.msk&quot;</span>
+    <span class="n">repeat_coords_file</span> <span class="o">=</span> <span class="n">red_repeat_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">genome_file_stem</span><span class="si">}</span><span class="s2">.rpt&quot;</span>
+    <span class="n">output_file</span> <span class="o">=</span> <span class="n">red_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
+
+    <span class="k">if</span> <span class="n">masked_genome_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;Masked Genome file already found on the path to the Red mask output dir. </span><span class="se">\</span>
+<span class="s2">            Will not create a new file&quot;</span>
+        <span class="p">)</span>
+        <span class="c1"># _create_red_gtf(repeat_coords_file, output_file)</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">masked_genome_file</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">red_genome_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;Unmasked genome file already found on the path to the Red genome dir, </span><span class="se">\</span>
+<span class="s2">            will not create a sym link&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Preparing to sym link the genome file to the Red genome dir. Cmd</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">sym_link_genome_cmd</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="c1"># subprocess.run([&quot;ln&quot;, &quot;-s&quot;, genome_file, red_genome_dir])</span>
+        <span class="n">red_genome_file</span><span class="o">.</span><span class="n">symlink_to</span><span class="p">(</span><span class="n">genome_file</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">red_genome_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running Red&quot;</span><span class="p">)</span>
+         <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">red_bin</span><span class="p">,</span>
+                <span class="s2">&quot;-gnm&quot;</span><span class="p">,</span>
+                <span class="n">red_genome_dir</span><span class="p">,</span>
+                <span class="s2">&quot;-msk&quot;</span><span class="p">,</span>
+                <span class="n">red_mask_dir</span><span class="p">,</span>
+                <span class="s2">&quot;-rpt&quot;</span><span class="p">,</span>
+                <span class="n">red_repeat_dir</span><span class="p">,</span>
+            <span class="p">],</span>
+            <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+            <span class="s2">&quot;Could not find the genome file in the Red genome dir or sym link </span><span class="se">\</span>
+<span class="s2">            to the original file. Path expected:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">genome_file</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="n">_create_red_gtf</span><span class="p">(</span><span class="n">repeat_coords_file</span><span class="p">,</span> <span class="n">output_file</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">masked_genome_file</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span> <span class="nf">_create_red_gtf</span><span class="p">(</span><span class="n">repeat_coords_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create Red gtf file from masked genome file</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        repeat_coords_file: Coordinates for repeats.</span>
+<span class="sd">        output_file : GTF file with the final results.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">repeat_coords_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">red_in</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span>
+        <span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">red_out</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">repeat_id</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">red_in</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">result_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^\&gt;(.+)\:(\d+)\-(\d+)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">result_match</span><span class="p">:</span>
+                <span class="n">region_name</span> <span class="o">=</span> <span class="n">result_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="c1"># Note that Red is 0-based, so add 1</span>
+                <span class="n">start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">result_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">result_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">gtf_line</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="se">\t</span><span class="s2">Red</span><span class="se">\t</span><span class="s2">repeat</span><span class="se">\t</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="se">\t</span><span class="s1">.</span><span class="se">\t</span><span class="s1">+</span><span class="se">\t</span><span class="s1">.</span><span class="se">\t</span><span class="s1">repeat_id &quot;</span><span class="si">{</span><span class="n">repeat_id</span><span class="si">}</span><span class="s1">&quot;;</span><span class="se">\n</span><span class="s1">&#39;</span>
+                <span class="p">)</span>
+                <span class="n">red_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">gtf_line</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">InputSchema</span><span class="p">(</span><span class="n">argschema</span><span class="o">.</span><span class="n">ArgSchema</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Input arguments expected to run Red.&quot;&quot;&quot;</span>
+
+    <span class="n">genome_file</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">InputFile</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Genome file path&quot;</span>
+    <span class="p">)</span>
+    <span class="n">output_dir</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">OutputDir</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span>
+    <span class="p">)</span>
+    <span class="n">red_bin</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">String</span><span class="p">(</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;Red&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Red executable path&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Red&#39;s entry-point.&quot;&quot;&quot;</span>
+    <span class="n">mod</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">ArgSchemaParser</span><span class="p">(</span><span class="n">schema_type</span><span class="o">=</span><span class="n">InputSchema</span><span class="p">)</span>
+    <span class="n">log_file_path</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;output_dir&quot;</span><span class="p">],</span> <span class="s2">&quot;log&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;red.log&quot;</span>
+    <span class="n">loginipath</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;conf&quot;</span> <span class="o">/</span> <span class="s2">&quot;logging.conf&quot;</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fileConfig</span><span class="p">(</span>
+        <span class="n">loginipath</span><span class="p">,</span>
+        <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;logfilename&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">log_file_path</span><span class="p">)},</span>
+        <span class="n">disable_existing_loggers</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">run_red</span><span class="p">(</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;genome_file&quot;</span><span class="p">]),</span> <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;output_dir&quot;</span><span class="p">],</span> <span class="n">mod</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="s2">&quot;red_bin&quot;</span><span class="p">],</span>
+    <span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="../../../../../search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="../../../../../py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="../../../../../genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2023] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.5.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

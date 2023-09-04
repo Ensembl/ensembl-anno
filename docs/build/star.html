@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>STAR Module Documentation &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/agogo.css?v=0438b505" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Stringtie Module Documentation" href="stringtie.html" />
+    <link rel="prev" title="Scallop Module Documentation" href="scallop.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="scallop.html" title="Scallop Module Documentation"
+             accesskey="P">previous</a> |
+          <a href="stringtie.html" title="Stringtie Module Documentation"
+             accesskey="N">next</a> |
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-ensembl.tools.anno.transcriptomic_annotation.star">
+<span id="star-module-documentation"></span><h1>STAR Module Documentation<a class="headerlink" href="#module-ensembl.tools.anno.transcriptomic_annotation.star" title="Link to this heading">¶</a></h1>
+<p>The STAR (Spliced Transcripts Alignment to a Reference) alignment tool is widely used
+in genomics research for aligning RNA-seq data to a reference genome.
+Dobin A, Davis CA, Schlesinger F, et al. STAR: ultrafast universal RNA-seq aligner.
+Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.star.run_star">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.star.</span></span><span class="sig-name descname"><span class="pre">run_star</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">short_read_fastq_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delete_pre_trim_fastq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_fastq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_reads_per_sample</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_intron_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">star_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('star')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samtools_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('samtools')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_galore_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('trim_galore')</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/star.html#run_star"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.star.run_star" title="Link to this definition">¶</a></dt>
+<dd><p>Run STAR alignment on list of short read data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>genome_file</strong> – Genome file path.</p></li>
+<li><p><strong>output_dir</strong> – Working directory path.</p></li>
+<li><p><strong>short_read_fastq_dir</strong> – Short read directory path.</p></li>
+<li><p><strong>delete_pre_trim_fastq</strong> – Delete the original fastq files after trimming. Defaults to False.</p></li>
+<li><p><strong>trim_fastq</strong> – Trim short read files using TrimGalore. Defaults to False.</p></li>
+<li><p><strong>max_reads_per_sample</strong> – Max number of reads per sample. Defaults to 0 (unlimited).</p></li>
+<li><p><strong>max_intron_length</strong> – The maximum intron size for alignments. Defaults to 100000.</p></li>
+<li><p><strong>num_threads</strong> – Number of available threads.</p></li>
+<li><p><strong>star_bin</strong> – Software path.</p></li>
+<li><p><strong>samtools_bin</strong> – Software path.</p></li>
+<li><p><strong>trim_galore_bin</strong> – Software path.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.star.subsample_transcriptomic_data">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.star.</span></span><span class="sig-name descname"><span class="pre">subsample_transcriptomic_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fastq_file_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Path</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/star.html#subsample_transcriptomic_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.star.subsample_transcriptomic_data" title="Link to this definition">¶</a></dt>
+<dd><p>Subsample paired fastq files.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fastq_file_list</strong> – List of fastq file path to process.</p></li>
+<li><p><strong>num_threads</strong> – number of threads</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">STAR Module Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.transcriptomic_annotation.star.run_star"><code class="docutils literal notranslate"><span class="pre">run_star()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.transcriptomic_annotation.star.subsample_transcriptomic_data"><code class="docutils literal notranslate"><span class="pre">subsample_transcriptomic_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="scallop.html" title="Scallop Module Documentation"
+              >previous</a> |
+            <a href="stringtie.html" title="Stringtie Module Documentation"
+              >next</a> |
+            <a href="py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+              <br/>
+              <a href="_sources/star.rst.txt"
+                rel="nofollow">Show Source</a>
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2023] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.5.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

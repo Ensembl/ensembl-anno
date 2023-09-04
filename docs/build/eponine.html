@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Eponine Module Documentation &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/agogo.css?v=0438b505" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Genblast Module Documentation" href="genblast.html" />
+    <link rel="prev" title="Cmsearch Module Documentation" href="cmsearch.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="cmsearch.html" title="Cmsearch Module Documentation"
+             accesskey="P">previous</a> |
+          <a href="genblast.html" title="Genblast Module Documentation"
+             accesskey="N">next</a> |
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-ensembl.tools.anno.simple_feature_annotation.eponine">
+<span id="eponine-module-documentation"></span><h1>Eponine Module Documentation<a class="headerlink" href="#module-ensembl.tools.anno.simple_feature_annotation.eponine" title="Link to this heading">¶</a></h1>
+<p>Eponine is a probabilistic method for detecting transcription start sites (TSS)
+in mammalian genomic sequence, with good specificity and excellent positional accuracy.
+Down TA, Hubbard TJ. Computational detection and location of transcription start sites
+in mammalian genomic DNA. Genome Res. 2002 Mar;12(3):458-61. doi: 10.1101/gr.216102.
+PMID: 11875034; PMCID: PMC155284.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.simple_feature_annotation.eponine.run_eponine">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.simple_feature_annotation.eponine.</span></span><span class="sig-name descname"><span class="pre">run_eponine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">java_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('java')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eponine_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eponine_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.999</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/simple_feature_annotation/eponine.html#run_eponine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.simple_feature_annotation.eponine.run_eponine" title="Link to this definition">¶</a></dt>
+<dd><p>Run Eponine on genomic slices
+:param genome_file: Genome file path.
+:param output_dir: Working directory path.
+:param java_bin: Java path.
+:param eponine_bin: Eponine software path
+:param num_threads: Number of threads.</p>
+</dd></dl>
+
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Eponine Module Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.simple_feature_annotation.eponine.run_eponine"><code class="docutils literal notranslate"><span class="pre">run_eponine()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="cmsearch.html" title="Cmsearch Module Documentation"
+              >previous</a> |
+            <a href="genblast.html" title="Genblast Module Documentation"
+              >next</a> |
+            <a href="py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+              <br/>
+              <a href="_sources/eponine.rst.txt"
+                rel="nofollow">Show Source</a>
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2023] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.5.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

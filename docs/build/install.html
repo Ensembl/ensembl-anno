@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>API Setup and installation &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/agogo.css?v=0438b505" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="License" href="license.html" />
+    <link rel="prev" title="Contents" href="index.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="index.html" title="Contents"
+             accesskey="P">previous</a> |
+          <a href="license.html" title="License"
+             accesskey="N">next</a> |
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="api-setup-and-installation">
+<h1>API Setup and installation<a class="headerlink" href="#api-setup-and-installation" title="Link to this heading">¶</a></h1>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading">¶</a></h2>
+<p id="install">An Ensembl API checkout including:</p>
+<ul class="simple">
+<li><p>ensembl-production <a class="reference external" href="https://github.com/Ensembl/ensembl-production">ensembl-production</a>.</p></li>
+<li><p>ensembl-analysis <a class="reference external" href="https://github.com/Ensembl/ensembl-analysis/tree/dev/hive_master">ensembl-analysis</a>. (on dev/hive_master branch)</p></li>
+<li><p>ensembl-taxonomy <a class="reference external" href="https://github.com/Ensembl/ensembl-taxonomy">ensembl-taxonomy</a>.</p></li>
+<li><p>ensembl-orm <a class="reference external" href="https://github.com/Ensembl/ensembl-orm">ensembl-orm</a>.</p></li>
+</ul>
+<section id="software">
+<h3>Software<a class="headerlink" href="#software" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>Python 3.8+</p></li>
+<li><p>Bioperl 1.6.9+</p></li>
+</ol>
+</section>
+<section id="python-modules">
+<h3>Python Modules<a class="headerlink" href="#python-modules" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>argschema</p></li>
+</ol>
+</section>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<p>Directly from GitHub:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span><span class="linenos">1</span>git clone https://github.com/Ensembl/ensembl-analysis -b experimental/gbiab
+<span class="linenos">2</span>git clone https://github.com/Ensembl/ensembl-production
+<span class="linenos">3</span>git clone https://github.com/Ensembl/ensembl-hive
+<span class="linenos">4</span>git clone https://github.com/Ensembl/ensembl-taxonomy
+<span class="linenos">5</span>git clone https://github.com/Ensembl/ensembl-orm
+</pre></div>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Setup and installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="index.html" title="Contents"
+              >previous</a> |
+            <a href="license.html" title="License"
+              >next</a> |
+            <a href="genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+              <br/>
+              <a href="_sources/install.rst.txt"
+                rel="nofollow">Show Source</a>
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2023] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.5.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

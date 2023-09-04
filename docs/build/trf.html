@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>TRF Module Documentation &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/agogo.css?v=0438b505" />
+    <script src="_static/documentation_options.js?v=2709fde1"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="tRNAscan-SE Module Documentation" href="trnascan.html" />
+    <link rel="prev" title="Stringtie Module Documentation" href="stringtie.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="stringtie.html" title="Stringtie Module Documentation"
+             accesskey="P">previous</a> |
+          <a href="trnascan.html" title="tRNAscan-SE Module Documentation"
+             accesskey="N">next</a> |
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-ensembl.tools.anno.repeat_annotation.trf">
+<span id="trf-module-documentation"></span><h1>TRF Module Documentation<a class="headerlink" href="#module-ensembl.tools.anno.repeat_annotation.trf" title="Link to this heading">¶</a></h1>
+<p>Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
+Benson G. Tandem repeats finder: a program to analyze DNA sequences.
+Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.repeat_annotation.trf.run_trf">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.repeat_annotation.trf.</span></span><span class="sig-name descname"><span class="pre">run_trf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trf_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('trf')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_score</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mismatch_score</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">80</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pi</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">minscore</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">40</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maxperiod</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">500</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/repeat_annotation/trf.html#run_trf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.repeat_annotation.trf.run_trf" title="Link to this definition">¶</a></dt>
+<dd><p>Executes TRF on genomic slices
+:param genome_file: Genome file path.
+:param output_dir: working directory path.
+:param num_threads: int, number of threads.
+:param trf_bin: TRF software path.
+:param match_score: Matching weight.
+:param mismatch_score: Mismatching penalty.
+:param delta: Indel penalty.
+:param pm: Match probability (whole number).
+:param pi: Indel probability (whole number).
+:param minscore: Minimum alignment score to report.
+:param maxperiod: Maximum period size to report.</p>
+</dd></dl>
+
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">TRF Module Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.repeat_annotation.trf.run_trf"><code class="docutils literal notranslate"><span class="pre">run_trf()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="stringtie.html" title="Stringtie Module Documentation"
+              >previous</a> |
+            <a href="trnascan.html" title="tRNAscan-SE Module Documentation"
+              >next</a> |
+            <a href="py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+              <br/>
+              <a href="_sources/trf.rst.txt"
+                rel="nofollow">Show Source</a>
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2023] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.5.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

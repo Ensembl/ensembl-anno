@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.transcriptomic_annotation.scallop &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/agogo.css?v=0438b505" />
+    <script src="../../../../../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../../../../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="../../../../../index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for ensembl.tools.anno.transcriptomic_annotation.scallop</h1><div class="highlight"><pre>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information</span>
+<span class="c1"># regarding copyright ownership.</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Scallop is a high-performance tool designed for the accurate and efficient quantification of transcriptome assembly. </span>
+<span class="sd">It&#39;s capable of handling large-scale transcriptomic data while providing precise estimates of transcript abundances.</span>
+<span class="sd">Scallop&#39;s algorithmic approach allows it to efficiently reconstruct transcript structures and quantify their expression</span>
+<span class="sd">levels, making it a valuable resource for studying gene expression and transcriptome analysis.</span>
+
+<span class="sd">Shao M, Kingsford C. Accurate assembly of transcripts through phase-preserving graph decomposition. Nat Biotechnol.</span>
+<span class="sd">2017 Dec;35(12):1167-1169. doi: 10.1038/nbt.4020. Epub 2017 Nov 13. PMID: 29131147; PMCID: PMC5722698.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;run_scallop&quot;</span><span class="p">]</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">logging.config</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">argschema</span>
+
+<span class="kn">from</span> <span class="nn">ensembl.tools.anno.utils._utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">check_exe</span><span class="p">,</span>
+    <span class="n">create_dir</span><span class="p">,</span>
+    <span class="n">check_gtf_content</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="run_scallop">
+<a class="viewcode-back" href="../../../../../scallop.html#ensembl.tools.anno.transcriptomic_annotation.scallop.run_scallop">[docs]</a>
+<span class="k">def</span> <span class="nf">run_scallop</span><span class="p">(</span><span class="n">scallop_path</span><span class="p">,</span> <span class="n">stringtie_path</span><span class="p">,</span> <span class="n">main_output_dir</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">scallop_path</span><span class="p">:</span>
+        <span class="n">scallop_path</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">which</span><span class="p">(</span><span class="s2">&quot;scallop&quot;</span><span class="p">)</span>
+    <span class="n">utils</span><span class="o">.</span><span class="n">check_exe</span><span class="p">(</span><span class="n">scallop_path</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">stringtie_path</span><span class="p">:</span>
+        <span class="n">stringtie_path</span> <span class="o">=</span> <span class="n">shutil</span><span class="o">.</span><span class="n">which</span><span class="p">(</span><span class="s2">&quot;stringtie&quot;</span><span class="p">)</span>
+    <span class="n">utils</span><span class="o">.</span><span class="n">check_exe</span><span class="p">(</span><span class="n">stringtie_path</span><span class="p">)</span>
+
+    <span class="n">scallop_dir</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">create_dir</span><span class="p">(</span><span class="n">main_output_dir</span><span class="p">,</span> <span class="s2">&quot;scallop_output&quot;</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Skip analysis if the gtf file already exists&quot;</span><span class="p">)</span>
+    <span class="n">output_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">scallop_dir</span><span class="p">,</span> <span class="s2">&quot;annotation.gtf&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">output_file</span><span class="p">):</span>
+        <span class="n">transcript_count</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">check_gtf_content</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;transcript&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">transcript_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Scallop gtf file exists&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No gtf file, go on with the analysis&quot;</span><span class="p">)</span>
+
+    <span class="n">stringtie_merge_input_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">scallop_dir</span><span class="p">,</span> <span class="s2">&quot;scallop_assemblies.txt&quot;</span><span class="p">)</span>
+    <span class="n">stringtie_merge_output_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">scallop_dir</span><span class="p">,</span> <span class="s2">&quot;annotation.gtf&quot;</span><span class="p">)</span>
+    <span class="n">star_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">main_output_dir</span><span class="p">,</span> <span class="s2">&quot;star_output&quot;</span><span class="p">)</span>
+    <span class="n">memory_limit</span> <span class="o">=</span> <span class="mi">40</span> <span class="o">*</span> <span class="mi">1024</span><span class="o">**</span><span class="mi">3</span>
+
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">star_dir</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found a Star output dir, will load bam files&quot;</span><span class="p">)</span>
+
+    <span class="n">sorted_bam_files</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">bam_file</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">star_dir</span> <span class="o">+</span> <span class="s2">&quot;/*.bam&quot;</span><span class="p">):</span>
+        <span class="n">sorted_bam_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bam_file</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">sorted_bam_files</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span>
+            <span class="s2">&quot;The list of sorted bam files is empty, expected </span><span class="se">\</span>
+<span class="s2">            them in Star output dir. Star dir:</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span>
+            <span class="o">%</span> <span class="n">star_dir</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Don&#39;t know why this isn&#39;t multiprocessed, probably cos it was</span>
+    <span class="c1"># fast enough in serial. But consider multiprocessing if</span>
+    <span class="c1"># the mem usage is low</span>
+    <span class="k">for</span> <span class="n">sorted_bam_file</span> <span class="ow">in</span> <span class="n">sorted_bam_files</span><span class="p">:</span>
+        <span class="n">sorted_bam_file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">sorted_bam_file</span><span class="p">)</span>
+        <span class="n">transcript_file_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">&quot;.bam&quot;</span><span class="p">,</span> <span class="s2">&quot;.scallop.gtf&quot;</span><span class="p">,</span> <span class="n">sorted_bam_file_name</span><span class="p">)</span>
+        <span class="n">transcript_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">scallop_dir</span><span class="p">,</span> <span class="n">transcript_file_name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">transcript_file_path</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Found an existing scallop gtf file, will not overwrite. File found:&quot;</span>
+            <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">transcript_file_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running Scallop on: &quot;</span> <span class="o">+</span> <span class="n">sorted_bam_file_name</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Writing output to: &quot;</span> <span class="o">+</span> <span class="n">transcript_file_path</span><span class="p">)</span>
+            <span class="n">scallop_cmd</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">scallop_path</span><span class="p">,</span>
+                <span class="s2">&quot;-i&quot;</span><span class="p">,</span>
+                <span class="n">sorted_bam_file</span><span class="p">,</span>
+                <span class="s2">&quot;-o&quot;</span><span class="p">,</span>
+                <span class="n">transcript_file_path</span><span class="p">,</span>
+                <span class="s2">&quot;--min_flank_length&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;10&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="k">if</span> <span class="n">memory_limit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">scallop_cmd</span> <span class="o">=</span> <span class="n">prlimit_command</span><span class="p">(</span><span class="n">scallop_cmd</span><span class="p">,</span> <span class="n">memory_limit</span><span class="p">)</span>
+
+            <span class="n">return_value</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">return_value</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">(</span><span class="n">scallop_cmd</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Issue processing the following region with scallop&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Return value: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">return_value</span><span class="p">))</span>
+
+    <span class="c1"># Now need to merge</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating Stringtie merge input file: &quot;</span> <span class="o">+</span> <span class="n">stringtie_merge_input_file</span><span class="p">)</span>
+
+    <span class="n">gtf_list_out</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">stringtie_merge_input_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">gtf_file</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">scallop_dir</span> <span class="o">+</span> <span class="s2">&quot;/*.scallop.gtf&quot;</span><span class="p">):</span>
+        <span class="n">transcript_count</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">check_gtf_content</span><span class="p">(</span><span class="n">gtf_file</span><span class="p">,</span> <span class="s2">&quot;transcript&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">transcript_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">gtf_list_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">gtf_file</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Warning, skipping file with no transcripts. Path:</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="n">gtf_file</span>
+            <span class="p">)</span>
+    <span class="n">gtf_list_out</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Merging Scallop results. Writing to the following file:&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">stringtie_merge_output_file</span><span class="p">)</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="n">stringtie_path</span><span class="p">,</span>
+            <span class="s2">&quot;--merge&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-o&quot;</span><span class="p">,</span>
+            <span class="n">stringtie_merge_output_file</span><span class="p">,</span>
+            <span class="n">stringtie_merge_input_file</span><span class="p">,</span>
+        <span class="p">]</span>
+    <span class="p">)</span> </div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="../../../../../search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="../../../../../py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="../../../../../genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2023] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.5.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>
