@@ -253,7 +253,7 @@ def _generate_genblast_gtf(genblast_dir: Path) -> None:
     """
     logging.info("AAAAA  _generate_genblast_gtf")
     output_file = genblast_dir / "annotation.gtf"
-    with open(output_file, "w+") as file_out:
+    with open(output_file, "w+", encoding="utf8") as file_out:
         genblast_extension = "_1.1c_2.3_s1_0_16_1"
         for path in genblast_dir.rglob("*"):
             # for root, dirs, files in os.walk(genblast_dir):
@@ -285,7 +285,7 @@ def _split_protein_file(
 
     for i in range(0, 10):
         create_dir(output_dir, (f"bin_{i}"))
-    with open(protein_dataset) as file_in:
+    with open(protein_dataset,"r", encoding="utf8") as file_in:
         seq_count = 0
         batch_count = 0
         current_record = ""
@@ -382,7 +382,7 @@ def _convert_genblast_gff_to_gtf(gff_file: Path) -> str:
     gff_file: Path for the gff file
     """
     gtf_string = ""
-    with open(gff_file) as file_in:
+    with open(gff_file, "r", encoding="utf8") as file_in:
         for line in file_in:
             results = line.split()
             if len(results) == 9:

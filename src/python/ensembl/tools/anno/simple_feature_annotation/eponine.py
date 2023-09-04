@@ -141,7 +141,7 @@ def _multiprocess_eponine(
     eponine_cmd = eponine_cmd.copy()
     eponine_cmd.append(str(slice_file))
     logging.info(eponine_cmd)
-    with open(output_file, "w+") as eponine_out:
+    with open(output_file, "w+", encoding="utf8") as eponine_out:
         subprocess.run(eponine_cmd, stdout=eponine_out, check=True)
     _create_eponine_gtf(output_file, region_results, region_name)
     slice_file.unlink()

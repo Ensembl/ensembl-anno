@@ -131,12 +131,12 @@ def _multiprocess_cpg(
     slice_name = f"{region_name}.rs{start}.re{end}"
     #with TemporaryDirectory(dir=cpg_dir) as tmpdirname:
     slice_file = cpg_dir / f"{slice_name}.fa"
-    with open(slice_file, "w+") as region_out:
+    with open(slice_file, "w+", encoding="utf8") as region_out:
         region_out.write(f">{region_name}\n{seq}\n")
     region_results = cpg_dir / f"{slice_file}.cpg.gtf"
     output_file = Path(f"{slice_file}.cpg")
     cpg_cmd = [str(cpg_bin), str(slice_file)]
-    with open(output_file, "w+") as cpg_out:
+    with open(output_file, "w+", encoding="utf8") as cpg_out:
         subprocess.run(cpg_cmd, stdout=cpg_out, check=True)
         _create_cpg_gtf(
             output_file,
@@ -170,7 +170,7 @@ def _create_cpg_gtf(
         cpg_min_gc_content : Min GC frequency percentage
         cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
     """
-    with open(output_file, "r") as cpg_in, open(region_results, "w+") as cpg_out:
+    with open(output_file, "r", encoding="utf8") as cpg_in, open(region_results, "w+", encoding="utf8") as cpg_out:
         feature_count = 1
         for line in cpg_in:
             result_match = re.search(r"^" + region_name, line)
