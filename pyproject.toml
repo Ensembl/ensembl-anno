@@ -120,11 +120,13 @@ dev = [
     "mypy",
     "pylint",
     "pytest",
-    "Sphinx",
+    "sphinx",
+    "argschema",
+    "unittest"
 ]
 doc = [
     "mock",
-    "Sphinx",
+    "sphinx",
 ]
 
 [project.urls]  
@@ -135,14 +137,18 @@ repository = "https://github.com/Ensembl/ensembl-anno"
 # which executes the function `main` from this package when invoked.
 [project.scripts]  # Optional
 #ensembl-anno = "ensembl.anno.ensembl_anno:main"
-run_repeatmasker = "ensembl.tools.anno.repeats.repeatmasker:main"
-run_trf = "ensembl.tools.anno.repeats.trf:main"
-run_dust = "ensembl.tools.anno.repeats.dust:main"
-run_red = "ensembl.tools.anno.repeats.red:main"
-run_eponine = "ensembl.tools.anno.simple_feature.eponine:main"
-run_cpg = "ensembl.tools.anno.simple_feature.cpg:main"
-run_trnascan = "ensembl.tools.anno.snc_rna.trnascan:main"
+run_repeatmasker = "ensembl.tools.anno.repeat_annotation.repeatmasker:main"
+run_trf = "ensembl.tools.anno.repeat_annotation.trf:main"
+run_dust = "ensembl.tools.anno.repeat_annotation.dust:main"
+run_red = "ensembl.tools.anno.repeat_annotation.red:main"
+run_eponine = "ensembl.tools.anno.simple_feature_annotation.eponine:main"
+run_cpg = "ensembl.tools.anno.simple_feature_annotation.cpg:main"
+run_trnascan = "ensembl.tools.anno.snc_rna_annotation.trnascan:main"
 run_genblast = "ensembl.tools.anno.protein_annotation.genblast:main"
+run_star = "ensembl.tools.anno.transcriptomic_annotation.star:main"
+run_minimap2 = "ensembl.tools.anno.transcriptomic_annotation.minimap:main"
+run_stringtie = "ensembl.tools.anno.transcriptomic_annotation.stringtie:main"
+run_scallop = "ensembl.tools.anno.transcriptomic_annotation.scallop:main"
 # This is configuration specific to the `setuptools` build backend.
 # If you are using a different build backend, you will need to change this.
 [tool.setuptools]

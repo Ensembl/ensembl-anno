@@ -9,7 +9,6 @@ env/*
 .venv
 venv/*
 # packaging
-build/
 *_build*
 eggs/
 .eggs*
