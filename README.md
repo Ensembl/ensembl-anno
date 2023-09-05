@@ -32,22 +32,14 @@ Toolkit for annotation
 - load_gtf_ensembl.pl
 - select_best_transcripts.pl
 
-## Dependencies
-
-### Software
-
-| Software | Version | URL| Required |
-|----------|---------|----|----------|
-
-
-### Python EnsEMBL repositories you need to have
+# Dependencie: Python EnsEMBL repositories 
 
 | Repository name | branch | URL|
 |-----------------|--------|----|
 | ensembl-genes | default | https://github.com/Ensembl/ensembl-genes.git |
 
 
-### Perl EnsEMBL repositories you need to have
+# Dependencies: Perl EnsEMBL repositories
 
 | Repository name | branch | URL|
 |-----------------|--------|----|
@@ -57,6 +49,93 @@ Toolkit for annotation
 
 
 ### Python virtual environment
+
+# Dependencies
+
+## Included Softwares
+
+### DustMasker
+
+DustMasker is a program that identifies and masks out low complexity parts of a genome using an improved DUST algorithm.
+The main advantages of the new algorithm are symmetry with respect to taking reverse complements, context insensitivity, and much better performance.
+
+**Citation:** [Morgulis et al., "A Fast and Symmetric DUST Implementation to Mask Low-Complexity DNA Sequences"](https://pubmed.ncbi.nlm.nih.gov/16796549/)
+
+### RepeatMasker
+
+RepeatMasker screens DNA sequences for interspersed repeats and low complexity DNA sequences.
+
+**Citation:** [Smit, AFA, Hubley, R & Green, P. RepeatMasker Open-4.0. 2013-2015](http://www.repeatmasker.org)
+
+### Tandem Repeats Finder
+
+Tandem Repeats Finder locates and displays tandem repeats in DNA sequences.
+
+**Citation:** [Benson, "Tandem repeats finder: a program to analyze DNA sequences"](https://pubmed.ncbi.nlm.nih.gov/9862982/)
+
+### Red
+
+Red is a repeat-detection tool capable of labeling its training data and training itself automatically on an entire genome.
+
+**Citation:** [Girgis, "Red: an intelligent, rapid, accurate tool for detecting repeats de-novo on the genomic scale"](https://doi.org/10.1186/s12859-015-0654-5)
+
+### Eponine
+
+Eponine is a probabilistic method for detecting transcription start sites (TSS) in mammalian genomic sequences.
+
+**Citation:** [Down & Hubbard, "Computational detection and location of transcription start sites in mammalian genomic DNA"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC155284/)
+
+### CpG
+
+CpG is a set of discriminant functions that can recognize structural and compositional features
+such as CpG islands, promoter regions and first splice-donor sites.
+
+**Citation:** [Davuluri et al., "Computational identification of promoters and first exons in the human genome"](https://pubmed.ncbi.nlm.nih.gov/11726928/)
+
+### tRNAscan-SE
+
+tRNAscan-SE identifies transfer RNA genes in DNA sequences.
+
+**Citation:** [Lowe & Eddy, "tRNAscan-SE: a program for improved detection of transfer RNA genes in genomic sequence"](https://pubmed.ncbi.nlm.nih.gov/9023104/)
+
+### cmsearch
+
+Infernal and its "cmsearch" tool are used for detecting sncRNAs in sequence databases.
+
+**Citation:** [Nawrocki et al., "Infernal 1.0: inference of RNA alignments"](https://academic.oup.com/bioinformatics/article/25/10/1335/270663)
+
+### GenBlast
+
+GenBlast identifies homologous gene sequences in genomic databases. One of the key features of GenBlast is its flexibility to handle comparative genomics tasks and accurately identify homologs even when the sequences have undergone significant evolutionary changes. This capability makes it a valuable resource for researchers studying gene evolution, gene families, and gene function across diverse species.
+
+**Citation:** [She et al., "GenBlastA: enabling BLAST to identify homologous gene sequences"](https://pubmed.ncbi.nlm.nih.gov/18838612/)
+
+### STAR
+
+STAR-Spliced Transcripts Alignment to a Reference is an ultrafast universal RNA-seq aligner for aligning RNA-seq data to a reference genome.
+
+**Citation:** [Dobin et al., "STAR: ultrafast universal RNA-seq aligner"](https://pubmed.ncbi.nlm.nih.gov/23104886/)
+
+### StringTie
+
+StringTie is a fast and highly efficient assembler of RNA-Seq alignments into potential transcripts. It uses a novel network flow algorithm as well as an optional de novo assembly step to assemble and quantitate full-length transcripts representing multiple splice variants for each gene locus.
+
+**Citation:** [Pertea M et al., "StringTie enables improved reconstruction of a transcriptome from RNA-seq reads"](https://www.nature.com/articles/nbt.3122)
+
+### Scallop
+
+Scallop is a high-performance tool designed for the accurate and efficient quantification of transcriptome assembly. It's capable of handling large-scale transcriptomic data while providing precise estimates of transcript abundances. Scallop's algorithmic approach allows it to efficiently reconstruct transcript structures and quantify their expression levels, making it a valuable resource for studying gene expression and transcriptome analysis.
+
+**Citation:** [Shao et al., Accurate assembly of transcripts through phase-preserving graph decomposition.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5722698/)
+
+
+## Usage
+
+Please refer to the individual software modules for specific instructions on how to use each tool. [Link to Documentation](docs/build/index.html)
+
+
+
+
 
 
 ## Running Anno
