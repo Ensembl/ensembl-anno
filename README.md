@@ -133,7 +133,7 @@ Scallop is a high-performance tool designed for the accurate and efficient quant
 
 Please refer to the individual software modules for specific instructions on how to use each tool. [Link to Documentation](docs/build/index.html)
 
-
+<iframe src="docs/index.html" width="100%" height="500px"></iframe>
 
 
 
