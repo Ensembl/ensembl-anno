@@ -45,20 +45,7 @@ with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
 
 
 
-def prlimit_command(command_list, virtual_memory_limit):
 
-    """
-    Prepend memory limiting arguments to a command list to be run with subprocess.
-
-    This method uses the `prlimit` program to set the memory limit.
-
-    The `virtual_memory_limit` size is in bytes.
-
-    prlimit arguments:
-    -v, --as[=limits]
-           Address space limit.
-    """
-    return ["prlimit", f"-v{virtual_memory_limit}"] + command_list
 
 
 
