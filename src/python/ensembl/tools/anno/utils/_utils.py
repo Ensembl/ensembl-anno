@@ -860,87 +860,6 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
         current_index += 3
     orf_out.close()
 
-def bed_to_gtf(minimap2_output_dir):
-    gtf_file_path = os.path.join(minimap2_output_dir, "annotation.gtf")
-    gtf_out = open(gtf_file_path, "w+")
-    exons_dict = {}
-    gene_id = 1
-    for bed_file in glob.glob(minimap2_output_dir + "/*.bed"):
-        logger.info("Converting bed to GTF:")
-        logger.info(bed_file)
-        bed_in = open(bed_file)
-        bed_lines = bed_in.readlines()
-        for line in bed_lines:
-            line = line.rstrip()
-            elements = line.split("\t")
-            seq_region_name = elements[0]
-            offset = int(elements[1])
-            hit_name = elements[3]
-            strand = elements[5]
-            block_sizes = elements[10].split(",")
-            block_sizes = list(filter(None, block_sizes))
-            block_starts = elements[11].split(",")
-            block_starts = list(filter(None, block_starts))
-            exons = bed_to_exons(block_sizes, block_starts, offset)
-            transcript_line = [
-                seq_region_name,
-                "minimap",
-                "transcript",
-                0,
-                0,
-                ".",
-                strand,
-                ".",
-                'gene_id "minimap_'
-                + str(gene_id)
-                + '"; '
-                + 'transcript_id "minimap_'
-                + str(gene_id)
-                + '"',
-            ]
-            transcript_start = None
-            transcript_end = None
-            exon_records = []
-            for i, exon_coords in enumerate(exons):
-                if transcript_start is None or exon_coords[0] < transcript_start:
-                    transcript_start = exon_coords[0]
-
-                if transcript_end is None or exon_coords[1] > transcript_end:
-                    transcript_end = exon_coords[1]
-
-                exon_line = [
-                    seq_region_name,
-                    "minimap",
-                    "exon",
-                    str(exon_coords[0]),
-                    str(exon_coords[1]),
-                    ".",
-                    strand,
-                    ".",
-                    'gene_id "minimap_'
-                    + str(gene_id)
-                    + '"; '
-                    + 'transcript_id "minimap_'
-                    + str(gene_id)
-                    + '"; exon_number "'
-                    + str(i + 1)
-                    + '";',
-                ]
-
-                exon_records.append(exon_line)
-
-            transcript_line[3] = str(transcript_start)
-            transcript_line[4] = str(transcript_end)
-
-            gtf_out.write("\t".join(transcript_line) + "\n")
-            for exon_line in exon_records:
-                gtf_out.write("\t".join(exon_line) + "\n")
-
-            gene_id += 1
-
-    gtf_out.close()
-
-
 def bed_to_gff(input_dir, hints_file):
     gff_out = open(hints_file, "w+")
     exons_dict = {}
@@ -960,7 +879,7 @@ def bed_to_gff(input_dir, hints_file):
             block_sizes = list(filter(None, block_sizes))
             block_starts = elements[11].split(",")
             block_starts = list(filter(None, block_starts))
-            exons = bed_to_exons(block_sizes, block_starts, offset)
+            exons = bed_block_to_exons(block_sizes, block_starts, offset)
             for i, element in enumerate(exons):
                 exon_coords = exons[i]
                 exon_key = (
@@ -1000,23 +919,6 @@ def bed_to_gff(input_dir, hints_file):
         stdout=sorted_hints_out,
     )
     sorted_hints_out.close()
-
-
-def bed_to_exons(block_sizes, block_starts, offset):
-    exons = []
-    for i, element in enumerate(block_sizes):
-        block_start = offset + int(block_starts[i]) + 1
-        block_end = block_start + int(block_sizes[i]) - 1
-
-        if block_end < block_start:
-            logger.warning("Warning: block end is less than block start, skipping exon")
-            continue
-
-        exon_coords = [str(block_start), str(block_end)]
-        exons.append(exon_coords)
-
-    return exons
-
 
 def splice_junction_to_gff(input_dir, hints_file):
     sjf_out = open(hints_file, "w+")
@@ -1447,3 +1349,58 @@ def coallate_results(main_output_dir):
         if os.path.exists(results_path):
             cpy_cmd = ["cp", results_path, copy_path]
             subprocess.run(cpy_cmd)
+
+
+
+def check_transcriptomic_output(main_output_dir):
+
+    # This will check across the various transcriptomic
+    # dirs and check there's actually some data
+    transcriptomic_dirs = [
+        "scallop_output",
+        "stringtie_output",
+        "minimap2_output",
+    ]
+    total_lines = 0
+    min_lines = 100000
+    for transcriptomic_dir in transcriptomic_dirs:
+        full_file_path = os.path.join(
+            main_output_dir, transcriptomic_dir, "annotation.gtf"
+        )
+        if not os.path.exists(full_file_path):
+            logger.warning(
+                "Warning, no annotation.gtf found for "
+                + transcriptomic_dir
+                + ". This might be fine, e.g. no long read data were provided"
+            )
+            continue
+        num_lines = sum(1 for line in open(full_file_path))
+        total_lines = total_lines + num_lines
+        logger.info(
+            "For "
+            + transcriptomic_dir
+            + " found a total of "
+            + str(num_lines)
+            + " in the annotation.gtf file"
+        )
+    if total_lines == 0:
+        raise IOError(
+            "Anno was run with transcriptomic mode enabled,\
+            but the transcriptomic annotation files are empty"
+        )
+    elif total_lines <= min_lines:
+        raise IOError(
+            "Anno was run with transcriptomic mode enabled, \
+            but the total number of lines in the output \
+            files were less than the min expected value"
+            + "\n"
+            "Found: " + str(total_lines) + "\n"
+            "Min allowed: " + str(min_lines)
+        )
+
+    else:
+        logger.info(
+            "Found "
+            + str(total_lines)
+            + " total lines across the transcriptomic files. Checks passed"
+        )
