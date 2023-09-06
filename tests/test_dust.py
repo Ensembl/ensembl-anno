@@ -3,7 +3,7 @@ import tempfile
 import shutil
 from pathlib import Path
 from unittest.mock import patch
-from src.python.ensembl.tools.anno.repeat_annotation.dust import run_dust  # Replace 'your_module' with the actual module path
+from src.python.ensembl.tools.anno.repeat_annotation.dust import run_dust
 
 class TestDust(unittest.TestCase):
 
@@ -19,7 +19,7 @@ class TestDust(unittest.TestCase):
         # Define test input values
         genome_file = "path/to/your/genome.fasta"
         output_dir = self.temp_dir
-        dust_bin = "dust"
+        dust_bin = "dustmasker"
         num_threads = 2  # Set the number of threads for testing
 
         # Mock any external dependencies or subprocess calls
