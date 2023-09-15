@@ -44,7 +44,7 @@ release = "0.1"
 copyright_owner = "EMBL-European Bioinformatics Institute"
 copyright_dates = "[2016-%d]" % datetime.datetime.now().year
 copyright = copyright_dates + " " + copyright_owner
-
+html_baseurl = 'https://ensembl.github.io/ensembl-anno/'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
