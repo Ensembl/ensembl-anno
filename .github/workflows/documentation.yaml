@@ -15,7 +15,7 @@ jobs:
         run: |
           sphinx-build -d docs/source docs/build
       - name: Deploy
-        uses: ensembl/ensembl-anno
+        uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev/python_repo' }}
         with:
           publish_branch: dev/python_repo
