@@ -15,7 +15,7 @@ jobs:
         run: |
           sphinx-build -d docs/source docs/build
       - name: Deploy
-        uses: ensembl/ensembl-anno@v1
+        uses: ensembl/ensembl-anno
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev/python_repo' }}
         with:
           publish_branch: dev/python_repo
