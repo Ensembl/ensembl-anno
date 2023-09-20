@@ -529,7 +529,7 @@ def run_trnascan_regions(
     utils.check_exe(trnascan_path)
     logger.info(trnascan_path)
     # check_exe(trnascan_filter_path)
-    check_file(trnascan_filter_path)
+    utils.check_file(trnascan_filter_path)
     logger.info(trnascan_filter_path)
 
     trnascan_output_dir = utils.create_dir(main_output_dir, "trnascan_output")
@@ -3540,8 +3540,8 @@ def validate_coding_transcripts(
     subprocess.run(cpc2_cmd)
     cpc2_output_path = cpc2_output_path + ".txt"
 
-    check_file(rnasamba_output_path)
-    check_file(cpc2_output_path)
+    utils.check_file(rnasamba_output_path)
+    utils.check_file(cpc2_output_path)
 
     logger.info("diamond validation")
     diamond_results = None
@@ -4186,12 +4186,6 @@ def create_paired_paths(fastq_file_paths):
         final_list.append(path_dict[pair])
 
     return final_list
-
-
-def check_file(file_path):
-
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
 
 
 def coallate_results(main_output_dir):

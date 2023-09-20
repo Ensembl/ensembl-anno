@@ -388,16 +388,17 @@ def reverse_complement(sequence):
     return sequence.translate(rev_matrix)[::-1]
 
 
-def check_file(file_path: pathlib.Path):
+def check_file(file_path: os.PathLike):
     """
     Raise an error when the file doesn't exist
     Args:
-        file_path: pathlib.Path
+        file_path: File to path
     Returns:
         FileNotFoundError
     """
-    if not file_path.is_file():
+    fpath = pathlib.Path(file_path)
+    if not fpath.is_file():
         # Check if the given file path needs to be resolved, e.g. which EukHighConfidenceFilter
-        file_path = shutil.which(file_path)
-        if not pathlib.Path(file_path).is_file():
+        fpath = shutil.which(file_path)
+        if not fpath or not pathlib.Path(fpath).is_file():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
