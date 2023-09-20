@@ -24,8 +24,13 @@ import typing
 
 import utils
 
+
+_REPO_ROOT = pathlib.Path(__file__).parent
+
+
 logger = logging.getLogger(__name__)
-with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
+config_file = _REPO_ROOT / "config.json"
+with config_file.open("r") as f:
     config = json.load(f)
 
 

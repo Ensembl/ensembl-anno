@@ -37,7 +37,12 @@ import repeatmasking_utils
 import simple_feature_utils
 import utils
 
-with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
+
+_REPO_ROOT = pathlib.Path(__file__).parent
+
+
+config_file = _REPO_ROOT / "config.json"
+with config_file.open("r") as f:
     config = json.load(f)
 
 
@@ -1445,17 +1450,8 @@ def run_genblast_align(
     asnb_file = masked_genome_file + ".asnb"
     logger.info("ASNB file: %s" % asnb_file)
 
-    if not os.path.exists("alignscore.txt"):
-        shutil.copy(
-            os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt", "./"
-        )
-    #        subprocess.run(
-    #            [
-    #                "cp",
-    #                os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt",
-    #                "./",
-    #            ]
-    #        )
+    if not Path(f"{genblast_dir}/alignscore.txt").exists():
+        shutil.copy(_REPO_ROOT / "support_files" / "alignscore.txt", genblast_dir)
 
     if not os.path.exists(masked_genome_file):
         raise IOError("Masked genome file does not exist: %s" % masked_genome_file)
@@ -4565,7 +4561,7 @@ if __name__ == "__main__":
 
     # set up logger
     log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
-    loginipath = pathlib.Path(os.environ["ENSCODE"] + "/ensembl-anno/logging.conf")
+    loginipath = _REPO_ROOT / "logging.conf"
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": log_file_path},
