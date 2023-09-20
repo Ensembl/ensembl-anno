@@ -10,6 +10,7 @@
     <script src="../../../../../_static/documentation_options.js?v=2709fde1"></script>
     <script src="../../../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/_modules/ensembl/tools/anno/protein_annotation/genblast.html" />
     <link rel="index" title="Index" href="../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../search.html" /> 
   </head><body>
@@ -293,7 +294,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;AAAAA  _generate_genblast_gtf&quot;</span><span class="p">)</span>
     <span class="n">output_file</span> <span class="o">=</span> <span class="n">genblast_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_out</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_out</span><span class="p">:</span>
         <span class="n">genblast_extension</span> <span class="o">=</span> <span class="s2">&quot;_1.1c_2.3_s1_0_16_1&quot;</span>
         <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">genblast_dir</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">):</span>
             <span class="c1"># for root, dirs, files in os.walk(genblast_dir):</span>
@@ -325,7 +326,7 @@
 
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
         <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bin_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">protein_dataset</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_in</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">protein_dataset</span><span class="p">,</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_in</span><span class="p">:</span>
         <span class="n">seq_count</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">batch_count</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">current_record</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -422,7 +423,7 @@
 <span class="sd">    gff_file: Path for the gff file</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">gtf_string</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">gff_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_in</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">gff_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_in</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">file_in</span><span class="p">:</span>
             <span class="n">results</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span><span class="p">:</span>
@@ -547,6 +548,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../dust.html">DustMasker Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>

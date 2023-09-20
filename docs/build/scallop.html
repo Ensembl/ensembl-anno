@@ -11,6 +11,7 @@
     <script src="_static/documentation_options.js?v=2709fde1"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/scallop.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="STAR Module Documentation" href="star.html" />
@@ -43,16 +44,32 @@
             
   <section id="module-ensembl.tools.anno.transcriptomic_annotation.scallop">
 <span id="scallop-module-documentation"></span><h1>Scallop Module Documentation<a class="headerlink" href="#module-ensembl.tools.anno.transcriptomic_annotation.scallop" title="Link to this heading">¶</a></h1>
-<p>Scallop is a high-performance tool designed for the accurate and efficient quantification of transcriptome assembly.
-It’s capable of handling large-scale transcriptomic data while providing precise estimates of transcript abundances.
-Scallop’s algorithmic approach allows it to efficiently reconstruct transcript structures and quantify their expression
-levels, making it a valuable resource for studying gene expression and transcriptome analysis.</p>
-<p>Shao M, Kingsford C. Accurate assembly of transcripts through phase-preserving graph decomposition. Nat Biotechnol.
+<p>Scallop is a high-performance tool designed for the accurate and efficient quantification
+of transcriptome assembly.
+It’s capable of handling large-scale transcriptomic data while providing precise estimates
+of transcript abundances.
+Scallop’s algorithmic approach allows it to efficiently reconstruct transcript structures
+and quantify their expression levels, making it a valuable resource for studying gene
+expression and transcriptome analysis.</p>
+<p>Shao M, Kingsford C. Accurate assembly of transcripts through phase-preserving graph
+decomposition. Nat Biotechnol.
 2017 Dec;35(12):1167-1169. doi: 10.1038/nbt.4020. Epub 2017 Nov 13. PMID: 29131147; PMCID: PMC5722698.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.scallop.run_scallop">
-<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.scallop.</span></span><span class="sig-name descname"><span class="pre">run_scallop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">scallop_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stringtie_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">main_output_dir</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/scallop.html#run_scallop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.scallop.run_scallop" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.scallop.</span></span><span class="sig-name descname"><span class="pre">run_scallop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scallop_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('scallop')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prlimit_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('prlimit')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stringtie_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('stringtie')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">memory_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">42949672960</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/scallop.html#run_scallop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.scallop.run_scallop" title="Link to this definition">¶</a></dt>
+<dd><p>Run Scallop assembler on short read data after STAR alignment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>output_dir</strong> – Working directory path.</p></li>
+<li><p><strong>scallop_bin</strong> – Software path.</p></li>
+<li><p><strong>prlimit_bin</strong> – Software path.</p></li>
+<li><p><strong>stringtie_bin</strong> – Software path.</p></li>
+<li><p><strong>memory_limit</strong> – Memory limit Scallop command Defaults to 40*1024**3.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 </section>
 
@@ -70,6 +87,8 @@ levels, making it a valuable resource for studying gene expression and transcrip
 <li class="toctree-l1"><a class="reference internal" href="install.html">API Setup and installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dust.html">DustMasker Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="eponine.html">Eponine Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>

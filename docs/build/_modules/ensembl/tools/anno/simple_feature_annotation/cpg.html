@@ -10,6 +10,7 @@
     <script src="../../../../../_static/documentation_options.js?v=2709fde1"></script>
     <script src="../../../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/_modules/ensembl/tools/anno/simple_feature_annotation/cpg.html" />
     <link rel="index" title="Index" href="../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../search.html" /> 
   </head><body>
@@ -171,12 +172,12 @@
     <span class="n">slice_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="s2">.rs</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">.re</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="s2">&quot;</span>
     <span class="c1">#with TemporaryDirectory(dir=cpg_dir) as tmpdirname:</span>
     <span class="n">slice_file</span> <span class="o">=</span> <span class="n">cpg_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_name</span><span class="si">}</span><span class="s2">.fa&quot;</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">slice_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">region_out</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">slice_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">region_out</span><span class="p">:</span>
         <span class="n">region_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&gt;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">seq</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
     <span class="n">region_results</span> <span class="o">=</span> <span class="n">cpg_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_file</span><span class="si">}</span><span class="s2">.cpg.gtf&quot;</span>
     <span class="n">output_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_file</span><span class="si">}</span><span class="s2">.cpg&quot;</span><span class="p">)</span>
     <span class="n">cpg_cmd</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">cpg_bin</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">slice_file</span><span class="p">)]</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">cpg_out</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">cpg_out</span><span class="p">:</span>
         <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cpg_cmd</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">cpg_out</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="n">_create_cpg_gtf</span><span class="p">(</span>
             <span class="n">output_file</span><span class="p">,</span>
@@ -210,7 +211,7 @@
 <span class="sd">        cpg_min_gc_content : Min GC frequency percentage</span>
 <span class="sd">        cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">cpg_in</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span><span class="n">region_results</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">cpg_out</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">cpg_in</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span><span class="n">region_results</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">cpg_out</span><span class="p">:</span>
         <span class="n">feature_count</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">cpg_in</span><span class="p">:</span>
             <span class="n">result_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^&quot;</span> <span class="o">+</span> <span class="n">region_name</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
@@ -307,6 +308,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">Cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../dust.html">DustMasker Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
