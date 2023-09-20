@@ -10,15 +10,18 @@ jobs:
       - uses: actions/setup-python@v3
       - name: Install dependencies
         run: |
-          pip install sphinx sphinx_rtd_theme
+          pip install sphinx
+      - name: Debug
+        run: |
+          echo "GitHub Workspace: $GITHUB_WORKSPACE"
       - name: Sphinx build
         run: |
-          sphinx-build -build -b html  docs/source _build
+          sphinx-build -build -b html  $GITHUB_WORKSPACE/docs/source $GITHUB_WORKSPACE/_build
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev/python_repo' }}
         with:
           publish_branch:  gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: _build/
+          publish_dir: $GITHUB_WORKSPACE/_build/
           force_orphan: true
