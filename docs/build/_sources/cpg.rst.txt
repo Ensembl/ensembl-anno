@@ -1,3 +1,4 @@
+.. _cpg-module-documentation:
 CpG Module Documentation
 ==============================
 
