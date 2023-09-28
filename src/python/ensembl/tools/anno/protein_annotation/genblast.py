@@ -19,7 +19,6 @@ comparative genomics tasks and accurately identify homologs even when
 the sequences have undergone significant evolutionary changes.
 This capability makes it a valuable resource for researchers studying gene
 evolution, gene families, and gene function across diverse species.
-
 GenBlast has been widely used in various genomic analyses and is available as
 a standalone command-line tool or as part of different bioinformatics pipelines.
 Researchers in the field of comparative genomics and gene function analysis
@@ -70,17 +69,31 @@ def run_genblast(#pylint:disable=dangerous-default-value
 ) -> None:
     """
     Executes GenBlast on genomic slices
-    Args:
-            masked_genome : Masked genome file path.
-            output_dir: Working directory path.
-            protein_dataset: Protein dataset (Uniprot/OrthoDb) path.
-            genblast_timeout_secs: Time for timeout (sec).
-            max_intron_length: Maximum intron length.
-            genblast_bin : Software path.
-            convert2blastmask_bin: Software path.
-            makeblastdb_bin : Software path.
-            genblast_timeout: seconds
-            num_threads: int, number of threads.
+            :param masked_genome: Masked genome file path.
+            :type masked_genome: Path
+            :param output_dir: Working directory path.
+            :type output_dir: Path
+            :param protein_dataset: Protein dataset (Uniprot/OrthoDb) path.
+            :type protein_dataset: Path
+            :param genblast_timeout_secs: Time for timeout (sec).
+            :type genblast_timeout_secs: int, default 10800
+            :param max_intron_length: Maximum intron length.
+            :type max_intron_length: int 
+            :param genblast_bin: Software path.
+            :type genblast_bin: Path, default genblast
+            :param convert2blastmask_bin: Software path.
+            :type convert2blastmask_bin: Path, default convert2blastmask
+            :param makeblastdb_bin: Software path.
+            :type makeblastdb_bin: Path, default makeblastdb
+            :param genblast_timeout: seconds
+            :type genblast_timeout: int, default 1
+            :param num_threads: int, number of threads.
+            :type num_threads:int, default 1 
+            :param protein_set: Source 
+            :type str: ["uniprot", "orthodb"]
+                            
+            :return: None
+            :rtype: None
     """
 
     check_exe(genblast_bin)

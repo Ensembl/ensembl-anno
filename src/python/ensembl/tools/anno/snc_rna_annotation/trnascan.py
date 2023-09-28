@@ -54,12 +54,19 @@ def run_trnascan(
 ) -> None:
     """
     Executes tRNAscan-SE on genomic slices
-    Args:
-            genome_file : Genome file path.
-            trnascan_bin : tRNAscan-SE software path.
-            trnascan_filter : tRNAscan-SE filter set path.
-            output_dir :  working directory path.
-            num_threads: int, number of threads.
+        :param genome_file: Genome file path.
+        :type genome_file: PathLike 
+        :param output_dir:  working directory path.
+        :type output_dir, Path  
+        :param trnascan_bin: tRNAscan-SE software path.
+        :type trnascan_bin: Path, default tRNAscan-SE
+        :param trnascan_filter: tRNAscan-SE filter set path.
+        :type trnascan_filter: Path, default EukHighConfidenceFilter
+        :param num_threads: int, number of threads.
+        :type num_threads: int, default 1 
+                            
+        :return: None
+        :rtype: None
     """
     check_exe(trnascan_bin)
     check_file(trnascan_filter)

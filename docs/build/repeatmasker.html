@@ -50,13 +50,59 @@ Smit, AFA, Hubley, R &amp; Green, P. RepeatMasker Open-4.0</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="ensembl.tools.anno.repeat_annotation.repeatmasker.run_repeatmasker">
 <span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.repeat_annotation.repeatmasker.</span></span><span class="sig-name descname"><span class="pre">run_repeatmasker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeatmasker_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('RepeatMasker')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">library</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repeatmasker_engine</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'rmblast'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">species</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/repeat_annotation/repeatmasker.html#run_repeatmasker"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.repeat_annotation.repeatmasker.run_repeatmasker" title="Link to this definition">¶</a></dt>
-<dd><p>Executes RepeatMasker on the genome slices and stores the final annotation.gtf in repeatmasker_output
-:param genome_file: Genome file path.
-:param repeatmasker_path: RepeatMasker executable path.
-:param library: Custom repeat library.
-:param species: Species name.
-:param output_dir: Output directory path.
-:param num_threads: Number of threads.</p>
+<dd><p>Executes RepeatMasker on the genome slices and stores the final annotation.gtf in repeatmasker_output</p>
+<blockquote>
+<div><dl class="field-list simple">
+<dt class="field-odd">param genome_file<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Genome file path.</p>
+</dd>
+<dt class="field-even">type genome_file<span class="colon">:</span></dt>
+<dd class="field-even"><p>PathLike</p>
+</dd>
+<dt class="field-odd">param output_dir<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Output directory path.</p>
+</dd>
+<dt class="field-even">type output_dir<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param repeatmasker_bin<span class="colon">:</span></dt>
+<dd class="field-odd"><p>RepeatMasker executable path.</p>
+</dd>
+<dt class="field-even">type repeatmasker_bin<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path, default RepeatMasker</p>
+</dd>
+<dt class="field-odd">param library<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Custom repeat library.</p>
+</dd>
+<dt class="field-even">type library<span class="colon">:</span></dt>
+<dd class="field-even"><p>str</p>
+</dd>
+<dt class="field-odd">param repeatmasker_engine<span class="colon">:</span></dt>
+<dd class="field-odd"><p>RepeatMasker engine.</p>
+</dd>
+<dt class="field-even">type repeatmasker_engine<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, default rmblast</p>
+</dd>
+<dt class="field-odd">param species<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Species name.</p>
+</dd>
+<dt class="field-even">type species<span class="colon">:</span></dt>
+<dd class="field-even"><p>str</p>
+</dd>
+<dt class="field-odd">param num_threads<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Number of threads.</p>
+</dd>
+<dt class="field-even">type num_threads<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 1</p>
+</dd>
+<dt class="field-odd">return<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+<dt class="field-even">rtype<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</div></blockquote>
 </dd></dl>
 
 </section>
@@ -80,10 +126,7 @@ Smit, AFA, Hubley, R &amp; Green, P. RepeatMasker Open-4.0</p>
 <li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="red.html">Red Module Documentation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Repeatmasker Module Documentation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.repeat_annotation.repeatmasker.run_repeatmasker"><code class="docutils literal notranslate"><span class="pre">run_repeatmasker()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Repeatmasker Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scallop.html">Scallop Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="star.html">STAR Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>

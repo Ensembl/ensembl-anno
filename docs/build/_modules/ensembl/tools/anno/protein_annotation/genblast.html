@@ -57,7 +57,6 @@
 <span class="sd">the sequences have undergone significant evolutionary changes.</span>
 <span class="sd">This capability makes it a valuable resource for researchers studying gene</span>
 <span class="sd">evolution, gene families, and gene function across diverse species.</span>
-
 <span class="sd">GenBlast has been widely used in various genomic analyses and is available as</span>
 <span class="sd">a standalone command-line tool or as part of different bioinformatics pipelines.</span>
 <span class="sd">Researchers in the field of comparative genomics and gene function analysis</span>
@@ -110,17 +109,31 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Executes GenBlast on genomic slices</span>
-<span class="sd">    Args:</span>
-<span class="sd">            masked_genome : Masked genome file path.</span>
-<span class="sd">            output_dir: Working directory path.</span>
-<span class="sd">            protein_dataset: Protein dataset (Uniprot/OrthoDb) path.</span>
-<span class="sd">            genblast_timeout_secs: Time for timeout (sec).</span>
-<span class="sd">            max_intron_length: Maximum intron length.</span>
-<span class="sd">            genblast_bin : Software path.</span>
-<span class="sd">            convert2blastmask_bin: Software path.</span>
-<span class="sd">            makeblastdb_bin : Software path.</span>
-<span class="sd">            genblast_timeout: seconds</span>
-<span class="sd">            num_threads: int, number of threads.</span>
+<span class="sd">            :param masked_genome: Masked genome file path.</span>
+<span class="sd">            :type masked_genome: Path</span>
+<span class="sd">            :param output_dir: Working directory path.</span>
+<span class="sd">            :type output_dir: Path</span>
+<span class="sd">            :param protein_dataset: Protein dataset (Uniprot/OrthoDb) path.</span>
+<span class="sd">            :type protein_dataset: Path</span>
+<span class="sd">            :param genblast_timeout_secs: Time for timeout (sec).</span>
+<span class="sd">            :type genblast_timeout_secs: int, default 10800</span>
+<span class="sd">            :param max_intron_length: Maximum intron length.</span>
+<span class="sd">            :type max_intron_length: int </span>
+<span class="sd">            :param genblast_bin: Software path.</span>
+<span class="sd">            :type genblast_bin: Path, default genblast</span>
+<span class="sd">            :param convert2blastmask_bin: Software path.</span>
+<span class="sd">            :type convert2blastmask_bin: Path, default convert2blastmask</span>
+<span class="sd">            :param makeblastdb_bin: Software path.</span>
+<span class="sd">            :type makeblastdb_bin: Path, default makeblastdb</span>
+<span class="sd">            :param genblast_timeout: seconds</span>
+<span class="sd">            :type genblast_timeout: int, default 1</span>
+<span class="sd">            :param num_threads: int, number of threads.</span>
+<span class="sd">            :type num_threads:int, default 1 </span>
+<span class="sd">            :param protein_set: Source </span>
+<span class="sd">            :type str: [&quot;uniprot&quot;, &quot;orthodb&quot;]</span>
+<span class="sd">                            </span>
+<span class="sd">            :return: None</span>
+<span class="sd">            :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">check_exe</span><span class="p">(</span><span class="n">genblast_bin</span><span class="p">)</span>

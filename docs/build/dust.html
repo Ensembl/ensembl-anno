@@ -51,11 +51,41 @@ DUST Implementation to Mask Low-Complexity DNA Sequences.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="ensembl.tools.anno.repeat_annotation.dust.run_dust">
 <span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.repeat_annotation.dust.</span></span><span class="sig-name descname"><span class="pre">run_dust</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dust_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('dustmasker')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/repeat_annotation/dust.html#run_dust"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.repeat_annotation.dust.run_dust" title="Link to this definition">¶</a></dt>
-<dd><p>Run Dust on genomic slices with mutiprocessing
-:param genome_file: Genome file path.
-:param output_dir: Working directory path.
-:param dust_bin: Dust software path.
-:param num_threads: Number of threads.</p>
+<dd><dl class="simple">
+<dt>Run Dust on genomic slices with mutiprocessing</dt><dd><dl class="field-list simple">
+<dt class="field-odd">param genome_file<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Genome file path.</p>
+</dd>
+<dt class="field-even">type genome_file<span class="colon">:</span></dt>
+<dd class="field-even"><p>PathLike</p>
+</dd>
+<dt class="field-odd">param output_dir<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Working directory path.</p>
+</dd>
+<dt class="field-even">type output_dir<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param dust_bin<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Dust software path.</p>
+</dd>
+<dt class="field-even">type dust_bin<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path, default dustmasker</p>
+</dd>
+<dt class="field-odd">param num_threads<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Number of threads.</p>
+</dd>
+<dt class="field-even">type num_threads<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 1</p>
+</dd>
+<dt class="field-odd">return<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+<dt class="field-even">rtype<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -74,10 +104,7 @@ DUST Implementation to Mask Low-Complexity DNA Sequences.</p>
 <li class="toctree-l1"><a class="reference internal" href="install.html">API Setup and installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cpg.html">CpG Module Documentation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">DustMasker Module Documentation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.repeat_annotation.dust.run_dust"><code class="docutils literal notranslate"><span class="pre">run_dust()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">DustMasker Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="eponine.html">Eponine Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>

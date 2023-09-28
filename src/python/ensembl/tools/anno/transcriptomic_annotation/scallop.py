@@ -52,12 +52,19 @@ def run_scallop(
     """
     Run Scallop assembler on short read data after STAR alignment.
 
-    Args:
-        output_dir : Working directory path.
-        scallop_bin : Software path.
-        prlimit_bin : Software path.
-        stringtie_bin : Software path.
-        memory_limit : Memory limit Scallop command Defaults to 40*1024**3.
+        :param output_dir: Working directory path.
+        :type output_dir: Path
+        :param scallop_bin: Software path.
+        :type scallop_bin: Path, default scallop
+        :param prlimit_bin: Software path.
+        :type prlimit_bin: Path, default prlimit
+        :param stringtie_bin: Software path.
+        :type stringtie_bin: Path, default stringtie
+        :param memory_limit: Memory limit Scallop command Defaults to 40*1024**3.
+        :type memory_limit: int
+                        
+        :return: None
+        :rtype: None
     """
     check_exe(scallop_bin)
     check_exe(stringtie_bin)

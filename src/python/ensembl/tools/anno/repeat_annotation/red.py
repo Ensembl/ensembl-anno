@@ -40,14 +40,15 @@ logger = logging.getLogger(__name__)
 def run_red(genome_file: Path, output_dir: Path, red_bin: Path = Path("Red"),) -> str:
     """
     Run Red on genome file
-
-    Args:
-        genome_file : Genome file path.
-        output_dir : Working directory path.
-        red_bin : Red software path.
-
-    Return:
-        masked genome file
+        :param genome_file: Genome file path.
+        :type genome_file: Path
+        :param output_dir: Working directory path.
+        :type output_dir: Path
+        :param red_bin: Red software path.
+        :type red_bin: Path, default Red
+        
+        :return: Masked genome file
+        :rtype: str
     """
     check_exe(red_bin)
     red_dir = create_dir(output_dir, "red_output")

@@ -94,12 +94,19 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Executes tRNAscan-SE on genomic slices</span>
-<span class="sd">    Args:</span>
-<span class="sd">            genome_file : Genome file path.</span>
-<span class="sd">            trnascan_bin : tRNAscan-SE software path.</span>
-<span class="sd">            trnascan_filter : tRNAscan-SE filter set path.</span>
-<span class="sd">            output_dir :  working directory path.</span>
-<span class="sd">            num_threads: int, number of threads.</span>
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :type genome_file: PathLike </span>
+<span class="sd">        :param output_dir:  working directory path.</span>
+<span class="sd">        :type output_dir, Path  </span>
+<span class="sd">        :param trnascan_bin: tRNAscan-SE software path.</span>
+<span class="sd">        :type trnascan_bin: Path, default tRNAscan-SE</span>
+<span class="sd">        :param trnascan_filter: tRNAscan-SE filter set path.</span>
+<span class="sd">        :type trnascan_filter: Path, default EukHighConfidenceFilter</span>
+<span class="sd">        :param num_threads: int, number of threads.</span>
+<span class="sd">        :type num_threads: int, default 1 </span>
+<span class="sd">                            </span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">trnascan_bin</span><span class="p">)</span>
     <span class="n">check_file</span><span class="p">(</span><span class="n">trnascan_filter</span><span class="p">)</span>

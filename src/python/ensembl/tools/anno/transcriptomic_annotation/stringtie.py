@@ -43,10 +43,15 @@ def run_stringtie(
 ) -> None:
     """
     StringTie assembler of short read data.
-    Args:
-        output_dir : Working directory path.
-        stringtie_bin : Software path.
-        num_threads : Number of available threads.
+        :param output_dir: Working directory path.
+        :type output_dir: Path
+        :param stringtie_bin: Software path.
+        :type stringtie_bin: Path, default stringtie
+        :param num_threads: Number of available threads.
+        :type num_threads: int, default 1
+                        
+        :return: None
+        :rtype: None
     """
     check_exe(stringtie_bin)
     stringtie_dir = create_dir(output_dir, "stringtie_output")

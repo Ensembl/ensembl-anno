@@ -100,18 +100,31 @@
 <span class="sd">    Run STAR alignment on list of short read data.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        genome_file : Genome file path.</span>
-<span class="sd">        output_dir : Working directory path.</span>
-<span class="sd">        short_read_fastq_dir : Short read directory path.</span>
-<span class="sd">        delete_pre_trim_fastq : Delete the original fastq files after trimming. Defaults to False.</span>
-<span class="sd">        trim_fastq : Trim short read files using TrimGalore. Defaults to False.</span>
-<span class="sd">        max_reads_per_sample : Max number of reads per sample. Defaults to 0 (unlimited).</span>
-<span class="sd">        max_intron_length : The maximum intron size for alignments. Defaults to 100000.</span>
-<span class="sd">        num_threads : Number of available threads.</span>
-<span class="sd">        star_bin : Software path.</span>
-<span class="sd">        samtools_bin : Software path.</span>
-<span class="sd">        trim_galore_bin : Software path.</span>
-
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :type genome_file: Path</span>
+<span class="sd">        :param output_dir: Working directory path.</span>
+<span class="sd">        :type output_dir: Path</span>
+<span class="sd">        :param short_read_fastq_dir: Short read directory path.</span>
+<span class="sd">        :type short_read_fastq_dir: Path</span>
+<span class="sd">        :param delete_pre_trim_fastq: Delete the original fastq files after trimming. Defaults to False.</span>
+<span class="sd">        :type delete_pre_trim_fastq: boolean, default False</span>
+<span class="sd">        :param trim_fastq: Trim short read files using TrimGalore. Defaults to False.</span>
+<span class="sd">        :type trim_fastq: boolean, default False</span>
+<span class="sd">        :param max_reads_per_sample: Max number of reads per sample. Defaults to 0 (unlimited).</span>
+<span class="sd">        :type max_reads_per_sample: int, default 0</span>
+<span class="sd">        :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.</span>
+<span class="sd">        :type max_intron_length: int, default 100000</span>
+<span class="sd">        :param num_threads: Number of available threads.</span>
+<span class="sd">        :type num_threads: int, default 1 </span>
+<span class="sd">        :param star_bin: Software path.</span>
+<span class="sd">        :type star_bin: Path, default star</span>
+<span class="sd">        :param samtools_bin: Software path.</span>
+<span class="sd">        :type samtools_bin: Path,default samtools</span>
+<span class="sd">        :param trim_galore_bin: Software path.</span>
+<span class="sd">        :type trim_galore_bin: Path, default trim_galore</span>
+<span class="sd">                        </span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">star_bin</span><span class="p">)</span>
     <span class="c1"># If trimming has been enabled then switch the path for</span>

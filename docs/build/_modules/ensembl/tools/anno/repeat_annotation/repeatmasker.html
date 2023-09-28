@@ -96,14 +96,24 @@
 
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Executes RepeatMasker on the genome slices and stores the final annotation.gtf in repeatmasker_output</span>
-<span class="sd">    Args:</span>
-<span class="sd">        genome_file : Genome file path.</span>
-<span class="sd">        repeatmasker_path : RepeatMasker executable path.</span>
-<span class="sd">        library : Custom repeat library.</span>
-<span class="sd">        species :Species name.</span>
-<span class="sd">        output_dir : Output directory path.</span>
-<span class="sd">        num_threads: Number of threads.</span>
 
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :type genome_file: PathLike</span>
+<span class="sd">        :param output_dir: Output directory path.</span>
+<span class="sd">        :type output_dir: Path</span>
+<span class="sd">        :param repeatmasker_bin: RepeatMasker executable path.</span>
+<span class="sd">        :type repeatmasker_bin: Path, default RepeatMasker</span>
+<span class="sd">        :param library: Custom repeat library.</span>
+<span class="sd">        :type library: str</span>
+<span class="sd">        :param repeatmasker_engine: RepeatMasker engine.</span>
+<span class="sd">        :type repeatmasker_engine: str, default rmblast</span>
+<span class="sd">        :param species: Species name.</span>
+<span class="sd">        :type species: str</span>
+<span class="sd">        :param num_threads: Number of threads.</span>
+<span class="sd">        :type num_threads: int, default 1</span>
+<span class="sd">        </span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">repeatmasker_bin</span><span class="p">)</span>
     <span class="n">repeatmasker_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;repeatmasker_output&quot;</span><span class="p">)</span>

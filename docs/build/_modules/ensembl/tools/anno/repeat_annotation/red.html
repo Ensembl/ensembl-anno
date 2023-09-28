@@ -80,14 +80,15 @@
 <span class="k">def</span> <span class="nf">run_red</span><span class="p">(</span><span class="n">genome_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">red_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;Red&quot;</span><span class="p">),)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Run Red on genome file</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        genome_file : Genome file path.</span>
-<span class="sd">        output_dir : Working directory path.</span>
-<span class="sd">        red_bin : Red software path.</span>
-
-<span class="sd">    Return:</span>
-<span class="sd">        masked genome file</span>
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :type genome_file: Path</span>
+<span class="sd">        :param output_dir: Working directory path.</span>
+<span class="sd">        :type output_dir: Path</span>
+<span class="sd">        :param red_bin: Red software path.</span>
+<span class="sd">        :type red_bin: Path, default Red</span>
+<span class="sd">        </span>
+<span class="sd">        :return: Masked genome file</span>
+<span class="sd">        :rtype: str</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">red_bin</span><span class="p">)</span>
     <span class="n">red_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;red_output&quot;</span><span class="p">)</span>

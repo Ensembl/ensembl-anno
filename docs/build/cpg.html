@@ -51,14 +51,59 @@ first exons in the human genome. Nat Genet. 2001, 29(4):412-417. [PMID: 11726928
 <dl class="py function">
 <dt class="sig sig-object py" id="ensembl.tools.anno.simple_feature_annotation.cpg.run_cpg">
 <span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.simple_feature_annotation.cpg.</span></span><span class="sig-name descname"><span class="pre">run_cpg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpg_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('cpg_lh')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpg_min_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">400</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpg_min_gc_content</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpg_min_oe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/simple_feature_annotation/cpg.html#run_cpg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.simple_feature_annotation.cpg.run_cpg" title="Link to this definition">¶</a></dt>
-<dd><p>Run CpG islands on genomic slices
-:param genome_file: Genome file path.
-:param output_dir: Working directory path
-:param cpg_bin: CpG software path.
-:param cpg_min_length: Min length of CpG islands
-:param cpg_min_gc_content: Min GC frequency percentage
-:param cpg_min_oe: Min ratio of the observed to expected number of CpG (CpGo/e)
-:param num_threads: int, number of threads.</p>
+<dd><p>Run CpG islands on genomic slices</p>
+<blockquote>
+<div><dl class="field-list simple">
+<dt class="field-odd">param genome_file<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Genome file path.</p>
+</dd>
+<dt class="field-even">type genome_file<span class="colon">:</span></dt>
+<dd class="field-even"><p>PathLike</p>
+</dd>
+<dt class="field-odd">param output_dir<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Working directory path</p>
+</dd>
+<dt class="field-even">type output_dir<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param cpg_bin<span class="colon">:</span></dt>
+<dd class="field-odd"><p>CpG software path.</p>
+</dd>
+<dt class="field-even">type cpg_bin<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param cpg_min_length<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Min length of CpG islands</p>
+</dd>
+<dt class="field-even">type cpg_min_length<span class="colon">:</span></dt>
+<dd class="field-even"><p>int</p>
+</dd>
+<dt class="field-odd">param cpg_min_gc_content<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Min GC frequency percentage</p>
+</dd>
+<dt class="field-even">type cpg_min_gc_content<span class="colon">:</span></dt>
+<dd class="field-even"><p>int</p>
+</dd>
+<dt class="field-odd">param cpg_min_oe<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Min ratio of the observed to expected number of CpG (CpGo/e)</p>
+</dd>
+<dt class="field-even">type cpg_min_oe<span class="colon">:</span></dt>
+<dd class="field-even"><p>float</p>
+</dd>
+<dt class="field-odd">param num_threads<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int, number of threads.</p>
+</dd>
+<dt class="field-even">type num_threads<span class="colon">:</span></dt>
+<dd class="field-even"><p>int</p>
+</dd>
+<dt class="field-odd">return<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+<dt class="field-even">rtype<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</div></blockquote>
 </dd></dl>
 
 </section>

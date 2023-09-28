@@ -99,18 +99,31 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Executes TRF on genomic slices</span>
-<span class="sd">    Args:</span>
-<span class="sd">            genome_file : Genome file path.</span>
-<span class="sd">            output_dir :  working directory path.</span>
-<span class="sd">            num_threads: int, number of threads.</span>
-<span class="sd">            trf_bin : TRF software path.</span>
-<span class="sd">            match_score : Matching weight.</span>
-<span class="sd">            mismatch_score : Mismatching penalty.</span>
-<span class="sd">            delta : Indel penalty.</span>
-<span class="sd">            pm : Match probability (whole number).</span>
-<span class="sd">            pi : Indel probability (whole number).</span>
-<span class="sd">            minscore : Minimum alignment score to report.</span>
-<span class="sd">            maxperiod : Maximum period size to report.</span>
+<span class="sd">            :param genome_file: Genome file path.</span>
+<span class="sd">            :type genome_file: PathLike</span>
+<span class="sd">            :param output_dir:  Working directory path.</span>
+<span class="sd">            :type output_dir: Path</span>
+<span class="sd">            :param num_threads: int, number of threads.</span>
+<span class="sd">            :type num_threads: int, default 1</span>
+<span class="sd">            :param trf_bin: TRF software path.</span>
+<span class="sd">            :type trf_bin: Path, default trf</span>
+<span class="sd">            :param match_score: Matching weight.</span>
+<span class="sd">            :type match_score: int, default 2</span>
+<span class="sd">            :param mismatch_score: Mismatching penalty.</span>
+<span class="sd">            :type mismatch_score: int, default 5</span>
+<span class="sd">            :param delta: Indel penalty.</span>
+<span class="sd">            :type delta: int, default 7</span>
+<span class="sd">            :param pm: Match probability (whole number).</span>
+<span class="sd">            :type pm: int, default 80</span>
+<span class="sd">            :param pi: Indel probability (whole number).</span>
+<span class="sd">            :type pi: int, default 10</span>
+<span class="sd">            :param minscore: Minimum alignment score to report.</span>
+<span class="sd">            :type minscore: int, default 40</span>
+<span class="sd">            :param maxperiod: Maximum period size to report.</span>
+<span class="sd">            :type maxperiod: int, default 500</span>
+<span class="sd">                    </span>
+<span class="sd">            :return: None</span>
+<span class="sd">            :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">trf_bin</span><span class="p">)</span>
     <span class="n">trf_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;trf_output&quot;</span><span class="p">)</span>

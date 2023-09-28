@@ -95,11 +95,17 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Run Dust on genomic slices with mutiprocessing</span>
-<span class="sd">    Args:</span>
-<span class="sd">        genome_file : Genome file path.</span>
-<span class="sd">        output_dir : Working directory path.</span>
-<span class="sd">        dust_bin : Dust software path.</span>
-<span class="sd">        num_threads: Number of threads.</span>
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :type genome_file: PathLike</span>
+<span class="sd">        :param output_dir: Working directory path.</span>
+<span class="sd">        :type output_dir: Path</span>
+<span class="sd">        :param dust_bin: Dust software path.</span>
+<span class="sd">        :type dust_bin: Path, default dustmasker</span>
+<span class="sd">        :param num_threads: Number of threads.</span>
+<span class="sd">        :type num_threads: int, default 1</span>
+<span class="sd">                </span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">check_exe</span><span class="p">(</span><span class="n">dust_bin</span><span class="p">)</span>
@@ -113,9 +119,7 @@
             <span class="k">return</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating list of genomic slices&quot;</span><span class="p">)</span>
     <span class="n">seq_region_to_length</span> <span class="o">=</span> <span class="n">get_seq_region_length</span><span class="p">(</span><span class="n">genome_file</span><span class="p">,</span> <span class="mi">5000</span><span class="p">)</span>
-    <span class="n">slice_ids_per_region</span> <span class="o">=</span> <span class="n">get_slice_id</span><span class="p">(</span>
-        <span class="n">seq_region_to_length</span><span class="p">,</span> <span class="n">slice_size</span><span class="o">=</span><span class="mi">1000000</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">min_length</span><span class="o">=</span><span class="mi">5000</span>
-    <span class="p">)</span>
+    <span class="n">slice_ids_per_region</span> <span class="o">=</span> <span class="n">get_slice_id</span><span class="p">(</span><span class="n">seq_region_to_length</span><span class="p">,</span> <span class="n">slice_size</span><span class="o">=</span><span class="mi">1000000</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">min_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
     <span class="n">dust_cmd</span> <span class="o">=</span> <span class="p">[</span><span class="n">dust_bin</span><span class="p">,</span> <span class="s2">&quot;-in&quot;</span><span class="p">]</span>
     <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="n">num_threads</span><span class="p">)</span>  <span class="c1"># pylint: disable=consider-using-with</span>
     <span class="k">for</span> <span class="n">slice_id</span> <span class="ow">in</span> <span class="n">slice_ids_per_region</span><span class="p">:</span>
@@ -197,8 +201,7 @@
                 <span class="n">start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">result_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
                 <span class="n">end</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">result_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
                 <span class="n">gtf_line</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="se">\t</span><span class="s2">Dust</span><span class="se">\t</span><span class="s2">repeat</span><span class="se">\t</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="se">\t</span><span class="s2">&quot;</span>
-                    <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="se">\t</span><span class="s1">.</span><span class="se">\t</span><span class="s1">+</span><span class="se">\t</span><span class="s1">.</span><span class="se">\t</span><span class="s1">repeat_id &quot;</span><span class="si">{</span><span class="n">repeat_count</span><span class="si">}</span><span class="s1">&quot;;</span><span class="se">\n</span><span class="s1">&#39;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="se">\t</span><span class="s2">Dust</span><span class="se">\t</span><span class="s2">repeat</span><span class="se">\t</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="se">\t</span><span class="s2">&quot;</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="se">\t</span><span class="s1">.</span><span class="se">\t</span><span class="s1">+</span><span class="se">\t</span><span class="s1">.</span><span class="se">\t</span><span class="s1">repeat_id &quot;</span><span class="si">{</span><span class="n">repeat_count</span><span class="si">}</span><span class="s1">&quot;;</span><span class="se">\n</span><span class="s1">&#39;</span>
                 <span class="p">)</span>
                 <span class="n">dust_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">gtf_line</span><span class="p">)</span>
                 <span class="n">repeat_count</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -207,20 +210,14 @@
 <span class="k">class</span> <span class="nc">InputSchema</span><span class="p">(</span><span class="n">argschema</span><span class="o">.</span><span class="n">ArgSchema</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Input arguments expected to run DustMasker.&quot;&quot;&quot;</span>
 
-    <span class="n">genome_file</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">InputFile</span><span class="p">(</span>
-        <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Genome file path&quot;</span>
-    <span class="p">)</span>
-    <span class="n">output_dir</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">OutputDir</span><span class="p">(</span>
-        <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span>
-    <span class="p">)</span>
+    <span class="n">genome_file</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">InputFile</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Genome file path&quot;</span><span class="p">)</span>
+    <span class="n">output_dir</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">OutputDir</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span><span class="p">)</span>
     <span class="n">dust_bin</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">String</span><span class="p">(</span>
         <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">default</span><span class="o">=</span><span class="s2">&quot;dustmasker&quot;</span><span class="p">,</span>
         <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Dust executable path&quot;</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="n">num_threads</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">Integer</span><span class="p">(</span>
-        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Number of threads&quot;</span>
-    <span class="p">)</span>
+    <span class="n">num_threads</span> <span class="o">=</span> <span class="n">argschema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">Integer</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Number of threads&quot;</span><span class="p">)</span>
 
 
 <span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>

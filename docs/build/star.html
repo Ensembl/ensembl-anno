@@ -52,23 +52,30 @@ Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635</p>
 <dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.star.run_star">
 <span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.star.</span></span><span class="sig-name descname"><span class="pre">run_star</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">short_read_fastq_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delete_pre_trim_fastq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_fastq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_reads_per_sample</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_intron_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">star_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('star')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samtools_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('samtools')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_galore_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('trim_galore')</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/star.html#run_star"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.star.run_star" title="Link to this definition">¶</a></dt>
 <dd><p>Run STAR alignment on list of short read data.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>genome_file</strong> – Genome file path.</p></li>
-<li><p><strong>output_dir</strong> – Working directory path.</p></li>
-<li><p><strong>short_read_fastq_dir</strong> – Short read directory path.</p></li>
-<li><p><strong>delete_pre_trim_fastq</strong> – Delete the original fastq files after trimming. Defaults to False.</p></li>
-<li><p><strong>trim_fastq</strong> – Trim short read files using TrimGalore. Defaults to False.</p></li>
-<li><p><strong>max_reads_per_sample</strong> – Max number of reads per sample. Defaults to 0 (unlimited).</p></li>
-<li><p><strong>max_intron_length</strong> – The maximum intron size for alignments. Defaults to 100000.</p></li>
-<li><p><strong>num_threads</strong> – Number of available threads.</p></li>
-<li><p><strong>star_bin</strong> – Software path.</p></li>
-<li><p><strong>samtools_bin</strong> – Software path.</p></li>
-<li><p><strong>trim_galore_bin</strong> – Software path.</p></li>
-</ul>
-</dd>
-</dl>
+<p>:param : param genome_file: Genome file path.
+:param : type genome_file: Path
+:param : param output_dir: Working directory path.
+:param : type output_dir: Path
+:param : param short_read_fastq_dir: Short read directory path.
+:param : type short_read_fastq_dir: Path
+:param : param delete_pre_trim_fastq: Delete the original fastq files after trimming. Defaults to False.
+:param : type delete_pre_trim_fastq: boolean, default False
+:param : param trim_fastq: Trim short read files using TrimGalore. Defaults to False.
+:param : type trim_fastq: boolean, default False
+:param : param max_reads_per_sample: Max number of reads per sample. Defaults to 0 (unlimited).
+:param : type max_reads_per_sample: int, default 0
+:param : param max_intron_length: The maximum intron size for alignments. Defaults to 100000.
+:param : type max_intron_length: int, default 100000
+:param : param num_threads: Number of available threads.
+:param : type num_threads: int, default 1
+:param : param star_bin: Software path.
+:param : type star_bin: Path, default star
+:param : param samtools_bin: Software path.
+:param : type samtools_bin: Path,default samtools
+:param : param trim_galore_bin: Software path.
+:param : type trim_galore_bin: Path, default trim_galore
+:param : return: None
+:param : rtype: None</p>
 </dd></dl>
 
 <dl class="py function">
@@ -108,11 +115,7 @@ Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635</p>
 <li class="toctree-l1"><a class="reference internal" href="red.html">Red Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="repeatmasker.html">Repeatmasker Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scallop.html">Scallop Module Documentation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">STAR Module Documentation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.transcriptomic_annotation.star.run_star"><code class="docutils literal notranslate"><span class="pre">run_star()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.transcriptomic_annotation.star.subsample_transcriptomic_data"><code class="docutils literal notranslate"><span class="pre">subsample_transcriptomic_data()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">STAR Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="trf.html">TRF Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="trnascan.html">tRNAscan-SE Module Documentation</a></li>

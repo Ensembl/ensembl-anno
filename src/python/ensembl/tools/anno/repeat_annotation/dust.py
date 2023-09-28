@@ -55,11 +55,17 @@ def run_dust(
 ) -> None:
     """
     Run Dust on genomic slices with mutiprocessing
-    Args:
-        genome_file : Genome file path.
-        output_dir : Working directory path.
-        dust_bin : Dust software path.
-        num_threads: Number of threads.
+        :param genome_file: Genome file path.
+        :type genome_file: PathLike
+        :param output_dir: Working directory path.
+        :type output_dir: Path
+        :param dust_bin: Dust software path.
+        :type dust_bin: Path, default dustmasker
+        :param num_threads: Number of threads.
+        :type num_threads: int, default 1
+                
+        :return: None
+        :rtype: None
     """
 
     check_exe(dust_bin)
@@ -73,9 +79,7 @@ def run_dust(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(
-        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
-    )
+    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
     dust_cmd = [dust_bin, "-in"]
     pool = multiprocessing.Pool(num_threads)  # pylint: disable=consider-using-with
     for slice_id in slice_ids_per_region:
@@ -156,8 +160,7 @@ def _create_dust_gtf(
                 start = int(result_match.group(1)) + 1
                 end = int(result_match.group(2)) + 1
                 gtf_line = (
-                    f"{region_name}\tDust\trepeat\t{start}\t"
-                    f'{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'
+                    f"{region_name}\tDust\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'
                 )
                 dust_out.write(gtf_line)
                 repeat_count += 1
@@ -166,20 +169,14 @@ def _create_dust_gtf(
 class InputSchema(argschema.ArgSchema):
     """Input arguments expected to run DustMasker."""
 
-    genome_file = argschema.fields.InputFile(
-        required=True, description="Genome file path"
-    )
-    output_dir = argschema.fields.OutputDir(
-        required=True, description="Output directory path"
-    )
+    genome_file = argschema.fields.InputFile(required=True, description="Genome file path")
+    output_dir = argschema.fields.OutputDir(required=True, description="Output directory path")
     dust_bin = argschema.fields.String(
         required=False,
         default="dustmasker",
         description="Dust executable path",
     )
-    num_threads = argschema.fields.Integer(
-        required=False, default=1, description="Number of threads"
-    )
+    num_threads = argschema.fields.Integer(required=False, default=1, description="Number of threads")
 
 
 def main() -> None:

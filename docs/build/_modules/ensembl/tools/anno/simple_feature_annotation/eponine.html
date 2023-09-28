@@ -99,12 +99,19 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Run Eponine on genomic slices</span>
-<span class="sd">    Args:</span>
-<span class="sd">        genome_file : Genome file path.</span>
-<span class="sd">        output_dir : Working directory path.</span>
-<span class="sd">        java_bin : Java path.</span>
-<span class="sd">        eponine_bin : Eponine software path</span>
-<span class="sd">        num_threads: Number of threads.</span>
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :param genome_file: PathLike</span>
+<span class="sd">        :param output_dir: Working directory path.</span>
+<span class="sd">        :param output_dir: Path</span>
+<span class="sd">        :param java_bin: Java path.</span>
+<span class="sd">        :param java_bin: Path, default java</span>
+<span class="sd">        :param eponine_bin: Eponine software path</span>
+<span class="sd">        :param eponine_bin: Path</span>
+<span class="sd">        :param num_threads: Number of threads.</span>
+<span class="sd">        :param num_threads: int, default 1</span>
+<span class="sd">                        </span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_file</span><span class="p">(</span><span class="n">eponine_bin</span><span class="p">)</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">java_bin</span><span class="p">)</span>

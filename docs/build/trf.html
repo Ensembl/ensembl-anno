@@ -50,18 +50,83 @@ Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="ensembl.tools.anno.repeat_annotation.trf.run_trf">
 <span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.repeat_annotation.trf.</span></span><span class="sig-name descname"><span class="pre">run_trf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">PathLike</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trf_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('trf')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">match_score</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mismatch_score</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">80</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pi</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">minscore</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">40</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maxperiod</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">500</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/repeat_annotation/trf.html#run_trf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.repeat_annotation.trf.run_trf" title="Link to this definition">¶</a></dt>
-<dd><p>Executes TRF on genomic slices
-:param genome_file: Genome file path.
-:param output_dir: working directory path.
-:param num_threads: int, number of threads.
-:param trf_bin: TRF software path.
-:param match_score: Matching weight.
-:param mismatch_score: Mismatching penalty.
-:param delta: Indel penalty.
-:param pm: Match probability (whole number).
-:param pi: Indel probability (whole number).
-:param minscore: Minimum alignment score to report.
-:param maxperiod: Maximum period size to report.</p>
+<dd><dl class="simple">
+<dt>Executes TRF on genomic slices</dt><dd><dl class="field-list simple">
+<dt class="field-odd">param genome_file<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Genome file path.</p>
+</dd>
+<dt class="field-even">type genome_file<span class="colon">:</span></dt>
+<dd class="field-even"><p>PathLike</p>
+</dd>
+<dt class="field-odd">param output_dir<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Working directory path.</p>
+</dd>
+<dt class="field-even">type output_dir<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param num_threads<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int, number of threads.</p>
+</dd>
+<dt class="field-even">type num_threads<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 1</p>
+</dd>
+<dt class="field-odd">param trf_bin<span class="colon">:</span></dt>
+<dd class="field-odd"><p>TRF software path.</p>
+</dd>
+<dt class="field-even">type trf_bin<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path, default trf</p>
+</dd>
+<dt class="field-odd">param match_score<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Matching weight.</p>
+</dd>
+<dt class="field-even">type match_score<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 2</p>
+</dd>
+<dt class="field-odd">param mismatch_score<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Mismatching penalty.</p>
+</dd>
+<dt class="field-even">type mismatch_score<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 5</p>
+</dd>
+<dt class="field-odd">param delta<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Indel penalty.</p>
+</dd>
+<dt class="field-even">type delta<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 7</p>
+</dd>
+<dt class="field-odd">param pm<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Match probability (whole number).</p>
+</dd>
+<dt class="field-even">type pm<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 80</p>
+</dd>
+<dt class="field-odd">param pi<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Indel probability (whole number).</p>
+</dd>
+<dt class="field-even">type pi<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 10</p>
+</dd>
+<dt class="field-odd">param minscore<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Minimum alignment score to report.</p>
+</dd>
+<dt class="field-even">type minscore<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 40</p>
+</dd>
+<dt class="field-odd">param maxperiod<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Maximum period size to report.</p>
+</dd>
+<dt class="field-even">type maxperiod<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 500</p>
+</dd>
+<dt class="field-odd">return<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+<dt class="field-even">rtype<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -89,10 +154,7 @@ Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573</p>
 <li class="toctree-l1"><a class="reference internal" href="scallop.html">Scallop Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="star.html">STAR Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">TRF Module Documentation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#ensembl.tools.anno.repeat_annotation.trf.run_trf"><code class="docutils literal notranslate"><span class="pre">run_trf()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">TRF Module Documentation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="trnascan.html">tRNAscan-SE Module Documentation</a></li>
 </ul>
 

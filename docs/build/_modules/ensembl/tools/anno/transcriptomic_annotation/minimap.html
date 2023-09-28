@@ -36,7 +36,7 @@
           <div class="body" role="main">
             
   <h1>Source code for ensembl.tools.anno.transcriptomic_annotation.minimap</h1><div class="highlight"><pre>
-<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information</span>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information #pylint: disable=missing-module-docstring</span>
 <span class="c1"># regarding copyright ownership.</span>
 <span class="c1">#</span>
 <span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
@@ -50,7 +50,6 @@
 <span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
 <span class="c1"># See the License for the specific language governing permissions and</span>
 <span class="c1"># limitations under the License.</span>
-
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Minimap2 is a pairwise sequence alignment algorithm designed for efficiently comparing nucleotide sequences.</span>
 <span class="sd">The algorithm uses a versatile indexing strategy to quickly find approximate matches between sequences, </span>
@@ -89,14 +88,23 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Run Minimap2 to align long read data against genome file.</span>
 <span class="sd">    Default Minimap set for PacBio data.</span>
-<span class="sd">    Args:</span>
-<span class="sd">        output_dir : Working directory path.</span>
-<span class="sd">        long_read_fastq_dir : Long read directory path.</span>
-<span class="sd">        genome_file : Genome file path.</span>
-<span class="sd">        minimap2_bin : Software path.</span>
-<span class="sd">        paftools_bin : Software path.</span>
-<span class="sd">        max_intron_length : The maximum intron size for alignments. Defaults to 100000.</span>
-<span class="sd">        num_threads : Number of available threads.</span>
+<span class="sd">            :param output_dir: Working directory path.</span>
+<span class="sd">            :type output_dir: Path</span>
+<span class="sd">            :param long_read_fastq_dir: Long read directory path.</span>
+<span class="sd">            :type long_read_fastq_dir: Path</span>
+<span class="sd">            :param genome_file: Genome file path.</span>
+<span class="sd">            :type genome_file: Path</span>
+<span class="sd">            :param minimap2_bin: Software path.</span>
+<span class="sd">            :type minimap2_bin: Path, default minimap2</span>
+<span class="sd">            :param paftools_bin: Software path.</span>
+<span class="sd">            :type paftools_bin: Path, default paftools.js</span>
+<span class="sd">            :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.</span>
+<span class="sd">            :type max_intron_length: int, default 100000</span>
+<span class="sd">            :param num_threads: Number of available threads.</span>
+<span class="sd">            :type num_threads: int, default 1</span>
+<span class="sd">               </span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">minimap2_bin</span><span class="p">)</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">paftools_bin</span><span class="p">)</span>

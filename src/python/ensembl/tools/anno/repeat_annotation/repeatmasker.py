@@ -56,14 +56,24 @@ def run_repeatmasker(
 
     """
     Executes RepeatMasker on the genome slices and stores the final annotation.gtf in repeatmasker_output
-    Args:
-        genome_file : Genome file path.
-        repeatmasker_path : RepeatMasker executable path.
-        library : Custom repeat library.
-        species :Species name.
-        output_dir : Output directory path.
-        num_threads: Number of threads.
 
+        :param genome_file: Genome file path.
+        :type genome_file: PathLike
+        :param output_dir: Output directory path.
+        :type output_dir: Path
+        :param repeatmasker_bin: RepeatMasker executable path.
+        :type repeatmasker_bin: Path, default RepeatMasker
+        :param library: Custom repeat library.
+        :type library: str
+        :param repeatmasker_engine: RepeatMasker engine.
+        :type repeatmasker_engine: str, default rmblast
+        :param species: Species name.
+        :type species: str
+        :param num_threads: Number of threads.
+        :type num_threads: int, default 1
+        
+        :return: None
+        :rtype: None
     """
     check_exe(repeatmasker_bin)
     repeatmasker_dir = create_dir(output_dir, "repeatmasker_output")

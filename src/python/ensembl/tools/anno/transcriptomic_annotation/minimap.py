@@ -1,4 +1,4 @@
-# See the NOTICE file distributed with this work for additional information
+# See the NOTICE file distributed with this work for additional information #pylint: disable=missing-module-docstring
 # regarding copyright ownership.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """
 Minimap2 is a pairwise sequence alignment algorithm designed for efficiently comparing nucleotide sequences.
 The algorithm uses a versatile indexing strategy to quickly find approximate matches between sequences, 
@@ -49,14 +48,23 @@ def run_minimap2(
     """
     Run Minimap2 to align long read data against genome file.
     Default Minimap set for PacBio data.
-    Args:
-        output_dir : Working directory path.
-        long_read_fastq_dir : Long read directory path.
-        genome_file : Genome file path.
-        minimap2_bin : Software path.
-        paftools_bin : Software path.
-        max_intron_length : The maximum intron size for alignments. Defaults to 100000.
-        num_threads : Number of available threads.
+            :param output_dir: Working directory path.
+            :type output_dir: Path
+            :param long_read_fastq_dir: Long read directory path.
+            :type long_read_fastq_dir: Path
+            :param genome_file: Genome file path.
+            :type genome_file: Path
+            :param minimap2_bin: Software path.
+            :type minimap2_bin: Path, default minimap2
+            :param paftools_bin: Software path.
+            :type paftools_bin: Path, default paftools.js
+            :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.
+            :type max_intron_length: int, default 100000
+            :param num_threads: Number of available threads.
+            :type num_threads: int, default 1
+               
+        :return: None
+        :rtype: None
     """
     check_exe(minimap2_bin)
     check_exe(paftools_bin)

@@ -92,12 +92,19 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Run Scallop assembler on short read data after STAR alignment.</span>
 
-<span class="sd">    Args:</span>
-<span class="sd">        output_dir : Working directory path.</span>
-<span class="sd">        scallop_bin : Software path.</span>
-<span class="sd">        prlimit_bin : Software path.</span>
-<span class="sd">        stringtie_bin : Software path.</span>
-<span class="sd">        memory_limit : Memory limit Scallop command Defaults to 40*1024**3.</span>
+<span class="sd">        :param output_dir: Working directory path.</span>
+<span class="sd">        :type output_dir: Path</span>
+<span class="sd">        :param scallop_bin: Software path.</span>
+<span class="sd">        :type scallop_bin: Path, default scallop</span>
+<span class="sd">        :param prlimit_bin: Software path.</span>
+<span class="sd">        :type prlimit_bin: Path, default prlimit</span>
+<span class="sd">        :param stringtie_bin: Software path.</span>
+<span class="sd">        :type stringtie_bin: Path, default stringtie</span>
+<span class="sd">        :param memory_limit: Memory limit Scallop command Defaults to 40*1024**3.</span>
+<span class="sd">        :type memory_limit: int</span>
+<span class="sd">                        </span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">scallop_bin</span><span class="p">)</span>
     <span class="n">check_exe</span><span class="p">(</span><span class="n">stringtie_bin</span><span class="p">)</span>

@@ -59,12 +59,19 @@ def run_eponine(
 ) -> None:
     """
     Run Eponine on genomic slices
-    Args:
-        genome_file : Genome file path.
-        output_dir : Working directory path.
-        java_bin : Java path.
-        eponine_bin : Eponine software path
-        num_threads: Number of threads.
+        :param genome_file: Genome file path.
+        :param genome_file: PathLike
+        :param output_dir: Working directory path.
+        :param output_dir: Path
+        :param java_bin: Java path.
+        :param java_bin: Path, default java
+        :param eponine_bin: Eponine software path
+        :param eponine_bin: Path
+        :param num_threads: Number of threads.
+        :param num_threads: int, default 1
+                        
+        :return: None
+        :rtype: None
     """
     check_file(eponine_bin)
     check_exe(java_bin)

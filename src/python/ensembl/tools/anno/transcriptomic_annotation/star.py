@@ -60,18 +60,31 @@ def run_star(
     Run STAR alignment on list of short read data.
 
     Args:
-        genome_file : Genome file path.
-        output_dir : Working directory path.
-        short_read_fastq_dir : Short read directory path.
-        delete_pre_trim_fastq : Delete the original fastq files after trimming. Defaults to False.
-        trim_fastq : Trim short read files using TrimGalore. Defaults to False.
-        max_reads_per_sample : Max number of reads per sample. Defaults to 0 (unlimited).
-        max_intron_length : The maximum intron size for alignments. Defaults to 100000.
-        num_threads : Number of available threads.
-        star_bin : Software path.
-        samtools_bin : Software path.
-        trim_galore_bin : Software path.
-
+        :param genome_file: Genome file path.
+        :type genome_file: Path
+        :param output_dir: Working directory path.
+        :type output_dir: Path
+        :param short_read_fastq_dir: Short read directory path.
+        :type short_read_fastq_dir: Path
+        :param delete_pre_trim_fastq: Delete the original fastq files after trimming. Defaults to False.
+        :type delete_pre_trim_fastq: boolean, default False
+        :param trim_fastq: Trim short read files using TrimGalore. Defaults to False.
+        :type trim_fastq: boolean, default False
+        :param max_reads_per_sample: Max number of reads per sample. Defaults to 0 (unlimited).
+        :type max_reads_per_sample: int, default 0
+        :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.
+        :type max_intron_length: int, default 100000
+        :param num_threads: Number of available threads.
+        :type num_threads: int, default 1 
+        :param star_bin: Software path.
+        :type star_bin: Path, default star
+        :param samtools_bin: Software path.
+        :type samtools_bin: Path,default samtools
+        :param trim_galore_bin: Software path.
+        :type trim_galore_bin: Path, default trim_galore
+                        
+        :return: None
+        :rtype: None
     """
     check_exe(star_bin)
     # If trimming has been enabled then switch the path for
