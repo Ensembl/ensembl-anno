@@ -48,20 +48,21 @@ def run_minimap2(
     """
     Run Minimap2 to align long read data against genome file.
     Default Minimap set for PacBio data.
-            :param output_dir: Working directory path.
-            :type output_dir: Path
-            :param long_read_fastq_dir: Long read directory path.
-            :type long_read_fastq_dir: Path
-            :param genome_file: Genome file path.
-            :type genome_file: Path
-            :param minimap2_bin: Software path.
-            :type minimap2_bin: Path, default minimap2
-            :param paftools_bin: Software path.
-            :type paftools_bin: Path, default paftools.js
-            :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.
-            :type max_intron_length: int, default 100000
-            :param num_threads: Number of available threads.
-            :type num_threads: int, default 1
+    
+        :param output_dir: Working directory path.
+        :type output_dir: Path
+        :param long_read_fastq_dir: Long read directory path.
+        :type long_read_fastq_dir: Path
+        :param genome_file: Genome file path.
+        :type genome_file: Path
+        :param minimap2_bin: Software path.
+        :type minimap2_bin: Path, default minimap2
+        :param paftools_bin: Software path.
+        :type paftools_bin: Path, default paftools.js
+        :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.
+        :type max_intron_length: int, default 100000
+        :param num_threads: Number of available threads.
+        :type num_threads: int, default 1
                
         :return: None
         :rtype: None
