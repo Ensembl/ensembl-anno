@@ -14,11 +14,12 @@ jobs:
       - name: Sphinx build
         run: |
           sphinx-build -build -b html  $GITHUB_WORKSPACE/docs/source $GITHUB_WORKSPACE/docs/build
+          sphinx-build $GITHUB_WORKSPACE/docs/source -W -b linkcheck -d $GITHUB_WORKSPACE/docs/build/doctrees docs/build/html
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev/python_repo' }}
         with:
           publish_branch:  gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build
+          publish_dir: $GITHUB_WORKSPACE/docs/build
           force_orphan: true
