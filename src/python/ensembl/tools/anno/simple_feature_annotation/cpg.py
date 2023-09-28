@@ -55,13 +55,17 @@ def run_cpg(
     """
     Run CpG islands on genomic slices
     Args:
-        genome_file : Genome file path.
-        output_dir : Working directory path
-        cpg_bin : CpG software path.
-        cpg_min_length : Min length of CpG islands
-        cpg_min_gc_content : Min GC frequency percentage
-        cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
-        num_threads: int, number of threads.
+        :param genome_file : Genome file path.
+        :type genome_file: PathLike
+        :param output_dir : Working directory path
+        :param cpg_bin : CpG software path.
+        :param cpg_min_length : Min length of CpG islands
+        :param cpg_min_gc_content : Min GC frequency percentage
+        :param cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
+        :param num_threads: int, number of threads.
+        
+        :return: None
+        :rtype: None
     """
 
     check_exe(cpg_bin)
