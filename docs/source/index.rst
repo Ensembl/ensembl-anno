@@ -36,19 +36,19 @@ to install the project.
 
    install
    license
-   
-   cpg
-   dust
-   eponine
-   genblast
-   minimap
-   red
-   repeatmasker
-   scallop
-   star
-   stringtie
-   trf
-   trnascan
+
+   _modules/cpg
+   _modules/dust
+   _modules/eponine
+   _modules/genblast
+   _modules/minimap
+   _modules/red
+   _modules/repeatmasker
+   _modules/scallop
+   _modules/star
+   _modules/stringtie
+   _modules/trf
+   _modules/trnascan
    
 Indices and tables
 ==================
