@@ -65,7 +65,8 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
 ]
-
+# Set napoleon_use_param to True to format parameters as in the docstring
+napoleon_use_param = True
 # A list of ignored prefixes for module index sorting.
 modindex_common_prefix = []
 
