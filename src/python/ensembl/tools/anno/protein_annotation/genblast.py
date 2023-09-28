@@ -68,7 +68,9 @@ def run_genblast(#pylint:disable=dangerous-default-value
     protein_set: str = ["uniprot", "orthodb"],
 ) -> None:
     """
+    
     Executes GenBlast on genomic slices
+    
             :param masked_genome: Masked genome file path.
             :type masked_genome: Path
             :param output_dir: Working directory path.
@@ -88,12 +90,13 @@ def run_genblast(#pylint:disable=dangerous-default-value
             :param genblast_timeout: seconds
             :type genblast_timeout: int, default 1
             :param num_threads: int, number of threads.
-            :type num_threads:int, default 1 
+            :type num_threads: int, default 1 
             :param protein_set: Source 
             :type str: ["uniprot", "orthodb"]
-                            
+            
             :return: None
             :rtype: None
+            
     """
 
     check_exe(genblast_bin)

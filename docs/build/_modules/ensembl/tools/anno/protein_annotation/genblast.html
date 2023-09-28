@@ -108,7 +108,9 @@
     <span class="n">protein_set</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;uniprot&quot;</span><span class="p">,</span> <span class="s2">&quot;orthodb&quot;</span><span class="p">],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    </span>
 <span class="sd">    Executes GenBlast on genomic slices</span>
+<span class="sd">    </span>
 <span class="sd">            :param masked_genome: Masked genome file path.</span>
 <span class="sd">            :type masked_genome: Path</span>
 <span class="sd">            :param output_dir: Working directory path.</span>
@@ -128,12 +130,13 @@
 <span class="sd">            :param genblast_timeout: seconds</span>
 <span class="sd">            :type genblast_timeout: int, default 1</span>
 <span class="sd">            :param num_threads: int, number of threads.</span>
-<span class="sd">            :type num_threads:int, default 1 </span>
+<span class="sd">            :type num_threads: int, default 1 </span>
 <span class="sd">            :param protein_set: Source </span>
 <span class="sd">            :type str: [&quot;uniprot&quot;, &quot;orthodb&quot;]</span>
-<span class="sd">                            </span>
+<span class="sd">            </span>
 <span class="sd">            :return: None</span>
 <span class="sd">            :rtype: None</span>
+<span class="sd">            </span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">check_exe</span><span class="p">(</span><span class="n">genblast_bin</span><span class="p">)</span>

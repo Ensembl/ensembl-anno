@@ -62,8 +62,9 @@ Genome Res., 21(5): 936-949.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="ensembl.tools.anno.protein_annotation.genblast.run_genblast">
 <span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.protein_annotation.genblast.</span></span><span class="sig-name descname"><span class="pre">run_genblast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">masked_genome</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">protein_dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_intron_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">genblast_timeout_secs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10800</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">genblast_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('genblast')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convert2blastmask_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('convert2blastmask')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">makeblastdb_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('makeblastdb')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">protein_set</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['uniprot',</span> <span class="pre">'orthodb']</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/protein_annotation/genblast.html#run_genblast"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.protein_annotation.genblast.run_genblast" title="Link to this definition">¶</a></dt>
-<dd><dl>
-<dt>Executes GenBlast on genomic slices</dt><dd><dl class="field-list simple">
+<dd><p>Executes GenBlast on genomic slices</p>
+<blockquote>
+<div><dl class="field-list simple">
 <dt class="field-odd">param masked_genome<span class="colon">:</span></dt>
 <dd class="field-odd"><p>Masked genome file path.</p>
 </dd>
@@ -121,11 +122,15 @@ Genome Res., 21(5): 936-949.</p>
 <dt class="field-odd">param num_threads<span class="colon">:</span></dt>
 <dd class="field-odd"><p>int, number of threads.</p>
 </dd>
-</dl>
-<p>:type num_threads:int, default 1
-:param protein_set: Source
-:type str: [“uniprot”, “orthodb”]</p>
-<dl class="field-list simple">
+<dt class="field-even">type num_threads<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 1</p>
+</dd>
+<dt class="field-odd">param protein_set<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Source</p>
+</dd>
+<dt class="field-even">type str<span class="colon">:</span></dt>
+<dd class="field-even"><p>[“uniprot”, “orthodb”]</p>
+</dd>
 <dt class="field-odd">return<span class="colon">:</span></dt>
 <dd class="field-odd"><p>None</p>
 </dd>
@@ -133,8 +138,7 @@ Genome Res., 21(5): 936-949.</p>
 <dd class="field-even"><p>None</p>
 </dd>
 </dl>
-</dd>
-</dl>
+</div></blockquote>
 </dd></dl>
 
 </section>
