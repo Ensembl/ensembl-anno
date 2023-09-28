@@ -1,5 +1,5 @@
 Stringtie Module Documentation
-==============================
+==================================
 
 .. automodule:: ensembl.tools.anno.transcriptomic_annotation.stringtie
    :members:

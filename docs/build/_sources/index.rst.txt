@@ -31,12 +31,12 @@ Check out :ref:`installation <install>` section for further information on how
 to install the project.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Index
 
    install
    license
-   
+
    cpg
    dust
    eponine
