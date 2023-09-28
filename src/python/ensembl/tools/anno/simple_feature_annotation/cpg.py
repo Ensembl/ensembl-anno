@@ -54,10 +54,11 @@ def run_cpg(
 ) -> None:
     """
     Run CpG islands on genomic slices
-    Args:
+
         :param genome_file : Genome file path.
         :type genome_file: PathLike
         :param output_dir : Working directory path
+        :type output_dir : Path
         :param cpg_bin : CpG software path.
         :param cpg_min_length : Min length of CpG islands
         :param cpg_min_gc_content : Min GC frequency percentage
