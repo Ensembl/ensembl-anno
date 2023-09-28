@@ -60,10 +60,15 @@ def run_cpg(
         :param output_dir : Working directory path
         :type output_dir : Path
         :param cpg_bin : CpG software path.
+        :type cpg_bin : Path
         :param cpg_min_length : Min length of CpG islands
+        :type cpg_min_length : int
         :param cpg_min_gc_content : Min GC frequency percentage
+        :type cpg_min_gc_content : int
         :param cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
+        :type cpg_min_oe : float
         :param num_threads: int, number of threads.
+        :type num_threads : int
         
         :return: None
         :rtype: None
