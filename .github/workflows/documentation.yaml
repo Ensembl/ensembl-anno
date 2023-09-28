@@ -16,7 +16,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          cat pyproject.toml | grep -A9999 '\[project.dependencies\]' | grep -B9999 '\[/project.dependencies\]' | grep -v '\[project.dependencies\]\|--\|\[.*\]' | xargs -n 1 pip install
+          pip install -e.
           pip install sphinx sphinx_rtd_theme
 
       - name: Sphinx Build
