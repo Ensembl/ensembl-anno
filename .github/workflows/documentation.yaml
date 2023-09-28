@@ -6,20 +6,28 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
-      - name: Install dependencies
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Install Dependencies
         run: |
+          cat pyproject.toml | grep -A9999 '\[project.dependencies\]' | grep -B9999 '\[/project.dependencies\]' | grep -v '\[project.dependencies\]\|--\|\[.*\]' | xargs -n 1 pip install
           pip install sphinx sphinx_rtd_theme
-      - name: Sphinx build
+
+      - name: Sphinx Build
         run: |
-          sphinx-build -build -b html  $GITHUB_WORKSPACE/docs/source $GITHUB_WORKSPACE/docs/build
-          sphinx-build $GITHUB_WORKSPACE/docs/source -W -b linkcheck -d $GITHUB_WORKSPACE/docs/build/doctrees docs/build/html
-      - name: Deploy
+          sphinx-build -b html docs/source docs/build
+          sphinx-build docs/source -W -b linkcheck -d docs/build/doctrees docs/build/html
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev/python_repo' }}
         with:
-          publish_branch:  gh-pages
+          publish_branch: gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: $GITHUB_WORKSPACE/docs/build
+          publish_dir: docs/build
           force_orphan: true
