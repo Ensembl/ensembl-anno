@@ -57,7 +57,7 @@ def run_trnascan(
         :param genome_file: Genome file path.
         :type genome_file: PathLike 
         :param output_dir:  working directory path.
-        :type output_dir, Path  
+        :type output_dir: Path  
         :param trnascan_bin: tRNAscan-SE software path.
         :type trnascan_bin: Path, default tRNAscan-SE
         :param trnascan_filter: tRNAscan-SE filter set path.
