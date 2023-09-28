@@ -99,8 +99,8 @@ maintainers = [
 #
 # For an analysis of this field vs pip's requirements files see:
 # https://packaging.python.org/discussions/install-requires-vs-requirements/
-#dependencies = [ # Optional
-#TOADD
+[project.dependencies] = [ # Optional
+  "argschema >= 3.0.4",
 
 #]
 
@@ -121,7 +121,6 @@ dev = [
     "pylint",
     "pytest",
     "sphinx",
-    "argschema",
     "unittest"
 ]
 doc = [
