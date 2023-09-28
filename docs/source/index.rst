@@ -31,24 +31,24 @@ Check out :ref:`installation <install>` section for further information on how
 to install the project.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Index
 
    install
    license
 
-   _modules/cpg
-   _modules/dust
-   _modules/eponine
-   _modules/genblast
-   _modules/minimap
-   _modules/red
-   _modules/repeatmasker
-   _modules/scallop
-   _modules/star
-   _modules/stringtie
-   _modules/trf
-   _modules/trnascan
+   cpg
+   dust
+   eponine
+   genblast
+   minimap
+   red
+   repeatmasker
+   scallop
+   star
+   stringtie
+   trf
+   trnascan
    
 Indices and tables
 ==================
