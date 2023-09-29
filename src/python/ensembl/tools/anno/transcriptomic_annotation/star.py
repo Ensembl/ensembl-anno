@@ -26,6 +26,7 @@ import logging.config
 import gzip
 import math
 import multiprocessing
+import os
 from pathlib import Path
 import random
 import re
@@ -212,8 +213,8 @@ def run_star(
         ]
         #'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000',
         #'50000','50000','50000','50000','50000','100000']
-        check_compression = re.search(r".gz$", fastq_file)
-        if check_compression:
+        #check_compression = re.search(r".gz$", fastq_file)
+        if fastq_file.suffix.endswith('.gz'):
             star_command.append("--readFilesCommand")
             star_command.append("gunzip")
             star_command.append("-c")
@@ -239,7 +240,7 @@ def run_star(
     logging.info("Completed running STAR")
 
 
-def _create_paired_paths(fastq_file_paths: List) -> List:
+def _create_paired_paths(fastq_file_paths: List) -> List[Path]:
     """
     Create list of paired transcriptomic fastq files
 
@@ -281,7 +282,6 @@ https://github.com/lh3/seqtk
 
 def _subsample_paired_fastq_files(
     fastq_files: List[Path],
-    output_files: List[Path] = "",
     subsample_read_limit: int = 100000000,
     num_threads: int = 2,
     compressed: bool = False,
@@ -296,11 +296,16 @@ def _subsample_paired_fastq_files(
         num_threads : Number of threads, defaults to 2.
         compressed : file compressed, defaults to False.
     """
-    fastq_file_1, fastq_file_2 = fastq_files
-    if len(output_files) == 0:
-        output_files = [f"{fastq_file_1}.sub", f"{fastq_file_2}.sub"]
-    output_file_1, output_file_2 = output_files
-    if re.search(r"\.gz$", fastq_file_1):
+    if len(fastq_files)==2:
+        fastq_file_1, fastq_file_2 = fastq_files
+        output_file_1, output_file_2 = [Path(f"{fastq_file_1}.sub"), Path(f"{fastq_file_2}.sub")]
+    elif len(fastq_files)==1:
+        fastq_file_1=fastq_files[0]
+        output_file_1 = Path(f"{fastq_file_1}.sub")
+    else:
+        raise FileNotFoundError("No fastq file found")
+
+    if fastq_file_1.suffix.endswith('.gz$'):
         compressed = True
         num_lines = sum(1 for line in gzip.open(fastq_file_1))#pylint:disable=consider-using-with
     else:
@@ -364,7 +369,7 @@ def _subsample_fastq_subset(
             lines = [file_in.readline() for _ in range(4)]
 
 
-def subsample_transcriptomic_data(fastq_file_list: List[Path], num_threads: int = 2) -> None:
+def subsample_transcriptomic_data(fastq_file_list: List, num_threads: int = 2) -> None:
     """
     Subsample paired fastq files.
 
@@ -439,18 +444,18 @@ def run_trimming(
     ]
 
     pool = multiprocessing.Pool(int(num_threads))  # pylint:disable=consider-using-with
-    for fastq_paired_files in fastq_file_list:
+    for fastq_file in fastq_file_list:
+        if delete_pre_trim_fastq:
+            fastq_file.unlink()
         pool.apply_async(
             multiprocess_trim_galore,
             args=(
                 trim_galore_cmd,
-                fastq_paired_files,
+                fastq_file,
                 trim_dir,
             ),
         )
-        if delete_pre_trim_fastq:
-            for file_path in fastq_paired_files:
-                file_path.unlink()
+
     pool.close()
     pool.join()
 
@@ -459,12 +464,12 @@ def run_trimming(
     for trimmed_fastq_path in trimmed_fastq_list:
         logging.info("Trimmed file path: %s", str(trimmed_fastq_path))
         sub_patterns = re.compile(r"|".join(("_val_1.fq", "_val_2.fq", "_trimmed.fq")))
-        updated_file_path = sub_patterns.sub(".fq", trimmed_fastq_path.name)
-        updated_file_path = short_read_fastq_dir / updated_file_path
+        updated_file_path_name = sub_patterns.sub(".fq", trimmed_fastq_path.name)
+        updated_file_path = short_read_fastq_dir / updated_file_path_name
         logging.info("Updated file path: %s", str(updated_file_path))
         trimmed_fastq_path.rename(updated_file_path)
 
-    files_to_delete_list = []
+    files_to_delete_list : List[Path] = []
     for file_type in file_types:
         files_to_delete_list.extend(short_read_fastq_dir.glob(file_type))
 
