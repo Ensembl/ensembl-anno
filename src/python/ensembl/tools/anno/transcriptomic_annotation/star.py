@@ -89,7 +89,7 @@ def run_star(
     # short_read_fastq_dir from the original location to the trimmed fastq dir
     if trim_fastq:
         run_trimming(output_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads, trim_galore_bin)
-        short_read_fastq_dir = output_dir / f"trim_galore_output"
+        short_read_fastq_dir = output_dir / "trim_galore_output"
 
     #  if not os.path.exists(subsample_script_path):
     #subsample_script_path = "subsample_fastq.py"
@@ -97,8 +97,8 @@ def run_star(
     star_dir = create_dir(output_dir, "star_output")
 
     for output_file in [
-        output_dir / f"stringtie_output/annotation.gtf",
-        output_dir / f"scallop_output/annotation.gtf",
+        output_dir / "stringtie_output" / "annotation.gtf",
+        output_dir / "scallop_output" / "annotation.gtf",
     ]:
         if output_file.exists():
             transcript_count = check_gtf_content(output_file, "transcript")  # check a gtf
