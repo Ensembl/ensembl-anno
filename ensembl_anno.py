@@ -4217,6 +4217,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
+        default="",
         help="Path where the output and temp files will write to. \
         Uses current dir by default",
     )
@@ -4480,7 +4481,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    work_dir = args.output_dir
+    work_dir = pathlib.Path(args.output_dir).absolute()
     genome_file = args.genome_file
     num_threads = args.num_threads
     # masked_genome_file = genome_file  # This will be updated later if Red is run
@@ -4545,16 +4546,11 @@ if __name__ == "__main__":
     species = args.repeatmasker_species
 
     main_script_dir = os.path.dirname(os.path.realpath(__file__))
-    # work_dir=glob.glob(work_dir)
     if not os.path.exists(genome_file):
         raise IOError("File does not exist: %s" % genome_file)
 
-    if not work_dir:
-        work_dir = os.getcwd()
-        # work_dir=glob.glob(work_dir)
-
     # set up logger
-    log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
+    log_file_path = work_dir / "ensembl_anno.log"
     loginipath = _REPO_ROOT / "logging.conf"
     logging.config.fileConfig(
         loginipath,
@@ -4565,25 +4561,16 @@ if __name__ == "__main__":
     logger.propagate = False
 
     logger.info("work directory: %s" % work_dir)
-    if not os.path.exists(work_dir):
-        logger.info("Work dir does not exist, will create")
-        utils.create_dir(work_dir, None)
+    work_dir.mkdir(parents=True, exist_ok=True)
 
     if num_threads == 1:
         logger.info("Thread count is set to the default value 1; this might be slow.")
 
-    if os.path.exists(
-        os.path.join(work_dir, "red_output", "mask_output")
-    ) or os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
-        red_genome_file = [
-            f
-            for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output"))
-            if f.endswith(".msk")
-        ]
+    mask_output_path = work_dir / "red_output" / "mask_output"
+    if mask_output_path.exists() or (mask_output_path.suffix == ".msk"):
+        red_genome_file = [f for f in mask_output_path.iterdir() if f.endswith(".msk")]
         logger.info("red_genome_file %s", red_genome_file)
-        masked_genome_file = os.path.join(
-            work_dir, "red_output", "mask_output", red_genome_file[0]
-        )
+        masked_genome_file = mask_output_path / red_genome_file[0]
     else:
         masked_genome_file = genome_file
     logger.info("Masked genome file %s", masked_genome_file)
@@ -4773,7 +4760,7 @@ if __name__ == "__main__":
             genblast_path,
             convert2blastmask_path,
             makeblastdb_path,
-            os.path.join(work_dir, "genblast_output"),
+            work_dir / "genblast_output",
             protein_file,
             masked_genome_file,
             max_intron_length,
@@ -4790,7 +4777,7 @@ if __name__ == "__main__":
             genblast_path,
             convert2blastmask_path,
             makeblastdb_path,
-            os.path.join(work_dir, "busco_output"),
+            work_dir / "busco_output",
             busco_protein_file,
             masked_genome_file,
             max_intron_length,
