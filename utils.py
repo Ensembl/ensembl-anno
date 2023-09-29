@@ -37,25 +37,20 @@ def create_dir(main_output_dir, dir_name):
     Returns:
         str Path to the created directory
     """
+    target_dir = pathlib.Path(main_output_dir)
     if dir_name:
-        target_dir = os.path.join(main_output_dir, dir_name)
-    else:
-        target_dir = main_output_dir
-
-    if os.path.exists(target_dir):
+        target_dir = target_dir / dir_name
+    if target_dir.exists():
         logger.warning("Directory already exists, will not create again")
-        return target_dir
-
-    logger.info("Attempting to create target dir: %s", target_dir)
-
-    try:
-        os.mkdir(target_dir)
-    except OSError:
-        logger.error("Creation of the dir failed, path used: %s", target_dir)
     else:
-        logger.info("Successfully created the dir on the following path: %s", target_dir)
-
-    return target_dir
+        logger.info("Attempting to create target dir: %s", target_dir)
+        try:
+            target_dir.mkdir(parents=True)
+        except OSError:
+            logger.error("Creation of the dir failed, path used: %s", target_dir)
+        else:
+            logger.info("Successfully created the dir on the following path: %s", target_dir)
+    return str(target_dir)
 
 
 def check_exe(exe_path):
