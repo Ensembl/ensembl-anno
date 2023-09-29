@@ -1445,13 +1445,12 @@ def run_genblast_align(
     else:
         logger.info("No gtf file, go on with the analysis")
 
-    genblast_output_file = os.path.join(genblast_dir, "genblast")
-
     asnb_file = masked_genome_file + ".asnb"
     logger.info("ASNB file: %s" % asnb_file)
 
-    if not Path(f"{genblast_dir}/alignscore.txt").exists():
-        shutil.copy(_REPO_ROOT / "support_files" / "alignscore.txt", genblast_dir)
+    alignscore_path = pathlib.Path().absolute() / "alignscore.txt"
+    if not alignscore_path.exists():
+        shutil.copyfile(_REPO_ROOT / "support_files" / "alignscore.txt", alignscore_path)
 
     if not os.path.exists(masked_genome_file):
         raise IOError("Masked genome file does not exist: %s" % masked_genome_file)
