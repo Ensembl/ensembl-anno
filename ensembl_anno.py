@@ -1730,7 +1730,7 @@ def run_makeblastdb(makeblastdb_path, masked_genome_file, asnb_file):
             "-mask_data",
             asnb_file,
             "-max_file_sz",
-            "10000000000",
+            "4000000000",
         ]
     )
     logger.info("Completed running makeblastdb")
