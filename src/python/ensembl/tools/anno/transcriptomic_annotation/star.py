@@ -20,7 +20,7 @@ Dobin A, Davis CA, Schlesinger F, et al. STAR: ultrafast universal RNA-seq align
 Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635
 """
 
-__all__ = ["run_star", "subsample_transcriptomic_data"]
+__all__ = ["run_star"]
 import logging
 import logging.config
 import gzip
@@ -89,7 +89,7 @@ def run_star(
     # short_read_fastq_dir from the original location to the trimmed fastq dir
     if trim_fastq:
         run_trimming(output_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads, trim_galore_bin)
-        short_read_fastq_dir = output_dir / "trim_galore_output"
+        short_read_fastq_dir = output_dir / f"trim_galore_output"
 
     #  if not os.path.exists(subsample_script_path):
     #subsample_script_path = "subsample_fastq.py"
@@ -97,8 +97,8 @@ def run_star(
     star_dir = create_dir(output_dir, "star_output")
 
     for output_file in [
-        output_dir / "stringtie_output/annotation.gtf",
-        output_dir / "scallop_output/annotation.gtf",
+        output_dir / f"stringtie_output/annotation.gtf",
+        output_dir / f"scallop_output/annotation.gtf",
     ]:
         if output_file.exists():
             transcript_count = check_gtf_content(output_file, "transcript")  # check a gtf
@@ -527,7 +527,7 @@ class InputSchema(argschema.ArgSchema):
     num_threads = argschema.fields.Integer(required=False, default=1, description="Number of threads")
     star_bin = argschema.fields.String(
         required=False,
-        default="star",
+        default="STAR",
         description="Star software path",
     )
     samtools_bin = argschema.fields.String(
