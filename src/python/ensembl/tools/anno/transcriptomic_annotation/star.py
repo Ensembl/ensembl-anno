@@ -98,8 +98,8 @@ def run_star(
     star_dir = create_dir(output_dir, "star_output")
 
     for output_file in [
-        output_dir / "stringtie_output" / "annotation.gtf",
-        output_dir / "scallop_output" / "annotation.gtf",
+        Path(f"{output_dir}/stringtie_output/annotation.gtf"),
+        Path(f"{output_dir}/scallop_output/annotation.gtf"),
     ]:
         if output_file.exists():
             transcript_count = check_gtf_content(output_file, "transcript")  # check a gtf
@@ -253,7 +253,7 @@ def _create_paired_paths(fastq_file_paths: List) -> List[Path]:
     path_dict = {}
     # final_list = []
     for fastq_file in fastq_file_paths:
-        paired_name = re.search(r"(.+)_\d+\.(fastq|fq)", fastq_file)
+        paired_name = re.search(r"(.+)_\d+\.(fastq|fq)", str(fastq_file))
         if not paired_name:
             logging.exception(
                 "Could not find _1 or _2 at the end of the prefix \
