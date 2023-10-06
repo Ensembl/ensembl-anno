@@ -178,6 +178,11 @@ class InputSchema(argschema.ArgSchema):
         default="scallop",
         description="Scallop software path",
     )
+    stringtie_bin = argschema.fields.String(
+        required=False,
+        default="stringtie",
+        description="Scallop software path",
+    )
     prlimit_bin = argschema.fields.String(
         required=False,
         default="prlimit",
@@ -199,5 +204,5 @@ def main() -> None:
         disable_existing_loggers=False,
     )
     run_scallop(
-        mod.args["output_dir"], mod.args["scallop_bin"], mod.args["prlimit_bin"], mod.args["memory_limit"]
+        mod.args["output_dir"], mod.args["scallop_bin"], mod.args["prlimit_bin"], mod.args["stringtie_bin"], mod.args["memory_limit"]
     )
