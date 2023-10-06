@@ -78,7 +78,7 @@ def run_minimap2(
         if transcript_count > 0:
             logging.info("Minimap2 gtf file exists, skipping analysis")
             return
-    minimap2_index_file = minimap2_dir / f"{genome_file.name}.mmi"
+    minimap2_index_file = minimap2_dir / f"{Path(genome_file).name}.mmi"
     # minimap2_hints_file = minimap2_dir /"minimap2_hints.gff"
     file_types = ("*.fastq", "*.fq")
     fastq_file_list = [
@@ -130,10 +130,10 @@ def run_minimap2(
                     sam_file,
                 ]
             )
-        logging.info("Creating bed file from SAM")
-        subprocess.run(
+            logging.info("Creating bed file from SAM")
+            subprocess.run(
             [paftools_bin, "splice2bed", sam_file], stdout=bed_file_out
-        )  # pylint:disable=subprocess-run-check
+            )  # pylint:disable=subprocess-run-check
 
     bed_to_gtf(minimap2_dir)
 
