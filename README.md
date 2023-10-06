@@ -52,7 +52,9 @@ Toolkit for annotation
 | Repository name | branch | URL|
 |-----------------|--------|----|
 | ensembl | default | https://github.com/Ensembl/ensembl.git |
-| ensembl-analysis | experimental/gbiab | https://github.com/Ensembl/ensembl-analysis.git | (need to make sure depencies are on main and update this to main/default for branch)
+| ensembl-analysis | experimental/gbiab | https://github.com/Ensembl/ensembl-analysis.git | (need to make sure dependencies are on main and update this to main/default for branch)
+| ensembl-io | default | https://github.com/Ensembl/ensembl-io.git |
+| ensembl-taxonomy | default | https://github.com/Ensembl/ensembl-taxonomy.git |
 | ensembl-variation | default | https://github.com/Ensembl/ensembl-variation.git |
 
 
