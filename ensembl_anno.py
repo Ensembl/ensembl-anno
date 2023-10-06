@@ -4567,7 +4567,7 @@ if __name__ == "__main__":
 
     mask_output_path = work_dir / "red_output" / "mask_output"
     if mask_output_path.exists() or (mask_output_path.suffix == ".msk"):
-        red_genome_file = [f for f in mask_output_path.iterdir() if f.endswith(".msk")]
+        red_genome_file = [f for f in mask_output_path.iterdir() if f.suffix == ".msk"]
         logger.info("red_genome_file %s", red_genome_file)
         masked_genome_file = mask_output_path / red_genome_file[0]
     else:
