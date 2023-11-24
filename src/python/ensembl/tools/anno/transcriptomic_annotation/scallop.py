@@ -77,7 +77,7 @@ def run_scallop(
             logging.info("Scallop gtf file exists, skipping analysis")
             return
 
-    star_dir = output_dir / "star_output"
+    star_dir =  Path(f"{output_dir}/star_output")
 
     if star_dir.exists() and len(list(star_dir.glob("*.bam"))) != 0:
         for sorted_bam_file in star_dir.glob("*.bam"):
@@ -102,7 +102,7 @@ def run_scallop(
                         "10",
                     ]
                     if memory_limit is not None:
-                        scallop_cmd = prlimit_command(prlimit_bin, scallop_cmd, memory_limit)
+                        scallop_cmd = _prlimit_command(prlimit_bin, scallop_cmd, memory_limit)
                     subprocess.check_output(scallop_cmd, stderr=subprocess.STDOUT, universal_newlines=True)
                     # This combines the standard output and error streams into a single
                     # string and ensures that the output is in text mode
@@ -117,10 +117,10 @@ def run_scallop(
 
     # Now need to merge
     logging.info("Merge Scaalop's output.")
-    scallop_merge(scallop_dir, stringtie_bin)
+    _scallop_merge(scallop_dir, stringtie_bin)
 
 
-def scallop_merge(scallop_dir: Path, stringtie_bin: Path = Path("stringtie")) -> None:
+def _scallop_merge(scallop_dir: Path, stringtie_bin: Path = Path("stringtie")) -> None:
     """
     Merge Scallop result in a single gtf file
 
@@ -133,7 +133,7 @@ def scallop_merge(scallop_dir: Path, stringtie_bin: Path = Path("stringtie")) ->
         for gtf_file in scallop_dir.glob("*.scallop.gtf"):
             transcript_count = check_gtf_content(gtf_file, "transcript")
             if transcript_count > 0:
-                gtf_list_out.write(gtf_file + "\n")
+                gtf_list_out.write(str(gtf_file) + "\n")
             else:
                 logging.warning("Warning, skipping file with no transcripts. Path:%s\n", gtf_file)
 
@@ -154,7 +154,7 @@ def scallop_merge(scallop_dir: Path, stringtie_bin: Path = Path("stringtie")) ->
         print("StringTie execution failed with an error:%s", e.output)
 
 
-def prlimit_command(prlimit_bin, command_list, virtual_memory_limit) -> list:
+def _prlimit_command(prlimit_bin, command_list, virtual_memory_limit) -> list:
     """
     Prepend memory limiting arguments to a command list to be run with subprocess.
 
