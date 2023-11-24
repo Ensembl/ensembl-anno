@@ -31,7 +31,7 @@ import re
 import subprocess
 import tempfile
 from typing import List
-import argschema
+import argparse
 
 
 from ensembl.tools.anno.utils._utils import (
@@ -166,36 +166,42 @@ def _create_dust_gtf(
                 repeat_count += 1
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run DustMasker."""
 
-    genome_file = argschema.fields.InputFile(required=True, description="Genome file path")
-    output_dir = argschema.fields.OutputDir(required=True, description="Output directory path")
-    dust_bin = argschema.fields.String(
-        required=False,
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="DustMasker arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument(
+        "--dust_bin",
         default="dustmasker",
-        description="Dust executable path",
+        help="Dust executable path",
     )
-    num_threads = argschema.fields.Integer(required=False, default=1, description="Number of threads")
+    parser.add_argument(
+        "--num_threads", type=int, default=1, help="Number of threads"
+    )
+    return parser.parse_args()
 
-
-def main() -> None:
+def main():
     """Dust's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "dust.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "dust.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
-    run_dust(
-        mod.args["genome_file"],
-        mod.args["output_dir"],
-        mod.args["dust_bin"],
-        mod.args["num_threads"],
-    )
 
+    run_dust(
+        args.genome_file,
+        args.output_dir,
+        args.dust_bin,
+        args.num_threads,
+    )
 
 if __name__ == "__main__":
     main()

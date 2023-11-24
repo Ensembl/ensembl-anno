@@ -20,17 +20,16 @@
 
 __all__ = ["run_repeatmasker"]
 
-import json
+import argparse
 import logging
 import logging.config
 import multiprocessing
-import os
 from os import PathLike
 from pathlib import Path
 import re
 import subprocess
 from typing import List
-import argschema
+
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -103,7 +102,7 @@ def run_repeatmasker(
         repeatmasker_cmd.extend(["-species", species])
     else:
         repeatmasker_cmd.extend(["-lib", library])
-    logger.info(f"Running RepeatMasker {repeatmasker_cmd}")
+    logger.info("Running RepeatMasker %s",repeatmasker_cmd)
     pool = multiprocessing.Pool(num_threads)  # pylint: disable=consider-using-with
     for slice_id in slice_ids_per_region:
         pool.apply_async(
@@ -221,53 +220,61 @@ def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
                 repeatmasker_out.write(gtf_line)
                 repeat_count += 1
 
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="RepeatMasker's arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument(
+        "--repeatmasker_bin",
+        default="RepeatMasker",
+        help="RepeatMasker executable path",
+    )
+    parser.add_argument(
+        "--library",
+        default="",
+        help="Custom repeat library",
+    )
+    parser.add_argument(
+        "--repeatmasker_engine",
+        default="rmblast",
+        help="RepeatMasker engine",
+    )
+    parser.add_argument(
+        "--species",
+        default="homo",
+        help="Species name (used if no library is provided)",
+    )
+    parser.add_argument(
+        "--num_threads",
+        type=int,
+        default=1,
+        help="Number of threads",
+    )
+    return parser.parse_args()
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run RepeatMasker."""
-
-    genome_file = argschema.fields.InputFile(
-        required= True, description= "Genome file path"
-    )
-    output_dir = argschema.fields.OutputDir(
-        required= True, description= "Output directory path"
-    )
-    repeatmasker_bin = argschema.fields.String(
-        required= False, default= "RepeatMasker",
-            description = "RepeatMasker executable path",
-
-    )
-    library = argschema.fields.String(
-            required= False, default= "", description= "Custom repeat library"
-    )
-    repeatmasker_engine = argschema.fields.String(
-            required= False, default= "rmblast", description= "RepeatMasker engine"
-    )
-    species = argschema.fields.String(
-            required= False,
-            default="homo",
-            description="Species name (used if no library is provided)"
-    )
-    num_threads = argschema.fields.Integer(
-            required= False, default= 1, description= "Number of threads"
-    )
-
-
-def main() -> None:
+def main():
     """RepeatMasker's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") /"repeatmasking.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "repeatmasking.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
-    logging.config.fileConfig(loginipath, defaults={"logfilename": str(log_file_path)}, disable_existing_loggers=False,)
+
+    logging.config.fileConfig(
+        loginipath,
+        defaults={"logfilename": str(log_file_path)},
+        disable_existing_loggers=False,
+    )
+
     run_repeatmasker(
-        mod.args["genome_file"],
-        mod.args["output_dir"],
-        mod.args["repeatmasker_bin"],
-        mod.args["library"],
-        mod.args["repeatmasker_engine"],
-        mod.args["species"],
-        mod.args["num_threads"],
-        )
+        args.genome_file,
+        args.output_dir,
+        args.repeatmasker_bin,
+        args.library,
+        args.repeatmasker_engine,
+        args.species,
+        args.num_threads,
+    )
 
 if __name__ == "__main__":
     main()
-

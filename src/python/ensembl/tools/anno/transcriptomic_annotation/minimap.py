@@ -21,13 +21,13 @@ Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinforma
 """
 
 __all__ = ["run_minimap2"]
+
+import argparse
 import logging
 import logging.config
 from pathlib import Path
 import subprocess
 from typing import List
-import argschema
-
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -48,7 +48,7 @@ def run_minimap2(
     """
     Run Minimap2 to align long read data against genome file.
     Default Minimap set for PacBio data.
-    
+
         :param output_dir: Working directory path.
         :type output_dir: Path
         :param long_read_fastq_dir: Long read directory path.
@@ -63,7 +63,7 @@ def run_minimap2(
         :type max_intron_length: int, default 100000
         :param num_threads: Number of available threads.
         :type num_threads: int, default 1
-               
+
         :return: None
         :rtype: None
     """
@@ -132,7 +132,7 @@ def run_minimap2(
             )
             logging.info("Creating bed file from SAM")
             subprocess.run(
-            [paftools_bin, "splice2bed", sam_file], stdout=bed_file_out
+                [paftools_bin, "splice2bed", sam_file], stdout=bed_file_out
             )  # pylint:disable=subprocess-run-check
 
     _bed_to_gtf(minimap2_dir)
@@ -212,54 +212,42 @@ def _bed_block_to_exons(block_sizes: List, block_starts: List, offset: int) -> L
     return exons
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run Minimap2 software."""
-
-    output_dir = argschema.fields.OutputDir(required=True, description="Output directory path")
-    long_read_fastq_dir = argschema.fields.String(
-        required=True,
-        description="Long read directory path",
-    )
-    genome_file = argschema.fields.InputFile(required=True, description="Genome file path")
-    minimap2_bin = argschema.fields.String(
-        required=False,
-        default="minimap2",
-        description="Minimap2 software path",
-    )
-    paftools_bin = argschema.fields.String(
-        required=False,
-        default="paftools.js",
-        description="Paftools software path",
-    )
-    max_intron_length = argschema.fields.Integer(
-        required=False,
-        default="100000",
-        description="The maximum intron length.",
-    )
-    max_intron_length = argschema.fields.Integer(
-        required=False,
-        default="100000",
-        description="The maximum intron size for alignments.",
-    )
-    num_threads = argschema.fields.Integer(required=False, default=1, description="Number of threads")
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Minimap2's arguments")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--long_read_fastq_dir", required=True, help="Long read directory path")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--minimap2_bin", default="minimap2", help="Minimap2 software path")
+    parser.add_argument("--paftools_bin", default="paftools.js", help="Paftools software path")
+    parser.add_argument("--max_intron_length", type=int, default=100000, help="The maximum intron length.")
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    return parser.parse_args()
 
 
-def main() -> None:
+def main():
     """Minimap2's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "minimap.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "minimap.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
+
     run_minimap2(
-        mod.args["output_dir"],
-        mod.args["long_read_fastq_dir"],
-        mod.args["genome_file"],
-        mod.args["minimap2_bin"],
-        mod.args["paftools_bin"],
-        mod.args["max_intron_length"],
-        mod.args["num_threads"],
+        args.output_dir,
+        args.long_read_fastq_dir,
+        args.genome_file,
+        args.minimap2_bin,
+        args.paftools_bin,
+        args.max_intron_length,
+        args.num_threads,
     )
+
+
+if __name__ == "__main__":
+    main()

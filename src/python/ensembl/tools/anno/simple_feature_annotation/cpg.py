@@ -19,6 +19,8 @@ Davuluri RV, Grosse I, Zhang MQ: Computational identification of promoters and
 first exons in the human genome. Nat Genet. 2001, 29(4):412-417. [PMID: 11726928]
 """
 __all__ = ["run_cpg"]
+
+import argparse
 import logging
 import logging.config
 import multiprocessing
@@ -27,8 +29,7 @@ from pathlib import Path
 import re
 import subprocess
 from tempfile import TemporaryDirectory
-from typing import List,Union
-import argschema
+from typing import List, Union
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -69,7 +70,7 @@ def run_cpg(
         :type cpg_min_oe: float
         :param num_threads: int, number of threads.
         :type num_threads: int
-        
+
         :return: None
         :rtype: None
     """
@@ -84,9 +85,7 @@ def run_cpg(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(
-        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
-    )
+    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
     logger.info("Running CpG")
     pool = multiprocessing.Pool(int(num_threads))  # pylint:disable=consider-using-with
     for slice_id in slice_ids_per_region:
@@ -139,7 +138,7 @@ def _multiprocess_cpg(
     )
     seq = get_sequence(region_name, int(start), int(end), 1, genome_file, cpg_dir)
     slice_name = f"{region_name}.rs{start}.re{end}"
-    #with TemporaryDirectory(dir=cpg_dir) as tmpdirname:
+    # with TemporaryDirectory(dir=cpg_dir) as tmpdirname:
     slice_file = cpg_dir / f"{slice_name}.fa"
     with open(slice_file, "w+", encoding="utf8") as region_out:
         region_out.write(f">{region_name}\n{seq}\n")
@@ -180,7 +179,9 @@ def _create_cpg_gtf(
         cpg_min_gc_content : Min GC frequency percentage
         cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
     """
-    with open(output_file, "r", encoding="utf8") as cpg_in, open(region_results, "w+", encoding="utf8") as cpg_out:
+    with open(output_file, "r", encoding="utf8") as cpg_in, open(
+        region_results, "w+", encoding="utf8"
+    ) as cpg_out:
         feature_count = 1
         for line in cpg_in:
             result_match = re.search(r"^" + region_name, line)
@@ -194,9 +195,9 @@ def _create_cpg_gtf(
                 oe_score_str = results[7]
                 oe_score: Union[float, int]
                 if oe_score_str in ("-", "inf"):
-                    oe_score=0
+                    oe_score = 0
                 else:
-                    oe_score=float(oe_score_str)
+                    oe_score = float(oe_score_str)
                 if (
                     int(length) >= int(cpg_min_length)
                     and gc_content >= int(cpg_min_gc_content)
@@ -209,56 +210,47 @@ def _create_cpg_gtf(
                     cpg_out.write(gtf_line)
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run CpG software."""
-
-    genome_file = argschema.fields.InputFile(
-        required=True, description="Genome file path"
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="CpG's arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--cpg_bin", default="cpg_lh", help="CpG executable path")
+    parser.add_argument("--cpg_min_length", type=int, default=400, help="Min length of CpG islands")
+    parser.add_argument("--cpg_min_gc_content", type=int, default=50, help="Min GC frequency percentage")
+    parser.add_argument(
+        "--cpg_min_oe",
+        type=float,
+        default=0.6,
+        help="Min ratio of the observed to expected number of CpG (CpGo/e)",
     )
-    output_dir = argschema.fields.OutputDir(
-        required=True, description="Output directory path"
-    )
-    cpg_bin = argschema.fields.String(
-        required=False,
-        default="cpg_lh",
-        description="CpG executable path",
-    )
-    cpg_min_length = argschema.fields.Integer(
-        required=False,
-        default="400",
-        description="Min length of CpG islands",
-    )
-    cpg_min_gc_content = argschema.fields.Integer(
-        required=False,
-        default="50",
-        description="Min GC frequency percentage",
-    )
-    cpg_min_oe = argschema.fields.Float(
-        required=False,
-        default="0.6",
-        description="Min ratio of the observed to expected number of CpG (CpGo/e)",
-    )
-    num_threads = argschema.fields.Integer(
-        required=False, default=1, description="Number of threads"
-    )
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    return parser.parse_args()
 
 
-def main() -> None:
+def main():
     """CpG's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "cpg.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "cpg.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
+
     run_cpg(
-        mod.args["genome_file"],
-        mod.args["output_dir"],
-        mod.args["cpg_bin"],
-        mod.args["cpg_min_length"],
-        mod.args["cpg_min_gc_content"],
-        mod.args["cpg_min_oe"],
-        mod.args["num_threads"],
+        args.genome_file,
+        args.output_dir,
+        args.cpg_bin,
+        args.cpg_min_length,
+        args.cpg_min_gc_content,
+        args.cpg_min_oe,
+        args.num_threads,
     )
+
+
+if __name__ == "__main__":
+    main()

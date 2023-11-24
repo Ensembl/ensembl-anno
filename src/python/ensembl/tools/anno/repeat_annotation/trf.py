@@ -19,6 +19,7 @@
 """
 __all__ = ["run_trf"]
 
+import argparse
 import logging
 import logging.config
 import multiprocessing
@@ -29,7 +30,7 @@ import re
 import subprocess
 import tempfile
 from typing import List
-import argschema
+
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -235,71 +236,48 @@ def _create_trf_gtf(
                     trf_out.write(gtf_line)
                     repeat_count += 1
 
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="TRF's arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--trf_bin", default="trf", help="TRF executable path")
+    parser.add_argument("--match_score", type=int, default=2, help="Matching weight")
+    parser.add_argument("--mismatch_score", type=int, default=5, help="Mismatching penalty")
+    parser.add_argument("--delta", type=int, default=7, help="Indel penalty")
+    parser.add_argument("--pm", type=int, default=80, help="Match probability")
+    parser.add_argument("--pi", type=int, default=10, help="Indel probability")
+    parser.add_argument("--minscore", type=int, default=40, help="Minimum alignment score to report")
+    parser.add_argument("--maxperiod", type=int, default=500, help="Maximum period size to report")
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    return parser.parse_args()
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run TRF."""
-
-    genome_file = argschema.fields.InputFile(
-        required=True, description="Genome file path"
-    )
-    output_dir = argschema.fields.OutputDir(
-        required=True, description="Output directory path"
-    )
-    trf_bin = argschema.fields.String(
-        required=False,
-        default="trf",
-        description="TRF executable path",
-    )
-    match_score = argschema.fields.Integer(
-        required=False, default=2, description="Matching weight"
-    )
-    mismatch_score = argschema.fields.Integer(
-        required=False, default=5, description="Mismatching penalty"
-    )
-    delta = argschema.fields.Integer(
-        required=False, default=7, description="Indel penalty"
-    )
-    pm = argschema.fields.Integer(
-        required=False, default=80, description="Match probability"
-    )
-    pi = argschema.fields.Integer(
-        required=False, default=10, description="Indel probability"
-    )
-    minscore = argschema.fields.Integer(
-        required=False, default=40, description="Minimum alignment score to report"
-    )
-    maxperiod = argschema.fields.Integer(
-        required=False, default=500, description="Maximum period size to report"
-    )
-    num_threads = argschema.fields.Integer(
-        required=False, default=1, description="Number of threads"
-    )
-
-
-def main() -> None:
+def main():
     """TRF's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "trf.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "trf.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
-    run_trf(
-        mod.args["genome_file"],
-        mod.args["output_dir"],
-        mod.args["num_threads"],
-        mod.args["trf_bin"],
-        mod.args["match_score"],
-        mod.args["mismatch_score"],
-        mod.args["delta"],
-        mod.args["pm"],
-        mod.args["pi"],
-        mod.args["minscore"],
-        mod.args["maxperiod"],
-    )
 
+    run_trf(
+        args.genome_file,
+        args.output_dir,
+        args.num_threads,
+        args.trf_bin,
+        args.match_score,
+        args.mismatch_score,
+        args.delta,
+        args.pm,
+        args.pi,
+        args.minscore,
+        args.maxperiod,
+    )
 
 if __name__ == "__main__":
     main()

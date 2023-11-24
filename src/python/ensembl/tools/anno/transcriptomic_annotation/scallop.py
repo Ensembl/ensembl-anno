@@ -28,12 +28,13 @@ decomposition. Nat Biotechnol.
 """
 
 __all__ = ["run_scallop"]
+
+import argparse
 import logging
 import logging.config
 from pathlib import Path
 import re
 import subprocess
-import argschema
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -62,7 +63,7 @@ def run_scallop(
         :type stringtie_bin: Path, default stringtie
         :param memory_limit: Memory limit Scallop command Defaults to 40*1024**3.
         :type memory_limit: int
-                        
+
         :return: None
         :rtype: None
     """
@@ -77,7 +78,7 @@ def run_scallop(
             logging.info("Scallop gtf file exists, skipping analysis")
             return
 
-    star_dir =  Path(f"{output_dir}/star_output")
+    star_dir = Path(f"{output_dir}/star_output")
 
     if star_dir.exists() and len(list(star_dir.glob("*.bam"))) != 0:
         for sorted_bam_file in star_dir.glob("*.bam"):
@@ -169,40 +170,34 @@ def _prlimit_command(prlimit_bin, command_list, virtual_memory_limit) -> list:
     return [str(prlimit_bin), f"-v{virtual_memory_limit}"] + command_list
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run StringTie software."""
-
-    output_dir = argschema.fields.OutputDir(required=True, description="Output directory path")
-    scallop_bin = argschema.fields.String(
-        required=False,
-        default="scallop",
-        description="Scallop software path",
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Scallop's arguments")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--scallop_bin", default="scallop", help="Scallop software path")
+    parser.add_argument("--stringtie_bin", default="stringtie", help="StringTie software path")
+    parser.add_argument("--prlimit_bin", default="prlimit", help="Prlimit software path")
+    parser.add_argument(
+        "--memory_limit", type=int, default=40 * 1024**3, help="Memory's limit for Scallop command"
     )
-    stringtie_bin = argschema.fields.String(
-        required=False,
-        default="stringtie",
-        description="Scallop software path",
-    )
-    prlimit_bin = argschema.fields.String(
-        required=False,
-        default="prlimit",
-        description="Prlimit software path",
-    )
-    memory_limit = argschema.fields.Integer(
-        required=False, default=40 * 1024**3, description="Memory's limit for Scallop command"
-    )
+    return parser.parse_args()
 
 
-def main() -> None:
-    """Scallop's entry-point. :no-index:"""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "scallop.log"
+def main():
+    """Scallop's entry-point."""
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "scallop.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
-    run_scallop(
-        mod.args["output_dir"], mod.args["scallop_bin"], mod.args["prlimit_bin"], mod.args["stringtie_bin"], mod.args["memory_limit"]
-    )
+
+    run_scallop(args.output_dir, args.scallop_bin, args.prlimit_bin, args.stringtie_bin, args.memory_limit)
+
+
+if __name__ == "__main__":
+    main()

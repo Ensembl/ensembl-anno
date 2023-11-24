@@ -21,20 +21,19 @@ Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635
 """
 
 __all__ = ["run_star"]
+
+import argparse
 import logging
 import logging.config
 import gzip
 import math
 import multiprocessing
-import os
 from pathlib import Path
 import random
 import re
 import shutil
 import subprocess
 from typing import List
-import argschema
-
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -74,14 +73,14 @@ def run_star(
         :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.
         :type max_intron_length: int, default 100000
         :param num_threads: Number of available threads.
-        :type num_threads: int, default 1 
+        :type num_threads: int, default 1
         :param star_bin: Software path.
         :type star_bin: Path, default star
         :param samtools_bin: Software path.
         :type samtools_bin: Path,default samtools
         :param trim_galore_bin: Software path.
         :type trim_galore_bin: Path, default trim_galore
-                        
+
         :return: None
         :rtype: None
     """
@@ -93,7 +92,7 @@ def run_star(
         short_read_fastq_dir = output_dir / "trim_galore_output"
 
     #  if not os.path.exists(subsample_script_path):
-    #subsample_script_path = "subsample_fastq.py"
+    # subsample_script_path = "subsample_fastq.py"
 
     star_dir = create_dir(output_dir, "star_output")
 
@@ -115,7 +114,6 @@ def run_star(
     ]
     if len(fastq_file_list) == 0:
         raise IndexError(f"The list of fastq files is empty. Fastq dir:\n{short_read_fastq_dir}")
-
 
     # for file_type in file_types:
     #    fastq_file_list.extend(glob.glob(os.path.join(short_read_fastq_dir, file_type)))
@@ -144,26 +142,26 @@ def run_star(
         # slower indexing, while a seed length that is too small might affect alignment accuracy.
         index_bases = min(14, math.floor((math.log(genome_size, 2) / 2) - 1))
         try:
-            subprocess.run(#pylint:disable=subprocess-run-check
-            [
-                str(star_bin),
-                "--runThreadN",
-                str(num_threads),
-                "--runMode",
-                "genomeGenerate",
-                "--outFileNamePrefix",
-                f"{star_dir}/",
-                "--genomeDir",
-                str(star_dir),
-                "--genomeSAindexNbases",
-                str(index_bases),
-                "--genomeFastaFiles",
-                str(genome_file),
-            ]
+            subprocess.run(  # pylint:disable=subprocess-run-check
+                [
+                    str(star_bin),
+                    "--runThreadN",
+                    str(num_threads),
+                    "--runMode",
+                    "genomeGenerate",
+                    "--outFileNamePrefix",
+                    f"{star_dir}/",
+                    "--genomeDir",
+                    str(star_dir),
+                    "--genomeSAindexNbases",
+                    str(index_bases),
+                    "--genomeFastaFiles",
+                    str(genome_file),
+                ]
             )
-        except  Exception as e:
+        except Exception as e:#pylint:disable=broad-exception-caught
             logging.error("An error occurred while creating star index: %s", e)
-      
+
     logging.info("Running Star on the files in the fastq dir")
     for fastq_file in fastq_file_list:
         # logger.info(fastq_file_path)
@@ -213,16 +211,16 @@ def run_star(
         ]
         #'--outSJfilterIntronMaxVsReadN','5000','10000','25000','40000',
         #'50000','50000','50000','50000','50000','100000']
-        #check_compression = re.search(r".gz$", fastq_file)
-        if fastq_file.suffix.endswith('.gz'):
+        # check_compression = re.search(r".gz$", fastq_file)
+        if fastq_file.suffix.endswith(".gz"):
             star_command.append("--readFilesCommand")
             star_command.append("gunzip")
             star_command.append("-c")
-        subprocess.run(star_command)#pylint:disable=subprocess-run-check
+        subprocess.run(star_command)  # pylint:disable=subprocess-run-check
         shutil.move(Path(f"{star_dir}/Aligned.out.sam"), sam_file)
         shutil.move(Path(f"{star_dir}/SJ.out.tab"), junctions_file)
         logging.info("Converting samfile into sorted bam file. Bam file: %s", bam_file)
-        subprocess.run(#pylint:disable=subprocess-run-check
+        subprocess.run(  # pylint:disable=subprocess-run-check
             [
                 str(samtools_bin),
                 "sort",
@@ -273,7 +271,8 @@ def _create_paired_paths(fastq_file_paths: List) -> List[Path]:
     logging.info([value for values_list in path_dict.values() for value in values_list])
     return [value for values_list in path_dict.values() for value in values_list]
 
-#pylint:disable=pointless-string-statement
+
+# pylint:disable=pointless-string-statement
 """
 For an advanced and optimised subsampling we could use 
 https://github.com/lh3/seqtk 
@@ -296,32 +295,35 @@ def _subsample_paired_fastq_files(
         num_threads : Number of threads, defaults to 2.
         compressed : file compressed, defaults to False.
     """
-    if len(fastq_files)==2:
+    if len(fastq_files) == 2:
         fastq_file_1, fastq_file_2 = fastq_files
         output_file_1, output_file_2 = [Path(f"{fastq_file_1}.sub"), Path(f"{fastq_file_2}.sub")]
-    elif len(fastq_files)==1:
-        fastq_file_1=fastq_files[0]
+    elif len(fastq_files) == 1:
+        fastq_file_1 = fastq_files[0]
         output_file_1 = Path(f"{fastq_file_1}.sub")
     else:
         raise FileNotFoundError("No fastq file found")
 
-    if fastq_file_1.suffix.endswith('.gz$'):
+    if fastq_file_1.suffix.endswith(".gz$"):
         compressed = True
-        num_lines = sum(1 for line in gzip.open(fastq_file_1))#pylint:disable=consider-using-with
+        num_lines = sum(1 for line in gzip.open(fastq_file_1))  # pylint:disable=consider-using-with
     else:
-        num_lines = sum(1 for line in open(fastq_file_1))#pylint:disable=consider-using-with
+        num_lines = sum(1 for line in open(fastq_file_1))  # pylint:disable=consider-using-with
 
     range_limit = int(num_lines / 4)
     if range_limit <= subsample_read_limit:
-        logging.info("Number of reads (%s is less than the max allowed read count (%s), \
-            no need to subsample", str(range_limit),str(subsample_read_limit)
+        logging.info(
+            "Number of reads (%s is less than the max allowed read count (%s), \
+            no need to subsample",
+            str(range_limit),
+            str(subsample_read_limit),
         )
         return
 
     rand_list = random.sample(range(0, range_limit - 1), subsample_read_limit)
     random_indices = {idx * 4: 1 for idx in rand_list}
     logging.info("Processing paired files in parallel")
-    pool = multiprocessing.Pool(int(num_threads))#pylint:disable=consider-using-with
+    pool = multiprocessing.Pool(int(num_threads))  # pylint:disable=consider-using-with
     pool.apply_async(
         _subsample_fastq_subset,
         args=(
@@ -469,7 +471,7 @@ def run_trimming(
         logging.info("Updated file path: %s", str(updated_file_path))
         trimmed_fastq_path.rename(updated_file_path)
 
-    files_to_delete_list : List[Path] = []
+    files_to_delete_list: List[Path] = []
     for file_type in file_types:
         files_to_delete_list.extend(short_read_fastq_dir.glob(file_type))
 
@@ -500,76 +502,64 @@ def multiprocess_trim_galore(trim_galore_cmd: List, fastq_paired_files: List[Pat
     subprocess.run(trim_galore_cmd, check=True)
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run STAR software."""
-
-    genome_file = argschema.fields.InputFile(required=True, description="Genome file path")
-    output_dir = argschema.fields.OutputDir(required=True, description="Output directory path")
-    short_read_fastq_dir = argschema.fields.String(
-        required=True,
-        description="Short read directory path",
-    )
-    delete_pre_trim_fastq = argschema.fields.Bool(
-        required=False,
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="STAR's arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--short_read_fastq_dir", required=True, help="Short read directory path")
+    parser.add_argument(
+        "--delete_pre_trim_fastq",
+        action="store_true",
         default=False,
-        description="Delete the original fastq files after trimming",
+        help="Delete the original fastq files after trimming",
     )
-    trim_fastq = argschema.fields.Bool(
-        required=False,
-        default=False,
-        description="Trim the short read files using Trim Galore",
+    parser.add_argument(
+        "--trim_fastq", action="store_true", default=False, help="Trim the short read files using Trim Galore"
     )
-    max_reads_per_sample = argschema.fields.Integer(
-        required=False,
-        default="0",
-        description="The maximum number of reads to use per sample.",
+    parser.add_argument(
+        "--max_reads_per_sample", type=int, default=0, help="The maximum number of reads to use per sample"
     )
-    max_intron_length = argschema.fields.Integer(
-        required=False,
-        default="100000",
-        description="The maximum intron size for alignments.",
+    parser.add_argument(
+        "--max_intron_length", type=int, default=100000, help="The maximum intron size for alignments"
     )
-    num_threads = argschema.fields.Integer(required=False, default=1, description="Number of threads")
-    star_bin = argschema.fields.String(
-        required=False,
-        default="STAR",
-        description="Star software path",
-    )
-    samtools_bin = argschema.fields.String(
-        required=False,
-        default="samtools",
-        description="Samtools software path",
-    )
-    trim_galore_bin = argschema.fields.String(
-        required=False,
-        default="trim_galore",
-        description="Trim Galore software path",
-    )
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument("--star_bin", default="STAR", help="Star software path")
+    parser.add_argument("--samtools_bin", default="samtools", help="Samtools software path")
+    parser.add_argument("--trim_galore_bin", default="trim_galore", help="Trim Galore software path")
+    return parser.parse_args()
 
 
-def main() -> None:
+def main():
     """STAR's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "star.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "star.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
+
     run_star(
-        mod.args["genome_file"],
-        mod.args["output_dir"],
-        mod.args["short_read_fastq_dir"],
-        mod.args["delete_pre_trim_fastq"],
-        mod.args["trim_fastq"],
-        mod.args["max_reads_per_sample"],
-        mod.args["max_intron_length"],
-        mod.args["num_threads"],
-        mod.args["star_bin"],
-        mod.args["samtools_bin"],
-        mod.args["trim_galore_bin"],
+        args.genome_file,
+        args.output_dir,
+        args.short_read_fastq_dir,
+        args.delete_pre_trim_fastq,
+        args.trim_fastq,
+        args.max_reads_per_sample,
+        args.max_intron_length,
+        args.num_threads,
+        args.star_bin,
+        args.samtools_bin,
+        args.trim_galore_bin,
     )
+
+
+if __name__ == "__main__":
+    main()
 
 
 # pylint:disable=pointless-string-statement

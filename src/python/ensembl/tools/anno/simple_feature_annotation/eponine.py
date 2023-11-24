@@ -21,17 +21,15 @@ PMID: 11875034; PMCID: PMC155284.
 """
 __all__ = ["run_eponine"]
 
+import argparse
 import logging
 import logging.config
 import multiprocessing
-import os
 from os import PathLike
 from pathlib import Path
 import re
 import subprocess
-from tempfile import TemporaryDirectory
 from typing import List
-import argschema
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -69,7 +67,7 @@ def run_eponine(
         :param eponine_bin: Path
         :param num_threads: Number of threads.
         :param num_threads: int, default 1
-                        
+
         :return: None
         :rtype: None
     """
@@ -85,9 +83,7 @@ def run_eponine(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(
-        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
-    )
+    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
 
     eponine_cmd = [
         str(java_bin),
@@ -139,7 +135,7 @@ def _multiprocess_eponine(
     )
     seq = get_sequence(region_name, int(start), int(end), 1, genome_file, eponine_dir)
     slice_name = f"{region_name}.rs{start}.re{end}"
-    #with tempfile.TemporaryDirectory(dir=eponine_dir) as tmpdirname:
+    # with tempfile.TemporaryDirectory(dir=eponine_dir) as tmpdirname:
     slice_file = eponine_dir / f"{slice_name}.fa"
     with open(slice_file, "w+", encoding="utf8") as region_out:
         region_out.write(f">{region_name}\n{seq}\n")
@@ -194,51 +190,42 @@ def _create_eponine_gtf(
                 eponine_out.write(gtf_line)
                 feature_count += 1
 
-
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run Eponine."""
-
-    genome_file = argschema.fields.InputFile(
-        required=True, description="Genome file path"
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Eponine's arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument("--java_bin", default="java", help="Java executable path")
+    parser.add_argument(
+        "--eponine_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar",#pylint:disable=line-too-long
+        help="Eponine executable path",
     )
-    output_dir = argschema.fields.OutputDir(
-        required=True, description="Output directory path"
-    )
-    num_threads = argschema.fields.Integer(
-        required=False, default=1, description="Number of threads"
-    )
-    java_bin = argschema.fields.String(
-        required=False,
-        default="java",
-        description="Java executable path",
-    )
-    eponine_bin = argschema.fields.String(
-        required=False,
-        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar",  # pylint:disable=line-too-long
-        description="Java executable path",
-    )
-    eponine_threashold = argschema.fields.Float(
-        required=False, default=0.999, description="Eponine threashold"
-    )
+    parser.add_argument("--eponine_threashold", type=float, default=0.999, help="Eponine threashold")
+    return parser.parse_args()
 
 
-def main() -> None:
+def main():
     """Eponine's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "eponine.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "eponine.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
+
     run_eponine(
-        mod.args["genome_file"],
-        mod.args["output_dir"],
-        mod.args["num_threads"],
-        Path(mod.args["java_bin"]),
-        Path(mod.args["eponine_bin"]),
-        mod.args["eponine_threashold"],
+        args.genome_file,
+        args.output_dir,
+        args.num_threads,
+        Path(args.java_bin),
+        Path(args.eponine_bin),
+        args.eponine_threashold,
     )
 
 

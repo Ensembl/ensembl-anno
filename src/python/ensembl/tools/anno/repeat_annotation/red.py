@@ -21,13 +21,13 @@ https://doi.org/10.1186/s12859-015-0654-5
 """
 __all__ = ["run_red"]
 
+import argparse
 import logging
 import logging.config
-from os import PathLike
 from pathlib import Path
 import re
 import subprocess
-import argschema
+
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -37,7 +37,11 @@ from ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_red(genome_file: Path, output_dir: Path, red_bin: Path = Path("Red"),) -> str:
+def run_red(
+    genome_file: Path,
+    output_dir: Path,
+    red_bin: Path = Path("Red"),
+) -> str:
     """
     Run Red on genome file
         :param genome_file: Genome file path.
@@ -46,7 +50,7 @@ def run_red(genome_file: Path, output_dir: Path, red_bin: Path = Path("Red"),) -
         :type output_dir: Path
         :param red_bin: Red software path.
         :type red_bin: Path, default Red
-        
+
         :return: Masked genome file
         :rtype: str
     """
@@ -86,20 +90,20 @@ def run_red(genome_file: Path, output_dir: Path, red_bin: Path = Path("Red"),) -
         red_genome_file.symlink_to(genome_file)
     try:
         if red_genome_file.exists():
-         logger.info("Running Red")
-         subprocess.run(
-            [
-                red_bin,
-                "-gnm",
-                red_genome_dir,
-                "-msk",
-                red_mask_dir,
-                "-rpt",
-                red_repeat_dir,
-            ],
-            check=True,
-        )
-    except:
+            logger.info("Running Red")
+            subprocess.run(
+                [
+                    red_bin,
+                    "-gnm",
+                    red_genome_dir,
+                    "-msk",
+                    red_mask_dir,
+                    "-rpt",
+                    red_repeat_dir,
+                ],
+                check=True,
+            )
+    except:#pylint:disable=bare-except
         logger.error(
             "Could not find the genome file in the Red genome dir or sym link \
             to the original file. Path expected:\n%s",
@@ -128,38 +132,41 @@ def _create_red_gtf(repeat_coords_file: Path, output_file: Path):
                 start = int(result_match.group(2)) + 1
                 end = int(result_match.group(3)) + 1
                 gtf_line = (
-                    f"{region_name}\tRed\trepeat\t{start}\t"
-                    f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'
+                    f"{region_name}\tRed\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'
                 )
                 red_out.write(gtf_line)
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run Red."""
-
-    genome_file = argschema.fields.InputFile(
-        required=True, description="Genome file path"
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Red's arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument(
+        "--red_bin",
+        default="red",
+        help="Red executable path",
     )
-    output_dir = argschema.fields.OutputDir(
-        required=True, description="Output directory path"
-    )
-    red_bin = argschema.fields.String(
-        required=False, default="Red", description="Red executable path",
-    )
+    return parser.parse_args()
 
 
-def main() -> None:
+def main():
     """Red's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "red.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "red.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
+
     run_red(
-        Path(mod.args["genome_file"]), mod.args["output_dir"], mod.args["red_bin"],
+        Path(args.genome_file),
+        args.output_dir,
+        args.red_bin,
     )
 
 

@@ -22,12 +22,13 @@ reconstruction of a transcriptome from RNA-seq reads Nature Biotechnology 2015, 
 """
 
 __all__ = ["run_stringtie"]
+
+import argparse
 import logging
 import logging.config
 from pathlib import Path
 import re
 import subprocess
-import argschema
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -49,7 +50,7 @@ def run_stringtie(
         :type stringtie_bin: Path, default stringtie
         :param num_threads: Number of available threads.
         :type num_threads: int, default 1
-                        
+
         :return: None
         :rtype: None
     """
@@ -123,30 +124,34 @@ def run_stringtie(
         logging.error("Error running Stringtie merging command: %s", e)
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run StringTie software."""
-
-    output_dir = argschema.fields.OutputDir(required=True, description="Output directory path")
-    stringtie_bin = argschema.fields.String(
-        required=False,
-        default="stringtie",
-        description="StringTie software path",
-    )
-    num_threads = argschema.fields.Integer(required=False, default=1, description="Number of threads")
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="StringTie's arguments")
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--stringtie_bin", default="stringtie", help="StringTie software path")
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    return parser.parse_args()
 
 
-def main() -> None:
+def main():
     """StringTie's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "stringtie.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "stringtie.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
+
     run_stringtie(
-        mod.args["output_dir"],
-        mod.args["stringtie_bin"],
-        mod.args["num_threads"],
+        args.output_dir,
+        args.stringtie_bin,
+        args.num_threads,
     )
+
+
+if __name__ == "__main__":
+    main()

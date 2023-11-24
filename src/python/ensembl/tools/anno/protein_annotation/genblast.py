@@ -44,7 +44,7 @@ import shutil
 import signal
 import subprocess
 from typing import List
-import argschema
+import argparse
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -267,7 +267,7 @@ def _generate_genblast_gtf(genblast_dir: Path) -> None:
     Collect output from geneblast and create the final gtf file
     genblast_dir: Working directory path.
     """
-    logging.info("AAAAA  _generate_genblast_gtf")
+
     output_file = genblast_dir / "annotation.gtf"
     with open(output_file, "w+", encoding="utf8") as file_out:
         genblast_extension = "_1.1c_2.3_s1_0_16_1"
@@ -441,70 +441,69 @@ def _set_genblast_attributes(attributes: str, feature_type: str) -> str:
     return converted_attributes
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run TRF."""
-
-    masked_genome_file = argschema.fields.InputFile(
-        required=True, description="Masked genome file path"
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Genblast arguments")
+    parser.add_argument(
+        "--masked_genome_file", required=True, help="Masked genome file path"
     )
-    output_dir = argschema.fields.OutputDir(
-        required=True, description="Output directory path"
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--protein_file", required=True, help="Path for the protein dataset")
+    parser.add_argument(
+        "--genblast_timeout_secs", type=int, default=10800, help="Genblast timeout period"
     )
-    protein_file = argschema.fields.String(
-        required=True, description="Path for the protein dataset"
+    parser.add_argument(
+        "--max_intron_length", type=int, required=True, help="Maximum intron length"
     )
-    genblast_timeout_secs = argschema.fields.Integer(
-        required=False, default=10800, description="Genblast timeout period"
-    )
-    max_intron_length = argschema.fields.Integer(
-        required=True, description="Maximum intron length"
-    )
-    genblast_bin = argschema.fields.String(
-        required=False,
+    parser.add_argument(
+        "--genblast_bin",
         default="genblast",
-        description="Genblast executable path",
+        help="Genblast executable path",
     )
-    convert2blastmask_bin = argschema.fields.String(
-        required=False,
+    parser.add_argument(
+        "--convert2blastmask_bin",
         default="convert2blastmask",
-        description="convert2blastmask executable path",
+        help="convert2blastmask executable path",
     )
-    makeblastdb_bin = argschema.fields.String(
-        required=False, default="makeblastdb", description="makeblastdb  executable path"
+    parser.add_argument(
+        "--makeblastdb_bin",
+        default="makeblastdb",
+        help="makeblastdb executable path",
     )
-    num_threads = argschema.fields.Integer(
-        required=False, default=1, description="Number of threads"
-    )
-    protein_set = argschema.fields.String(
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--protein_set",
         required=True,
-        description="Protein set [uniprot,orthodb]",
-        validate=lambda x: x in ["uniprot", "orthodb"],
+        choices=["uniprot", "orthodb"],
+        help="Protein set [uniprot, orthodb]",
     )
+    return parser.parse_args()
 
-
-def main() -> None:
+def main():
     """Genblast's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "genblast.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "genblast.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
-    run_genblast(
-        Path(mod.args["masked_genome_file"]),
-        Path(mod.args["output_dir"]),
-        Path(mod.args["protein_file"]),
-        mod.args["max_intron_length"],
-        mod.args["genblast_timeout_secs"],
-        Path(mod.args["genblast_bin"]),
-        Path(mod.args["convert2blastmask_bin"]),
-        Path(mod.args["makeblastdb_bin"]),
-        mod.args["num_threads"],
-        mod.args["protein_set"],
-    )
 
+    run_genblast(
+        Path(args.masked_genome_file),
+        Path(args.output_dir),
+        Path(args.protein_file),
+        args.max_intron_length,
+        args.genblast_timeout_secs,
+        Path(args.genblast_bin),
+        Path(args.convert2blastmask_bin),
+        Path(args.makeblastdb_bin),
+        args.num_threads,
+        args.protein_set,
+    )
 
 if __name__ == "__main__":
     main()
