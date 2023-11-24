@@ -65,7 +65,7 @@ def run_stringtie(
 
     stringtie_merge_input_file = stringtie_dir / "stringtie_assemblies.txt"
     stringtie_merge_output_file = stringtie_dir / "annotation.gtf"
-    star_dir = output_dir / "star_output"
+    star_dir = Path(f"{output_dir}/star_output")
 
     if star_dir.exists() and len(list(star_dir.glob("*.bam"))) != 0:
         for sorted_bam_file in star_dir.glob("*.bam"):
