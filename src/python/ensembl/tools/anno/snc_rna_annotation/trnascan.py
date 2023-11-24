@@ -21,6 +21,7 @@ Nucleic Acids Res. 1997, 25(5):955-64. [PMID: 9023104]
 """
 __all__ = ["run_trnascan"]
 
+import argparse
 import logging
 import logging.config
 import multiprocessing
@@ -29,7 +30,6 @@ from pathlib import Path
 import re
 import subprocess
 from typing import List
-import argschema
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -55,16 +55,16 @@ def run_trnascan(
     """
     Executes tRNAscan-SE on genomic slices
         :param genome_file: Genome file path.
-        :type genome_file: PathLike 
+        :type genome_file: PathLike
         :param output_dir:  working directory path.
-        :type output_dir: Path  
+        :type output_dir: Path
         :param trnascan_bin: tRNAscan-SE software path.
         :type trnascan_bin: Path, default tRNAscan-SE
         :param trnascan_filter: tRNAscan-SE filter set path.
         :type trnascan_filter: Path, default EukHighConfidenceFilter
         :param num_threads: int, number of threads.
-        :type num_threads: int, default 1 
-                            
+        :type num_threads: int, default 1
+
         :return: None
         :rtype: None
     """
@@ -108,9 +108,7 @@ def run_trnascan(
 
     pool.close()
     pool.join()
-    slice_output_to_gtf(
-        output_dir=trnascan_dir, unique_ids=True, file_extension=".trna.gtf"
-    )
+    slice_output_to_gtf(output_dir=trnascan_dir, unique_ids=True, file_extension=".trna.gtf")
     for gtf_file in trnascan_dir.glob("*.trna.gtf"):
         gtf_file.unlink()
 
@@ -178,10 +176,8 @@ def _multiprocess_trnascan(
         "--prefix",
         str(filter_prefix_file),
     ]
-    logger.info(
-        "tRNAscan-SE filter command: %s", " ".join(str(item) for item in filter_cmd)
-    )
-    subprocess.run(filter_cmd)#pylint:disable=subprocess-run-check
+    logger.info("tRNAscan-SE filter command: %s", " ".join(str(item) for item in filter_cmd))
+    subprocess.run(filter_cmd)  # pylint:disable=subprocess-run-check
     _create_trnascan_gtf(region_results, filter_output_file, region_name)
     output_file.unlink(missing_ok=True)
     slice_file.unlink(missing_ok=True)
@@ -192,9 +188,7 @@ def _multiprocess_trnascan(
     filter_output_file.unlink(missing_ok=True)
 
 
-def _create_trnascan_gtf(
-    region_results: Path, filter_output_file: Path, region_name: str
-) -> None:
+def _create_trnascan_gtf(region_results: Path, filter_output_file: Path, region_name: str) -> None:
     """
     Read the fasta file and save the content in gtf format
     All the genomic slices are collected in a single gtf output
@@ -232,11 +226,7 @@ def _create_trnascan_gtf(
                 if start > end:
                     strand = "-"
                     start, end = end, start
-                biotype = (
-                    "tRNA"
-                    if re.search(r"high confidence set", line)
-                    else "tRNA_pseudogene"
-                )
+                biotype = "tRNA" if re.search(r"high confidence set", line) else "tRNA_pseudogene"
                 transcript_string = (
                     f"{region_name}\ttRNAscan\ttranscript\t{start}\t{end}\t.\t"
                     f'{strand}\t.\tgene_id "{gene_counter}"; transcript_id '
@@ -253,46 +243,40 @@ def _create_trnascan_gtf(
                 gene_counter += 1
 
 
-class InputSchema(argschema.ArgSchema):
-    """Input arguments expected to run tRNAscan-SE."""
-
-    genome_file = argschema.fields.InputFile(
-        required=True, description="Genome file path"
-    )
-    trnascan_bin = argschema.fields.String(
-        required=False,
-        default="tRNAscan-SE",
-        description="tRNAscan-SE executable path",
-    )
-    trnascan_filter = argschema.fields.String(
-        required=False,
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="tRNAscan-SE's arguments")
+    parser.add_argument("--genome_file", required=True, help="Genome file path")
+    parser.add_argument("--trnascan_bin", default="tRNAscan-SE", help="tRNAscan-SE executable path")
+    parser.add_argument(
+        "--trnascan_filter",
         default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter",
-        description="tRNAscan-SE filter path",
+        help="tRNAscan-SE filter path",
     )
-    output_dir = argschema.fields.OutputDir(
-        required=True, description="Output directory path"
-    )
-    num_threads = argschema.fields.Integer(
-        required=False, default=1, description="Number of threads"
-    )
+    parser.add_argument("--output_dir", required=True, help="Output directory path")
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    return parser.parse_args()
 
 
-def main() -> None:
+def main():
     """tRNAscan-SE's entry-point."""
-    mod = argschema.ArgSchemaParser(schema_type=InputSchema)
-    log_file_path = create_dir(mod.args["output_dir"], "log") / "trnascan.log"
+    args = parse_args()
+
+    log_file_path = create_dir(args.output_dir, "log") / "trnascan.log"
     loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
+
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": str(log_file_path)},
         disable_existing_loggers=False,
     )
+
     run_trnascan(
-        mod.args["genome_file"],
-        mod.args["output_dir"],
-        mod.args["trnascan_bin"],
-        Path(mod.args["trnascan_filter"]),
-        mod.args["num_threads"],
+        args.genome_file,
+        args.output_dir,
+        args.trnascan_bin,
+        Path(args.trnascan_filter),
+        args.num_threads,
     )
 
 
