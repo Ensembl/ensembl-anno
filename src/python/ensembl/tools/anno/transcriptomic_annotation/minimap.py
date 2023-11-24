@@ -135,12 +135,12 @@ def run_minimap2(
             [paftools_bin, "splice2bed", sam_file], stdout=bed_file_out
             )  # pylint:disable=subprocess-run-check
 
-    bed_to_gtf(minimap2_dir)
+    _bed_to_gtf(minimap2_dir)
 
     logging.info("Completed running minimap2")
 
 
-def bed_to_gtf(output_dir: Path) -> None:
+def _bed_to_gtf(output_dir: Path) -> None:
     """
     Convert bed file into gtf file
     Args:
@@ -160,7 +160,7 @@ def bed_to_gtf(output_dir: Path) -> None:
                     # sizes of individual block of exons
                     block_sizes = [size for size in elements[10].split(",") if size]
                     block_starts = [size for size in elements[11].split(",") if size]
-                    exons = bed_block_to_exons(block_sizes, block_starts, offset)
+                    exons = _bed_block_to_exons(block_sizes, block_starts, offset)
                     transcript_start = None
                     transcript_end = None
                     exon_records = []
@@ -189,7 +189,7 @@ def bed_to_gtf(output_dir: Path) -> None:
                     gene_id += 1
 
 
-def bed_block_to_exons(block_sizes: List, block_starts: List, offset: int) -> List:
+def _bed_block_to_exons(block_sizes: List, block_starts: List, offset: int) -> List:
     """
     Extract exon size and start from exon feature block
     Args:
