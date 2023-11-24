@@ -37,6 +37,7 @@ to install the project.
    install
    license
 
+   cmsearch
    cpg
    dust
    eponine
