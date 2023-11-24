@@ -100,8 +100,8 @@ maintainers = [
 # For an analysis of this field vs pip's requirements files see:
 # https://packaging.python.org/discussions/install-requires-vs-requirements/
 dependencies = [ # Optional
-#TOADD
-    "argschema",
+
+    "psutil",
 ]
 
 # List additional groups of dependencies here (e.g. development
@@ -144,6 +144,7 @@ run_red = "ensembl.tools.anno.repeat_annotation.red:main"
 run_eponine = "ensembl.tools.anno.simple_feature_annotation.eponine:main"
 run_cpg = "ensembl.tools.anno.simple_feature_annotation.cpg:main"
 run_trnascan = "ensembl.tools.anno.snc_rna_annotation.trnascan:main"
+run_cmsearch = "ensembl.tools.anno.snc_rna_annotation.cmsearch:main"
 run_genblast = "ensembl.tools.anno.protein_annotation.genblast:main"
 run_star = "ensembl.tools.anno.transcriptomic_annotation.star:main"
 run_minimap2 = "ensembl.tools.anno.transcriptomic_annotation.minimap:main"
