@@ -66,23 +66,22 @@ def run_cmsearch(
 ) -> None:
     """
     Search CM(s) against a Rfam database
-
-        :param genome_file : Genome file path.
+        :param genome_file: Genome file path.
         :type genome_file: PathLike
-        :param output_dir : Working directory path.
-        :type output_dir : Path
-        :param rfam_accessions : list of Rfam accessions.
-        :type rfam_accessions : Path
-        :param rfam_cm_db : Rfam database with cm models.
-        :type rfam_cm_db : Path
-        :param rfam_seed : Rfam seeds file.
-        :type rfam_seed : Path
-        :param cmsearch_bin : cmsearch software path.
-        :type cmsearch_bin : Path
+        :param output_dir: Working directory path.
+        :type output_dir: Path
+        :param rfam_accessions: list of Rfam accessions.
+        :type rfam_accessions: Path
+        :param rfam_cm_db: Rfam database with cm models.
+        :type rfam_cm_db: Path
+        :param rfam_seed: Rfam seeds file.
+        :type rfam_seed: Path
+        :param cmsearch_bin: cmsearch software path.
+        :type cmsearch_bin: Path
         :param rnafold_bin: RNAfold software path.
-        :type rnafold_bin : Path
-        :param num_threads : int, number of threads.
-        :type num_threads :int
+        :type rnafold_bin: Path
+        :param num_threads: number of threads.
+        :type num_threads:int
 
         :return: None
         :rtype: None
