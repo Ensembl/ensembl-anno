@@ -57,7 +57,7 @@ def run_minimap2(
         :type genome_file: Path
         :param minimap2_bin: Software path.
         :type minimap2_bin: Path, default minimap2
-        :param paftools_bin: Software path.
+        :param paftools_bin: Js path.
         :type paftools_bin: Path, default paftools.js
         :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.
         :type max_intron_length: int, default 100000
@@ -219,7 +219,7 @@ def parse_args():
     parser.add_argument("--long_read_fastq_dir", required=True, help="Long read directory path")
     parser.add_argument("--genome_file", required=True, help="Genome file path")
     parser.add_argument("--minimap2_bin", default="minimap2", help="Minimap2 software path")
-    parser.add_argument("--paftools_bin", default="paftools.js", help="Paftools software path")
+    parser.add_argument("--paftools_bin", default="paftools.js", help="Paftools js path")
     parser.add_argument("--max_intron_length", type=int, default=100000, help="The maximum intron length.")
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
     return parser.parse_args()
