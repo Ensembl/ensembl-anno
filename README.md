@@ -104,11 +104,35 @@ Infernal and its "cmsearch" tool are used for detecting sncRNAs in sequence data
 
 **Citation:** [Nawrocki et al., "Infernal 1.0: inference of RNA alignments"](https://academic.oup.com/bioinformatics/article/25/10/1335/270663)
 
+### RNAfold
+
+Calculate minimum free energy secondary structures and partition function of RNAs.
+
+**Citation:** [Lorenz, R., Bernhart, S. H., Höner Zu Siederdissen, C., Tafer, H., Flamm, C., Stadler, P. F., & Hofacker, I. L. (2011). ViennaRNA Package 2.0. Algorithms for Molecular Biology, 6, 26.](https://almob.biomedcentral.com/articles/10.1186/1748-7188-6-26)
+
 ### GenBlast
 
 GenBlast identifies homologous gene sequences in genomic databases. One of the key features of GenBlast is its flexibility to handle comparative genomics tasks and accurately identify homologs even when the sequences have undergone significant evolutionary changes. This capability makes it a valuable resource for researchers studying gene evolution, gene families, and gene function across diverse species.
 
-**Citation:** [She et al., "GenBlastA: enabling BLAST to identify homologous gene sequences"](https://pubmed.ncbi.nlm.nih.gov/18838612/)
+**Citation:** [https://blast.ncbi.nlm.nih.gov/Blast.cgi](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
+
+### convert2blastmask
+
+Convert masking information in lower-case masked FASTA input to file formats suitable for makeblastdb.
+
+**Citation:** [https://blast.ncbi.nlm.nih.gov/Blast.cgi](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
+
+### makeblastdb
+
+Application to create BLAST databases.
+
+**Citation:** [https://blast.ncbi.nlm.nih.gov/Blast.cgi](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
+
+### Minimap2
+
+Minimap2 is a general-purpose alignment program to map DNA or long mRNA sequences against a large reference database. 
+
+**Citation:** [Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics, 34(18), 3094-3100."](https://academic.oup.com/bioinformatics/article/34/18/3094/4994778)
 
 ### STAR
 
@@ -128,12 +152,17 @@ Scallop is a high-performance tool designed for the accurate and efficient quant
 
 **Citation:** [Shao et al., Accurate assembly of transcripts through phase-preserving graph decomposition.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5722698/)
 
+### Samtools
+
+Samtools is a suite of programs for interacting with high-throughput sequencing data in the SAM (Sequence Alignment/Map), BAM (Binary Alignment/Map), and CRAM (CRAM Compression Format) formats.
+
+**Citation:** [Li H., Handsaker B., Wysoker A., Fennell T., Ruan J., Homer N., Marth G., Abecasis G., Durbin R., and 1000 Genome Project Data Processing Subgroup.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2723002/)
+
+
 
 ## Usage
 
 Please refer to the individual software modules for specific instructions on how to use each tool. [Link to Documentation](docs/build/index.html)
-
-<iframe src="docs/index.html" width="100%" height="500px"></iframe>
 
 
 
