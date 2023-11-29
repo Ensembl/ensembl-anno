@@ -1,0 +1,29 @@
+[[[        rfam_dbname = config["cmsearch"]["rfam_dbname"]  "rfam_dbname" : "Rfam",
+rfam_user = config["cmsearch"]["rfam_user"] "rfam_user" : "rfamro",
+rfam_host = config["cmsearch"]["rfam_host"] "rfam_host" : "mysql-rfam-public.ebi.ac.uk",
+rfam_port = config["cmsearch"]["rfam_port"] "rfam_port" : "4497",
+#  rfam_accession_query_cmd = ["mysql -h", rfam_host,"-u",rfam_user,
+# "-P",rfam_port,"-NB -e",rfam_dbname,"'select rfam_acc FROM (SELECT DISTINCT
+# f.rfam_acc, f.rfam_id, f.type, f.description, f.gathering_cutoff,
+# f.trusted_cutoff FROM full_region fr, rfamseq rf, taxonomy tx, family f WHERE
+# rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc AND fr.rfamseq_acc = rf.rfamseq_acc
+# AND LOWER(tx.tax_string) LIKE \'%" + clade + "%\' AND (f.type LIKE \'%snRNA%\'
+# OR f.type LIKE \'%rRNA%\' OR LOWER(f.rfam_id) LIKE \'%rnase%\' OR
+# LOWER(f.rfam_id) LIKE \'%vault%\' OR LOWER(f.rfam_id) LIKE \'%y_rna%\'
+# OR f.rfam_id LIKE \'%Metazoa_SRP%\') AND is_significant = 1) AS TEMP
+# WHERE rfam_id NOT LIKE \'%bacteria%\' AND rfam_id NOT LIKE \'%archaea%\'
+# AND rfam_id NOT LIKE \'%microsporidia%\';'"]
+
+# mysql -hmysql-rfam-public.ebi.ac.uk -urfamro -P4497 Rfam -NB -e "select rfam_acc
+# FROM (SELECT DISTINCT f.rfam_acc, f.rfam_id, f.type, f.description,
+# f.gathering_cutoff, f.trusted_cutoff FROM full_region fr, rfamseq rf,
+# taxonomy tx, family f WHERE rf.ncbi_id = tx.ncbi_id AND f.rfam_acc = fr.rfam_acc
+# AND fr.rfamseq_acc = rf.rfamseq_acc AND LOWER(tx.tax_string) LIKE '%insect%' AND
+# (f.type LIKE '%snRNA%' OR f.type LIKE '%rRNA%' OR LOWER(f.rfam_id) LIKE '%rnase%'
+# OR LOWER(f.rfam_id) LIKE '%vault%' OR LOWER(f.rfam_id) LIKE '%y_rna%'
+# OR f.rfam_id LIKE '%Metazoa_SRP%') AND is_significant = 1) AS TEMP WHERE rfam_id NOT
+# LIKE '%bacteria%' AND rfam_id NOT LIKE '%archaea%' AND rfam_id NOT LIKE '%microsporidia%';"
+
+# rfam_accession_file = '/hps/nobackup2/production/ensembl/fergal/production/
+# test_runs/non_verts/butterfly/rfam_insect_ids.txt'
+# rfam_accession_file = os.path.join(main_output_dir,'rfam_accessions.txt')
