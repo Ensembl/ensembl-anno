@@ -86,7 +86,7 @@ def run_cmsearch(
         :param rnafold_bin: RNAfold software path.
         :type rnafold_bin: Path
         :param num_threads: number of threads.
-        :type num_threads:int
+        :type num_threads: int
 
         :return: None
         :rtype: None
