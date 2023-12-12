@@ -29,7 +29,6 @@ Bioinformatics, 25(10), 1335-1337.
 __all__ = ["run_cmsearch"]
 
 import argparse
-import io
 import logging
 import logging.config
 import multiprocessing
@@ -39,7 +38,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Any, Union
 import psutil
 
 from ensembl.tools.anno.utils._utils import (
@@ -59,12 +58,8 @@ def run_cmsearch(
     genome_file: PathLike,
     output_dir: Path,
     rfam_accession_file: Path,
-    rfam_cm_db: Path = Path(
-        "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm"
-    ),
-    rfam_seeds_file: Path = Path(
-        "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed"
-    ),
+    rfam_cm_db: Path = Path("/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm"),
+    rfam_seeds_file: Path = Path("/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed"),
     cmsearch_bin: Path = Path("cmsearch"),
     rnafold_bin: Path = Path("RNAfold"),
     num_threads: int = 1,
@@ -75,7 +70,7 @@ def run_cmsearch(
         :type genome_file: PathLike
         :param output_dir: Working directory path.
         :type output_dir: Path
-        :param rfam_accessions: list of Rfam accessions.
+        :param rfam_accessions: List of Rfam accessions.
         :type rfam_accessions: Path
         :param rfam_cm_db: Rfam database with cm models.
         :type rfam_cm_db: Path
@@ -85,7 +80,7 @@ def run_cmsearch(
         :type cmsearch_bin: Path
         :param rnafold_bin: RNAfold software path.
         :type rnafold_bin: Path
-        :param num_threads: number of threads.
+        :param num_threads: Number of threads.
         :type num_threads: int
 
         :return: None
@@ -110,7 +105,7 @@ def run_cmsearch(
     with open(rfam_cm_db, "r") as rfam_cm_in:
         rfam_data = rfam_cm_in.read()
 
-    rfam_models = rfam_data.split("//\n")#get a chunck containing a model
+    rfam_models = rfam_data.split("//\n")  # get a chunck containing a model
     with open(rfam_selected_models_file, "w+") as rfam_cm_out:
         for model in rfam_models:
             # The Rfam.cm file has INFERNAL and HMMR models, both are needed at this point
@@ -126,9 +121,7 @@ def run_cmsearch(
 
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(
-        seq_region_to_length, slice_size=100000, overlap=0, min_length=5000
-    )
+    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=100000, overlap=0, min_length=5000)
 
     cmsearch_cmd = [
         str(cmsearch_bin),
@@ -153,8 +146,7 @@ def run_cmsearch(
                 rfam_selected_models_file,
                 cm_models,
                 seed_descriptions,
-                rnafold_bin
-                # memory_limit,
+                rnafold_bin,
             ),
         )
     pool.close()
@@ -169,8 +161,8 @@ def run_cmsearch(
         seed_descriptions,
     )
     slice_output_to_gtf(output_dir=rfam_dir, unique_ids=True, file_extension=".rfam.gtf")
-    #for gtf_file in rfam_dir.glob("*.rfam.gtf"):
-    #    gtf_file.unlink()
+    for gtf_file in rfam_dir.glob("*.rfam.gtf"):
+        gtf_file.unlink()
 
 
 def _handle_failed_jobs(
@@ -187,7 +179,7 @@ def _handle_failed_jobs(
     Args:
         rfam_dir (Path): Rfam output dir.
         cmsearch_cmd (List): Cmsearch command.
-        genome_file (PathLike): Genome softamsked file.
+        genome_file (PathLike): Genome softmasked file.
         rfam_selected_models_file (Path): Rfam model file.
         cm_models (dict): Metrics of Rfam models.
         seed_descriptions (dict): Rfam seed models file.
@@ -208,7 +200,6 @@ def _handle_failed_jobs(
     num_cores = min(available_cores, available_memory // memory_per_core)
     pool = multiprocessing.Pool(num_cores)  # pylint: disable=consider-using-with
     for exception_file in exception_file_list:
-        # exception_file_name = os.path.basename(exception_file_path)
         logger.info("Running himem job for failed region:%s\n", exception_file)
         match = re.search(r"(.+)\.rs(\d+)\.re(\d+)\.", exception_file.name)
         if match:
@@ -256,7 +247,7 @@ def _get_rfam_seed_descriptions(rfam_seeds_file: PathLike) -> Dict[str, Dict[str
 
         if matches:
             key, value = matches[0]
-            logger.info("rfam seed %s %s %s", key,value, matches)
+            # logger.info("rfam seed %s %s %s", key,value, matches)
             if key == "AC":
                 domain = value
                 descriptions[domain] = {}
@@ -269,45 +260,6 @@ def _get_rfam_seed_descriptions(rfam_seeds_file: PathLike) -> Dict[str, Dict[str
             elif key == "TP":
                 assert domain is not None, "Domain should not be None at this point."
                 descriptions[domain]["type"] = value
-
-    """
-    # pylint: disable=W0105
-    TO DELETE IF THE ABOVE CODE WORKS #pylint: disable=pointless-string-statement
-    # pylint: disable=W0105
-        domain_match = re.search(
-            r"^\\#=GF AC   (.+)", seed # pylint: disable=anomalous-backslash-in-string
-        )
-        if domain_match:
-            domain = domain_match.group(1)
-            descriptions[domain] = {}
-            continue
-
-        description_match = re.search(
-            r"^\\#=GF DE   (.+)", seed #pylint:disable=anomalous-backslash-in-string
-        )  # pylint: disable =anomalous-backslash-in-string
-        if description_match:
-            description = description_match.group(1)
-            descriptions[domain]["description"] = description
-            continue
-
-        name_match = re.search(
-            "^\\#=GF ID   (.+)", seed #pylint:disable=anomalous-backslash-in-string
-        )  # pylint: disable =anomalous-backslash-in-string
-        if name_match:
-            name = name_match.group(1)
-            descriptions[domain]["name"] = name
-            continue
-
-        type_match = re.search(
-            "^\\#=GF TP   Gene; (.+)", seed #pylint:disable=anomalous-backslash-in-string
-        )  # pylint: disable =anomalous-backslash-in-string
-        if type_match:
-            rfam_type = type_match.group(1)
-            descriptions[domain]["type"] = rfam_type
-            continue
-            """
-    for key, value in descriptions.items():
-                        print(f"{key}: {value}")        
     return descriptions
 
 
@@ -315,18 +267,15 @@ def _extract_rfam_metrics(rfam_selected_models: PathLike) -> Dict[str, Dict[str,
     """Get name, description, length, max length, threshold of each Rfam model.
 
     Args:
-        rfam_selected_models_file (PathLike): Path for Rfam models.
+        rfam_selected_models_file : Path for Rfam models.
 
     Returns:
-        parsed_cm_data: disctionary with Rfam metrics.
+        parsed_cm_data: Rfam metrics.
     """
     with open(rfam_selected_models, "r") as rfam_cm_in:
         rfam_models = rfam_cm_in.read().split("//\n")
-
-        # rfam_models = rfam_data.split("//\n")
         parsed_cm_data: Dict[str, Dict[str, Any]] = {}
         for model in rfam_models:
-            # temp = model.split("\n")
             model_name_match = re.search(r"NAME\s+(\S+)", model)
             match_infernal = re.search(r"INFERNAL", model)
             if model_name_match and match_infernal:
@@ -345,44 +294,8 @@ def _extract_rfam_metrics(rfam_selected_models: PathLike) -> Dict[str, Dict[str,
                         match = re.search(pattern, line)
                         if match:
                             parsed_cm_data[model_name][value_type] = match.group(1)
-                            #logger.info("_extract_rfam_metrics %s", parsed_cm_data[model_name][value_type] )
-                            #for key, value in parsed_cm_data[model_name].items():
-                            #    print(f"{key}: {value}")
                             continue
-                """ TO DELETE IF ABOVE SOLUTION WORKS
-                for line in model.split("\n"):
-                    name_match = re.search("^NAME\\s+(\\S+)", line)
-                    if name_match:
-                        parsed_cm_data[model_name]["-name"] = name_match.group(1)
-                        continue
 
-                    description_match = re.search(r"^DESC\\s+(\\S+)", line) #pylint: disable=anomalous-backslash-in-string
-                    if description_match:
-                        parsed_cm_data[model_name]["-description"] = description_match.group(
-                            1
-                        )
-                        continue
-
-                    length_match = re.search(r"^CLEN\\s+(\\d+)", line) #pylint:disable=anomalous-backslash-in-string
-                    if length_match:
-                        parsed_cm_data[model_name]["-length"] = length_match.group(1)
-                        continue
-
-                    max_length_match = re.search(r"^W\\s+(\\d+)", line) #pylint:disable=anomalous-backslash-in-string
-                    if max_length_match:
-                        parsed_cm_data[model_name]["-maxlength"] = max_length_match.group(1)
-                        continue
-
-                    accession_match = re.search(r"^ACC\\s+(\\S+)", line) #pylint:disable=anomalous-backslash-in-string
-                    if accession_match:
-                        parsed_cm_data[model_name]["-accession"] = accession_match.group(1)
-                        continue
-
-                    threshold_match = re.search(r"^GA\\s+(\\d+)", line) #pylint:disable=anomalous-backslash-in-string
-                    if threshold_match:
-                        parsed_cm_data[model_name]["-threshold"] = threshold_match.group(1)
-                        continue
-                        """
     return parsed_cm_data
 
 
@@ -398,14 +311,14 @@ def _multiprocess_cmsearch(
 ) -> None:
     """Run cmsearch on multiprocess on genomic slices
     Args:
-        cmsearch_cmd (List): Cmsearch command to execute.
+        cmsearch_cmd : Cmsearch command to execute.
         slice_id: List of slice IDs.
-        genome_file (PathLike): Genome softamsked file.
-        rfam_dir (Path): Rfam output dir.
-        rfam_selected_models_file (Path): Rfam model file.
-        cm_models (dict): Metrics of Rfam models.
-        seed_descriptions (dict): Rfam seed models file.
-        rnafold_bin: RNAfold software path.
+        genome_file : Genome softamsked file.
+        rfam_dir : Rfam output dir.
+        rfam_selected_models_file : Rfam model file.
+        cm_models : Metrics of Rfam models.
+        seed_descriptions : Rfam seed models file.
+        rnafold_bin : RNAfold software path.
     """
     region_name, start, end = slice_id
     logger.info(
@@ -416,11 +329,8 @@ def _multiprocess_cmsearch(
     )
     seq = get_sequence(region_name, int(start), int(end), 1, genome_file, rfam_dir)
     slice_name = f"{region_name}.rs{start}.re{end}"
-    # I NEED TO SEE THE OUTPUT TO SET BIOTYPES
-    # with tempfile.TemporaryDirectory(dir=rfam_dir) as tmpdirname:
     slice_file = rfam_dir / f"{slice_name}.fa"
 
-    print("EEEEEEE %s", slice_file)
     with open(slice_file, "w+", encoding="utf8") as region_out:
         region_out.write(f">{region_name}\n{seq}\n")
     region_tblout = rfam_dir / f"{slice_name}.tblout"
@@ -429,29 +339,16 @@ def _multiprocess_cmsearch(
     cmsearch_cmd.append(str(region_tblout))
     cmsearch_cmd.append(str(rfam_selected_models_file))
     cmsearch_cmd.append(str(slice_file))
-    logger.info("MULTIPROCESScmsearch_cmd: %s", cmsearch_cmd)
     logger.info(" ".join(cmsearch_cmd))
-    # to TEST
     # if memory_limit is not None:
     #    cmsearch_cmd = prlimit_command(cmsearch_cmd, memory_limit)
-    logger.info(region_tblout)
     return_value = None
-    # with open(region_tblout, "w+", encoding="utf8") as cmsearch_out:
-     
     try:
         return_value = subprocess.check_output(
             cmsearch_cmd,
             stderr=subprocess.STDOUT,
             text=True,
         )
-        logger.info("AAAAAAAcmsearch output: ")
-        #with open(region_tblout, "w+", encoding="utf8") as cmsearch_out:
-        #   return_value= subprocess.run(cmsearch_cmd, stdout=cmsearch_out, check=True)
-        logger.info("AAAAAAAcmsearch output: %s", return_value)
-    #except Exception as ex:
-    #    logger.error("Error during cmsearch execution: %s", ex)
-    #    return
-
     except subprocess.CalledProcessError as ex:
         # Note that writing to file was the only option here.
         # If return_value was passed back, eventually it would clog the
@@ -470,13 +367,9 @@ def _multiprocess_cmsearch(
         region_results.unlink()
         region_tblout.unlink()
         raise ex  # Re-raise the exception to allow caller to handle it further if needed
-        #return
-    
-    logger.info("_parse_rfam_tblout")
+
     initial_table_results = _parse_rfam_tblout(region_tblout, region_name)
-    logger.info("_remove_rfam_overlap")
     unique_table_results = _remove_rfam_overlap(initial_table_results)
-    logger.info("_filter_rfam_results")
     filtered_table_results = _filter_rfam_results(unique_table_results, cm_models)
     _create_rfam_gtf(
         filtered_table_results,
@@ -488,16 +381,11 @@ def _multiprocess_cmsearch(
         rfam_dir,
         rnafold_bin,
     )
-    # os.remove(slice_file)
-    # os.remove(region_tblout_file_path)
-    # gc.collect()
     region_results.unlink()
     region_tblout.unlink()
 
 
-def _parse_rfam_tblout(
-    region_tblout: Path, region_name: str
-) -> List[Dict[str, Any]]:
+def _parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, Any]]:
     """Parse cmsearch output
     col 0 Target Name : This is the name of the target sequence or sequence region that matched the query.
     col 2 Query name : This is the name of the query sequence or model that was used for the search.
@@ -537,15 +425,11 @@ def _parse_rfam_tblout(
                 "query_name": str(hit[2]),
                 "score": str(hit[14]),
             }
-            logger.info("parsed_tbl_data %s", hit)
             all_parsed_results.append(parsed_tbl_data)
-    logger.info("parser data %s %d", region_tblout, len(all_parsed_results))
     return all_parsed_results
 
 
-def _remove_rfam_overlap(
-    parsed_tbl_data: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def _remove_rfam_overlap(parsed_tbl_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Remove Rfam mdoels overlapping and with a lower score.
 
@@ -556,70 +440,49 @@ def _remove_rfam_overlap(
         Final Rfam models
     """
     excluded_structures = {}
-    chosen_structures : List[Dict[str, Any]] = []
+    chosen_structures: List[Dict[str, Any]] = []
     for structure_x in parsed_tbl_data:
         chosen_structure = structure_x
         structure_x_start = int(structure_x["start"])
         structure_x_end = int(structure_x["end"])
         structure_x_score = float(structure_x["score"])
         structure_x_accession = structure_x["accession"]
-        structure_x_string = f"{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
+        structure_x_string = (
+            f"{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
+        )
         for structure_y in parsed_tbl_data:
             structure_y_start = int(structure_y["start"])
             structure_y_end = int(structure_y["end"])
             structure_y_score = float(structure_y["score"])
             structure_y_accession = structure_y["accession"]
-            structure_y_string = f"{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
+            structure_y_string = (
+                f"{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
+            )
             if structure_y_string in excluded_structures:
                 continue
-            if (
-                structure_x_start <= structure_y_end
-                and structure_x_end >= structure_y_start
-            ):
+            if structure_x_start <= structure_y_end and structure_x_end >= structure_y_start:
                 if structure_x_score < structure_y_score:
                     chosen_structure = structure_y
                     excluded_structures[structure_x_string] = 1
                 else:
                     excluded_structures[structure_y_string] = 1
         chosen_structures.append(chosen_structure)
-    logger.info("end of excluded sequences %d", len(chosen_structures))
     return chosen_structures
 
 
 def _filter_rfam_results(
     unfiltered_tbl_data: List[Dict[str, Any]], cm_models: Dict[str, Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     """Filter Rfam models according to type and a set of thresholds.
 
     Args:
-        unfiltered_tbl_data (List[Dict[str, Union[str, int]]]): Unfiltered Rfam output.
-        cm_models (Dict): Rfam models.
+        unfiltered_tbl_data : Unfiltered Rfam output.
+        cm_models : Rfam models.
 
     Returns:
-        List: List of filtered models
+        filtered_results: List of filtered models
     """
-
-    """
-    for structure in unfiltered_tbl_data:
-        query = structure["query_name"]
-        if query in cm_models:
-            threshold = cm_models[query]["-threshold"]
-            if query == "LSU_rRNA_eukarya":
-                threshold = 1700
-            elif query == "LSU_rRNA_archaea":
-                continue
-            elif query == "LSU_rRNA_bacteria":
-                continue
-            elif query == "SSU_rRNA_eukarya":
-                threshold = 1600
-            elif query == "5_8S_rRNA":
-                threshold = 85
-            elif query == "5S_rRNA":
-                threshold = 75
-            if threshold and float(structure["score"]) >= float(threshold):
-                filtered_results.append(structure)
-                """
-    filtered_results : List[Dict[str, Any]] = []
+    filtered_results: List[Dict[str, Any]] = []
     thresholds = {
         "LSU_rRNA_eukarya": 1700,
         "SSU_rRNA_eukarya": 1600,
@@ -631,9 +494,7 @@ def _filter_rfam_results(
         if query in ["LSU_rRNA_archaea", "LSU_rRNA_bacteria"]:
             threshold = cm_models.get(str(query), {}).get("-threshold")
         else:
-            threshold = thresholds.get(
-                str(query), cm_models.get(str(query), {}).get("-threshold")
-            )
+            threshold = thresholds.get(str(query), cm_models.get(str(query), {}).get("-threshold"))
         if threshold is not None and float(structure["score"]) >= float(threshold):
             logger.info("filtera rfam results %s", structure)
             filtered_results.append(structure)
@@ -651,7 +512,7 @@ def _filter_rfam_results(
 
 
 def _create_rfam_gtf(
-    filtered_results: List[Dict[str,Any]],
+    filtered_results: List[Dict[str, Any]],
     cm_models: Dict[str, Dict[str, Any]],
     seed_descriptions: Dict[str, Dict[str, Any]],
     region_name: str,
@@ -674,75 +535,35 @@ def _create_rfam_gtf(
     """
     if not filtered_results:
         return
-    logger.info(" sono a 635 %s", region_results)
-    """
+
     biotype_type_mapping = {
-                r"snRNA;": "snRNA",
-                r"snRNA; snoRNA": "snoRNA",
-                r"snRNA; snoRNA; scaRNA;": "scaRNA",
-                r"rRNA;": "rRNA",
-                r"antisense;": "antisense",
-                r"antitoxin;": "antitoxin",
-                r"ribozyme;": "ribozyme",
-            }
-            """
-    biotype_type_mapping = {
-    r"snRNA; snoRNA; scaRNA": "scaRNA",
-    r"snRNA; snoRNA": "snoRNA",
-    r"snRNA": "snRNA",
-    r"rRNA;": "rRNA",
-    r"antisense;": "antisense",
-    r"antitoxin;": "antitoxin",
-    r"ribozyme;": "ribozyme"
+        r"snRNA; snoRNA; scaRNA": "scaRNA",
+        r"snRNA; snoRNA": "snoRNA",
+        r"snRNA": "snRNA",
+        r"rRNA;": "rRNA",
+        r"antisense;": "antisense",
+        r"antitoxin;": "antitoxin",
+        r"ribozyme;": "ribozyme",
     }
     biotype_name_mapping = {
-                r"Vault": "Vault_RNA",
-                r"Y_RNA": "Y_RNA",
-                r"^RNaseP": "RNase_P_RNA",
-                r"^RNase_M" : "RNase_MRP_RNA"
-            }
+        r"Vault": "Vault_RNA",
+        r"Y_RNA": "Y_RNA",
+        r"^RNaseP": "RNase_P_RNA",
+        r"^RNase_M": "RNase_MRP_RNA",
+    }
     with open(region_results, "w+") as rfam_gtf_out:
         gene_counter = 1
         for structure in filtered_results:
             query = structure["query_name"]
             accession = structure["accession"]
-            logger.info("query %s accession %s", query, accession)
-            #matching_models = [cm_model for cm_model in cm_models if cm_model.get("name") == query]
-            #Each key in matching_models corresponds to a model name, and the value is the dictionary representing that specific model.
-            #matching_models = {key: value for key, value in cm_models.items() if value.get("name") == query}
-            #if query in matching_models:
             if query in cm_models:
-                #model = matching_models[query]
-                model = cm_models[query]
-                logger.info ("found matching_models")
-                #for  cm_model in cm_models:
-                #    if query == cm_model.get("name"):
-                #if query in cm_models["name"]:
-                #        model = cm_model
-                #matching_descriptions = [accession in seed_description for seed_description in seed_descriptions]
-             #if accession in matching_descriptions:
+                model = cm_models[query] # pylint: disable=unused-variable
                 description = seed_descriptions.get(accession, {})
                 rfam_type = description.get("type", "misc_RNA")
-
-                logger.info("rfam_type %s", rfam_type)
-                #if accession in seed_descriptions:
-                    #description =  matching_descriptions[accession]
-                    #description = seed_descriptions.get(accession)
-                #if accession in seed_descriptions:
-                #    description = seed_descriptions[accession]
-                            #rfam_name = seed_descriptions[accession]["name"]
-                            #logger.info("seed description rfam name %s", rfam_name)
-                    #if "type" in description:
-                    #    rfam_type = description["type"]
-                    #    logger.info("rfam_type %s", rfam_type)
-                    #else:
-                    #    description = {}
-                    #    rfam_type = "misc_RNA"
                 domain = structure["query_name"]
-                #padding = model["-length"]
+                # padding = model["-length"]
                 gtf_strand = structure["strand"]
                 rnafold_strand = structure["strand"]
-
                 if gtf_strand == 1:
                     start = structure["start"]
                     end = structure["end"]
@@ -759,12 +580,8 @@ def _create_rfam_gtf(
                 match_found = False
                 # Check each pattern and update biotype if a match is found
                 for pattern, mapped_biotype in biotype_type_mapping.items():
-                    #logger.info("pattern, mapped_biotype in biotype_type_mapping.items %s",pattern)
-                    logger.info("Trying pattern:%s", pattern)
-                    logger.info("rfam_type:%s", rfam_type)
                     if re.search(pattern, str(rfam_type)):
                         biotype = mapped_biotype
-                        logger.info("biotype_type_mapping %s", biotype)
                         match_found = True
                         break  # Break out of the loop once a match is found
                 # If no match is found, check matches in biotype_name_mapping
@@ -773,47 +590,15 @@ def _create_rfam_gtf(
                     for pattern, mapped_biotype in biotype_name_mapping.items():
                         if re.search(pattern, domain):
                             biotype = mapped_biotype
-                            logger.info("biotype_name_mapping %s", biotype)
                             match_found = True
                             break  # Break out of the loop once a match is found
-                # If no match is found, check for "RNaseP" using regex
-                # if not match_found:
-                #    if re.findall(r'\b\w*RNaseP\w*\b', text, flags=re.IGNORECASE):
-                #        biotype = re.findall(r'\b\w*RNaseP\w*\b', text, flags=re.IGNORECASE)
-
-                # TO DELETE IF ABOVE WORKS
-                """
-                biotype = "misc_RNA"
-                if re.match(r"^snRNA;", rfam_type):
-                    biotype = "snRNA"
-                if re.match(r"^snRNA; snoRNA", rfam_type):
-                    biotype = "snoRNA"
-                if re.match(r"^snRNA; snoRNA; scaRNA;", rfam_type):
-                    biotype = "scaRNA"
-                if re.match(r"rRNA;", rfam_type):
-                    biotype = "rRNA"
-                if re.match(r"antisense;", rfam_type):
-                    biotype = "antisense"
-                if re.match(r"antitoxin;", rfam_type):
-                    biotype = "antitoxin"
-                if re.match(r"ribozyme;", rfam_type):
-                    biotype = "ribozyme"
-                    
-                    
-                if re.match(r"" + domain, rfam_type):
-                    biotype = domain
-                if re.match(r"" + domain, rfam_type):
-                    biotype = "Vault_RNA"
-                if re.match(r"" + domain, rfam_type):
-                    biotype = "Y_RNA"
-                """
                 rna_seq = get_sequence(
-                region_name,
-                int(start),
-                int(end),
-                int(rnafold_strand),
-                genome_file,
-                rfam_dir,
+                    region_name,
+                    int(start),
+                    int(end),
+                    int(rnafold_strand),
+                    genome_file,
+                    rfam_dir,
                 )
                 valid_structure = check_rnafold_structure(rna_seq, rfam_dir, rnafold_bin)
 
@@ -854,16 +639,13 @@ def _create_rfam_gtf(
                     + biotype  # pylint: disable=undefined-loop-variable
                     + '";\n'
                 )
-                logger.info("transcript final %s", transcript_string)
-                logger.info("exon final %s", exon_string)
+
                 rfam_gtf_out.write(transcript_string)
                 rfam_gtf_out.write(exon_string)
                 gene_counter += 1
 
 
-def check_rnafold_structure(
-    seq: str, rfam_dir: Path, rnafold_bin: Path = Path("RNAfold")
-) -> float:
+def check_rnafold_structure(seq: str, rfam_dir: Path, rnafold_bin: Path = Path("RNAfold")) -> Union[float, None]:
     """RNAfold reads RNA sequences, calculates their minimum free energy (mfe)
        structure and prints the mfe structure in bracket notation and its free energy.
 
@@ -881,30 +663,26 @@ def check_rnafold_structure(
     # for loading into an Ensembl db
     free_energy_score = None
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w+t", delete=False, dir=rfam_dir
-        ) as rna_temp_in:
+        with tempfile.NamedTemporaryFile(mode="w+t", delete=False, dir=rfam_dir) as rna_temp_in:
             rna_temp_in.writelines(">seq1\n" + seq + "\n")
             rna_in_file_path = rna_temp_in.name
-        logger.info("rnafold path file %s", rna_in_file_path)
-        rnafold_cmd = ["RNAfold", "--infile", str(rna_in_file_path)]
-        #rnafold_output = subprocess.Popen(rnafold_cmd, stdout=subprocess.PIPE)
-        #for line in io.TextIOWrapper(rnafold_output.stdout, encoding="utf-8"):
-        rnafold_output = subprocess.check_output(rnafold_cmd,stderr=subprocess.STDOUT,text=True,)
-        logger.info("rnafold_output = subprocess.check_output %s", rnafold_output)
+        rnafold_cmd = [str(rnafold_bin), "--infile", str(rna_in_file_path)]
+        rnafold_output = subprocess.check_output(
+            rnafold_cmd,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
         for line in rnafold_output.splitlines():
-            logger.info("RNAFOLD %s", line)
             match = re.search(r"([().]+)\s\(\s*(-*\d+.\d+)\)", line)
             if match:
-                structure = match.group(1)
-                free_energy_score = match.group(2)  #TOADD DAF
-                logger.info("rnafold match %s", free_energy_score)
+                structure = match.group(1) # pylint: disable=unused-variable
+                free_energy_score = float(match.group(2))  # TOADD DAF
                 break
     except (subprocess.CalledProcessError, OSError) as e:
         logging.error("Error while running RNAfold: %s", e)
     finally:
         #rna_in_file_path.unlink()
-        logger.info("FREE ENERGY %s", free_energy_score)
+        logger.info("FREE ENERGY %s", free_energy_score)    
     return free_energy_score
 
 
@@ -980,9 +758,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="RepeatMasker's arguments")
     parser.add_argument("--genome_file", required=True, help="Genome file path")
     parser.add_argument("--output_dir", required=True, help="Output directory path")
-    parser.add_argument(
-        "--rfam_accessions", required=True, help="List of Rfam accessions."
-    )
+    parser.add_argument("--rfam_accessions", required=True, help="List of Rfam accessions.")
     parser.add_argument(
         "--rfam_cm_db",
         default="/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm",
