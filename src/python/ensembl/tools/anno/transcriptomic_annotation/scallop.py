@@ -86,7 +86,7 @@ def run_scallop(
             transcript_file = scallop_dir / transcript_file_name
             if transcript_file.exists():
                 logging.info(
-                    "Found an existing stringtie gtf file, will not overwrite. \
+                    "Found an existing scallop gtf file, will not overwrite. \
                         File found: %s",
                     transcript_file,
                 )
