@@ -1,0 +1,11 @@
+dove metto il check transcriptomic?
+
+
+per nextflow il modulo puo' esporre pu functions ma dal main come le chiamo for se faccio import run _scallop e poi la definisco
+sui repeats splitto in seqs (processo) x ogni seq faccio andare un tool'
+dovrei fare andare un tool alla volta ? no in sequeneza il problema e' come 
+
+
+seq1 trigger x tool in parallel e poi da singolo tool metto in sequeneza steps
+
+

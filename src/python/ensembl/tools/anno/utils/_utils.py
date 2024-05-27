@@ -411,7 +411,7 @@ def load_results_to_ensembl_db(
     main_output_dir,
     db_details,
     num_threads,
-):
+    ):
     db_loading_script = os.path.join(
         main_script_dir, "support_scripts_perl", "load_gtf_ensembl.pl"
     )
@@ -645,7 +645,7 @@ def generic_load_records_to_ensembl_db(
     analysis_name,
     gtf_records,
     num_threads,
-):
+ ):
     pool = multiprocessing.Pool(int(num_threads))
     for record_batch in gtf_records:
         pool.apply_async(
@@ -675,7 +675,7 @@ def multiprocess_load_records_to_ensembl_db(
     load_type,
     analysis_name,
     record_batch,
-):
+    ):
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=output_dir
     ) as gtf_temp_out:
