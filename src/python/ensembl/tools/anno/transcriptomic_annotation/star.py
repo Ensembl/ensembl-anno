@@ -742,6 +742,7 @@ def main():
             args.subsample_percentage,
             args.sampling_via_read_limit,
             args.sampling_via_percentage,
+            args.sampling_via_read_limit_percentage,
             args.num_threads,
         )
     if args.run_trimming:
