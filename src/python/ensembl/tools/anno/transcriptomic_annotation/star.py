@@ -78,12 +78,12 @@ def run_star(  # pylint:disable=too-many-branches
         :type subsample_read_limit:int, default 100000000,
         :param subsample_percentage: Maximun percentage of reads to subsample.
         :type subsample_percentage: int, default 0.25,
-        :param sampling_via_read_limit: subsample fastq files using --subsample_read_limit.
-        :type sampling_via_read_limit : boolean, False,
-        :param sampling_via_percentage: subsample fastq files using --subsample_percentage.
-        :type sampling_via_percentage : boolean, False,
+        :param sampling_via_read_limit: subsample fastq files using subsample_read_limit.
+        :type sampling_via_read_limit: boolean, False,
+        :param sampling_via_percentage: subsample fastq files using subsample_percentage.
+        :type sampling_via_percentage: boolean, False,
         :param sampling_via_read_limit_percentage: use max read limit and  percentage value.
-        :type sampling_via_read_limit_percentage : boolean, False,
+        :type sampling_via_read_limit_percentage: boolean, False,
         :param num_threads: Number of available threads.
         :type num_threads: int, default 1
         :param star_bin: Software path.
