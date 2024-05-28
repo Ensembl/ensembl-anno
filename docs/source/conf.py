@@ -78,7 +78,12 @@ autodoc_default_options = {
     "undoc-members": False,
     "exclude-members": "__weakref__",
 }
-
+suppress_warnings = [
+    'docstring',
+    'ref.citation',       # Example: Suppress warnings about citations
+    'image.nonlocal_uri', # Example: Suppress warnings about non-local images
+    # Add other warnings to suppress as needed
+]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
