@@ -418,7 +418,7 @@ def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches
     else:
         raise FileNotFoundError("No fastq file found")
 
-    if fastq_file_1.suffix.endswith(".gz$"):
+    if fastq_file_1.suffix.endswith(".gz"):
         compressed = True
         num_lines = sum(1 for line in gzip.open(fastq_file_1))  # pylint:disable=consider-using-with
     else:
@@ -443,8 +443,8 @@ def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches
         )
         return
 
-    rand_list = random.sample(range(0, range_limit - 1), sampling_size)
-    random_indices = {idx * 4: 1 for idx in rand_list}
+    rand_list = random.sample(range(0, range_limit-1), sampling_size)
+    random_indices = [idx * 4 for idx in rand_list]
     logging.info("Processing paired files in parallel")
     if num_threads >= 2:
         pool = multiprocessing.Pool(int(num_threads))  # pylint:disable=consider-using-with
@@ -498,6 +498,29 @@ def _subsample_fastq_subset(
         compressed : the files is compressed
     """
     line_index = 0
+    read_block = []
+    with gzip.open(fastq_file, "rt") if compressed else open(fastq_file) as file_in, open(
+                    output_file, "w+"
+                        ) as file_out:
+        for line in file_in:
+            read_block.append(line)
+            if len(read_block) == 4:
+                if line_index in random_indices:
+                  file_out.writelines(read_block)
+                read_block = []
+                line_index += 4
+        #lines = [file_in.readline() for _ in range(4)]
+    """   
+       while lines[3]:
+                #lines = [file_in.readline() for _ in range(4)]
+                # Break if the end of the file is reached
+                if len(lines) < 4 :  # No more lines to read
+                    break
+                # Write to output if current index is in random_indices
+                if line_index in random_indices:
+                    file_out.writelines(lines)
+                line_index += 4
+                lines = [file_in.readline() for _ in range(4)]
 
     with gzip.open(fastq_file, "rt") if compressed else open(fastq_file) as file_in, open(
         output_file, "w+"
@@ -508,7 +531,7 @@ def _subsample_fastq_subset(
                 file_out.writelines(lines)
             line_index += 4
             lines = [file_in.readline() for _ in range(4)]
-
+    """
 
 def run_trimming(
     output_dir: Path,
@@ -609,9 +632,9 @@ def multiprocess_trim_galore(trim_galore_cmd: List, fastq_paired_files: List[Pat
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="STAR's arguments")
-    parser.add_argument("--genome_file", required=True, help="Genome file path")
-    parser.add_argument("--output_dir", required=True, help="Output directory path")
-    parser.add_argument("--short_read_fastq_dir", required=True, help="Short read directory path")
+    parser.add_argument("--genome_file",  help="Genome file path")
+    parser.add_argument("--output_dir",  help="Output directory path")
+    parser.add_argument("--short_read_fastq_dir",  help="Short read directory path")
     parser.add_argument(
         "--delete_pre_trim_fastq",
         action="store_true",
@@ -682,7 +705,6 @@ def parse_args():
     parser.add_argument(
         "--run_star",
         type=bool,
-        default=True,
         help="If True will run STAR alignment given an input dataset of fastq files.",
         required=False,
     )
