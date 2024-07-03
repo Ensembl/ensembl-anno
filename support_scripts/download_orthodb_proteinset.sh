@@ -21,18 +21,18 @@
 ## Update 1.4: -Improved handling of main download URL and orthoDB version needed for OrthoDB master file/data retreval
 ##             -Implement embedding of OrthoDB version into protein file names
 
-## Update 1.5 -Updated Rest Endpoint URLs (as of July 2024)
-
+## Update 1.5 - Updated Rest Endpoint URLs (as of July 2024)
+##            - Added trace logging to processing output
+##            - Improved variable declarations and use 
+##            - Subsituted wget for curl
 # https://data.orthodb.org/current/fasta?id=0at6231&species=6334,31234,34506,51031,6238,6239,6279,7209
 
 # Main input variable
 TAXID_CLADE=$1
 CWD_TMP=`readlink -f $PWD`
 DATE_RUN=$(date "+%d/%m/%Y" | sed 's/\//-/g')
-# PERL_SCRIPTS_DIR="../support_scripts_perl"
 PERL_SCRIPTS_DIR="$CWD_TMP/ensembl-anno/support_scripts_perl"
 PROCESSING_LOG="Trace.${DATE_RUN}.log"
-
 
 
 ## IMPORTANT URL - Which could be changed in a future OrthoDB update.... ##
