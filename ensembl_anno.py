@@ -1,3 +1,4 @@
+
 # pylint: disable=logging-not-lazy, invalid-name, missing-function-docstring, subprocess-run-check, unused-variable, redefined-outer-name, too-many-arguments, too-many-locals, too-many-branches, too-many-statements, unused-argument, no-else-return, undefined-variable, no-else-continue, no-else-raise, missing-docstring, consider-swap-variables, consider-using-in, too-many-lines, unused-import
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
@@ -2403,7 +2404,7 @@ def bed_to_exons(block_sizes, block_starts, offset):
     return exons
 
 
-def check_transcriptomic_output(main_output_dir):
+def check_transcriptomic_output(main_output_dir, min_transcriptomic_reads=100000):
 
     # This will check across the various transcriptomic
     # dirs and check there's actually some data
@@ -2413,7 +2414,7 @@ def check_transcriptomic_output(main_output_dir):
         "minimap2_output",
     ]
     total_lines = 0
-    min_lines = 100000
+    min_lines = min_transcriptomic_reads 
     for transcriptomic_dir in transcriptomic_dirs:
         full_file_path = os.path.join(
             main_output_dir, transcriptomic_dir, "annotation.gtf"
@@ -4488,6 +4489,12 @@ if __name__ == "__main__":
         type=str,
         help="Specify species for repeatmasker (default homo)",
     )
+    parser.add_argument(
+        "--min_transcriptomic_reads",
+        type=int,
+        help="Specify a minimum threshold amount of valid transcriptomic reads (default = 100,000)",
+        default=100000,
+    )
     args = parser.parse_args()
 
     work_dir = args.output_dir
@@ -4553,6 +4560,7 @@ if __name__ == "__main__":
     delete_pre_trim_fastq = args.delete_pre_trim_fastq
     library = args.repeatmasker_library
     species = args.repeatmasker_species
+    min_transcriptomic_reads = args.min_transcriptomic_reads
 
     main_script_dir = os.path.dirname(os.path.realpath(__file__))
     # work_dir=glob.glob(work_dir)
@@ -4770,7 +4778,7 @@ if __name__ == "__main__":
         )
 
     if run_transcriptomic:
-        check_transcriptomic_output(work_dir)
+        check_transcriptomic_output(work_dir, min_transcriptomic_reads)
 
     #################################
     # Protein analyses
