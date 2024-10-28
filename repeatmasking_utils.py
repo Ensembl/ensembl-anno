@@ -71,6 +71,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     slice_ids = utils.create_slice_ids(
         seq_region_lengths, slice_size=1000000, overlap=0, min_length=5000
     )
+
     generic_repeatmasker_cmd = [
         repeatmasker_path,
         "-nolow",
@@ -88,6 +89,7 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
             generic_repeatmasker_cmd.extend(["-species", species])
     else:
         generic_repeatmasker_cmd.extend(["-lib", library])
+
     logger.info("Running RepeatMasker")
     pool = multiprocessing.Pool(num_threads)
     for slice_id in slice_ids:
@@ -106,8 +108,8 @@ def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
     utils.slice_output_to_gtf(
         str(repeatmasker_output_dir), ".rm.gtf", 1, "repeat_id", "repeatmask"
     )
-    for gtf_file in pathlib.Path(repeatmasker_output_dir).glob("*.rm.gtf"):
-        gtf_file.unlink()
+    #for gtf_file in pathlib.Path(repeatmasker_output_dir).glob("*.rm.gtf"):
+    #    gtf_file.unlink()
 
 
 def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
@@ -156,7 +158,7 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     create_repeatmasker_gtf(
         repeatmasker_output_file_path, region_results_file_path, region_name
     )
-
+    """
     repeatmasker_output_file_path.unlink()
     region_fasta_file_path.unlink()
     # if region_results_file_path.exists():
@@ -169,6 +171,33 @@ def multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         repeatmasker_log_file_path.unlink()
     if repeatmasker_cat_file_path.exists():
         repeatmasker_cat_file_path.unlink()
+    """
+
+# Function to find the repeat class based on the mappings
+def get_repeat_type(repeat_type):
+    mappings = {
+    r'^Low_Comp': 'Low complexity regions',
+    r'^LINE': 'Type I Transposons/LINE',
+    r'^SINE': 'Type I Transposons/SINE',
+    r'^DNA': 'Type II Transposons',
+    r'^LTR': 'LTRs',
+    r'^Other': 'Other repeats',
+    r'^Satelli': 'Satellite repeats',
+    r'^Simple': 'Simple repeats',
+    r'^Tandem': 'Tandem repeats',
+    r'^TRF': 'Tandem repeats',
+    r'^Waterman': 'Waterman',
+    r'^Recon': 'Recon',
+    r'^Tet_repeat': 'Tetraodon repeats',
+    r'^MaskRegion': 'Mask region',
+    r'^dust': 'Dust',
+    r'^Unknown': 'Unknown',
+    r'RNA$': 'RNA repeats'
+    }
+    for pattern, description in mappings.items():
+        if re.match(pattern, repeat_type):
+            return description
+    return "Unknown"  # Default if no match is found
 
 
 def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
@@ -189,8 +218,8 @@ def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
     SW    perc perc perc query    position in query matching repeat       position in repeat
     score div. del. ins. sequence begin end (left)  repeat   class/family begin end  (left)  ID
     """
-    with open(repeatmasker_output_file_path, "r") as repeatmasker_in, open(
-        region_results_file_path, "w+"
+    with open(repeatmasker_output_file_path, "r",encoding="utf8") as repeatmasker_in, open(
+        region_results_file_path, "w+",encoding="utf8"
     ) as repeatmasker_out:
         repeat_count = 1
         for line in repeatmasker_in:
@@ -208,6 +237,7 @@ def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
                 strand = results[8]
                 repeat_name = results[9]
                 repeat_class = results[10]
+                repeat_type = get_repeat_type(results[10])
                 if strand == "+":
                     repeat_start = results[11]
                     repeat_end = results[12]
@@ -220,7 +250,7 @@ def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
                     f"{region_name}\tRepeatMasker\trepeat\t{start}\t{end}\t.\t"
                     f"{strand}\t.\trepeat_id{repeat_count}; "
                     f'repeat_name "{repeat_name}"; repeat_class "{repeat_class}"; '
-                    f'repeat_start "{repeat_start}"; '
+                    f'repeat_type "{repeat_type}"; repeat_start "{repeat_start}"; '
                     f'repeat_end "{repeat_end}"; score "{score}";\n'
                 )
                 repeatmasker_out.write(gtf_line)

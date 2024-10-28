@@ -215,7 +215,31 @@ def load_results_to_ensembl_db(
             "Did not find a TRF annotation file, so not loading. Path checked:\n"
             + trf_results_gtf_file
         )
-
+    repeatmasker_results_gtf_file = os.path.join(main_output_dir, "repeatmasker_output", "annotation.gtf")
+    if os.path.exists(repeatmasker_results_gtf_file):
+        logger.info("Loading Repeatmasker repeats to db")
+        batch_size = 500
+        load_type = "single_line_feature"
+        analysis_name = "repeatmask_repbase_human"
+        gtf_records = batch_gtf_records(
+            repeatmasker_results_gtf_file, batch_size, db_loading_dir, load_type
+        )
+        generic_load_records_to_ensembl_db(
+            load_to_ensembl_db,
+            db_loading_script,
+            genome_file,
+            db_details,
+            db_loading_dir,
+            load_type,
+            analysis_name,
+            gtf_records,
+            num_threads,
+        )
+    else:
+        logger.error(
+            "Did not find a Repeatmasker annotation file, so not loading. Path checked:\n"
+            + repeatmasker_results_gtf_file
+        )
     cpg_results_gtf_file = os.path.join(main_output_dir, "cpg_output", "annotation.gtf")
     if os.path.exists(cpg_results_gtf_file):
         logger.info("Loading CpG islands to db")
