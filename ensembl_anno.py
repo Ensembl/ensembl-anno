@@ -48,6 +48,7 @@ def load_results_to_ensembl_db(
     main_output_dir,
     db_details,
     num_threads,
+    repeatmasker_analysis,
 ):
 
     db_loading_script = os.path.join(
@@ -220,7 +221,7 @@ def load_results_to_ensembl_db(
         logger.info("Loading Repeatmasker repeats to db")
         batch_size = 500
         load_type = "single_line_feature"
-        analysis_name = "repeatmask_repbase_human"
+        analysis_name = repeatmasker_analysis #"repeatmask_repbase_human"
         gtf_records = batch_gtf_records(
             repeatmasker_results_gtf_file, batch_size, db_loading_dir, load_type
         )
@@ -4512,6 +4513,12 @@ if __name__ == "__main__":
         type=str,
         help="Specify species for repeatmasker (default homo)",
     )
+    parser.add_argument(
+        "--repeatmasker_analysis",
+        type=str,
+        default="repeatmask_repbase_human",
+        help="Specify logic name for repeatmasker analysis (default repeatmask_repbase_human)",
+    )    
     args = parser.parse_args()
 
     work_dir = args.output_dir
@@ -4577,6 +4584,7 @@ if __name__ == "__main__":
     delete_pre_trim_fastq = args.delete_pre_trim_fastq
     library = args.repeatmasker_library
     species = args.repeatmasker_species
+    repeatmasker_analysis = args.repeatmasker_analysis
 
     main_script_dir = os.path.dirname(os.path.realpath(__file__))
     # work_dir=glob.glob(work_dir)
@@ -4865,6 +4873,7 @@ if __name__ == "__main__":
             work_dir,
             db_details,
             num_threads,
+            repeatmasker_analysis,
         )
 
 #  coallate_results(work_dir)
