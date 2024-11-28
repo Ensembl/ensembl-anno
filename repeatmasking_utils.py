@@ -24,17 +24,22 @@ import typing
 
 import utils
 
+
+_REPO_ROOT = pathlib.Path(__file__).parent
+
+
 logger = logging.getLogger(__name__)
-with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
+config_file = _REPO_ROOT / "config.json"
+with config_file.open("r") as f:
     config = json.load(f)
 
 
 def run_repeatmasker_regions(  # pylint: disable=too-many-arguments
-    genome_file: typing.Union[pathlib.Path, str],
+    genome_file: os.PathLike,
     repeatmasker_path: str,
     library: str,
     species: str,
-    main_output_dir: str,
+    main_output_dir: os.PathLike,
     num_threads: int,
 ):
     """
@@ -258,9 +263,9 @@ def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
 
 
 def run_dust_regions(
-    genome_file: typing.Union[pathlib.Path, str],
+    genome_file: os.PathLike,
     dust_path: str,
-    main_output_dir: str,
+    main_output_dir: os.PathLike,
     num_threads: int,
 ):
     """
@@ -396,9 +401,9 @@ def create_dust_gtf(
 
 
 def run_trf_repeats(  # pylint: disable=too-many-locals
-    genome_file: typing.Union[pathlib.Path, str],
+    genome_file: os.PathLike,
     trf_path: str,
-    main_output_dir: str,
+    main_output_dir: os.PathLike,
     num_threads: int,
 ):
     """
@@ -593,7 +598,7 @@ def create_trf_gtf(
 
 
 def run_red(
-    red_path: str, main_output_dir: str, genome_file: typing.Union[pathlib.Path, str]
+    red_path: str, main_output_dir: os.PathLike, genome_file: os.PathLike
 ):
     """
     Run Red on genome file

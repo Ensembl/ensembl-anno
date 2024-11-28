@@ -37,7 +37,12 @@ import repeatmasking_utils
 import simple_feature_utils
 import utils
 
-with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
+
+_REPO_ROOT = pathlib.Path(__file__).parent
+
+
+config_file = _REPO_ROOT / "config.json"
+with config_file.open("r") as f:
     config = json.load(f)
 
 
@@ -549,7 +554,7 @@ def run_trnascan_regions(
     utils.check_exe(trnascan_path)
     logger.info(trnascan_path)
     # check_exe(trnascan_filter_path)
-    check_file(trnascan_filter_path)
+    utils.check_file(trnascan_filter_path)
     logger.info(trnascan_filter_path)
 
     trnascan_output_dir = utils.create_dir(main_output_dir, "trnascan_output")
@@ -1465,22 +1470,12 @@ def run_genblast_align(
     else:
         logger.info("No gtf file, go on with the analysis")
 
-    genblast_output_file = os.path.join(genblast_dir, "genblast")
-
     asnb_file = masked_genome_file + ".asnb"
     logger.info("ASNB file: %s" % asnb_file)
 
-    if not os.path.exists("alignscore.txt"):
-        shutil.copy(
-            os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt", "./"
-        )
-    #        subprocess.run(
-    #            [
-    #                "cp",
-    #                os.environ["ENSCODE"] + "/ensembl-anno/support_files/alignscore.txt",
-    #                "./",
-    #            ]
-    #        )
+    alignscore_path = pathlib.Path().absolute() / "alignscore.txt"
+    if not alignscore_path.exists():
+        shutil.copyfile(_REPO_ROOT / "support_files" / "alignscore.txt", alignscore_path)
 
     if not os.path.exists(masked_genome_file):
         raise IOError("Masked genome file does not exist: %s" % masked_genome_file)
@@ -1760,7 +1755,7 @@ def run_makeblastdb(makeblastdb_path, masked_genome_file, asnb_file):
             "-mask_data",
             asnb_file,
             "-max_file_sz",
-            "10000000000",
+            "4000000000",
         ]
     )
     logger.info("Completed running makeblastdb")
@@ -3569,8 +3564,8 @@ def validate_coding_transcripts(
     subprocess.run(cpc2_cmd)
     cpc2_output_path = cpc2_output_path + ".txt"
 
-    check_file(rnasamba_output_path)
-    check_file(cpc2_output_path)
+    utils.check_file(rnasamba_output_path)
+    utils.check_file(cpc2_output_path)
 
     logger.info("diamond validation")
     diamond_results = None
@@ -4217,12 +4212,6 @@ def create_paired_paths(fastq_file_paths):
     return final_list
 
 
-def check_file(file_path):
-
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
-
-
 def coallate_results(main_output_dir):
 
     results_dir = utils.create_dir(main_output_dir, "results")
@@ -4252,6 +4241,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
+        default="",
         help="Path where the output and temp files will write to. \
         Uses current dir by default",
     )
@@ -4521,7 +4511,7 @@ if __name__ == "__main__":
     )    
     args = parser.parse_args()
 
-    work_dir = args.output_dir
+    work_dir = pathlib.Path(args.output_dir).absolute()
     genome_file = args.genome_file
     num_threads = args.num_threads
     # masked_genome_file = genome_file  # This will be updated later if Red is run
@@ -4587,17 +4577,12 @@ if __name__ == "__main__":
     repeatmasker_analysis = args.repeatmasker_analysis
 
     main_script_dir = os.path.dirname(os.path.realpath(__file__))
-    # work_dir=glob.glob(work_dir)
     if not os.path.exists(genome_file):
         raise IOError("File does not exist: %s" % genome_file)
 
-    if not work_dir:
-        work_dir = os.getcwd()
-        # work_dir=glob.glob(work_dir)
-
     # set up logger
-    log_file_path = pathlib.Path(work_dir) / "ensembl_anno.log"
-    loginipath = pathlib.Path(os.environ["ENSCODE"] + "/ensembl-anno/logging.conf")
+    log_file_path = work_dir / "ensembl_anno.log"
+    loginipath = _REPO_ROOT / "logging.conf"
     logging.config.fileConfig(
         loginipath,
         defaults={"logfilename": log_file_path},
@@ -4607,25 +4592,16 @@ if __name__ == "__main__":
     logger.propagate = False
 
     logger.info("work directory: %s" % work_dir)
-    if not os.path.exists(work_dir):
-        logger.info("Work dir does not exist, will create")
-        utils.create_dir(work_dir, None)
+    work_dir.mkdir(parents=True, exist_ok=True)
 
     if num_threads == 1:
         logger.info("Thread count is set to the default value 1; this might be slow.")
 
-    if os.path.exists(
-        os.path.join(work_dir, "red_output", "mask_output")
-    ) or os.path.join(work_dir, "red_output", "mask_output").endswith(".msk"):
-        red_genome_file = [
-            f
-            for f in os.listdir(os.path.join(work_dir, "red_output", "mask_output"))
-            if f.endswith(".msk")
-        ]
+    mask_output_path = work_dir / "red_output" / "mask_output"
+    if mask_output_path.exists() or (mask_output_path.suffix == ".msk"):
+        red_genome_file = [f for f in mask_output_path.iterdir() if f.suffix == ".msk"]
         logger.info("red_genome_file %s", red_genome_file)
-        masked_genome_file = os.path.join(
-            work_dir, "red_output", "mask_output", red_genome_file[0]
-        )
+        masked_genome_file = mask_output_path / red_genome_file[0]
     else:
         masked_genome_file = genome_file
     logger.info("Masked genome file %s", masked_genome_file)
@@ -4815,7 +4791,7 @@ if __name__ == "__main__":
             genblast_path,
             convert2blastmask_path,
             makeblastdb_path,
-            os.path.join(work_dir, "genblast_output"),
+            work_dir / "genblast_output",
             protein_file,
             masked_genome_file,
             max_intron_length,
@@ -4832,7 +4808,7 @@ if __name__ == "__main__":
             genblast_path,
             convert2blastmask_path,
             makeblastdb_path,
-            os.path.join(work_dir, "busco_output"),
+            work_dir / "busco_output",
             busco_protein_file,
             masked_genome_file,
             max_intron_length,

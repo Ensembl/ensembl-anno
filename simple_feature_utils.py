@@ -24,16 +24,21 @@ import typing
 
 import utils
 
+
+_REPO_ROOT = pathlib.Path(__file__).parent
+
+
 logger = logging.getLogger(__name__)
-with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
+config_file = _REPO_ROOT / "config.json"
+with config_file.open("r") as f:
     config = json.load(f)
 
 
 def run_eponine_regions(  # pylint: disable=too-many-locals
-    genome_file: typing.Union[pathlib.Path, str],
+    genome_file: os.PathLike,
     java_path: str,
     eponine_path: str,
-    main_output_dir: str,
+    main_output_dir: os.PathLike,
     num_threads: int,
 ):
     """
@@ -193,9 +198,9 @@ def create_eponine_gtf(
 
 
 def run_cpg_regions(
-    genome_file: typing.Union[pathlib.Path, str],
+    genome_file: os.PathLike,
     cpg_path: str,
-    main_output_dir: str,
+    main_output_dir: os.PathLike,
     num_threads: int,
 ):
     """

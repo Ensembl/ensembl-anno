@@ -37,25 +37,20 @@ def create_dir(main_output_dir, dir_name):
     Returns:
         str Path to the created directory
     """
+    target_dir = pathlib.Path(main_output_dir)
     if dir_name:
-        target_dir = os.path.join(main_output_dir, dir_name)
-    else:
-        target_dir = main_output_dir
-
-    if os.path.exists(target_dir):
+        target_dir = target_dir / dir_name
+    if target_dir.exists():
         logger.warning("Directory already exists, will not create again")
-        return target_dir
-
-    logger.info("Attempting to create target dir: %s", target_dir)
-
-    try:
-        os.mkdir(target_dir)
-    except OSError:
-        logger.error("Creation of the dir failed, path used: %s", target_dir)
     else:
-        logger.info("Successfully created the dir on the following path: %s", target_dir)
-
-    return target_dir
+        logger.info("Attempting to create target dir: %s", target_dir)
+        try:
+            target_dir.mkdir(parents=True)
+        except OSError:
+            logger.error("Creation of the dir failed, path used: %s", target_dir)
+        else:
+            logger.info("Successfully created the dir on the following path: %s", target_dir)
+    return str(target_dir)
 
 
 def check_exe(exe_path):
@@ -388,13 +383,17 @@ def reverse_complement(sequence):
     return sequence.translate(rev_matrix)[::-1]
 
 
-def check_file(file_path: pathlib.Path):
+def check_file(file_path: os.PathLike):
     """
     Raise an error when the file doesn't exist
     Args:
-        file_path: pathlib.Path
+        file_path: File to path
     Returns:
         FileNotFoundError
     """
-    if not file_path.is_file():
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
+    fpath = pathlib.Path(file_path)
+    if not fpath.is_file():
+        # Check if the given file path needs to be resolved, e.g. which EukHighConfidenceFilter
+        fpath = shutil.which(file_path)
+        if not fpath or not pathlib.Path(fpath).is_file():
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
