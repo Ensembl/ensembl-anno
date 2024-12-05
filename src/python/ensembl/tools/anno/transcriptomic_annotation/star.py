@@ -12,8 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""The STAR (Spliced Transcripts Alignment to a Reference) alignment tool is widely used
+"""
+The STAR (Spliced Transcripts Alignment to a Reference) alignment tool is widely used
 in genomics research for aligning RNA-seq data to a reference genome.
+
 Dobin A, Davis CA, Schlesinger F, et al. STAR: ultrafast universal RNA-seq aligner.
 Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635
 """
@@ -60,6 +62,7 @@ def run_star(  # pylint:disable=too-many-branches
 ) -> None:
     """
     Run STAR alignment on list of short read data.
+    
         :param genome_file: Genome file path.
         :type genome_file: Path
         :param output_dir: Working directory path.
@@ -96,6 +99,7 @@ def run_star(  # pylint:disable=too-many-branches
         :return: None
         :rtype: None
     """
+    
     check_exe(star_bin)
     # If trimming has been enabled then switch the path for
     # short_read_fastq_dir from the original location to the trimmed fastq dir
