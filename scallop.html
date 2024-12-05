@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Scallop Module Documentation &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/agogo.css?v=cc331ede" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=e031e9a9"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/scallop.html" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="STAR Module Documentation" href="star.html" />
+    <link rel="prev" title="Repeatmasker Module Documentation" href="repeatmasker.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="repeatmasker.html" title="Repeatmasker Module Documentation"
+             accesskey="P">previous</a> |
+          <a href="star.html" title="STAR Module Documentation"
+             accesskey="N">next</a> |
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-ensembl.tools.anno.transcriptomic_annotation.scallop">
+<span id="scallop-module-documentation"></span><h1>Scallop Module Documentation<a class="headerlink" href="#module-ensembl.tools.anno.transcriptomic_annotation.scallop" title="Permalink to this heading">¶</a></h1>
+<p>Scallop is a high-performance tool designed for the accurate and efficient quantification
+of transcriptome assembly.
+It’s capable of handling large-scale transcriptomic data while providing precise estimates
+of transcript abundances.
+Scallop’s algorithmic approach allows it to efficiently reconstruct transcript structures
+and quantify their expression levels, making it a valuable resource for studying gene
+expression and transcriptome analysis.</p>
+<p>Shao M, Kingsford C. Accurate assembly of transcripts through phase-preserving graph
+decomposition. Nat Biotechnol.
+2017 Dec;35(12):1167-1169. doi: 10.1038/nbt.4020. Epub 2017 Nov 13. PMID: 29131147; PMCID: PMC5722698.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.scallop.run_scallop">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.scallop.</span></span><span class="sig-name descname"><span class="pre">run_scallop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scallop_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('scallop')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prlimit_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('prlimit')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stringtie_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('stringtie')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">memory_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">42949672960</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/scallop.html#run_scallop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.scallop.run_scallop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run Scallop assembler on short read data after STAR alignment.</p>
+<blockquote>
+<div><dl class="field-list simple">
+<dt class="field-odd">param output_dir<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Working directory path.</p>
+</dd>
+<dt class="field-even">type output_dir<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param scallop_bin<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Software path.</p>
+</dd>
+<dt class="field-even">type scallop_bin<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path, default scallop</p>
+</dd>
+<dt class="field-odd">param prlimit_bin<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Software path.</p>
+</dd>
+<dt class="field-even">type prlimit_bin<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path, default prlimit</p>
+</dd>
+<dt class="field-odd">param stringtie_bin<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Software path.</p>
+</dd>
+<dt class="field-even">type stringtie_bin<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path, default stringtie</p>
+</dd>
+<dt class="field-odd">param memory_limit<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Memory limit Scallop command Defaults to 40*1024**3.</p>
+</dd>
+<dt class="field-even">type memory_limit<span class="colon">:</span></dt>
+<dd class="field-even"><p>int</p>
+</dd>
+<dt class="field-odd">return<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+<dt class="field-even">rtype<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmsearch.html">cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dust.html">DustMasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="repeatmasker.html" title="Repeatmasker Module Documentation"
+              >previous</a> |
+            <a href="star.html" title="STAR Module Documentation"
+              >next</a> |
+            <a href="py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+              <br/>
+              <a href="_sources/scallop.rst.txt"
+                rel="nofollow">Show Source</a>
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2024] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

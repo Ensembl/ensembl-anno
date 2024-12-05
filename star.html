@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>STAR Module Documentation &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/agogo.css?v=cc331ede" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=e031e9a9"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/star.html" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Stringtie Module Documentation" href="stringtie.html" />
+    <link rel="prev" title="Scallop Module Documentation" href="scallop.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="scallop.html" title="Scallop Module Documentation"
+             accesskey="P">previous</a> |
+          <a href="stringtie.html" title="Stringtie Module Documentation"
+             accesskey="N">next</a> |
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="module-ensembl.tools.anno.transcriptomic_annotation.star">
+<span id="star-module-documentation"></span><h1>STAR Module Documentation<a class="headerlink" href="#module-ensembl.tools.anno.transcriptomic_annotation.star" title="Permalink to this heading">¶</a></h1>
+<p>The STAR (Spliced Transcripts Alignment to a Reference) alignment tool is widely used
+in genomics research for aligning RNA-seq data to a reference genome.</p>
+<p>Dobin A, Davis CA, Schlesinger F, et al. STAR: ultrafast universal RNA-seq aligner.
+Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.star.run_star">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.star.</span></span><span class="sig-name descname"><span class="pre">run_star</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">genome_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">short_read_fastq_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delete_pre_trim_fastq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_fastq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_reads_per_sample</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_intron_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subsample_read_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100000000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subsample_percentage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_via_read_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_via_percentage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_via_read_limit_percentage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">star_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('star')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samtools_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('samtools')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_galore_bin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">PosixPath('trim_galore')</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/star.html#run_star"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.star.run_star" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run STAR alignment on list of short read data.</p>
+<blockquote>
+<div><dl class="field-list simple">
+<dt class="field-odd">param genome_file<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Genome file path.</p>
+</dd>
+<dt class="field-even">type genome_file<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param output_dir<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Working directory path.</p>
+</dd>
+<dt class="field-even">type output_dir<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param short_read_fastq_dir<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Short read directory path.</p>
+</dd>
+<dt class="field-even">type short_read_fastq_dir<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path</p>
+</dd>
+<dt class="field-odd">param delete_pre_trim_fastq<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Delete the original fastq files after trimming. Defaults to False.</p>
+</dd>
+<dt class="field-even">type delete_pre_trim_fastq<span class="colon">:</span></dt>
+<dd class="field-even"><p>boolean, default False</p>
+</dd>
+<dt class="field-odd">param trim_fastq<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Trim short read files using TrimGalore. Defaults to False.</p>
+</dd>
+<dt class="field-even">type trim_fastq<span class="colon">:</span></dt>
+<dd class="field-even"><p>boolean, default False</p>
+</dd>
+<dt class="field-odd">param max_reads_per_sample<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Max number of reads per sample. Defaults to 0 (unlimited).</p>
+</dd>
+<dt class="field-even">type max_reads_per_sample<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 0</p>
+</dd>
+<dt class="field-odd">param max_intron_length<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The maximum intron size for alignments. Defaults to 100000.</p>
+</dd>
+<dt class="field-even">type max_intron_length<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default 100000</p>
+</dd>
+<dt class="field-odd">param subsample_read_limit<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Maximum number of reads to subsample. Defaults to 100000000.</p>
+</dd>
+</dl>
+<p>:type subsample_read_limit:int, default 100000000,
+:param subsample_percentage: Maximun percentage of reads to subsample.
+:type subsample_percentage: int, default 0.25,
+:param sampling_via_read_limit: subsample fastq files using subsample_read_limit.
+:type sampling_via_read_limit: boolean, False,
+:param sampling_via_percentage: subsample fastq files using subsample_percentage.
+:type sampling_via_percentage: boolean, False,
+:param sampling_via_read_limit_percentage: use max read limit and  percentage value.
+:type sampling_via_read_limit_percentage: boolean, False,
+:param num_threads: Number of available threads.
+:type num_threads: int, default 1
+:param star_bin: Software path.
+:type star_bin: Path, default star
+:param samtools_bin: Software path.
+:type samtools_bin: Path,default samtools
+:param trim_galore_bin: Software path.
+:type trim_galore_bin: Path, default trim_galore</p>
+<dl class="field-list simple">
+<dt class="field-odd">return<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+<dt class="field-even">rtype<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.star.run_trimming">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.star.</span></span><span class="sig-name descname"><span class="pre">run_trimming</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">short_read_fastq_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delete_pre_trim_fastq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_galore_bin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'trim_galore'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/star.html#run_trimming"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.star.run_trimming" title="Permalink to this definition">¶</a></dt>
+<dd><p>Trim list of short read fastq files.
+:param output_dir: Working directory path.
+:param short_read_fastq_dir: Short read directory path.
+:param delete_pre_trim_fastq: Removing original fastq file post trimming. Defaults to False.
+:param num_threads: Number of threads.
+:param trim_galore_bin: Software path.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ensembl.tools.anno.transcriptomic_annotation.star.subsample_transcriptomic_data">
+<span class="sig-prename descclassname"><span class="pre">ensembl.tools.anno.transcriptomic_annotation.star.</span></span><span class="sig-name descname"><span class="pre">subsample_transcriptomic_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fastq_file_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Path</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subsample_read_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100000000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subsample_percentage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_via_read_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_via_percentage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_via_read_limit_percentage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Path</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/ensembl/tools/anno/transcriptomic_annotation/star.html#subsample_transcriptomic_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ensembl.tools.anno.transcriptomic_annotation.star.subsample_transcriptomic_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Subsample list of paired files.
+:param fastq_file_list: Subsample paired fastq files.
+:param subsample_read_limit: Maximum number of reads to subsample, default to 100000000.
+:param subsample_percentage: Maximun percentage of reads to subsample, default to 0.25.
+:param sampling_via_read_limit: If True will subsample an input dataset of fastq files         using –subsample_read_limit value.
+:param sampling_via_percentage: If True will subsample an input dataset of fastq files         using –subsample_percentage value.
+:param sampling_via_read_limit_percentage: If True will subsample an input dataset of         fastq files using –subsample_read_limit and –subsample_percentage value;         the lowest number of reads is taken.
+:param num_threads: number of threads</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>List of subsampled paired transcriptomic files</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>List[Path]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmsearch.html">cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dust.html">DustMasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="scallop.html" title="Scallop Module Documentation"
+              >previous</a> |
+            <a href="stringtie.html" title="Stringtie Module Documentation"
+              >next</a> |
+            <a href="py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+              <br/>
+              <a href="_sources/star.rst.txt"
+                rel="nofollow">Show Source</a>
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2024] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.repeat_annotation.trf &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/agogo.css?v=cc331ede" />
+    <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js?v=e031e9a9"></script>
+    <script src="../../../../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=4825356b"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/_modules/ensembl/tools/anno/repeat_annotation/trf.html" />
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="../../../../../index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for ensembl.tools.anno.repeat_annotation.trf</h1><div class="highlight"><pre>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information #pylint: disable=missing-module-docstring</span>
+<span class="c1"># regarding copyright ownership.</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.</span>
+<span class="sd">    Benson G. Tandem repeats finder: a program to analyze DNA sequences.</span>
+<span class="sd">    Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;run_trf&quot;</span><span class="p">]</span>
+
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">logging.config</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">os</span> <span class="kn">import</span> <span class="n">PathLike</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+
+
+<span class="kn">from</span> <span class="nn">ensembl.tools.anno.utils._utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">check_exe</span><span class="p">,</span>
+    <span class="n">create_dir</span><span class="p">,</span>
+    <span class="n">check_gtf_content</span><span class="p">,</span>
+    <span class="n">get_seq_region_length</span><span class="p">,</span>
+    <span class="n">get_slice_id</span><span class="p">,</span>
+    <span class="n">slice_output_to_gtf</span><span class="p">,</span>
+    <span class="n">get_sequence</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="run_trf"><a class="viewcode-back" href="../../../../../trf.html#ensembl.tools.anno.repeat_annotation.trf.run_trf">[docs]</a><span class="k">def</span> <span class="nf">run_trf</span><span class="p">(</span>
+    <span class="n">genome_file</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">trf_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;trf&quot;</span><span class="p">),</span>
+    <span class="n">match_score</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="n">mismatch_score</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+    <span class="n">delta</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">7</span><span class="p">,</span>
+    <span class="n">pm</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">80</span><span class="p">,</span>
+    <span class="n">pi</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="n">minscore</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">40</span><span class="p">,</span>
+    <span class="n">maxperiod</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Executes TRF on genomic slices</span>
+<span class="sd">            :param genome_file: Genome file path.</span>
+<span class="sd">            :type genome_file: PathLike</span>
+<span class="sd">            :param output_dir:  Working directory path.</span>
+<span class="sd">            :type output_dir: Path</span>
+<span class="sd">            :param num_threads: int, number of threads.</span>
+<span class="sd">            :type num_threads: int, default 1</span>
+<span class="sd">            :param trf_bin: TRF software path.</span>
+<span class="sd">            :type trf_bin: Path, default trf</span>
+<span class="sd">            :param match_score: Matching weight.</span>
+<span class="sd">            :type match_score: int, default 2</span>
+<span class="sd">            :param mismatch_score: Mismatching penalty.</span>
+<span class="sd">            :type mismatch_score: int, default 5</span>
+<span class="sd">            :param delta: Indel penalty.</span>
+<span class="sd">            :type delta: int, default 7</span>
+<span class="sd">            :param pm: Match probability (whole number).</span>
+<span class="sd">            :type pm: int, default 80</span>
+<span class="sd">            :param pi: Indel probability (whole number).</span>
+<span class="sd">            :type pi: int, default 10</span>
+<span class="sd">            :param minscore: Minimum alignment score to report.</span>
+<span class="sd">            :type minscore: int, default 40</span>
+<span class="sd">            :param maxperiod: Maximum period size to report.</span>
+<span class="sd">            :type maxperiod: int, default 500</span>
+<span class="sd">                    </span>
+<span class="sd">            :return: None</span>
+<span class="sd">            :rtype: None</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">trf_bin</span><span class="p">)</span>
+    <span class="n">trf_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;trf_output&quot;</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">trf_dir</span><span class="p">))</span>
+    <span class="n">output_file</span> <span class="o">=</span> <span class="n">trf_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
+    <span class="k">if</span> <span class="n">output_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">transcript_count</span> <span class="o">=</span> <span class="n">check_gtf_content</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;repeat&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">transcript_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Trf gtf file exists, skipping analysis&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating list of genomic slices&quot;</span><span class="p">)</span>
+    <span class="n">seq_region_to_length</span> <span class="o">=</span> <span class="n">get_seq_region_length</span><span class="p">(</span><span class="n">genome_file</span><span class="p">,</span> <span class="mi">5000</span><span class="p">)</span>
+    <span class="n">slice_ids_per_region</span> <span class="o">=</span> <span class="n">get_slice_id</span><span class="p">(</span>
+        <span class="n">seq_region_to_length</span><span class="p">,</span> <span class="n">slice_size</span><span class="o">=</span><span class="mi">1000000</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">min_length</span><span class="o">=</span><span class="mi">5000</span>
+    <span class="p">)</span>
+    <span class="n">trf_output_extension</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;.</span><span class="si">{</span><span class="n">match_score</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">mismatch_score</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">delta</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">pm</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">pi</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">minscore</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">maxperiod</span><span class="si">}</span><span class="s2">.dat&quot;</span>
+    <span class="p">)</span>
+    <span class="n">trf_cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">trf_bin</span><span class="p">,</span>
+        <span class="kc">None</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">match_score</span><span class="p">),</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">mismatch_score</span><span class="p">),</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">delta</span><span class="p">),</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">pm</span><span class="p">),</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">pi</span><span class="p">),</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">minscore</span><span class="p">),</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">maxperiod</span><span class="p">),</span>
+        <span class="s2">&quot;-d&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-h&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running TRF&quot;</span><span class="p">)</span>
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="n">num_threads</span><span class="p">)</span><span class="c1">#pylint:disable=consider-using-with</span>
+    <span class="k">for</span> <span class="n">slice_id</span> <span class="ow">in</span> <span class="n">slice_ids_per_region</span><span class="p">:</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+            <span class="n">_multiprocess_trf</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">trf_cmd</span><span class="p">,</span>
+                <span class="n">slice_id</span><span class="p">,</span>
+                <span class="n">trf_dir</span><span class="p">,</span>
+                <span class="n">trf_output_extension</span><span class="p">,</span>
+                <span class="n">genome_file</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+    <span class="n">slice_output_to_gtf</span><span class="p">(</span><span class="n">trf_dir</span><span class="p">,</span> <span class="s2">&quot;repeat_id&quot;</span><span class="p">,</span> <span class="s2">&quot;trf&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;.trf.gtf&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">gtf_file</span> <span class="ow">in</span> <span class="n">trf_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.trf.gtf&quot;</span><span class="p">):</span>
+        <span class="n">gtf_file</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span></div>
+
+
+<span class="k">def</span> <span class="nf">_multiprocess_trf</span><span class="p">(</span>
+    <span class="n">trf_cmd</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">slice_id</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">trf_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">trf_output_extension</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">genome_file</span><span class="p">:</span><span class="n">Path</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run TRF on multiprocess on genomic slices</span>
+<span class="sd">    Args:</span>
+<span class="sd">        trf_cmd: TRF command to execute.</span>
+<span class="sd">        slice_id: Slice Id to run TRF on.</span>
+<span class="sd">        trf_dir : TRF output dir.</span>
+<span class="sd">        trf_output_extension: TRF file output extension.</span>
+<span class="sd">        genome_file : Genome file.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">region_name</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">slice_id</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Processing slice to find tandem repeats with TRF:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="p">,</span>
+        <span class="n">start</span><span class="p">,</span>
+        <span class="n">end</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">seq</span> <span class="o">=</span> <span class="n">get_sequence</span><span class="p">(</span><span class="n">region_name</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">start</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">end</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="n">genome_file</span><span class="p">,</span> <span class="n">trf_dir</span><span class="p">)</span>
+    <span class="n">slice_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="s2">.rs</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">.re</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">(</span><span class="nb">dir</span><span class="o">=</span><span class="n">trf_dir</span><span class="p">)</span> <span class="k">as</span> <span class="n">tmpdirname</span><span class="p">:</span>
+        <span class="n">slice_file</span> <span class="o">=</span> <span class="n">trf_dir</span> <span class="o">/</span> <span class="n">tmpdirname</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_name</span><span class="si">}</span><span class="s2">.fa&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">slice_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">region_out</span><span class="p">:</span>
+            <span class="n">region_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&gt;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">seq</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">region_results</span> <span class="o">=</span> <span class="n">trf_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_name</span><span class="si">}</span><span class="s2">.trf.gtf&quot;</span>
+        <span class="c1"># TRF writes to the current dir, so swtich to the output dir for it</span>
+        <span class="c1"># os.chdir(str(trf_output_dir))</span>
+        <span class="n">output_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_file</span><span class="si">}{</span><span class="n">trf_output_extension</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">trf_cmd</span> <span class="o">=</span> <span class="n">trf_cmd</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">trf_cmd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">slice_file</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;trf_cmd: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">trf_cmd</span><span class="p">)</span>
+        <span class="c1"># with open(trf_output_file_path, &quot;w+&quot;) as trf_out:</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">trf_cmd</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">trf_dir</span> <span class="o">/</span> <span class="n">tmpdirname</span><span class="p">)</span><span class="c1">#pylint:disable=subprocess-run-check</span>
+        <span class="n">_create_trf_gtf</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">region_results</span><span class="p">,</span> <span class="n">region_name</span><span class="p">)</span>
+        <span class="n">slice_file</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+        <span class="n">output_file</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">_create_trf_gtf</span><span class="p">(</span>
+    <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">region_results</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read the fasta file and save the content in gtf format</span>
+
+<span class="sd">    TRF output format:</span>
+<span class="sd">    cols 1+2:  Indices of the repeat relative to the start of the sequence</span>
+<span class="sd">    col 3:     Period size of the repeat</span>
+<span class="sd">    col 4:     Number of copies aligned with the consensus pattern</span>
+<span class="sd">    col 5:     Size of consensus pattern (may differ slightly from the period size)</span>
+<span class="sd">    col 6:     Percent of matches between adjacent copies overall</span>
+<span class="sd">    col 7:     Percent of indels between adjacent copies overall</span>
+<span class="sd">    col 8:     Alignment score</span>
+<span class="sd">    cols 9-12: Percent composition for each of the four nucleotides</span>
+<span class="sd">    col 13:    Entropy measure based on percent composition</span>
+<span class="sd">    col 14:    Consensus sequence</span>
+<span class="sd">    col 15:    Repeat sequence</span>
+<span class="sd">    Args:</span>
+<span class="sd">       output_file : GTF file with final results.</span>
+<span class="sd">       region_results : GTF file with results per region.</span>
+<span class="sd">       region_name : Coordinates of genomic slice.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">trf_in</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span>
+        <span class="n">region_results</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span>
+    <span class="p">)</span> <span class="k">as</span> <span class="n">trf_out</span><span class="p">:</span>
+        <span class="n">repeat_count</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">trf_in</span><span class="p">:</span>
+            <span class="n">result_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^\d+&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">result_match</span><span class="p">:</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">15</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">start</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">period</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">copy_number</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+                <span class="n">percent_matches</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">5</span><span class="p">])</span>
+                <span class="n">score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">7</span><span class="p">])</span>
+                <span class="n">repeat_consensus</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="mi">13</span><span class="p">]</span>
+                <span class="k">if</span> <span class="p">(</span>  <span class="c1"># pylint: disable=too-many-boolean-expressions</span>
+                    <span class="n">score</span> <span class="o">&lt;</span> <span class="mi">50</span>
+                    <span class="ow">and</span> <span class="n">percent_matches</span> <span class="o">&gt;=</span> <span class="mi">80</span>
+                    <span class="ow">and</span> <span class="n">copy_number</span> <span class="o">&gt;</span> <span class="mi">2</span>
+                    <span class="ow">and</span> <span class="n">period</span> <span class="o">&lt;</span> <span class="mi">10</span>
+                <span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">copy_number</span> <span class="o">&gt;=</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">percent_matches</span> <span class="o">&gt;=</span> <span class="mi">70</span> <span class="ow">and</span> <span class="n">score</span> <span class="o">&gt;=</span> <span class="mi">50</span><span class="p">):</span>
+                    <span class="n">gtf_line</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="se">\t</span><span class="s2">TRF</span><span class="se">\t</span><span class="s2">repeat</span><span class="se">\t</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="se">\t</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">+</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">&quot;</span>
+                        <span class="sa">f</span><span class="s1">&#39;repeat_id &quot;</span><span class="si">{</span><span class="n">repeat_count</span><span class="si">}</span><span class="s1">&quot;; score &quot;</span><span class="si">{</span><span class="n">score</span><span class="si">}</span><span class="s1">&quot;; &#39;</span>
+                        <span class="sa">f</span><span class="s1">&#39;repeat_consensus &quot;</span><span class="si">{</span><span class="n">repeat_consensus</span><span class="si">}</span><span class="s1">&quot;;</span><span class="se">\n</span><span class="s1">&#39;</span>
+                    <span class="p">)</span>
+                    <span class="n">trf_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">gtf_line</span><span class="p">)</span>
+                    <span class="n">repeat_count</span> <span class="o">+=</span> <span class="mi">1</span>
+
+<span class="k">def</span> <span class="nf">parse_args</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse command line arguments.&quot;&quot;&quot;</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;TRF&#39;s arguments&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--genome_file&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Genome file path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--output_dir&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--trf_bin&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;trf&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;TRF executable path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--match_score&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Matching weight&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--mismatch_score&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Mismatching penalty&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--delta&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Indel penalty&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--pm&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">80</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Match probability&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--pi&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Indel probability&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--minscore&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Minimum alignment score to report&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--maxperiod&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Maximum period size to report&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--num_threads&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of threads&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;TRF&#39;s entry-point.&quot;&quot;&quot;</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">log_file_path</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;log&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;trf.log&quot;</span>
+    <span class="n">loginipath</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;conf&quot;</span> <span class="o">/</span> <span class="s2">&quot;logging.conf&quot;</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fileConfig</span><span class="p">(</span>
+        <span class="n">loginipath</span><span class="p">,</span>
+        <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;logfilename&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">log_file_path</span><span class="p">)},</span>
+        <span class="n">disable_existing_loggers</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">run_trf</span><span class="p">(</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">genome_file</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">num_threads</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">trf_bin</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">match_score</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">mismatch_score</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">delta</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">pm</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">minscore</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">maxperiod</span><span class="p">,</span>
+    <span class="p">)</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../dust.html">DustMasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="../../../../../search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="../../../../../py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="../../../../../genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2024] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

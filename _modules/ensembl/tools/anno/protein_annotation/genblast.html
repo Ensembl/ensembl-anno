@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.protein_annotation.genblast &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/agogo.css?v=cc331ede" />
+    <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js?v=e031e9a9"></script>
+    <script src="../../../../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=4825356b"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/_modules/ensembl/tools/anno/protein_annotation/genblast.html" />
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="../../../../../index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for ensembl.tools.anno.protein_annotation.genblast</h1><div class="highlight"><pre>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information</span>
+<span class="c1"># regarding copyright ownership.</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">GenBlast identifies homologous gene sequences in genomic databases.</span>
+<span class="sd">One of the key features of GenBlast is its flexibility to handle</span>
+<span class="sd">comparative genomics tasks and accurately identify homologs even when</span>
+<span class="sd">the sequences have undergone significant evolutionary changes.</span>
+<span class="sd">This capability makes it a valuable resource for researchers studying gene</span>
+<span class="sd">evolution, gene families, and gene function across diverse species.</span>
+<span class="sd">GenBlast has been widely used in various genomic analyses and is available as</span>
+<span class="sd">a standalone command-line tool or as part of different bioinformatics pipelines.</span>
+<span class="sd">Researchers in the field of comparative genomics and gene function analysis</span>
+<span class="sd">often rely on GenBlast to perform sensitive homology searches and obtain</span>
+<span class="sd">valuable insights into the evolutionary relationships and functional conservation</span>
+<span class="sd">of genes in different organisms.</span>
+
+
+<span class="sd">She, R., Chu, J.S., Uyar, B., Wang, J., Wang, K., and Chen, N. (2011).</span>
+<span class="sd">GenBlastA: enabling BLAST to identify homologous gene sequences.</span>
+<span class="sd">Genome Res., 21(5): 936-949.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;run_genblast&quot;</span><span class="p">]</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">logging.config</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">signal</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+
+<span class="kn">from</span> <span class="nn">ensembl.tools.anno.utils._utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">check_exe</span><span class="p">,</span>
+    <span class="n">create_dir</span><span class="p">,</span>
+    <span class="n">check_gtf_content</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="run_genblast"><a class="viewcode-back" href="../../../../../genblast.html#ensembl.tools.anno.protein_annotation.genblast.run_genblast">[docs]</a><span class="k">def</span> <span class="nf">run_genblast</span><span class="p">(</span><span class="c1">#pylint:disable=dangerous-default-value</span>
+    <span class="n">masked_genome</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">protein_dataset</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">max_intron_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">genblast_timeout_secs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10800</span><span class="p">,</span>
+    <span class="n">genblast_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;genblast&quot;</span><span class="p">),</span>
+    <span class="n">convert2blastmask_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;convert2blastmask&quot;</span><span class="p">),</span>
+    <span class="n">makeblastdb_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;makeblastdb&quot;</span><span class="p">),</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">protein_set</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;uniprot&quot;</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    </span>
+<span class="sd">    Executes GenBlast on genomic slices</span>
+<span class="sd">    </span>
+<span class="sd">            :param masked_genome: Masked genome file path.</span>
+<span class="sd">            :type masked_genome: Path</span>
+<span class="sd">            :param output_dir: Working directory path.</span>
+<span class="sd">            :type output_dir: Path</span>
+<span class="sd">            :param protein_dataset: Protein dataset (Uniprot/OrthoDb) path.</span>
+<span class="sd">            :type protein_dataset: Path</span>
+<span class="sd">            :param genblast_timeout_secs: Time for timeout (sec).</span>
+<span class="sd">            :type genblast_timeout_secs: int, default 10800</span>
+<span class="sd">            :param max_intron_length: Maximum intron length.</span>
+<span class="sd">            :type max_intron_length: int </span>
+<span class="sd">            :param genblast_bin: Software path.</span>
+<span class="sd">            :type genblast_bin: Path, default genblast</span>
+<span class="sd">            :param convert2blastmask_bin: Software path.</span>
+<span class="sd">            :type convert2blastmask_bin: Path, default convert2blastmask</span>
+<span class="sd">            :param makeblastdb_bin: Software path.</span>
+<span class="sd">            :type makeblastdb_bin: Path, default makeblastdb</span>
+<span class="sd">            :param genblast_timeout: seconds</span>
+<span class="sd">            :type genblast_timeout: int, default 1</span>
+<span class="sd">            :param num_threads: int, number of threads.</span>
+<span class="sd">            :type num_threads: int, default 1 </span>
+<span class="sd">            :param protein_set: Source </span>
+<span class="sd">            :type str: [&quot;uniprot&quot;, &quot;orthodb&quot;]</span>
+<span class="sd">            </span>
+<span class="sd">            :return: None</span>
+<span class="sd">            :rtype: None</span>
+<span class="sd">            </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">genblast_bin</span><span class="p">)</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">convert2blastmask_bin</span><span class="p">)</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">makeblastdb_bin</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">protein_set</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;uniprot&quot;</span><span class="p">,</span> <span class="s2">&quot;orthodb&quot;</span><span class="p">}:</span>
+
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;protein_set must be either &#39;uniprot&#39; or &#39;orthodb&#39;&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">protein_set</span> <span class="o">==</span> <span class="s2">&quot;uniprot&quot;</span><span class="p">:</span>
+        <span class="n">genblast_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;uniprot_output&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">protein_set</span> <span class="o">==</span> <span class="s2">&quot;orthodb&quot;</span><span class="p">:</span>
+        <span class="n">genblast_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;orthodb_output&quot;</span><span class="p">)</span>
+    <span class="n">output_file</span> <span class="o">=</span> <span class="n">genblast_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
+    <span class="k">if</span> <span class="n">output_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">transcript_count</span> <span class="o">=</span> <span class="n">check_gtf_content</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;transcript&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">transcript_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Genblast gtf file exists, skipping analysis&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">output_dir</span><span class="si">}</span><span class="s2">/alignscore.txt&quot;</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">genblast_dir</span><span class="si">}</span><span class="s2">/alignscore.txt&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="c1"># Get the repo directory</span>
+        <span class="n">repo_root_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">repo_root_dir</span><span class="si">}</span><span class="s2">/data/alignscore.txt&quot;</span><span class="p">),</span> <span class="n">genblast_dir</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">masked_genome</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Masked genome file does not exist: </span><span class="si">{</span><span class="n">masked_genome</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">protein_dataset</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">IOError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Protein file does not exist: </span><span class="si">{</span><span class="n">protein_dataset</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">asnb_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">masked_genome</span><span class="si">}</span><span class="s2">.asnb&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">asnb_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found an existing asnb, so will skip convert2blastmask&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_run_convert2blastmask</span><span class="p">(</span><span class="n">convert2blastmask_bin</span><span class="p">,</span> <span class="n">masked_genome</span><span class="p">,</span> <span class="n">asnb_file</span><span class="p">)</span>
+    <span class="n">_run_makeblastdb</span><span class="p">(</span><span class="n">makeblastdb_bin</span><span class="p">,</span> <span class="n">masked_genome</span><span class="p">,</span> <span class="n">asnb_file</span><span class="p">)</span>
+    <span class="n">batched_protein_files</span> <span class="o">=</span> <span class="n">split_protein_file</span><span class="p">(</span>
+        <span class="n">protein_dataset</span><span class="p">,</span> <span class="n">genblast_dir</span><span class="p">,</span> <span class="n">num_threads</span>
+    <span class="p">)</span>
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="n">num_threads</span><span class="p">)</span>  <span class="c1"># pylint:disable=consider-using-with</span>
+    <span class="k">for</span> <span class="n">batched_protein_file</span> <span class="ow">in</span> <span class="n">batched_protein_files</span><span class="p">:</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+            <span class="n">_multiprocess_genblast</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">batched_protein_file</span><span class="p">,</span>
+                <span class="n">masked_genome</span><span class="p">,</span>
+                <span class="n">genblast_bin</span><span class="p">,</span>
+                <span class="n">genblast_timeout_secs</span><span class="p">,</span>
+                <span class="n">max_intron_length</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+    <span class="n">_generate_genblast_gtf</span><span class="p">(</span><span class="n">genblast_dir</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">genblast_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;bin_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Completed running GenBlast&quot;</span><span class="p">)</span></div>
+
+
+<span class="k">def</span> <span class="nf">_multiprocess_genblast</span><span class="p">(</span>
+    <span class="n">protein_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">masked_genome</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">genblast_bin</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">genblast_timeout</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">max_intron_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Executes GenBlast on genomic slice</span>
+<span class="sd">    Args:</span>
+<span class="sd">            protein_file: Path of a single batched file.</span>
+<span class="sd">            masked_genome : Masked genome file path.</span>
+<span class="sd">            genblast_bin : Software path.</span>
+<span class="sd">            genblast_timeout_secs: Time for timeout (sec).</span>
+<span class="sd">            max_intron_length: Maximum intron length.</span>
+<span class="sd">            Command line options:</span>
+<span class="sd">            -P	Search program used to produce HSPs,</span>
+<span class="sd">                can be either &quot;blast&quot; or &quot;wublast&quot;, default is &quot;blast&quot;,</span>
+<span class="sd">                optional</span>
+<span class="sd">            -p	specifies the program option of genBlast: genblasta or genblastg</span>
+<span class="sd">            -q	List of query sequences to blast, must be in fasta format,</span>
+<span class="sd">                required</span>
+<span class="sd">            -t	The target database of genomic sequences in fasta format,</span>
+<span class="sd">                required</span>
+<span class="sd">            -g	parameter for blast: Perform gapped alignment (T/F)</span>
+<span class="sd">                [default: F], optional</span>
+<span class="sd">            -d	parameter for genBlast: maximum allowed distance between HSPs</span>
+<span class="sd">                within the same gene, a non-negative integer [default: 100000],</span>
+<span class="sd">                optional</span>
+<span class="sd">            -r	parameter for genBlast: number of ranks in the output,</span>
+<span class="sd">                a positive integer, optional</span>
+<span class="sd">            -e	parameter for blast: The e-value, [default: 1e-2],</span>
+<span class="sd">                optional</span>
+<span class="sd">            -c	parameter for genBlast: minimum percentage of query gene</span>
+<span class="sd">                coverage in the output, between 0 and 1 (e.g. for 50%</span>
+<span class="sd">                gene coverage, use &quot;0.5&quot;), optional</span>
+<span class="sd">            -W	parameter for blast: Set word size, 0 means using blast default [default: 0],</span>
+<span class="sd">                optional</span>
+<span class="sd">            -scodon The number of base pairs to search for start codon within the region of HSP</span>
+<span class="sd">                        group (inside the first HSP). If not specified, default is 15.</span>
+<span class="sd">            -i	parameter for genBlastG: minimum intron length, optional.</span>
+<span class="sd">                If not specified, the default value is 15.</span>
+<span class="sd">            -x	parameter for genBlastG: minimum internal exon length, optional.</span>
+<span class="sd">                If not specified, default is 20.</span>
+<span class="sd">            -n	parameter for genBlastG: maximum number of splice sites per region, optional.</span>
+<span class="sd">                If not specified, default is 20.</span>
+<span class="sd">            -gff	output options: turn on GFF output</span>
+<span class="sd">            -o	output filename, optional. If not specified, the output</span>
+<span class="sd">                will be the same as the query filename with &quot;.gblast&quot;</span>
+<span class="sd">                extension.</span>
+<span class="sd">            -pid turn on final alignment PID computation (global alignment between predicted</span>
+<span class="sd">                gene and query) in output.</span>
+<span class="sd">            -softmask	With this option NCBI blast will create a masking library,</span>
+<span class="sd">                you need to use it when blasting against a whole genome</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running GenBlast on : </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">protein_file</span><span class="p">)</span>
+
+    <span class="n">genblast_cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">genblast_bin</span><span class="p">),</span>
+        <span class="s2">&quot;-p&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;genblastg&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-q&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">protein_file</span><span class="p">),</span>
+        <span class="s2">&quot;-t&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">masked_genome</span><span class="p">),</span>
+        <span class="s2">&quot;-g&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;T&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-pid&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-r&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;1&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-P&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;blast&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-gff&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-e&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;1e-1&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-c&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;0.8&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-W&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;3&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-softmask&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-scodon&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;50&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-i&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;30&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-x&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;10&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-n&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;30&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-d&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">max_intron_length</span><span class="p">),</span>
+        <span class="s2">&quot;-o&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">protein_file</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">genblast_cmd</span><span class="p">))</span>
+    <span class="c1"># Using the child process termination as described here:</span>
+    <span class="c1"># https://alexandra-zaharia.github.io/posts/kill-subprocess</span>
+    <span class="c1"># -and-its-children-on-timeout-python/</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="c1"># pylint:disable=consider-using-with</span>
+            <span class="n">genblast_cmd</span><span class="p">,</span> <span class="n">start_new_session</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+        <span class="n">p</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">genblast_timeout</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">TimeoutExpired</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Timeout reached for file: </span><span class="si">%s</span><span class="s2"> </span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">protein_file</span><span class="p">)</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="c1"># pylint:disable=subprocess-run-check</span>
+            <span class="p">[</span><span class="s2">&quot;touch&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">protein_file</span><span class="si">}</span><span class="s2">.except&quot;</span><span class="p">))]</span>
+        <span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">killpg</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getpgid</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">pid</span><span class="p">),</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIGTERM</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_generate_genblast_gtf</span><span class="p">(</span><span class="n">genblast_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Collect output from geneblast and create the final gtf file</span>
+<span class="sd">    genblast_dir: Working directory path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">output_file</span> <span class="o">=</span> <span class="n">genblast_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_out</span><span class="p">:</span>
+        <span class="n">genblast_extension</span> <span class="o">=</span> <span class="s2">&quot;_1.1c_2.3_s1_0_16_1&quot;</span>
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">genblast_dir</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">):</span>
+            <span class="c1"># for root, dirs, files in os.walk(genblast_dir):</span>
+            <span class="c1"># for genblast_file in files:</span>
+            <span class="c1"># genblast_file = os.path.join(root, genblast_file)</span>
+            <span class="k">if</span> <span class="n">path</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span> <span class="ow">and</span> <span class="n">path</span><span class="o">.</span><span class="n">suffix</span> <span class="o">==</span> <span class="s2">&quot;.gff&quot;</span><span class="p">:</span>
+                <span class="n">gtf_string</span> <span class="o">=</span> <span class="n">_convert_genblast_gff_to_gtf</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                <span class="n">file_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">gtf_string</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">path</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span> <span class="ow">and</span> <span class="n">path</span><span class="o">.</span><span class="n">suffix</span> <span class="ow">in</span> <span class="p">(</span>
+                <span class="s2">&quot;.fa.blast&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;.fa.blast.report&quot;</span><span class="p">,</span>
+                <span class="n">genblast_extension</span><span class="p">,</span>
+            <span class="p">):</span>
+                <span class="n">path</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+
+<span class="k">def</span> <span class="nf">_run_convert2blastmask</span><span class="p">(</span>
+    <span class="n">convert2blastmask_bin</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">masked_genome</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">asnb_file</span><span class="p">:</span> <span class="n">Path</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert masking information in lower-case masked FASTA input to file</span>
+<span class="sd">    formats suitable for makeblastdb.</span>
+<span class="sd">    convert2blastmask_bin : Software path.</span>
+<span class="sd">    masked_genome: Path of masked genome file.</span>
+<span class="sd">    asnb_file: Path of assembly file.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running convert2blastmask prior to GenBlast:&quot;</span><span class="p">)</span>
+    <span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">convert2blastmask_bin</span><span class="p">),</span>
+        <span class="s2">&quot;-in&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">masked_genome</span><span class="p">),</span>
+        <span class="s2">&quot;-parse_seqids&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-masking_algorithm&quot;</span><span class="p">,</span>  <span class="c1"># mask_program_name</span>
+        <span class="s2">&quot;other&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-masking_options&quot;</span><span class="p">,</span>  <span class="c1"># mask_program_options</span>
+        <span class="s1">&#39;&quot;REpeatDetector, default&quot;&#39;</span><span class="p">,</span>
+        <span class="s2">&quot;-outfmt&quot;</span><span class="p">,</span>  <span class="c1"># output_format</span>
+        <span class="s2">&quot;maskinfo_asn1_bin&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-out&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">asnb_file</span><span class="p">),</span>
+    <span class="p">]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cmd</span><span class="p">))</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Completed running convert2blastmask&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_run_makeblastdb</span><span class="p">(</span><span class="n">makeblastdb_bin</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">masked_genome</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">asnb_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Application to create BLAST databases.</span>
+<span class="sd">    makeblastdb_bin : Software path.</span>
+<span class="sd">    masked_genome: Path of masked genome file.</span>
+<span class="sd">    asnb_file: Path of assembly file.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running makeblastdb prior to GenBlast&quot;</span><span class="p">)</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>  <span class="c1"># pylint:disable=subprocess-run-check</span>
+        <span class="p">[</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">makeblastdb_bin</span><span class="p">),</span>
+            <span class="s2">&quot;-in&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">masked_genome</span><span class="p">),</span>
+            <span class="s2">&quot;-dbtype&quot;</span><span class="p">,</span>  <span class="c1"># molecule_type</span>
+            <span class="s2">&quot;nucl&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-parse_seqids&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-mask_data&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">asnb_file</span><span class="p">),</span>
+            <span class="s2">&quot;-max_file_sz&quot;</span><span class="p">,</span>  <span class="c1"># number_of_bytes</span>
+            <span class="s2">&quot;10000000000&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Completed running makeblastdb&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_convert_genblast_gff_to_gtf</span><span class="p">(</span><span class="n">gff_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert the content of gtf file in gff format</span>
+<span class="sd">    gff_file: Path for the gff file</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">gtf_string</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">gff_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_in</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">file_in</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span><span class="p">:</span>
+                <span class="n">results</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;exon&quot;</span> <span class="k">if</span> <span class="n">results</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;coding_exon&quot;</span> <span class="k">else</span> <span class="n">results</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+                <span class="n">attributes</span> <span class="o">=</span> <span class="n">_set_genblast_attributes</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">8</span><span class="p">]),</span> <span class="nb">str</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+                <span class="n">results</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span> <span class="o">=</span> <span class="n">attributes</span>
+                <span class="n">converted_line</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+                <span class="n">gtf_string</span> <span class="o">+=</span> <span class="n">converted_line</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">gtf_string</span>
+
+
+<span class="k">def</span> <span class="nf">_set_genblast_attributes</span><span class="p">(</span><span class="n">attributes</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">feature_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given the list of attributes in the genblast output,</span>
+<span class="sd">    define the new attributes for the gtf file.</span>
+<span class="sd">    attributes: GenBlast attribute list</span>
+<span class="sd">    feature_type: transcript or exon</span>
+<span class="sd">    Example genBlast output #pylint: disable=line-too-long, trailing-whitespace</span>
+<span class="sd">    1       genBlastG       transcript      131128674       131137049       252.729 -       .       ID=259447-R1-1-A1;Name=259447;PID=84.65;Coverage=94.22;Note=PID:84.65-Cover:94.22</span>
+<span class="sd">    1       genBlastG       coding_exon     131137031       131137049       .       -       .       ID=259447-R1-1-A1-E1;Parent=259447-R1-1-A1</span>
+<span class="sd">    1       genBlastG       coding_exon     131136260       131136333       .       -       .       ID=259447-R1-1-A1-E2;Parent=259447-R1-1-A1</span>
+<span class="sd">    1       genBlastG       coding_exon     131128674       131130245       .       -       .       ID=259447-R1-1-A1-E3;Parent=259447-R1-1-A1</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">converted_attributes</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">split_attributes</span> <span class="o">=</span> <span class="n">attributes</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">feature_type</span> <span class="o">==</span> <span class="s2">&quot;transcript&quot;</span><span class="p">:</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;Name\=(.+)$&quot;</span><span class="p">,</span> <span class="n">split_attributes</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">assert</span> <span class="n">match</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">converted_attributes</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;gene_id &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot;; transcript_id &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot;;&#39;</span>
+    <span class="k">elif</span> <span class="n">feature_type</span> <span class="o">==</span> <span class="s2">&quot;exon&quot;</span><span class="p">:</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\-E(\d+);Parent\=(.+)\-R\d+\-\d+\-&quot;</span><span class="p">,</span> <span class="n">attributes</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">match</span>
+        <span class="n">exon_rank</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">converted_attributes</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;gene_id &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot;; transcript_id &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot;; exon_number &quot;</span><span class="si">{</span><span class="n">exon_rank</span><span class="si">}</span><span class="s1">&quot;;&#39;</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">converted_attributes</span>
+
+
+<span class="k">def</span> <span class="nf">parse_args</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse command line arguments.&quot;&quot;&quot;</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Genblast arguments&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--masked_genome_file&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Masked genome file path&quot;</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--output_dir&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--protein_file&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path for the protein dataset&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--genblast_timeout_secs&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10800</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Genblast timeout period&quot;</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--max_intron_length&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Maximum intron length&quot;</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--genblast_bin&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;genblast&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Genblast executable path&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--convert2blastmask_bin&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;convert2blastmask&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;convert2blastmask executable path&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--makeblastdb_bin&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;makeblastdb&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;makeblastdb executable path&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--num_threads&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of threads&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--protein_set&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;uniprot&quot;</span><span class="p">,</span> <span class="s2">&quot;orthodb&quot;</span><span class="p">],</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Protein set [uniprot, orthodb]&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Genblast&#39;s entry-point.&quot;&quot;&quot;</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">log_file_path</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;log&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;genblast.log&quot;</span>
+    <span class="n">loginipath</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;conf&quot;</span> <span class="o">/</span> <span class="s2">&quot;logging.conf&quot;</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fileConfig</span><span class="p">(</span>
+        <span class="n">loginipath</span><span class="p">,</span>
+        <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;logfilename&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">log_file_path</span><span class="p">)},</span>
+        <span class="n">disable_existing_loggers</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">run_genblast</span><span class="p">(</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">masked_genome_file</span><span class="p">),</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">),</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">protein_file</span><span class="p">),</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">max_intron_length</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">genblast_timeout_secs</span><span class="p">,</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">genblast_bin</span><span class="p">),</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">convert2blastmask_bin</span><span class="p">),</span>
+        <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">makeblastdb_bin</span><span class="p">),</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">num_threads</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">protein_set</span><span class="p">,</span>
+    <span class="p">)</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../dust.html">DustMasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="../../../../../search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="../../../../../py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="../../../../../genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2024] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

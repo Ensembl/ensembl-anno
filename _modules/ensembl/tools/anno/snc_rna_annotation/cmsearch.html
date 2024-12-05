@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.snc_rna_annotation.cmsearch &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/agogo.css?v=cc331ede" />
+    <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js?v=e031e9a9"></script>
+    <script src="../../../../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=4825356b"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/_modules/ensembl/tools/anno/snc_rna_annotation/cmsearch.html" />
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="../../../../../index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for ensembl.tools.anno.snc_rna_annotation.cmsearch</h1><div class="highlight"><pre>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information #pylint: disable=missing-module-docstring</span>
+<span class="c1"># regarding copyright ownership.</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Infernal and its &quot;cmsearch&quot; tool are used for detecting sncRNAs in sequence databases.</span>
+<span class="sd">sncRNA diversity: Small non-coding RNAs (sncRNAs) constitute a diverse group of RNA</span>
+<span class="sd">molecules that play critical roles in various cellular processes, including gene regulation,</span>
+<span class="sd">RNA interference, and post-transcriptional modifications. There are different types of sncRNAs,</span>
+<span class="sd">such as microRNAs (miRNAs), small interfering RNAs (siRNAs), and small nucleolar RNAs (snoRNAs).</span>
+<span class="sd">Despite their small size, many sncRNAs exhibit conserved structural features or sequence motifs</span>
+<span class="sd">across species, essential to identify and study them.</span>
+<span class="sd">Covariance models (CMs) can represent conserved RNA secondary structures as well as conserved</span>
+<span class="sd">sequence patterns. This makes them well-suited for detecting sncRNAs in sequence databases.</span>
+
+<span class="sd">Nawrocki, E. P., Kolbe, D. L., &amp; Eddy, S. R. (2009). Infernal 1.0: inference of RNA alignments.</span>
+<span class="sd">Bioinformatics, 25(10), 1335-1337.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;run_cmsearch&quot;</span><span class="p">]</span>
+
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">logging.config</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">os</span> <span class="kn">import</span> <span class="n">PathLike</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">import</span> <span class="nn">psutil</span>
+
+<span class="kn">from</span> <span class="nn">ensembl.tools.anno.utils._utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">check_exe</span><span class="p">,</span>
+    <span class="n">create_dir</span><span class="p">,</span>
+    <span class="n">check_gtf_content</span><span class="p">,</span>
+    <span class="n">get_seq_region_length</span><span class="p">,</span>
+    <span class="n">get_slice_id</span><span class="p">,</span>
+    <span class="n">slice_output_to_gtf</span><span class="p">,</span>
+    <span class="n">get_sequence</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="run_cmsearch"><a class="viewcode-back" href="../../../../../cmsearch.html#ensembl.tools.anno.snc_rna_annotation.cmsearch.run_cmsearch">[docs]</a><span class="k">def</span> <span class="nf">run_cmsearch</span><span class="p">(</span>
+    <span class="n">genome_file</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">rfam_accession_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">rfam_cm_db</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm&quot;</span><span class="p">),</span>
+    <span class="n">rfam_seeds_file</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed&quot;</span><span class="p">),</span>
+    <span class="n">cmsearch_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;cmsearch&quot;</span><span class="p">),</span>
+    <span class="n">rnafold_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;RNAfold&quot;</span><span class="p">),</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Search CM(s) against a Rfam database</span>
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :type genome_file: PathLike</span>
+<span class="sd">        :param output_dir: Working directory path.</span>
+<span class="sd">        :type output_dir: Path</span>
+<span class="sd">        :param rfam_accessions: List of Rfam accessions.</span>
+<span class="sd">        :type rfam_accessions: Path</span>
+<span class="sd">        :param rfam_cm_db: Rfam database with cm models.</span>
+<span class="sd">        :type rfam_cm_db: Path</span>
+<span class="sd">        :param rfam_seed: Rfam seeds file.</span>
+<span class="sd">        :type rfam_seed: Path</span>
+<span class="sd">        :param cmsearch_bin: cmsearch software path.</span>
+<span class="sd">        :type cmsearch_bin: Path</span>
+<span class="sd">        :param rnafold_bin: RNAfold software path.</span>
+<span class="sd">        :type rnafold_bin: Path</span>
+<span class="sd">        :param num_threads: Number of threads.</span>
+<span class="sd">        :type num_threads: int</span>
+
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">cmsearch_bin</span><span class="p">)</span>
+    <span class="n">rfam_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;rfam_output&quot;</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">rfam_dir</span><span class="p">)</span>
+    <span class="n">output_file</span> <span class="o">=</span> <span class="n">rfam_dir</span> <span class="o">/</span> <span class="s2">&quot;annotation.gtf&quot;</span>
+    <span class="k">if</span> <span class="n">output_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">transcript_count</span> <span class="o">=</span> <span class="n">check_gtf_content</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;transcript&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">transcript_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Cmsearch gtf file exists, skipping analysis&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No gtf file, go on with the analysis&quot;</span><span class="p">)</span>
+
+    <span class="n">rfam_selected_models_file</span> <span class="o">=</span> <span class="n">rfam_dir</span> <span class="o">/</span> <span class="s2">&quot;rfam_models.cm&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">rfam_accession_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">rfam_accessions_in</span><span class="p">:</span>
+        <span class="n">rfam_accessions</span> <span class="o">=</span> <span class="n">rfam_accessions_in</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">rfam_cm_db</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">rfam_cm_in</span><span class="p">:</span>
+        <span class="n">rfam_data</span> <span class="o">=</span> <span class="n">rfam_cm_in</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+    <span class="n">rfam_models</span> <span class="o">=</span> <span class="n">rfam_data</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;//</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>  <span class="c1"># get a chunck containing a model</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">rfam_selected_models_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">rfam_cm_out</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="n">rfam_models</span><span class="p">:</span>
+            <span class="c1"># The Rfam.cm file has INFERNAL and HMMR models, both are needed at this point</span>
+            <span class="c1"># Later we just want the INFERNAL ones for looking at thresholds</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(RF\d+)&quot;</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">model_accession</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">model_accession</span> <span class="ow">in</span> <span class="n">rfam_accessions</span><span class="p">:</span>
+                    <span class="n">rfam_cm_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">model</span> <span class="o">+</span> <span class="s2">&quot;//</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">seed_descriptions</span> <span class="o">=</span> <span class="n">_get_rfam_seed_descriptions</span><span class="p">(</span><span class="n">rfam_seeds_file</span><span class="p">)</span>
+    <span class="n">cm_models</span> <span class="o">=</span> <span class="n">_extract_rfam_metrics</span><span class="p">(</span><span class="n">rfam_selected_models_file</span><span class="p">)</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating list of genomic slices&quot;</span><span class="p">)</span>
+    <span class="n">seq_region_to_length</span> <span class="o">=</span> <span class="n">get_seq_region_length</span><span class="p">(</span><span class="n">genome_file</span><span class="p">,</span> <span class="mi">5000</span><span class="p">)</span>
+    <span class="n">slice_ids_per_region</span> <span class="o">=</span> <span class="n">get_slice_id</span><span class="p">(</span><span class="n">seq_region_to_length</span><span class="p">,</span> <span class="n">slice_size</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span> <span class="n">overlap</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">min_length</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
+
+    <span class="n">cmsearch_cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">cmsearch_bin</span><span class="p">),</span>
+        <span class="s2">&quot;--rfam&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--cpu&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">num_threads</span><span class="p">),</span>
+        <span class="s2">&quot;--nohmmonly&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--cut_ga&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--tblout&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running Rfam&quot;</span><span class="p">)</span>
+
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">num_threads</span><span class="p">))</span>  <span class="c1"># pylint: disable=consider-using-with</span>
+    <span class="k">for</span> <span class="n">slice_id</span> <span class="ow">in</span> <span class="n">slice_ids_per_region</span><span class="p">:</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+            <span class="n">_multiprocess_cmsearch</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">cmsearch_cmd</span><span class="p">,</span>
+                <span class="n">slice_id</span><span class="p">,</span>
+                <span class="n">genome_file</span><span class="p">,</span>
+                <span class="n">rfam_dir</span><span class="p">,</span>
+                <span class="n">rfam_selected_models_file</span><span class="p">,</span>
+                <span class="n">cm_models</span><span class="p">,</span>
+                <span class="n">seed_descriptions</span><span class="p">,</span>
+                <span class="n">rnafold_bin</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+    <span class="c1"># Retry failed runs</span>
+    <span class="n">_handle_failed_jobs</span><span class="p">(</span>
+        <span class="n">rfam_dir</span><span class="p">,</span>
+        <span class="n">cmsearch_cmd</span><span class="p">,</span>
+        <span class="n">genome_file</span><span class="p">,</span>
+        <span class="n">rfam_selected_models_file</span><span class="p">,</span>
+        <span class="n">cm_models</span><span class="p">,</span>
+        <span class="n">seed_descriptions</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">slice_output_to_gtf</span><span class="p">(</span><span class="n">output_dir</span><span class="o">=</span><span class="n">rfam_dir</span><span class="p">,</span> <span class="n">unique_ids</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">file_extension</span><span class="o">=</span><span class="s2">&quot;.rfam.gtf&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">gtf_file</span> <span class="ow">in</span> <span class="n">rfam_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.rfam.gtf&quot;</span><span class="p">):</span>
+        <span class="n">gtf_file</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span></div>
+
+
+<span class="k">def</span> <span class="nf">_handle_failed_jobs</span><span class="p">(</span>
+    <span class="n">rfam_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">cmsearch_cmd</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span>
+    <span class="n">genome_file</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span>
+    <span class="n">rfam_selected_models_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">cm_models</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">seed_descriptions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">rnafold_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;RNAfold&quot;</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Retry Rfam failed jobs using available cores and memory</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        rfam_dir (Path): Rfam output dir.</span>
+<span class="sd">        cmsearch_cmd (List): Cmsearch command.</span>
+<span class="sd">        genome_file (PathLike): Genome softmasked file.</span>
+<span class="sd">        rfam_selected_models_file (Path): Rfam model file.</span>
+<span class="sd">        cm_models (dict): Metrics of Rfam models.</span>
+<span class="sd">        seed_descriptions (dict): Rfam seed models file.</span>
+<span class="sd">        rnafold_bin: RNAfold software path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">exception_file_list</span> <span class="o">=</span> <span class="n">rfam_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.rfam.except&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Get the available system memory and CPU cores</span>
+    <span class="n">available_memory</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">virtual_memory</span><span class="p">()</span><span class="o">.</span><span class="n">available</span>
+    <span class="c1"># psutil.cpu_count(logical=False): number of physical CPU cores.</span>
+    <span class="c1"># psutil.cpu_count(logical=True): total number of logical CPU cores (physical cores and virtual cores)</span>
+    <span class="c1"># For computationally intensive tasks, using physical cores might be more appropriate,</span>
+    <span class="c1"># while for tasks that can benefit from parallelism, using logical cores might be beneficial.</span>
+    <span class="n">available_cores</span> <span class="o">=</span> <span class="n">psutil</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">(</span><span class="n">logical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># Calculate the optimal memory per core and the number of cores to use</span>
+    <span class="n">memory_per_core</span> <span class="o">=</span> <span class="n">available_memory</span> <span class="o">//</span> <span class="n">available_cores</span>
+    <span class="n">num_cores</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">available_cores</span><span class="p">,</span> <span class="n">available_memory</span> <span class="o">//</span> <span class="n">memory_per_core</span><span class="p">)</span>
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="n">num_cores</span><span class="p">)</span>  <span class="c1"># pylint: disable=consider-using-with</span>
+    <span class="k">for</span> <span class="n">exception_file</span> <span class="ow">in</span> <span class="n">exception_file_list</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running himem job for failed region:</span><span class="si">%s</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exception_file</span><span class="p">)</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(.+)\.rs(\d+)\.re(\d+)\.&quot;</span><span class="p">,</span> <span class="n">exception_file</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="n">except_region</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">except_start</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">except_end</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+            <span class="n">except_slice_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">except_region</span><span class="p">,</span> <span class="n">except_start</span><span class="p">,</span> <span class="n">except_end</span><span class="p">]</span>
+            <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+                <span class="n">_multiprocess_cmsearch</span><span class="p">,</span>
+                <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                    <span class="n">cmsearch_cmd</span><span class="p">,</span>
+                    <span class="n">except_slice_id</span><span class="p">,</span>
+                    <span class="n">genome_file</span><span class="p">,</span>
+                    <span class="n">rfam_dir</span><span class="p">,</span>
+                    <span class="n">rfam_selected_models_file</span><span class="p">,</span>
+                    <span class="n">cm_models</span><span class="p">,</span>
+                    <span class="n">seed_descriptions</span><span class="p">,</span>
+                    <span class="n">memory_per_core</span><span class="p">,</span>
+                    <span class="n">rnafold_bin</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">_get_rfam_seed_descriptions</span><span class="p">(</span><span class="n">rfam_seeds_file</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Rfam seed description</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        rfam_seeds_file (PathLike): File of Rfam seeds</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: List of Rfam seeds with description,name, type</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">descriptions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">rfam_seeds</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="c1"># NOTE: for some reason the decoder breaks on the seeds file,</span>
+    <span class="c1"># so I have made this ignore errors</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">rfam_seeds_file</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">rfam_seeds_in</span><span class="p">:</span>
+        <span class="n">rfam_seeds</span> <span class="o">=</span> <span class="n">rfam_seeds_in</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">seed</span> <span class="ow">in</span> <span class="n">rfam_seeds</span><span class="p">:</span>
+        <span class="n">matches</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^\#=GF (AC|DE|ID|TP)\s+(.+)&quot;</span><span class="p">,</span> <span class="n">seed</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">matches</span><span class="p">:</span>
+            <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">matches</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="c1"># logger.info(&quot;rfam seed %s %s %s&quot;, key,value, matches)</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;AC&quot;</span><span class="p">:</span>
+                <span class="n">domain</span> <span class="o">=</span> <span class="n">value</span>
+                <span class="n">descriptions</span><span class="p">[</span><span class="n">domain</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;DE&quot;</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="n">domain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Domain should not be None at this point.&quot;</span>
+                <span class="n">descriptions</span><span class="p">[</span><span class="n">domain</span><span class="p">][</span><span class="s2">&quot;description&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+            <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;ID&quot;</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="n">domain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Domain should not be None at this point.&quot;</span>
+                <span class="n">descriptions</span><span class="p">[</span><span class="n">domain</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+            <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;TP&quot;</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="n">domain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;Domain should not be None at this point.&quot;</span>
+                <span class="n">descriptions</span><span class="p">[</span><span class="n">domain</span><span class="p">][</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">return</span> <span class="n">descriptions</span>
+
+
+<span class="k">def</span> <span class="nf">_extract_rfam_metrics</span><span class="p">(</span><span class="n">rfam_selected_models</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get name, description, length, max length, threshold of each Rfam model.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        rfam_selected_models_file : Path for Rfam models.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        parsed_cm_data: Rfam metrics.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">rfam_selected_models</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">rfam_cm_in</span><span class="p">:</span>
+        <span class="n">rfam_models</span> <span class="o">=</span> <span class="n">rfam_cm_in</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;//</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">parsed_cm_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="n">rfam_models</span><span class="p">:</span>
+            <span class="n">model_name_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;NAME\s+(\S+)&quot;</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
+            <span class="n">match_infernal</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;INFERNAL&quot;</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">model_name_match</span> <span class="ow">and</span> <span class="n">match_infernal</span><span class="p">:</span>
+                <span class="n">model_name</span> <span class="o">=</span> <span class="n">model_name_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">parsed_cm_data</span><span class="p">[</span><span class="n">model_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">parse_regex</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="sa">r</span><span class="s2">&quot;^NAME\s+(\S+)&quot;</span><span class="p">:</span> <span class="s2">&quot;-name&quot;</span><span class="p">,</span>
+                    <span class="sa">r</span><span class="s2">&quot;^DESC\s+(\S+)&quot;</span><span class="p">:</span> <span class="s2">&quot;-description&quot;</span><span class="p">,</span>
+                    <span class="sa">r</span><span class="s2">&quot;^CLEN\s+(\d+)&quot;</span><span class="p">:</span> <span class="s2">&quot;-length&quot;</span><span class="p">,</span>
+                    <span class="sa">r</span><span class="s2">&quot;^W\s+(\d+)&quot;</span><span class="p">:</span> <span class="s2">&quot;-maxlength&quot;</span><span class="p">,</span>
+                    <span class="sa">r</span><span class="s2">&quot;^ACC\s+(\S+)&quot;</span><span class="p">:</span> <span class="s2">&quot;-accession&quot;</span><span class="p">,</span>
+                    <span class="sa">r</span><span class="s2">&quot;^GA\s+(\d+)&quot;</span><span class="p">:</span> <span class="s2">&quot;-threshold&quot;</span><span class="p">,</span>
+                <span class="p">}</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">):</span>
+                    <span class="k">for</span> <span class="n">pattern</span><span class="p">,</span> <span class="n">value_type</span> <span class="ow">in</span> <span class="n">parse_regex</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                            <span class="n">parsed_cm_data</span><span class="p">[</span><span class="n">model_name</span><span class="p">][</span><span class="n">value_type</span><span class="p">]</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                            <span class="k">continue</span>
+
+    <span class="k">return</span> <span class="n">parsed_cm_data</span>
+
+
+<span class="k">def</span> <span class="nf">_multiprocess_cmsearch</span><span class="p">(</span>
+    <span class="n">cmsearch_cmd</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">slice_id</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">genome_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">rfam_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">rfam_selected_models_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">cm_models</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">seed_descriptions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">rnafold_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;RNAfold&quot;</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run cmsearch on multiprocess on genomic slices</span>
+<span class="sd">    Args:</span>
+<span class="sd">        cmsearch_cmd : Cmsearch command to execute.</span>
+<span class="sd">        slice_id: List of slice IDs.</span>
+<span class="sd">        genome_file : Genome softamsked file.</span>
+<span class="sd">        rfam_dir : Rfam output dir.</span>
+<span class="sd">        rfam_selected_models_file : Rfam model file.</span>
+<span class="sd">        cm_models : Metrics of Rfam models.</span>
+<span class="sd">        seed_descriptions : Rfam seed models file.</span>
+<span class="sd">        rnafold_bin : RNAfold software path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">region_name</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">slice_id</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">&quot;Processing Rfam data using cmsearch against slice: </span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">:</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="p">,</span>
+        <span class="n">start</span><span class="p">,</span>
+        <span class="n">end</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">seq</span> <span class="o">=</span> <span class="n">get_sequence</span><span class="p">(</span><span class="n">region_name</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">start</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">end</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="n">genome_file</span><span class="p">,</span> <span class="n">rfam_dir</span><span class="p">)</span>
+    <span class="n">slice_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="s2">.rs</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">.re</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">slice_file</span> <span class="o">=</span> <span class="n">rfam_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_name</span><span class="si">}</span><span class="s2">.fa&quot;</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">slice_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">region_out</span><span class="p">:</span>
+        <span class="n">region_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&gt;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">seq</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">region_tblout</span> <span class="o">=</span> <span class="n">rfam_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_name</span><span class="si">}</span><span class="s2">.tblout&quot;</span>
+    <span class="n">region_results</span> <span class="o">=</span> <span class="n">rfam_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_name</span><span class="si">}</span><span class="s2">.rfam.gtf&quot;</span>
+    <span class="n">exception_results</span> <span class="o">=</span> <span class="n">rfam_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">slice_name</span><span class="si">}</span><span class="s2">.rfam.except&quot;</span>
+    <span class="n">cmsearch_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">region_tblout</span><span class="p">))</span>
+    <span class="n">cmsearch_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rfam_selected_models_file</span><span class="p">))</span>
+    <span class="n">cmsearch_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">slice_file</span><span class="p">))</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cmsearch_cmd</span><span class="p">))</span>
+    <span class="c1"># if memory_limit is not None:</span>
+    <span class="c1">#    cmsearch_cmd = prlimit_command(cmsearch_cmd, memory_limit)</span>
+    <span class="n">return_value</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">return_value</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">(</span>
+            <span class="n">cmsearch_cmd</span><span class="p">,</span>
+            <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">STDOUT</span><span class="p">,</span>
+            <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
+        <span class="c1"># Note that writing to file was the only option here.</span>
+        <span class="c1"># If return_value was passed back, eventually it would clog the</span>
+        <span class="c1"># tiny pipe that is used by the workers to send info back.</span>
+        <span class="c1"># That would mean that it would eventually just be one</span>
+        <span class="c1"># worked running at a time</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+            <span class="s2">&quot;Issue processing the following region with cmsearch: </span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">-</span><span class="si">%s</span><span class="s2"> &quot;</span><span class="p">,</span>
+            <span class="n">region_name</span><span class="p">,</span>
+            <span class="n">start</span><span class="p">,</span>
+            <span class="n">end</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Return value: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">return_value</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">exception_results</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">exception_out</span><span class="p">:</span>
+            <span class="n">exception_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">region_results</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+        <span class="n">region_tblout</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="n">ex</span>  <span class="c1"># Re-raise the exception to allow caller to handle it further if needed</span>
+
+    <span class="n">initial_table_results</span> <span class="o">=</span> <span class="n">_parse_rfam_tblout</span><span class="p">(</span><span class="n">region_tblout</span><span class="p">,</span> <span class="n">region_name</span><span class="p">)</span>
+    <span class="n">unique_table_results</span> <span class="o">=</span> <span class="n">_remove_rfam_overlap</span><span class="p">(</span><span class="n">initial_table_results</span><span class="p">)</span>
+    <span class="n">filtered_table_results</span> <span class="o">=</span> <span class="n">_filter_rfam_results</span><span class="p">(</span><span class="n">unique_table_results</span><span class="p">,</span> <span class="n">cm_models</span><span class="p">)</span>
+    <span class="n">_create_rfam_gtf</span><span class="p">(</span>
+        <span class="n">filtered_table_results</span><span class="p">,</span>
+        <span class="n">cm_models</span><span class="p">,</span>
+        <span class="n">seed_descriptions</span><span class="p">,</span>
+        <span class="n">region_name</span><span class="p">,</span>
+        <span class="n">region_results</span><span class="p">,</span>
+        <span class="n">genome_file</span><span class="p">,</span>
+        <span class="n">rfam_dir</span><span class="p">,</span>
+        <span class="n">rnafold_bin</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">region_results</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+    <span class="n">region_tblout</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">_parse_rfam_tblout</span><span class="p">(</span><span class="n">region_tblout</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse cmsearch output</span>
+<span class="sd">    col 0 Target Name : This is the name of the target sequence or sequence region that matched the query.</span>
+<span class="sd">    col 2 Query name : This is the name of the query sequence or model that was used for the search.</span>
+<span class="sd">    col 3 Accession : This usually refers to a unique identifier for the target sequence.</span>
+<span class="sd">    col 5 Query Start : The position where the match starts on the query sequence.</span>
+<span class="sd">    col 6 Query End : The position where the match ends on the query sequence.</span>
+<span class="sd">    col 7 Target Start : The position where the match starts on the target sequence.</span>
+<span class="sd">    col 8 Target End : The position where the match ends on the target sequence.</span>
+<span class="sd">    col 9 Strand : Indicates the orientation of the match on the target sequence.</span>
+<span class="sd">            It could be + for the forward strand or - for the reverse strand.</span>
+<span class="sd">    col 14 Hit Score : The score assigned to this match. Higher scores generally indicate better matches.</span>
+<span class="sd">    col 15 E-value : This is a statistical measure of the number of hits one can expect to see</span>
+<span class="sd">            when searching a database of a particular size.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        region_tblout : Cmsearch output for the region name.</span>
+<span class="sd">        region_name : Region name.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Formatted cmsearch output</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">region_tblout</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">rfam_tbl_in</span><span class="p">:</span>
+        <span class="n">rfam_tbl_data</span> <span class="o">=</span> <span class="n">rfam_tbl_in</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+    <span class="n">tbl_results</span> <span class="o">=</span> <span class="n">rfam_tbl_data</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">all_parsed_results</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">tbl_results</span><span class="p">:</span>
+        <span class="n">parsed_tbl_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">rf</span><span class="s2">&quot;^</span><span class="si">{</span><span class="n">region_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
+            <span class="n">hit</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="n">parsed_tbl_data</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;accession&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">hit</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span>
+                <span class="s2">&quot;start&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">hit</span><span class="p">[</span><span class="mi">7</span><span class="p">]),</span>
+                <span class="s2">&quot;end&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">hit</span><span class="p">[</span><span class="mi">8</span><span class="p">]),</span>
+                <span class="s2">&quot;strand&quot;</span><span class="p">:</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">hit</span><span class="p">[</span><span class="mi">9</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;+&quot;</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+                <span class="s2">&quot;query_name&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">hit</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span>
+                <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">hit</span><span class="p">[</span><span class="mi">14</span><span class="p">]),</span>
+            <span class="p">}</span>
+            <span class="n">all_parsed_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">parsed_tbl_data</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">all_parsed_results</span>
+
+
+<span class="k">def</span> <span class="nf">_remove_rfam_overlap</span><span class="p">(</span><span class="n">parsed_tbl_data</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Remove Rfam mdoels overlapping and with a lower score.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        parsed_tbl_data : Cmsearch output</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Final Rfam models</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">excluded_structures</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">chosen_structures</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">structure_x</span> <span class="ow">in</span> <span class="n">parsed_tbl_data</span><span class="p">:</span>
+        <span class="n">chosen_structure</span> <span class="o">=</span> <span class="n">structure_x</span>
+        <span class="n">structure_x_start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">structure_x</span><span class="p">[</span><span class="s2">&quot;start&quot;</span><span class="p">])</span>
+        <span class="n">structure_x_end</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">structure_x</span><span class="p">[</span><span class="s2">&quot;end&quot;</span><span class="p">])</span>
+        <span class="n">structure_x_score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">structure_x</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">])</span>
+        <span class="n">structure_x_accession</span> <span class="o">=</span> <span class="n">structure_x</span><span class="p">[</span><span class="s2">&quot;accession&quot;</span><span class="p">]</span>
+        <span class="n">structure_x_string</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">structure_x_start</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">structure_x_end</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">structure_x_score</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">structure_x_accession</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">structure_y</span> <span class="ow">in</span> <span class="n">parsed_tbl_data</span><span class="p">:</span>
+            <span class="n">structure_y_start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">structure_y</span><span class="p">[</span><span class="s2">&quot;start&quot;</span><span class="p">])</span>
+            <span class="n">structure_y_end</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">structure_y</span><span class="p">[</span><span class="s2">&quot;end&quot;</span><span class="p">])</span>
+            <span class="n">structure_y_score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">structure_y</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">])</span>
+            <span class="n">structure_y_accession</span> <span class="o">=</span> <span class="n">structure_y</span><span class="p">[</span><span class="s2">&quot;accession&quot;</span><span class="p">]</span>
+            <span class="n">structure_y_string</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">structure_y_start</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">structure_y_end</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">structure_y_score</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">structure_y_accession</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">structure_y_string</span> <span class="ow">in</span> <span class="n">excluded_structures</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">structure_x_start</span> <span class="o">&lt;=</span> <span class="n">structure_y_end</span> <span class="ow">and</span> <span class="n">structure_x_end</span> <span class="o">&gt;=</span> <span class="n">structure_y_start</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">structure_x_score</span> <span class="o">&lt;</span> <span class="n">structure_y_score</span><span class="p">:</span>
+                    <span class="n">chosen_structure</span> <span class="o">=</span> <span class="n">structure_y</span>
+                    <span class="n">excluded_structures</span><span class="p">[</span><span class="n">structure_x_string</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">excluded_structures</span><span class="p">[</span><span class="n">structure_y_string</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">chosen_structures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">chosen_structure</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">chosen_structures</span>
+
+
+<span class="k">def</span> <span class="nf">_filter_rfam_results</span><span class="p">(</span>
+    <span class="n">unfiltered_tbl_data</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">cm_models</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter Rfam models according to type and a set of thresholds.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        unfiltered_tbl_data : Unfiltered Rfam output.</span>
+<span class="sd">        cm_models : Rfam models.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        filtered_results: List of filtered models</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">filtered_results</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">thresholds</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;LSU_rRNA_eukarya&quot;</span><span class="p">:</span> <span class="mi">1700</span><span class="p">,</span>
+        <span class="s2">&quot;SSU_rRNA_eukarya&quot;</span><span class="p">:</span> <span class="mi">1600</span><span class="p">,</span>
+        <span class="s2">&quot;5_8S_rRNA&quot;</span><span class="p">:</span> <span class="mi">85</span><span class="p">,</span>
+        <span class="s2">&quot;5S_rRNA&quot;</span><span class="p">:</span> <span class="mi">75</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">for</span> <span class="n">structure</span> <span class="ow">in</span> <span class="n">unfiltered_tbl_data</span><span class="p">:</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;query_name&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">query</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;LSU_rRNA_archaea&quot;</span><span class="p">,</span> <span class="s2">&quot;LSU_rRNA_bacteria&quot;</span><span class="p">]:</span>
+            <span class="n">threshold</span> <span class="o">=</span> <span class="n">cm_models</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">query</span><span class="p">),</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;-threshold&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">threshold</span> <span class="o">=</span> <span class="n">thresholds</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">query</span><span class="p">),</span> <span class="n">cm_models</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">query</span><span class="p">),</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;-threshold&quot;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">threshold</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">float</span><span class="p">(</span><span class="n">structure</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">])</span> <span class="o">&gt;=</span> <span class="nb">float</span><span class="p">(</span><span class="n">threshold</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;filtera rfam results </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">structure</span><span class="p">)</span>
+            <span class="n">filtered_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">structure</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">filtered_results</span>
+
+
+<span class="c1"># NOTE: The below are notes from the perl code (which has extra code)</span>
+<span class="c1"># about possible improvements that are not implemented there</span>
+<span class="c1"># Although not included in RefSeq filters, additional filters that</span>
+<span class="c1"># consider sizes and score_to_size ratios can be applied</span>
+<span class="c1"># in future work to further exclude FPs</span>
+<span class="c1">#</span>
+<span class="c1"># my $is_valid_size = $mapping_length &gt; $min_length &amp;&amp; $mapping_length &lt; $max_length ? 1 : 0;</span>
+<span class="c1"># my $score_size_ratio = $result-&gt;{&#39;score&#39;} / $mapping_length;</span>
+
+
+<span class="k">def</span> <span class="nf">_create_rfam_gtf</span><span class="p">(</span>
+    <span class="n">filtered_results</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">cm_models</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">seed_descriptions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="n">region_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">region_results</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">genome_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">rfam_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">rnafold_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;RNAfold&quot;</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert RFam output per single region in gtf format</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        filtered_results : Filtered Rfam results without overlapping.</span>
+<span class="sd">        cm_models :  Rfam database.</span>
+<span class="sd">        seed_descriptions : Rfam seed file.</span>
+<span class="sd">        region_name : Slice name.</span>
+<span class="sd">        region_results : Rfam output file.</span>
+<span class="sd">        genome_file : Genome file.</span>
+<span class="sd">        rfam_dir : Output file.</span>
+<span class="sd">        rnafold_bin: RNAfold software path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">filtered_results</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">biotype_type_mapping</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="sa">r</span><span class="s2">&quot;snRNA; snoRNA; scaRNA&quot;</span><span class="p">:</span> <span class="s2">&quot;scaRNA&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;snRNA; snoRNA&quot;</span><span class="p">:</span> <span class="s2">&quot;snoRNA&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;snRNA&quot;</span><span class="p">:</span> <span class="s2">&quot;snRNA&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;rRNA;&quot;</span><span class="p">:</span> <span class="s2">&quot;rRNA&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;antisense;&quot;</span><span class="p">:</span> <span class="s2">&quot;antisense&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;antitoxin;&quot;</span><span class="p">:</span> <span class="s2">&quot;antitoxin&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;ribozyme;&quot;</span><span class="p">:</span> <span class="s2">&quot;ribozyme&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="n">biotype_name_mapping</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="sa">r</span><span class="s2">&quot;Vault&quot;</span><span class="p">:</span> <span class="s2">&quot;Vault_RNA&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;Y_RNA&quot;</span><span class="p">:</span> <span class="s2">&quot;Y_RNA&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;^RNaseP&quot;</span><span class="p">:</span> <span class="s2">&quot;RNase_P_RNA&quot;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;^RNase_M&quot;</span><span class="p">:</span> <span class="s2">&quot;RNase_MRP_RNA&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">region_results</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">rfam_gtf_out</span><span class="p">:</span>
+        <span class="n">gene_counter</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">structure</span> <span class="ow">in</span> <span class="n">filtered_results</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;query_name&quot;</span><span class="p">]</span>
+            <span class="n">accession</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;accession&quot;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">query</span> <span class="ow">in</span> <span class="n">cm_models</span><span class="p">:</span>
+                <span class="n">model</span> <span class="o">=</span> <span class="n">cm_models</span><span class="p">[</span><span class="n">query</span><span class="p">]</span> <span class="c1"># pylint: disable=unused-variable</span>
+                <span class="n">description</span> <span class="o">=</span> <span class="n">seed_descriptions</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">accession</span><span class="p">,</span> <span class="p">{})</span>
+                <span class="n">rfam_type</span> <span class="o">=</span> <span class="n">description</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="s2">&quot;misc_RNA&quot;</span><span class="p">)</span>
+                <span class="n">domain</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;query_name&quot;</span><span class="p">]</span>
+                <span class="c1"># padding = model[&quot;-length&quot;]</span>
+                <span class="n">gtf_strand</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;strand&quot;</span><span class="p">]</span>
+                <span class="n">rnafold_strand</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;strand&quot;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">gtf_strand</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">start</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;start&quot;</span><span class="p">]</span>
+                    <span class="n">end</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;end&quot;</span><span class="p">]</span>
+                    <span class="n">gtf_strand</span> <span class="o">=</span> <span class="s2">&quot;+&quot;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">start</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;end&quot;</span><span class="p">]</span>
+                    <span class="n">end</span> <span class="o">=</span> <span class="n">structure</span><span class="p">[</span><span class="s2">&quot;start&quot;</span><span class="p">]</span>
+                    <span class="c1"># score = structure[&quot;score&quot;]</span>
+                    <span class="n">gtf_strand</span> <span class="o">=</span> <span class="s2">&quot;-&quot;</span>
+                    <span class="n">rnafold_strand</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+
+                <span class="n">biotype</span> <span class="o">=</span> <span class="s2">&quot;misc_RNA&quot;</span>
+                <span class="c1"># Flag to track if a match is found</span>
+                <span class="n">match_found</span> <span class="o">=</span> <span class="kc">False</span>
+                <span class="c1"># Check each pattern and update biotype if a match is found</span>
+                <span class="k">for</span> <span class="n">pattern</span><span class="p">,</span> <span class="n">mapped_biotype</span> <span class="ow">in</span> <span class="n">biotype_type_mapping</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">rfam_type</span><span class="p">)):</span>
+                        <span class="n">biotype</span> <span class="o">=</span> <span class="n">mapped_biotype</span>
+                        <span class="n">match_found</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>  <span class="c1"># Break out of the loop once a match is found</span>
+                <span class="c1"># If no match is found, check matches in biotype_name_mapping</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">match_found</span><span class="p">:</span>
+                    <span class="c1"># Check each pattern and update biotype if a match is found</span>
+                    <span class="k">for</span> <span class="n">pattern</span><span class="p">,</span> <span class="n">mapped_biotype</span> <span class="ow">in</span> <span class="n">biotype_name_mapping</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                        <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">domain</span><span class="p">):</span>
+                            <span class="n">biotype</span> <span class="o">=</span> <span class="n">mapped_biotype</span>
+                            <span class="n">match_found</span> <span class="o">=</span> <span class="kc">True</span>
+                            <span class="k">break</span>  <span class="c1"># Break out of the loop once a match is found</span>
+                <span class="n">rna_seq</span> <span class="o">=</span> <span class="n">get_sequence</span><span class="p">(</span>
+                    <span class="n">region_name</span><span class="p">,</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">start</span><span class="p">),</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">end</span><span class="p">),</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">rnafold_strand</span><span class="p">),</span>
+                    <span class="n">genome_file</span><span class="p">,</span>
+                    <span class="n">rfam_dir</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">valid_structure</span> <span class="o">=</span> <span class="n">check_rnafold_structure</span><span class="p">(</span><span class="n">rna_seq</span><span class="p">,</span> <span class="n">rfam_dir</span><span class="p">,</span> <span class="n">rnafold_bin</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">valid_structure</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="n">transcript_string</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">region_name</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Rfam</span><span class="se">\t</span><span class="s2">transcript</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="n">gtf_strand</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="s1">&#39;gene_id &quot;&#39;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">gene_counter</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s1">&#39;&quot;; transcript_id &quot;&#39;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">gene_counter</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s1">&#39;&quot;; biotype &quot;&#39;</span>
+                    <span class="o">+</span> <span class="n">biotype</span>  <span class="c1"># pylint: disable=undefined-loop-variable</span>
+                    <span class="o">+</span> <span class="s1">&#39;&quot;;</span><span class="se">\n</span><span class="s1">&#39;</span>
+                <span class="p">)</span>
+                <span class="n">exon_string</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">region_name</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">Rfam</span><span class="se">\t</span><span class="s2">exon</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="n">gtf_strand</span>
+                    <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">.</span><span class="se">\t</span><span class="s2">&quot;</span>
+                    <span class="o">+</span> <span class="s1">&#39;gene_id &quot;&#39;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">gene_counter</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s1">&#39;&quot;; transcript_id &quot;&#39;</span>
+                    <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">gene_counter</span><span class="p">)</span>
+                    <span class="o">+</span> <span class="s1">&#39;&quot;; exon_number &quot;1&quot;; biotype &quot;&#39;</span>
+                    <span class="o">+</span> <span class="n">biotype</span>  <span class="c1"># pylint: disable=undefined-loop-variable</span>
+                    <span class="o">+</span> <span class="s1">&#39;&quot;;</span><span class="se">\n</span><span class="s1">&#39;</span>
+                <span class="p">)</span>
+
+                <span class="n">rfam_gtf_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">transcript_string</span><span class="p">)</span>
+                <span class="n">rfam_gtf_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">exon_string</span><span class="p">)</span>
+                <span class="n">gene_counter</span> <span class="o">+=</span> <span class="mi">1</span>
+
+
+<span class="k">def</span> <span class="nf">check_rnafold_structure</span><span class="p">(</span><span class="n">seq</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rfam_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">rnafold_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;RNAfold&quot;</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;RNAfold reads RNA sequences, calculates their minimum free energy (mfe)</span>
+<span class="sd">       structure and prints the mfe structure in bracket notation and its free energy.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        seq : sequence</span>
+<span class="sd">        rfam_dir : cmsearch working directory</span>
+<span class="sd">        rnafold_bin : Software path. Defaults to Path(&quot;RNAfold&quot;).</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        float: mfe structure</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Note there&#39;s some extra code in the RNAfold Perl module</span>
+    <span class="c1"># for encoding the structure into an attrib</span>
+    <span class="c1"># Could consider implementing this when running</span>
+    <span class="c1"># for loading into an Ensembl db</span>
+    <span class="n">free_energy_score</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;w+t&quot;</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="nb">dir</span><span class="o">=</span><span class="n">rfam_dir</span><span class="p">)</span> <span class="k">as</span> <span class="n">rna_temp_in</span><span class="p">:</span>
+            <span class="n">rna_temp_in</span><span class="o">.</span><span class="n">writelines</span><span class="p">(</span><span class="s2">&quot;&gt;seq1</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="n">seq</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">rna_in_file_path</span> <span class="o">=</span> <span class="n">rna_temp_in</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">rnafold_cmd</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">rnafold_bin</span><span class="p">),</span> <span class="s2">&quot;--infile&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">rna_in_file_path</span><span class="p">)]</span>
+        <span class="n">rnafold_output</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">(</span>
+            <span class="n">rnafold_cmd</span><span class="p">,</span>
+            <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">STDOUT</span><span class="p">,</span>
+            <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">rnafold_output</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;([().]+)\s\(\s*(-*\d+.\d+)\)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">structure</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># pylint: disable=unused-variable</span>
+                <span class="n">free_energy_score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>  <span class="c1"># TOADD DAF</span>
+                <span class="k">break</span>
+    <span class="k">except</span> <span class="p">(</span><span class="n">subprocess</span><span class="o">.</span><span class="n">CalledProcessError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Error while running RNAfold: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="c1">#rna_in_file_path.unlink()</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;FREE ENERGY </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">free_energy_score</span><span class="p">)</span>    
+    <span class="k">return</span> <span class="n">free_energy_score</span>
+
+
+<span class="c1"># this function is useful for the DnaAlignFeature and it should help when we load into the ensembl db</span>
+<span class="c1"># NOTE some of the code above and the code commented out here is to do with creating</span>
+<span class="c1"># a DAF. As we don&#39;t have a python concept of this I&#39;m leaving it out for the moment</span>
+<span class="c1"># but the code below is a reference</span>
+<span class="c1">#    my $daf = Bio::EnsEMBL::DnaDnaAlignFeature-&gt;new(</span>
+<span class="c1">#      -slice          =&gt; $self-&gt;queries,</span>
+<span class="c1">#      -start          =&gt; $strand == 1 ? $start : $end,</span>
+<span class="c1">#      -end            =&gt; $strand == 1 ? $end : $start,</span>
+<span class="c1">#      -strand         =&gt; $strand,</span>
+<span class="c1">#      -hstart         =&gt; $hstart,</span>
+<span class="c1">#      -hend           =&gt; $hend,</span>
+<span class="c1">#      -hstrand        =&gt; $strand,</span>
+<span class="c1">#      -score          =&gt; $score,</span>
+<span class="c1">#      -hseqname       =&gt; length($target_name) &gt; 39 ?</span>
+<span class="c1"># substr($target_name, 0, 39) : $target_name,,</span>
+<span class="c1">#      -p_value  =&gt; $evalue,</span>
+<span class="c1">#      -align_type =&gt; &#39;ensembl&#39;,</span>
+<span class="c1">#      -cigar_string  =&gt; abs($hend - $hstart) . &quot;M&quot;,</span>
+<span class="c1"># -hcoverage    =&gt; $RNAfold-&gt;score,</span>
+<span class="c1">#   );</span>
+
+
+<span class="c1"># this function is useful to upload the RNAfold structure in the transcript attribute table</span>
+<span class="c1"># should be moved into load db module</span>
+<span class="k">def</span> <span class="nf">encode_str</span><span class="p">(</span><span class="n">input_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode the number of repeated sequences reporting the sequence of characters and the number</span>
+<span class="sd">    of occurences; when the encoding sequence reach 200 it is splitted reporting the start and the</span>
+<span class="sd">    stop position in the transcript&#39;s structure</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        input_string : input sequence</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        List: List of encoded sequences</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">codes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">code</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">last_chrom</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">array</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">chrom</span> <span class="ow">in</span> <span class="n">input_string</span><span class="p">:</span>
+        <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="n">chrom</span> <span class="o">==</span> <span class="n">last_chrom</span><span class="p">:</span>
+            <span class="n">array</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">chrom</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">code</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">code</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">200</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">codes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="se">\t</span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">code</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                <span class="n">start</span> <span class="o">=</span> <span class="n">count</span> <span class="o">+</span> <span class="mi">1</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">code</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="p">))</span>
+                <span class="n">array</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="n">code</span> <span class="o">+=</span> <span class="n">chrom</span>
+            <span class="n">last_chrom</span> <span class="o">=</span> <span class="n">chrom</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">code</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">array</span><span class="p">))</span>
+
+    <span class="n">codes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="se">\t</span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">codes</span>
+
+
+<span class="k">def</span> <span class="nf">parse_args</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse command line arguments.&quot;&quot;&quot;</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;RepeatMasker&#39;s arguments&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--genome_file&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Genome file path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--output_dir&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--rfam_accessions&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;List of Rfam accessions.&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--rfam_cm_db&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Rfam database with cm models.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--rfam_seeds_file&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;CRfam seeds file.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--cmsearch_bin&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;cmsearch&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;cmsearch software path.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--rnafold_bin&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;RNAfold&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;RNAfold software path.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--num_threads&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of threads&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;cmsearch&#39;s entry-point.&quot;&quot;&quot;</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">log_file_path</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;log&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;cmsearch.log&quot;</span>
+    <span class="n">loginipath</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;conf&quot;</span> <span class="o">/</span> <span class="s2">&quot;logging.conf&quot;</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fileConfig</span><span class="p">(</span>
+        <span class="n">loginipath</span><span class="p">,</span>
+        <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;logfilename&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">log_file_path</span><span class="p">)},</span>
+        <span class="n">disable_existing_loggers</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">run_cmsearch</span><span class="p">(</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">genome_file</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">rfam_accessions</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">rfam_cm_db</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">rfam_seeds_file</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">cmsearch_bin</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">rnafold_bin</span><span class="p">,</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">num_threads</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../dust.html">DustMasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="../../../../../search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="../../../../../py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="../../../../../genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2024] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>

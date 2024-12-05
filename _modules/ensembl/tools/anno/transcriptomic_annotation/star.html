@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.transcriptomic_annotation.star &#8212; ensembl-anno 0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/agogo.css?v=cc331ede" />
+    <script data-url_root="../../../../../" id="documentation_options" src="../../../../../_static/documentation_options.js?v=e031e9a9"></script>
+    <script src="../../../../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=4825356b"></script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/_modules/ensembl/tools/anno/transcriptomic_annotation/star.html" />
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+  </head><body>
+    <div class="header-wrapper" role="banner">
+      <div class="header">
+        <div class="headertitle"><a
+          href="../../../../../index.html">ensembl-anno 0.1 documentation</a></div>
+        <div class="rel" role="navigation" aria-label="related navigation">
+          <a href="../../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |
+          <a href="../../../../../genindex.html" title="General Index"
+             accesskey="I">index</a>
+        </div>
+       </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="content">
+        <div class="document">
+            
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for ensembl.tools.anno.transcriptomic_annotation.star</h1><div class="highlight"><pre>
+<span></span><span class="c1"># See the NOTICE file distributed with this work for additional information</span>
+<span class="c1"># regarding copyright ownership.</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">The STAR (Spliced Transcripts Alignment to a Reference) alignment tool is widely used</span>
+<span class="sd">in genomics research for aligning RNA-seq data to a reference genome.</span>
+
+<span class="sd">Dobin A, Davis CA, Schlesinger F, et al. STAR: ultrafast universal RNA-seq aligner.</span>
+<span class="sd">Bioinformatics. 2013;29(1):15-21. doi:10.1093/bioinformatics/bts635</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;run_star&quot;</span><span class="p">,</span> <span class="s2">&quot;subsample_transcriptomic_data&quot;</span><span class="p">,</span> <span class="s2">&quot;run_trimming&quot;</span><span class="p">]</span>
+
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">logging.config</span>
+<span class="kn">import</span> <span class="nn">gzip</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">multiprocessing</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">from</span> <span class="nn">ensembl.tools.anno.utils._utils</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">check_exe</span><span class="p">,</span>
+    <span class="n">create_dir</span><span class="p">,</span>
+    <span class="n">check_gtf_content</span><span class="p">,</span>
+    <span class="n">get_seq_region_length</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="run_star"><a class="viewcode-back" href="../../../../../star.html#ensembl.tools.anno.transcriptomic_annotation.star.run_star">[docs]</a><span class="k">def</span> <span class="nf">run_star</span><span class="p">(</span>  <span class="c1"># pylint:disable=too-many-branches</span>
+    <span class="n">genome_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">short_read_fastq_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">delete_pre_trim_fastq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">trim_fastq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">max_reads_per_sample</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">max_intron_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100000</span><span class="p">,</span>
+    <span class="n">subsample_read_limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100000000</span><span class="p">,</span>
+    <span class="n">subsample_percentage</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.25</span><span class="p">,</span>
+    <span class="n">sampling_via_read_limit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">sampling_via_percentage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">sampling_via_read_limit_percentage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">star_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;star&quot;</span><span class="p">),</span>
+    <span class="n">samtools_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;samtools&quot;</span><span class="p">),</span>
+    <span class="n">trim_galore_bin</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;trim_galore&quot;</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run STAR alignment on list of short read data.</span>
+<span class="sd">    </span>
+<span class="sd">        :param genome_file: Genome file path.</span>
+<span class="sd">        :type genome_file: Path</span>
+<span class="sd">        :param output_dir: Working directory path.</span>
+<span class="sd">        :type output_dir: Path</span>
+<span class="sd">        :param short_read_fastq_dir: Short read directory path.</span>
+<span class="sd">        :type short_read_fastq_dir: Path</span>
+<span class="sd">        :param delete_pre_trim_fastq: Delete the original fastq files after trimming. Defaults to False.</span>
+<span class="sd">        :type delete_pre_trim_fastq: boolean, default False</span>
+<span class="sd">        :param trim_fastq: Trim short read files using TrimGalore. Defaults to False.</span>
+<span class="sd">        :type trim_fastq: boolean, default False</span>
+<span class="sd">        :param max_reads_per_sample: Max number of reads per sample. Defaults to 0 (unlimited).</span>
+<span class="sd">        :type max_reads_per_sample: int, default 0</span>
+<span class="sd">        :param max_intron_length: The maximum intron size for alignments. Defaults to 100000.</span>
+<span class="sd">        :type max_intron_length: int, default 100000</span>
+<span class="sd">        :param subsample_read_limit: Maximum number of reads to subsample. Defaults to 100000000.</span>
+<span class="sd">        :type subsample_read_limit:int, default 100000000,</span>
+<span class="sd">        :param subsample_percentage: Maximun percentage of reads to subsample.</span>
+<span class="sd">        :type subsample_percentage: int, default 0.25,</span>
+<span class="sd">        :param sampling_via_read_limit: subsample fastq files using subsample_read_limit.</span>
+<span class="sd">        :type sampling_via_read_limit: boolean, False,</span>
+<span class="sd">        :param sampling_via_percentage: subsample fastq files using subsample_percentage.</span>
+<span class="sd">        :type sampling_via_percentage: boolean, False,</span>
+<span class="sd">        :param sampling_via_read_limit_percentage: use max read limit and  percentage value.</span>
+<span class="sd">        :type sampling_via_read_limit_percentage: boolean, False,</span>
+<span class="sd">        :param num_threads: Number of available threads.</span>
+<span class="sd">        :type num_threads: int, default 1</span>
+<span class="sd">        :param star_bin: Software path.</span>
+<span class="sd">        :type star_bin: Path, default star</span>
+<span class="sd">        :param samtools_bin: Software path.</span>
+<span class="sd">        :type samtools_bin: Path,default samtools</span>
+<span class="sd">        :param trim_galore_bin: Software path.</span>
+<span class="sd">        :type trim_galore_bin: Path, default trim_galore</span>
+
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">star_bin</span><span class="p">)</span>
+    <span class="c1"># If trimming has been enabled then switch the path for</span>
+    <span class="c1"># short_read_fastq_dir from the original location to the trimmed fastq dir</span>
+    <span class="k">if</span> <span class="n">trim_fastq</span><span class="p">:</span>
+        <span class="n">run_trimming</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="n">short_read_fastq_dir</span><span class="p">,</span> <span class="n">delete_pre_trim_fastq</span><span class="p">,</span> <span class="n">num_threads</span><span class="p">,</span> <span class="n">trim_galore_bin</span><span class="p">)</span>
+        <span class="n">short_read_fastq_dir</span> <span class="o">=</span> <span class="n">output_dir</span> <span class="o">/</span> <span class="s2">&quot;trim_galore_output&quot;</span>
+
+    <span class="c1">#  if not os.path.exists(subsample_script_path):</span>
+    <span class="c1"># subsample_script_path = &quot;subsample_fastq.py&quot;</span>
+
+    <span class="n">star_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;star_output&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">output_file</span> <span class="ow">in</span> <span class="p">[</span>
+        <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">output_dir</span><span class="si">}</span><span class="s2">/stringtie_output/annotation.gtf&quot;</span><span class="p">),</span>
+        <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">output_dir</span><span class="si">}</span><span class="s2">/scallop_output/annotation.gtf&quot;</span><span class="p">),</span>
+    <span class="p">]:</span>
+        <span class="k">if</span> <span class="n">output_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="n">transcript_count</span> <span class="o">=</span> <span class="n">check_gtf_content</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;transcript&quot;</span><span class="p">)</span>  <span class="c1"># check a gtf</span>
+            <span class="k">if</span> <span class="n">transcript_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Transcriptomic alignment exists&quot;</span><span class="p">)</span>
+                <span class="k">return</span>
+
+    <span class="n">star_index_file</span> <span class="o">=</span> <span class="n">star_dir</span> <span class="o">/</span> <span class="s2">&quot;SAindex&quot;</span>
+    <span class="n">fastq_file_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">file_types</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;*.fastq&quot;</span><span class="p">,</span> <span class="s2">&quot;*.fq&quot;</span><span class="p">,</span> <span class="s2">&quot;*.fastq.gz&quot;</span><span class="p">,</span> <span class="s2">&quot;*.fq.gz&quot;</span><span class="p">)</span>
+    <span class="n">fastq_file_list</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">path</span> <span class="k">for</span> <span class="n">file_type</span> <span class="ow">in</span> <span class="n">file_types</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="n">short_read_fastq_dir</span><span class="p">)</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="n">file_type</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_file_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The list of fastq files is empty. Fastq dir:</span><span class="se">\n</span><span class="si">{</span><span class="n">short_read_fastq_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># for file_type in file_types:</span>
+    <span class="c1">#    fastq_file_list.extend(glob.glob(os.path.join(short_read_fastq_dir, file_type)))</span>
+
+    <span class="c1"># Get list of paired paths</span>
+    <span class="n">paired_fastq_file_list</span> <span class="o">=</span> <span class="n">_create_paired_paths</span><span class="p">(</span><span class="n">fastq_file_list</span><span class="p">)</span>
+    <span class="c1"># Subsamples in parallel if there&#39;s a value set</span>
+    <span class="k">if</span> <span class="n">max_reads_per_sample</span><span class="p">:</span>
+        <span class="n">paired_fastq_file_list_sub</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">paired_fastq_files</span> <span class="ow">in</span> <span class="n">paired_fastq_file_list</span><span class="p">:</span>
+            <span class="n">paired_fastq_files_sub</span> <span class="o">=</span> <span class="n">subsample_transcriptomic_data</span><span class="p">(</span>
+                <span class="n">paired_fastq_files</span><span class="p">,</span>
+                <span class="n">subsample_read_limit</span><span class="p">,</span>
+                <span class="n">subsample_percentage</span><span class="p">,</span>
+                <span class="n">sampling_via_read_limit</span><span class="p">,</span>
+                <span class="n">sampling_via_percentage</span><span class="p">,</span>
+                <span class="n">sampling_via_read_limit_percentage</span><span class="p">,</span>
+                <span class="n">num_threads</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">paired_fastq_file_list_sub</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">paired_fastq_files_sub</span><span class="p">)</span>
+            <span class="n">paired_fastq_file_list</span> <span class="o">=</span> <span class="n">paired_fastq_file_list_sub</span>
+        <span class="c1"># Get the list of the new subsampled files</span>
+        <span class="c1"># fastq_file_list = [</span>
+        <span class="c1">#    path for file_type in file_types for path in Path(short_read_fastq_dir).rglob(file_type)</span>
+        <span class="c1"># ]</span>
+    <span class="c1"># I don&#39;t think is needed</span>
+    <span class="c1"># fastq_file_list = check_for_fastq_subsamples(fastq_file_list)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">star_index_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Did not find an index file for Star. Will create now&quot;</span><span class="p">)</span>
+        <span class="n">seq_region_to_length</span> <span class="o">=</span> <span class="n">get_seq_region_length</span><span class="p">(</span><span class="n">genome_file</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">genome_size</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">seq_region_to_length</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="c1"># This calculates the base-2 logarithm of the genome_size. The logarithm of the genome size is</span>
+        <span class="c1"># a measure of how many bits are needed to represent the genome size in binary.</span>
+        <span class="c1">#</span>
+        <span class="c1"># The choice of 14 as the maximum value is likely based on empirical observations and optimization</span>
+        <span class="c1"># considerations. Too large of a seed length can lead to increased memory usage and potentially</span>
+        <span class="c1"># slower indexing, while a seed length that is too small might affect alignment accuracy.</span>
+        <span class="n">index_bases</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">((</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">genome_size</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>  <span class="c1"># pylint:disable=subprocess-run-check</span>
+                <span class="p">[</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">star_bin</span><span class="p">),</span>
+                    <span class="s2">&quot;--runThreadN&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">num_threads</span><span class="p">),</span>
+                    <span class="s2">&quot;--runMode&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;genomeGenerate&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;--outFileNamePrefix&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;--genomeDir&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">star_dir</span><span class="p">),</span>
+                    <span class="s2">&quot;--genomeSAindexNbases&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">index_bases</span><span class="p">),</span>
+                    <span class="s2">&quot;--genomeFastaFiles&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">genome_file</span><span class="p">),</span>
+                <span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>  <span class="c1"># pylint:disable=broad-exception-caught</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;An error occurred while creating star index: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running Star on the files in the fastq dir&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">paired_files</span> <span class="ow">in</span> <span class="n">paired_fastq_file_list</span><span class="p">:</span>
+        <span class="n">first_file_name</span> <span class="o">=</span> <span class="n">paired_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span>  <span class="c1"># Get the name of the first file</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(.+)_\d+\.(fastq|fq)&quot;</span><span class="p">,</span> <span class="n">first_file_name</span><span class="p">)</span>  <span class="c1"># Search for pattern</span>
+        <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="n">first_part_of_name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># logger.info(fastq_file_path)</span>
+        <span class="c1"># fastq_file_name = os.path.basename(fastq_file_path)</span>
+        <span class="n">star_tmp_dir</span> <span class="o">=</span> <span class="n">star_dir</span> <span class="o">/</span> <span class="s2">&quot;tmp&quot;</span>
+        <span class="k">if</span> <span class="n">star_tmp_dir</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">star_tmp_dir</span><span class="p">)</span>
+        <span class="n">sam_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">first_part_of_name</span><span class="si">}</span><span class="s2">.sam&quot;</span><span class="p">)</span>
+        <span class="n">junctions_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">first_part_of_name</span><span class="si">}</span><span class="s2">.sj.tab&quot;</span><span class="p">)</span>
+        <span class="n">sam_file_name</span> <span class="o">=</span> <span class="n">sam_file</span><span class="o">.</span><span class="n">name</span>
+        <span class="n">sam_temp_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">sam_file_name</span><span class="si">}</span><span class="s2">.tmp&quot;</span><span class="p">)</span>
+        <span class="n">bam_file</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">&quot;.sam&quot;</span><span class="p">,</span> <span class="s2">&quot;.bam&quot;</span><span class="p">,</span> <span class="n">sam_file_name</span><span class="p">)</span>
+        <span class="n">bam_sort_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">bam_file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">log_out_file</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">first_part_of_name</span><span class="si">}</span><span class="s2">.Log.final.out&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">log_out_file</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">bam_sort_file</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">bam_sort_file</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Found an existing bam file for the fastq file, </span><span class="se">\</span>
+<span class="s2">                presuming the file has been processed, will skip&quot;</span>
+            <span class="p">)</span>
+            <span class="k">continue</span>
+
+        <span class="n">read_files_in</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">fastq_file</span><span class="p">)</span> <span class="k">for</span> <span class="n">fastq_file</span> <span class="ow">in</span> <span class="n">paired_files</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Processing </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">paired_files</span><span class="p">))</span>
+        <span class="n">star_command</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">star_bin</span><span class="p">),</span>
+            <span class="s2">&quot;--outFilterIntronMotifs&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;RemoveNoncanonicalUnannotated&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--outSAMstrandField&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;intronMotif&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--runThreadN&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">num_threads</span><span class="p">),</span>
+            <span class="s2">&quot;--twopassMode&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;Basic&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--runMode&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;alignReads&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--genomeDir&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">star_dir</span><span class="p">),</span>
+            <span class="s2">&quot;--readFilesIn&quot;</span><span class="p">,</span>
+            <span class="n">read_files_in</span><span class="p">,</span>
+            <span class="s2">&quot;--outFileNamePrefix&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--outTmpDir&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">star_tmp_dir</span><span class="p">),</span>
+            <span class="s2">&quot;--outSAMtype&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;SAM&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;--alignIntronMax&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">max_intron_length</span><span class="p">),</span>
+        <span class="p">]</span>
+        <span class="c1">#&#39;--outSJfilterIntronMaxVsReadN&#39;,&#39;5000&#39;,&#39;10000&#39;,&#39;25000&#39;,&#39;40000&#39;,</span>
+        <span class="c1">#&#39;50000&#39;,&#39;50000&#39;,&#39;50000&#39;,&#39;50000&#39;,&#39;50000&#39;,&#39;100000&#39;]</span>
+        <span class="c1"># check_compression = re.search(r&quot;.gz$&quot;, fastq_file)</span>
+        <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">paired_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.gz&quot;</span><span class="p">):</span>
+            <span class="n">star_command</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;--readFilesCommand&quot;</span><span class="p">)</span>
+            <span class="n">star_command</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;gunzip&quot;</span><span class="p">)</span>
+            <span class="n">star_command</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;-c&quot;</span><span class="p">)</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">star_command</span><span class="p">)</span>  <span class="c1"># pylint:disable=subprocess-run-check</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/Aligned.out.sam&quot;</span><span class="p">),</span> <span class="n">sam_file</span><span class="p">)</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">star_dir</span><span class="si">}</span><span class="s2">/SJ.out.tab&quot;</span><span class="p">),</span> <span class="n">junctions_file</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Converting samfile into sorted bam file. Bam file: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">bam_file</span><span class="p">)</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>  <span class="c1"># pylint:disable=subprocess-run-check</span>
+            <span class="p">[</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">samtools_bin</span><span class="p">),</span>
+                <span class="s2">&quot;sort&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;-@&quot;</span><span class="p">,</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">num_threads</span><span class="p">),</span>
+                <span class="s2">&quot;-T&quot;</span><span class="p">,</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">sam_temp_file</span><span class="p">),</span>
+                <span class="s2">&quot;-o&quot;</span><span class="p">,</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">bam_sort_file</span><span class="p">),</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">sam_file</span><span class="p">),</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">star_dir</span> <span class="o">/</span> <span class="s2">&quot;Log.final.out&quot;</span><span class="p">,</span> <span class="n">log_out_file</span><span class="p">)</span>
+        <span class="n">sam_file</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Completed running STAR&quot;</span><span class="p">)</span></div>
+
+
+<span class="k">def</span> <span class="nf">_create_paired_paths</span><span class="p">(</span><span class="n">fastq_file_paths</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create list of paired transcriptomic fastq files</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        fastq_file_paths (List): List of transcriptomic file paths.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        List[List[Path]]: List of paired transcriptomic files</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">path_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">final_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">fastq_file</span> <span class="ow">in</span> <span class="n">fastq_file_paths</span><span class="p">:</span>
+        <span class="n">paired_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(.+)_\d+\.(fastq|fq)&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">fastq_file</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">paired_name</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                <span class="s2">&quot;Could not find _1 or _2 at the end of the prefix </span><span class="se">\</span>
+<span class="s2">                for file. Assuming file is not paired: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">fastq_file</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="n">final_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">fastq_file</span><span class="p">])</span>
+            <span class="k">continue</span>
+        <span class="n">run_accession</span> <span class="o">=</span> <span class="n">paired_name</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">run_accession</span> <span class="ow">in</span> <span class="n">path_dict</span><span class="p">:</span>
+            <span class="n">path_dict</span><span class="p">[</span><span class="n">run_accession</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fastq_file</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">path_dict</span><span class="p">[</span><span class="n">run_accession</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">fastq_file</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">path_dict</span><span class="p">:</span>  <span class="c1"># pylint:disable=consider-using-dict-items</span>
+        <span class="n">final_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">path_dict</span><span class="p">[</span><span class="n">pair</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">final_list</span>
+
+
+<span class="c1"># pylint:disable=pointless-string-statement</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">For an advanced and optimised subsampling we could use </span>
+<span class="sd">https://github.com/lh3/seqtk </span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="subsample_transcriptomic_data"><a class="viewcode-back" href="../../../../../star.html#ensembl.tools.anno.transcriptomic_annotation.star.subsample_transcriptomic_data">[docs]</a><span class="k">def</span> <span class="nf">subsample_transcriptomic_data</span><span class="p">(</span>
+    <span class="n">fastq_file_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">],</span>
+    <span class="n">subsample_read_limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100000000</span><span class="p">,</span>
+    <span class="n">subsample_percentage</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.25</span><span class="p">,</span>
+    <span class="n">sampling_via_read_limit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">sampling_via_percentage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">sampling_via_read_limit_percentage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Subsample list of paired files.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        fastq_file_list : Subsample paired fastq files.</span>
+<span class="sd">        subsample_read_limit : Maximum number of reads to subsample, default to 100000000.</span>
+<span class="sd">        subsample_percentage : Maximun percentage of reads to subsample, default to 0.25.</span>
+<span class="sd">        sampling_via_read_limit : If True will subsample an input dataset of fastq files \</span>
+<span class="sd">        using --subsample_read_limit value.</span>
+<span class="sd">        sampling_via_percentage : If True will subsample an input dataset of fastq files \</span>
+<span class="sd">        using --subsample_percentage value.</span>
+<span class="sd">        sampling_via_read_limit_percentage : If True will subsample an input dataset of \</span>
+<span class="sd">        fastq files using --subsample_read_limit and --subsample_percentage value; \</span>
+<span class="sd">        the lowest number of reads is taken.</span>
+<span class="sd">        num_threads : number of threads</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        List[Path]: List of subsampled paired transcriptomic files</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">subsampled_fastq_files</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1"># for fastq_files in fastq_file_list:</span>
+    <span class="c1"># fastq_file_1, fastq_file_2 = fastq_files</span>
+    <span class="c1"># fastq_file_pair = &quot;&quot;</span>
+    <span class="c1"># if len(fastq_files) == 2:</span>
+    <span class="c1">#    fastq_file_pair = fastq_files[1]</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_file_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">fastq_file_1</span> <span class="o">=</span> <span class="n">fastq_file_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_1</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Found an existing .sub file on the fastq path, will use that </span><span class="se">\</span>
+<span class="s2">                    instead. File:</span><span class="si">%s</span><span class="s2">.sub&quot;</span><span class="p">,</span>
+                <span class="n">fastq_file_1</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_subsample_paired_fastq_files</span><span class="p">(</span>
+                <span class="n">fastq_file_list</span><span class="p">,</span>
+                <span class="n">subsample_read_limit</span><span class="p">,</span>
+                <span class="n">subsample_percentage</span><span class="p">,</span>
+                <span class="n">sampling_via_read_limit</span><span class="p">,</span>
+                <span class="n">sampling_via_percentage</span><span class="p">,</span>
+                <span class="n">sampling_via_read_limit_percentage</span><span class="p">,</span>
+                <span class="n">num_threads</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">subsampled_fastq_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_1</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_file_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">fastq_file_1</span><span class="p">,</span> <span class="n">fastq_file_2</span> <span class="o">=</span> <span class="n">fastq_file_list</span>
+        <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_1</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_2</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;Found an existing .sub files on the fastq path for both members of the pair, will use </span><span class="se">\</span>
+<span class="s2">                those instead of subsampling again. Files: </span><span class="si">%s</span><span class="s2">.sub,</span><span class="si">%s</span><span class="s2">.sub&quot;</span><span class="p">,</span>
+                <span class="n">fastq_file_1</span><span class="p">,</span>
+                <span class="n">fastq_file_2</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_subsample_paired_fastq_files</span><span class="p">(</span>
+                <span class="n">fastq_file_list</span><span class="p">,</span>
+                <span class="n">subsample_read_limit</span><span class="p">,</span>
+                <span class="n">subsample_percentage</span><span class="p">,</span>
+                <span class="n">sampling_via_read_limit</span><span class="p">,</span>
+                <span class="n">sampling_via_percentage</span><span class="p">,</span>
+                <span class="n">sampling_via_read_limit_percentage</span><span class="p">,</span>
+                <span class="n">num_threads</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="n">subsampled_fastq_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_1</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">),</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_2</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="n">subsampled_fastq_files</span></div>
+
+
+<span class="k">def</span> <span class="nf">_subsample_paired_fastq_files</span><span class="p">(</span>  <span class="c1"># pylint:disable=too-many-branches</span>
+    <span class="n">fastq_files</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">],</span>
+    <span class="n">subsample_read_limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100000000</span><span class="p">,</span>
+    <span class="n">subsample_percentage</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.25</span><span class="p">,</span>
+    <span class="n">sampling_via_read_limit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">sampling_via_percentage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">sampling_via_read_limit_percentage</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Perform subsampling on two paired FastQ files in parallel using multiple threads.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        fastq_files : Path for paired fastq files.</span>
+<span class="sd">        subsample_read_limit : Maximum number of reads to subsample, default to 100000000.</span>
+<span class="sd">        subsample_percentage : Maximun percentage of reads to subsample, default to 0.25.</span>
+<span class="sd">        sampling_via_read_limit : If True will subsample an input dataset of fastq files \</span>
+<span class="sd">        using --subsample_read_limit value.</span>
+<span class="sd">        sampling_via_percentage : If True will subsample an input dataset of fastq files \</span>
+<span class="sd">        using --subsample_percentage value.</span>
+<span class="sd">        sampling_via_read_limit_percentage : If True will subsample an input dataset of \</span>
+<span class="sd">        fastq files using --subsample_read_limit and --subsample_percentage value; \</span>
+<span class="sd">        the lowest number of reads is taken.</span>
+<span class="sd">        num_threads : Number of threads, defaults to 2.</span>
+<span class="sd">        compressed : file compressed, defaults to False.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">fastq_file_1</span><span class="p">,</span> <span class="n">fastq_file_2</span> <span class="o">=</span> <span class="n">fastq_files</span>
+        <span class="n">output_file_1</span><span class="p">,</span> <span class="n">output_file_2</span> <span class="o">=</span> <span class="p">[</span><span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_1</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">),</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_2</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">)]</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">fastq_file_1</span> <span class="o">=</span> <span class="n">fastq_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">output_file_1</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fastq_file_1</span><span class="si">}</span><span class="s2">.sub&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="s2">&quot;No fastq file found&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">fastq_file_1</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;.gz&quot;</span><span class="p">):</span>
+        <span class="n">compressed</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">num_lines</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">fastq_file_1</span><span class="p">))</span>  <span class="c1"># pylint:disable=consider-using-with</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">compressed</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">num_lines</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">open</span><span class="p">(</span><span class="n">fastq_file_1</span><span class="p">))</span>  <span class="c1"># pylint:disable=consider-using-with</span>
+
+    <span class="n">range_limit</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_lines</span> <span class="o">/</span> <span class="mi">4</span><span class="p">)</span>
+    <span class="n">sampling_size</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">if</span> <span class="n">sampling_via_read_limit</span> <span class="ow">and</span> <span class="n">subsample_read_limit</span><span class="p">:</span>
+        <span class="n">sampling_size</span> <span class="o">=</span> <span class="n">subsample_read_limit</span>
+    <span class="k">elif</span> <span class="n">sampling_via_percentage</span> <span class="ow">and</span> <span class="n">subsample_percentage</span><span class="p">:</span>
+        <span class="n">sampling_size</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">range_limit</span> <span class="o">*</span> <span class="n">subsample_percentage</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">sampling_via_read_limit_percentage</span> <span class="ow">and</span> <span class="n">subsample_percentage</span> <span class="ow">and</span> <span class="n">subsample_read_limit</span><span class="p">:</span>
+        <span class="n">sampling_size</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">subsample_read_limit</span><span class="p">,</span> <span class="nb">round</span><span class="p">(</span><span class="n">range_limit</span> <span class="o">*</span> <span class="n">subsample_percentage</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">range_limit</span> <span class="o">&lt;=</span> <span class="n">sampling_size</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Number of reads (</span><span class="si">%s</span><span class="s2"> is less than the max allowed read count (</span><span class="si">%s</span><span class="s2">), </span><span class="se">\</span>
+<span class="s2">            no need to subsample&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">range_limit</span><span class="p">),</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">sampling_size</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="n">rand_list</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">range_limit</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">sampling_size</span><span class="p">)</span>
+    <span class="n">random_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">idx</span> <span class="o">*</span> <span class="mi">4</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">rand_list</span><span class="p">]</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Processing paired files in parallel&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">num_threads</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">num_threads</span><span class="p">))</span>  <span class="c1"># pylint:disable=consider-using-with</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+            <span class="n">_subsample_fastq_subset</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">fastq_file_1</span><span class="p">,</span>
+                <span class="n">output_file_1</span><span class="p">,</span>
+                <span class="n">random_indices</span><span class="p">,</span>
+                <span class="n">compressed</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+                <span class="n">_subsample_fastq_subset</span><span class="p">,</span>
+                <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                    <span class="n">fastq_file_2</span><span class="p">,</span>
+                    <span class="n">output_file_2</span><span class="p">,</span>
+                    <span class="n">random_indices</span><span class="p">,</span>
+                    <span class="n">compressed</span><span class="p">,</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_subsample_fastq_subset</span><span class="p">(</span>
+            <span class="n">fastq_file_1</span><span class="p">,</span>
+            <span class="n">output_file_1</span><span class="p">,</span>
+            <span class="n">random_indices</span><span class="p">,</span>
+            <span class="n">compressed</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">_subsample_fastq_subset</span><span class="p">(</span>
+                <span class="n">fastq_file_2</span><span class="p">,</span>
+                <span class="n">output_file_2</span><span class="p">,</span>
+                <span class="n">random_indices</span><span class="p">,</span>
+                <span class="n">compressed</span><span class="p">,</span>
+            <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_subsample_fastq_subset</span><span class="p">(</span>
+    <span class="n">fastq_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">output_file</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span> <span class="n">random_indices</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">compressed</span><span class="p">:</span> <span class="nb">bool</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Selecting specific sets of four lines from an input FastQ file and writing them to an output file.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        fastq_file : Path for the fastq file.</span>
+<span class="sd">        output_file : Path for the output file.</span>
+<span class="sd">        random_indices : set of random indices.</span>
+<span class="sd">        compressed : the files is compressed</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">line_index</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">read_block</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">fastq_file</span><span class="p">,</span> <span class="s2">&quot;rt&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">compressed</span> <span class="k">else</span> <span class="nb">open</span><span class="p">(</span><span class="n">fastq_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">file_in</span><span class="p">,</span> <span class="nb">open</span><span class="p">(</span>
+                    <span class="n">output_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span>
+                        <span class="p">)</span> <span class="k">as</span> <span class="n">file_out</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">file_in</span><span class="p">:</span>
+            <span class="n">read_block</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">read_block</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">line_index</span> <span class="ow">in</span> <span class="n">random_indices</span><span class="p">:</span>
+                  <span class="n">file_out</span><span class="o">.</span><span class="n">writelines</span><span class="p">(</span><span class="n">read_block</span><span class="p">)</span>
+                <span class="n">read_block</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">line_index</span> <span class="o">+=</span> <span class="mi">4</span>
+        <span class="c1">#lines = [file_in.readline() for _ in range(4)]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;   </span>
+<span class="sd">       while lines[3]:</span>
+<span class="sd">                #lines = [file_in.readline() for _ in range(4)]</span>
+<span class="sd">                # Break if the end of the file is reached</span>
+<span class="sd">                if len(lines) &lt; 4 :  # No more lines to read</span>
+<span class="sd">                    break</span>
+<span class="sd">                # Write to output if current index is in random_indices</span>
+<span class="sd">                if line_index in random_indices:</span>
+<span class="sd">                    file_out.writelines(lines)</span>
+<span class="sd">                line_index += 4</span>
+<span class="sd">                lines = [file_in.readline() for _ in range(4)]</span>
+
+<span class="sd">    with gzip.open(fastq_file, &quot;rt&quot;) if compressed else open(fastq_file) as file_in, open(</span>
+<span class="sd">        output_file, &quot;w+&quot;</span>
+<span class="sd">    ) as file_out:</span>
+<span class="sd">        lines = [file_in.readline() for _ in range(4)]</span>
+<span class="sd">        while lines[3]:  # This ensures that the loop continues until the end of the input file.</span>
+<span class="sd">            if line_index in random_indices:</span>
+<span class="sd">                file_out.writelines(lines)</span>
+<span class="sd">            line_index += 4</span>
+<span class="sd">            lines = [file_in.readline() for _ in range(4)]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="run_trimming"><a class="viewcode-back" href="../../../../../star.html#ensembl.tools.anno.transcriptomic_annotation.star.run_trimming">[docs]</a><span class="k">def</span> <span class="nf">run_trimming</span><span class="p">(</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">short_read_fastq_dir</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">delete_pre_trim_fastq</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">num_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">trim_galore_bin</span><span class="o">=</span><span class="s2">&quot;trim_galore&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Trim list of short read fastq files.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        output_dir : Working directory path.</span>
+<span class="sd">        short_read_fastq_dir : Short read directory path.</span>
+<span class="sd">        delete_pre_trim_fastq : Removing original fastq file post trimming. Defaults to False.</span>
+<span class="sd">        num_threads : Number of threads.</span>
+<span class="sd">        trim_galore_bin : Software path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">check_exe</span><span class="p">(</span><span class="n">trim_galore_bin</span><span class="p">)</span>
+    <span class="n">trim_dir</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;trim_galore_output&quot;</span><span class="p">)</span>
+
+    <span class="n">fastq_file_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">file_types</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;*.fastq&quot;</span><span class="p">,</span> <span class="s2">&quot;*.fq&quot;</span><span class="p">,</span> <span class="s2">&quot;*.fastq.gz&quot;</span><span class="p">,</span> <span class="s2">&quot;*.fq.gz&quot;</span><span class="p">)</span>
+    <span class="n">fastq_file_list</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">path</span> <span class="k">for</span> <span class="n">file_type</span> <span class="ow">in</span> <span class="n">file_types</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="n">short_read_fastq_dir</span><span class="p">)</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="n">file_type</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="n">paired_fastq_file_list</span> <span class="o">=</span> <span class="n">_create_paired_paths</span><span class="p">(</span><span class="n">fastq_file_list</span><span class="p">)</span>
+
+    <span class="n">trim_galore_cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">trim_galore_bin</span><span class="p">),</span>
+        <span class="s2">&quot;--illumina&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--quality&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;20&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--length&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;50&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--output_dir&quot;</span><span class="p">,</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">trim_dir</span><span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">num_threads</span><span class="p">))</span>  <span class="c1"># pylint:disable=consider-using-with</span>
+    <span class="k">for</span> <span class="n">fastq_file</span> <span class="ow">in</span> <span class="n">paired_fastq_file_list</span><span class="p">:</span>
+        <span class="n">file1</span><span class="p">,</span> <span class="n">file2</span> <span class="o">=</span> <span class="n">fastq_file</span>
+        <span class="k">if</span> <span class="n">delete_pre_trim_fastq</span><span class="p">:</span>
+            <span class="n">file1</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+            <span class="n">file2</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+            <span class="n">multiprocess_trim_galore</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">trim_galore_cmd</span><span class="p">,</span>
+                <span class="n">fastq_file</span><span class="p">,</span>
+                <span class="n">trim_dir</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+
+    <span class="n">trimmed_fastq_list</span> <span class="o">=</span> <span class="n">trim_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;*.fq.gz&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">trimmed_fastq_path</span> <span class="ow">in</span> <span class="n">trimmed_fastq_list</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Trimmed file path: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">trimmed_fastq_path</span><span class="p">))</span>
+        <span class="n">sub_patterns</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;|&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">((</span><span class="s2">&quot;_val_1.fq&quot;</span><span class="p">,</span> <span class="s2">&quot;_val_2.fq&quot;</span><span class="p">,</span> <span class="s2">&quot;_trimmed.fq&quot;</span><span class="p">)))</span>
+        <span class="n">updated_file_path_name</span> <span class="o">=</span> <span class="n">sub_patterns</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">&quot;.fq&quot;</span><span class="p">,</span> <span class="n">trimmed_fastq_path</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">updated_file_path</span> <span class="o">=</span> <span class="n">short_read_fastq_dir</span> <span class="o">/</span> <span class="n">updated_file_path_name</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Updated file path: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">updated_file_path</span><span class="p">))</span>
+        <span class="n">trimmed_fastq_path</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">updated_file_path</span><span class="p">)</span>
+
+    <span class="n">files_to_delete_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">file_type</span> <span class="ow">in</span> <span class="n">file_types</span><span class="p">:</span>
+        <span class="n">files_to_delete_list</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">short_read_fastq_dir</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">file_type</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">file_to_delete</span> <span class="ow">in</span> <span class="n">files_to_delete_list</span><span class="p">:</span>
+        <span class="n">file_to_delete</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span></div>
+
+
+<span class="k">def</span> <span class="nf">multiprocess_trim_galore</span><span class="p">(</span><span class="n">trim_galore_cmd</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span> <span class="n">fastq_paired_files</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Path</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Trim short paired or single short read fastq file.</span>
+<span class="sd">    Args:</span>
+<span class="sd">        trim_galore_cmd : Generic command.</span>
+<span class="sd">        fastq_paired_files : List of single or paired fastq files.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">fastq_file</span> <span class="o">=</span> <span class="n">fastq_paired_files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">fastq_file_pair</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_paired_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">fastq_file</span><span class="p">,</span> <span class="n">fastq_file_pair</span> <span class="o">=</span> <span class="n">fastq_paired_files</span>
+        <span class="n">trim_galore_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;--paired&quot;</span><span class="p">)</span>
+        <span class="n">trim_galore_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fastq_file</span><span class="p">)</span>
+        <span class="n">trim_galore_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fastq_file_pair</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">fastq_paired_files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">trim_galore_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fastq_paired_files</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Running Trim Galore with the following command: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">trim_galore_cmd</span><span class="p">)})</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">trim_galore_cmd</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">parse_args</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse command line arguments.&quot;&quot;&quot;</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;STAR&#39;s arguments&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--genome_file&quot;</span><span class="p">,</span>  <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Genome file path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--output_dir&quot;</span><span class="p">,</span>  <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output directory path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--short_read_fastq_dir&quot;</span><span class="p">,</span>  <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Short read directory path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--delete_pre_trim_fastq&quot;</span><span class="p">,</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Delete the original fastq files after trimming&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--trim_fastq&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Trim the short read files using Trim Galore&quot;</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--max_reads_per_sample&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;The maximum number of reads to use per sample&quot;</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--max_intron_length&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">100000</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;The maximum intron size for alignments&quot;</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--num_threads&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Number of threads&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--star_bin&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;STAR&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Star software path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--samtools_bin&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;samtools&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Samtools software path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--trim_galore_bin&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;trim_galore&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Trim Galore software path&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--subsample_read_limit&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">100000000</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Maximum number of reads to subsample. Default 1 hundred million reads&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--subsample_percentage&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Maximun percentage of reads to subsample (0 to 1)&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--sampling_via_read_limit&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;If True will subsample an input dataset of fastq files using --subsample_read_limit value.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--sampling_via_percentage&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;If True will subsample an input dataset of fastq files using --subsample_percentage value.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--sampling_via_read_limit_percentage&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;If True will subsample an input dataset of fastq files using --subsample_read_limit </span><span class="se">\</span>
+<span class="s2">            and --subsample_percentage value; the lowest number of reads is taken.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--paired_file_1&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path for single or paired fastq file; used when --run_subsampling </span><span class="se">\</span>
+<span class="s2">            or --run_trimming are enabled.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--paired_file_2&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path for single or paired fastq file; used when --run_subsampling </span><span class="se">\</span>
+<span class="s2">            or --run_trimming are enabled.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--run_star&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;If True will run STAR alignment given an input dataset of fastq files.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--run_subsampling&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;If True will subsample an input dataset of fastq files.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--run_trimming&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;If True will trim input dataset of fastq files using TrimGalore suite.&quot;</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;STAR&#39;s entry-point.&quot;&quot;&quot;</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">log_file_path</span> <span class="o">=</span> <span class="n">create_dir</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span> <span class="s2">&quot;log&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;star.log&quot;</span>
+    <span class="n">loginipath</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;conf&quot;</span> <span class="o">/</span> <span class="s2">&quot;logging.conf&quot;</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">fileConfig</span><span class="p">(</span>
+        <span class="n">loginipath</span><span class="p">,</span>
+        <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;logfilename&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">log_file_path</span><span class="p">)},</span>
+        <span class="n">disable_existing_loggers</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">run_star</span><span class="p">:</span>
+        <span class="n">run_star</span><span class="p">(</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">genome_file</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">short_read_fastq_dir</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">delete_pre_trim_fastq</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">trim_fastq</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">max_reads_per_sample</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">max_intron_length</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">subsample_read_limit</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">subsample_percentage</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">sampling_via_read_limit</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">sampling_via_percentage</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">sampling_via_read_limit_percentage</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">num_threads</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">star_bin</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">samtools_bin</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">trim_galore_bin</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">run_subsampling</span><span class="p">:</span>
+        <span class="n">fastq_file_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">paired_file_1</span><span class="p">),</span> <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">paired_file_2</span><span class="p">)]</span>
+        <span class="n">subsample_transcriptomic_data</span><span class="p">(</span>
+            <span class="n">fastq_file_list</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">subsample_read_limit</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">subsample_percentage</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">sampling_via_read_limit</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">sampling_via_percentage</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">sampling_via_read_limit_percentage</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">num_threads</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">run_trimming</span><span class="p">:</span>
+        <span class="n">run_trimming</span><span class="p">(</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">short_read_fastq_dir</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">delete_pre_trim_fastq</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">num_threads</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">trim_galore_bin</span><span class="p">,</span>
+        <span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+
+
+<span class="c1"># pylint:disable=pointless-string-statement</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">def model_builder(work_dir):</span>
+
+<span class="sd">    star_output_dir = os.path.join(work_dir, &quot;star_output&quot;)</span>
+
+<span class="sd">    all_junctions_file = os.path.join(star_output_dir, &quot;all_junctions.sj&quot;)</span>
+<span class="sd">    sjf_out = open(all_junctions_file, &quot;w+&quot;)</span>
+
+<span class="sd">    for sj_tab_file in glob.glob(input_dir + &quot;/*.sj.tab&quot;):</span>
+<span class="sd">        sjf_in = open(sj_tab_file)</span>
+<span class="sd">        sjf_lines = sjf_in.readlines()</span>
+<span class="sd">        for line in sjf_lines:</span>
+<span class="sd">            elements = line.split(&quot;\t&quot;)</span>
+<span class="sd">            strand = &quot;+&quot;</span>
+
+<span class="sd">            #    my $slice_name = $eles[0];</span>
+<span class="sd">            #    my $start = $eles[1];</span>
+<span class="sd">            #    my $end = $eles[2];</span>
+<span class="sd">            #    my $strand = $eles[3];</span>
+
+<span class="sd">            # If the strand is undefined then skip, Augustus expects a strand</span>
+<span class="sd">            if elements[3] == &quot;0&quot;:</span>
+<span class="sd">                continue</span>
+<span class="sd">            elif elements[3] == &quot;2&quot;:</span>
+<span class="sd">                strand = &quot;-&quot;</span>
+
+<span class="sd">            junction_length = int(elements[2]) - int(elements[1]) + 1</span>
+<span class="sd">            if junction_length &lt; 100:</span>
+<span class="sd">                continue</span>
+
+<span class="sd">            if not elements[4] and elements[7] &lt; 10:</span>
+<span class="sd">                continue</span>
+
+<span class="sd">            # For the moment treat multimapping and single</span>
+<span class="sd">            # mapping things as a combined score</span>
+<span class="sd">            score = float(elements[6]) + float(elements[7])</span>
+<span class="sd">            score = str(score)</span>
+<span class="sd">            output_line = [</span>
+<span class="sd">                elements[0],</span>
+<span class="sd">                &quot;RNASEQ&quot;,</span>
+<span class="sd">                &quot;intron&quot;,</span>
+<span class="sd">                elements[1],</span>
+<span class="sd">                elements[2],</span>
+<span class="sd">                score,</span>
+<span class="sd">                strand,</span>
+<span class="sd">                &quot;.&quot;,</span>
+<span class="sd">                (&quot;src=W;mul=&quot; + score + &quot;;&quot;),</span>
+<span class="sd">            ]</span>
+<span class="sd">            sjf_out.write(&quot;\t&quot;.join(output_line) + &quot;\n&quot;)</span>
+
+<span class="sd">    sjf_out.close()</span>
+<span class="sd">&quot;&quot;&quot;</span>
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+        </div>
+        <div class="sidebar">
+          
+          <h3>Table of Contents</h3>
+          <p class="caption" role="heading"><span class="caption-text">Index</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../install.html">API Setup and installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cmsearch.html">cmsearch Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../cpg.html">CpG Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../dust.html">DustMasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../eponine.html">Eponine Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../genblast.html">Genblast Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../minimap.html">Minimap2 Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../red.html">Red Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../repeatmasker.html">Repeatmasker Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../scallop.html">Scallop Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../star.html">STAR Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../stringtie.html">Stringtie Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trf.html">TRF Module Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../trnascan.html">tRNAscan-SE Module Documentation</a></li>
+</ul>
+
+          <div role="search">
+            <h3 style="margin-top: 1.5em;">Search</h3>
+            <form class="search" action="../../../../../search.html" method="get">
+                <input type="text" name="q" />
+                <input type="submit" value="Go" />
+            </form>
+          </div>
+
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+    <div class="footer-wrapper">
+      <div class="footer">
+        <div class="left">
+          <div role="navigation" aria-label="related navigaton">
+            <a href="../../../../../py-modindex.html" title="Python Module Index"
+              >modules</a> |
+            <a href="../../../../../genindex.html" title="General Index"
+              >index</a>
+          </div>
+          <div role="note" aria-label="source link">
+          </div>
+        </div>
+
+        <div class="right">
+          
+    <div class="footer" role="contentinfo">
+    &#169; Copyright [2016-2024] EMBL-European Bioinformatics Institute.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+        </div>
+        <div class="clearer"></div>
+      </div>
+    </div>
+
+  </body>
+</html>
