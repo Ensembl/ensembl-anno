@@ -38,18 +38,17 @@ import logging.config
 import multiprocessing
 import os
 from pathlib import Path
-import random
 import re
 import shutil
 import signal
 import subprocess
-from typing import List
 import argparse
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
+    split_protein_file
 )
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
     convert2blastmask_bin: Path = Path("convert2blastmask"),
     makeblastdb_bin: Path = Path("makeblastdb"),
     num_threads: int = 1,
-    protein_set: str = ["uniprot", "orthodb"],
+    protein_set: str = "uniprot",
 ) -> None:
     """
     
@@ -102,6 +101,8 @@ def run_genblast(#pylint:disable=dangerous-default-value
     check_exe(genblast_bin)
     check_exe(convert2blastmask_bin)
     check_exe(makeblastdb_bin)
+    if protein_set not in {"uniprot", "orthodb"}:
+        raise ValueError("protein_set must be either 'uniprot' or 'orthodb'")
     if protein_set == "uniprot":
         genblast_dir = create_dir(output_dir, "uniprot_output")
     elif protein_set == "orthodb":
@@ -128,7 +129,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
     else:
         _run_convert2blastmask(convert2blastmask_bin, masked_genome, asnb_file)
     _run_makeblastdb(makeblastdb_bin, masked_genome, asnb_file)
-    batched_protein_files = _split_protein_file(
+    batched_protein_files = split_protein_file(
         protein_dataset, genblast_dir, num_threads
     )
     pool = multiprocessing.Pool(num_threads)  # pylint:disable=consider-using-with
@@ -285,56 +286,6 @@ def _generate_genblast_gtf(genblast_dir: Path) -> None:
             ):
                 path.unlink()
 
-
-def _split_protein_file(
-    protein_dataset: Path, output_dir: Path, batch_size: int = 20
-) -> List:
-    """
-    The protein dataset file is splitted by a number of sequence equals to the batch_size
-    in batch files stored in 10 output directories.
-    protein_dataset : Path for the protein dataset.
-    output_dir : Output directory path.
-    batch_size : Size of the batch, it needs to be equals to the number of threads
-    to parallelise the sequence processing for each file.
-    """
-    batched_protein_files = []
-
-    for i in range(0, 10):
-        create_dir(output_dir, (f"bin_{i}"))
-    with open(protein_dataset,"r", encoding="utf8") as file_in:
-        seq_count = 0
-        batch_count = 0
-        current_record = ""
-        initial_seq = True
-        for line in file_in:
-            match = re.search(r">(.+)$", line)
-            # match header and is not first sequence, if the number of stored sequences in each file equals
-            # the number of batch_size, a new file will be created and the current_record reset
-            if match and not initial_seq and seq_count % batch_size == 0:
-                bin_num = random.randint(0, 9)
-                batch_file = output_dir / f"bin_{bin_num}" / f"{batch_count}.fa"
-                with batch_file.open("w+") as file_out:
-                    file_out.write(current_record)
-                batch_count += 1
-                seq_count += 1
-                current_record = line
-                batched_protein_files.append(batch_file)
-            # match header and is the first sequence
-            elif match:
-                current_record += line
-                initial_seq = False
-                seq_count += 1
-            # other lines
-            else:
-                current_record += line
-
-        if current_record:
-            bin_num = random.randint(0, 9)
-            batch_file = output_dir / f"bin_{bin_num}" / f"{batch_count}.fa"
-            with batch_file.open("w+") as file_out:
-                file_out.write(current_record)
-            batched_protein_files.append(batch_file)
-    return batched_protein_files
 
 
 def _run_convert2blastmask(
