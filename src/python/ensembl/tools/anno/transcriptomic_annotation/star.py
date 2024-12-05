@@ -61,6 +61,7 @@ def run_star(  # pylint:disable=too-many-branches
 ) -> None:
     """
     Run STAR alignment on list of short read data.
+    
         :param genome_file: Genome file path.
         :type genome_file: Path
         :param output_dir: Working directory path.
