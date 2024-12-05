@@ -98,6 +98,7 @@ def run_star(  # pylint:disable=too-many-branches
         :return: None
         :rtype: None
     """
+    
     check_exe(star_bin)
     # If trimming has been enabled then switch the path for
     # short_read_fastq_dir from the original location to the trimmed fastq dir
