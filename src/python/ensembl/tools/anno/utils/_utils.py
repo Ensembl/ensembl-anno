@@ -21,6 +21,7 @@ import logging
 import os
 from os import PathLike
 from pathlib import Path
+import random
 import re
 import subprocess
 import shutil
@@ -81,8 +82,8 @@ def check_gtf_content(gtf_file: PathLike, content_obj: str) -> int:
     Check number of transcript lines in the GTF
 
     Arg:
-      gtf_file: GTF file path
-      content_obj: Object to detect and count in the gtf i.e transcript, repeat
+        gtf_file: GTF file path
+        content_obj: Object to detect and count in the gtf i.e transcript, repeat
 
     Return: Number of occurences
     """
@@ -403,6 +404,55 @@ def check_file(file_path: Path) -> None:
     if not file_path.is_file():
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), file_path)
 
+def split_protein_file(
+    protein_dataset: Path, output_dir: Path, batch_size: int = 20
+) -> List:
+    """
+    The protein dataset file is splitted by a number of sequence equals to the batch_size
+    in batch files stored in 10 output directories.
+    protein_dataset : Path for the protein dataset.
+    output_dir : Output directory path.
+    batch_size : Size of the batch, it needs to be equals to the number of threads
+    to parallelise the sequence processing for each file.
+    """
+    batched_protein_files = []
+
+    for i in range(0, 10):
+        create_dir(output_dir, (f"bin_{i}"))
+    with open(protein_dataset,"r", encoding="utf8") as file_in:
+        seq_count = 0
+        batch_count = 0
+        current_record = ""
+        initial_seq = True
+        for line in file_in:
+            match = re.search(r">(.+)$", line)
+            # match header and is not first sequence, if the number of stored sequences in each file equals
+            # the number of batch_size, a new file will be created and the current_record reset
+            if match and not initial_seq and seq_count % batch_size == 0:
+                bin_num = random.randint(0, 9)
+                batch_file = output_dir / f"bin_{bin_num}" / f"{batch_count}.fa"
+                with batch_file.open("w+") as file_out:
+                    file_out.write(current_record)
+                batch_count += 1
+                seq_count += 1
+                current_record = line
+                batched_protein_files.append(batch_file)
+            # match header and is the first sequence
+            elif match:
+                current_record += line
+                initial_seq = False
+                seq_count += 1
+            # other lines
+            else:
+                current_record += line
+
+        if current_record:
+            bin_num = random.randint(0, 9)
+            batch_file = output_dir / f"bin_{bin_num}" / f"{batch_count}.fa"
+            with batch_file.open("w+") as file_out:
+                file_out.write(current_record)
+            batched_protein_files.append(batch_file)
+    return batched_protein_files
 
 def load_results_to_ensembl_db(
     main_script_dir,
