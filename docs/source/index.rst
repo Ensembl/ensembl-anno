@@ -38,18 +38,24 @@ to install the project.
    license
 
    cmsearch
+   cpc2
    cpg
+   diamond
    dust
    eponine
    genblast
    minimap
    red
    repeatmasker
+   rnasamba
    scallop
    star
    stringtie
    trf
    trnascan
+
+   finalise genset
+   load into core
    
 Indices and tables
 ==================
