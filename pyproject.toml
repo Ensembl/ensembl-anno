@@ -150,6 +150,11 @@ run_star = "ensembl.tools.anno.transcriptomic_annotation.star:main"
 run_minimap2 = "ensembl.tools.anno.transcriptomic_annotation.minimap:main"
 run_stringtie = "ensembl.tools.anno.transcriptomic_annotation.stringtie:main"
 run_scallop = "ensembl.tools.anno.transcriptomic_annotation.scallop:main"
+run_rnasamba = "ensembl.tools.anno.finalise_geneset.rnasamba:main"
+run_cpc2 = "ensembl.tools.anno.finalise_geneset.cpc2:main"
+run_diamond = "ensembl.tools.anno.finalise_geneset.diamond:main"
+run_finalise_geneset = "ensembl.tools.anno.finalise_geneset.finalise_geneset:main"
+load_results_to_ensembl_db = "ensembl.tools.anno.load_results_to_ensembl_db:main"
 # This is configuration specific to the `setuptools` build backend.
 # If you are using a different build backend, you will need to change this.
 [tool.setuptools]
