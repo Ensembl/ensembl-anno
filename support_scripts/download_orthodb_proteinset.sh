@@ -26,10 +26,30 @@
 
 # Main input variable
 TAXID_CLADE=${1^}
+ORTHODB_VERSION="v"$2
 CWD_TMP=`readlink -f $PWD`
 DATE_RUN=$(date "+%d/%m/%Y" | sed 's/\//-/g')
 PERL_SCRIPTS_DIR="$CWD_TMP/ensembl-anno/support_scripts_perl"
 PROCESSING_LOG="Trace.${DATE_RUN}.log"
+
+## IMPORTANT URL - Which could be changed in a future OrthoDB update.... ##
+ORTHODB_FILE_URL="https://data.orthodb.org/current/download"
+# [ReadMe = $ORTHODB_FILE_URL/README.txt]
+
+# Define endpoint URL if user specified version:
+if [[ "${ORTHODB_VERSION}" =~ v[0-9]+ ]]; then
+    ORTHODB_FILE_URL="https://data.orthodb.org/${ORTHODB_VERSION}/download"
+fi
+
+## check URL is active:
+HTTP_CODE=`curl -sL -w "%{http_code}\n" "$ORTHODB_FILE_URL" -o /dev/null`
+if [[ $HTTP_CODE != "200" ]]; then
+    echo "URL - > $ORTHODB_FILE_URL is returning HTTP code $HTTP_CODE"
+    echo -e -n "Is this expected ?\nNeed to exit..."
+    exit
+else
+    echo -e -n "$ORTHODB_FILE_URL has non-404 status hurray (code:$HTTP_CODE)\nProceeding...\n"
+fi
 
 # Check before doing any processing if support scripts dir is available
 if [[ ! -d $PERL_SCRIPTS_DIR ]]; then
@@ -37,10 +57,6 @@ if [[ ! -d $PERL_SCRIPTS_DIR ]]; then
     echo -e -n "Please make sure you have this path available, set 'PERL_SCRIPTS_DIR':line35.\nExiting.\n"
     exit
 fi
-
-## IMPORTANT URL - Which could be changed in a future OrthoDB update.... ##
-ORTHODB_FILE_URL="https://data.orthodb.org/current/download"
-# [ReadMe = $ORTHODB_FILE_URL/README.txt]
 
 if [ -z $TAXID_CLADE ]; then
     echo -e -n 'Taxon ID OR Clade name required. Exiting...\n\nUsage: sh download_orthodb_proteinset.sh <TaxonID -OR- Clade Name>\n'
