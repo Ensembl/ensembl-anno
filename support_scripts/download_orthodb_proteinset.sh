@@ -48,7 +48,7 @@ if [[ $HTTP_CODE != "200" ]]; then
     echo -e -n "Is this expected ?\nNeed to exit..."
     exit
 else
-    echo -e -n "$ORTHODB_FILE_URL has non-404 status hurray (code:$HTTP_CODE)\nProceeding...\n"
+    echo -e -n "$ORTHODB_FILE_URL has non-404 status hurray (code:$HTTP_CODE)\nProceeding...\n" | tee $PROCESSING_LOG
 fi
 
 # Check before doing any processing if support scripts dir is available
@@ -59,8 +59,8 @@ if [[ ! -d $PERL_SCRIPTS_DIR ]]; then
 fi
 
 if [ -z $TAXID_CLADE ]; then
-    echo -e -n 'Taxon ID OR Clade name required. Exiting...\n\nUsage: sh download_orthodb_proteinset.sh <TaxonID -OR- Clade Name>\n'
-    echo -e -n 'E.g:\nsh Download_OrthoDB_ProtSet.sh mollusca\nOR\n'
+    echo -e -n 'Taxon ID OR Clade name required. Exiting...\n\nUsage: sh download_orthodb_proteinset.sh <TaxonID -OR- Clade Name> <Optional: OrthoDB version [e.g 12]>\n'
+    echo -e -n 'E.g:\nsh Download_OrthoDB_ProtSet.sh mollusca 12\nOR\nsh Download_OrthoDB_ProtSet.sh mollusca\nOR\n'
     echo 'sh Download_OrthoDB_ProtSet.sh 6447'
     exit 1
 else
