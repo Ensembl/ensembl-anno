@@ -248,7 +248,7 @@ def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
 
                 gtf_line = (
                     f"{region_name}\tRepeatMasker\trepeat\t{start}\t{end}\t.\t"
-                    f"{strand}\t.\trepeat_id{repeat_count}; "
+                    f"{strand}\t.\trepeat_id \"{repeat_count}\"; "
                     f'repeat_name "{repeat_name}"; repeat_class "{repeat_class}"; '
                     f'repeat_type "{repeat_type}"; repeat_start "{repeat_start}"; '
                     f'repeat_end "{repeat_end}"; score "{score}";\n'
