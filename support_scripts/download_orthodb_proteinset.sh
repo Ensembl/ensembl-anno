@@ -14,34 +14,53 @@
 # limitations under the License.
 
 ## A script to help download and process data from OrthoDB [See: https://www.orthodb.org/orthodb_userguide.html#contact]
+
 ## API Docs: https://www.ezlab.org/orthodb_userguide.html
 ## Author: Lahcen Campbell [lcampbell@ebi.ac.uk]
-## version: 1.5
+## Current version: 1.6
 
-## Update 1.4: -Improved handling of main download URL and orthoDB version needed for OrthoDB master file/data retreval
-##             -Implement embedding of OrthoDB version into protein file names
-
-## Update 1.5 - Updated Rest Endpoint URLs (as of July 2024)
-##            - Added trace logging to processing output
-##            - Improved variable declarations and use 
-##            - Subsituted wget for curl
-# https://data.orthodb.org/current/fasta?id=0at6231&species=6334,31234,34506,51031,6238,6239,6279,7209
+## Updated in 1.6 - Updated Rest Endpoint URLs (as of April 2025)
+##                - Increased max cluster retrieval to new max 10k (up from 5K)
+##                - Added small check for path access to support_scripts dir
+##                - Assorted spelling fixes, variable formatting consistency
 
 # Main input variable
-TAXID_CLADE=$1
+TAXID_CLADE=${1^}
+ORTHODB_VERSION="v"$2
 CWD_TMP=`readlink -f $PWD`
 DATE_RUN=$(date "+%d/%m/%Y" | sed 's/\//-/g')
 PERL_SCRIPTS_DIR="$CWD_TMP/ensembl-anno/support_scripts_perl"
 PROCESSING_LOG="Trace.${DATE_RUN}.log"
 
-
 ## IMPORTANT URL - Which could be changed in a future OrthoDB update.... ##
-ORTHODB_FILE_URL="https://data.orthodb.org/download"
+ORTHODB_FILE_URL="https://data.orthodb.org/current/download"
 # [ReadMe = $ORTHODB_FILE_URL/README.txt]
 
+# Define endpoint URL if user specified version:
+if [[ "${ORTHODB_VERSION}" =~ v[0-9]+ ]]; then
+    ORTHODB_FILE_URL="https://data.orthodb.org/${ORTHODB_VERSION}/download"
+fi
+
+## check URL is active:
+HTTP_CODE=`curl -sL -w "%{http_code}\n" "$ORTHODB_FILE_URL" -o /dev/null`
+if [[ $HTTP_CODE != "200" ]]; then
+    echo "URL - > $ORTHODB_FILE_URL is returning HTTP code $HTTP_CODE"
+    echo -e -n "Is this expected ?\nNeed to exit..."
+    exit
+else
+    echo -e -n "$ORTHODB_FILE_URL has non-404 status hurray (code:$HTTP_CODE)\nProceeding...\n" | tee $PROCESSING_LOG
+fi
+
+# Check before doing any processing if support scripts dir is available
+if [[ ! -d $PERL_SCRIPTS_DIR ]]; then
+    echo -e -n "Unable to locate and define perl support scripts directory variable '${PERL_SCRIPTS_DIR}'.\n"
+    echo -e -n "Please make sure you have this path available, set 'PERL_SCRIPTS_DIR':line35.\nExiting.\n"
+    exit
+fi
+
 if [ -z $TAXID_CLADE ]; then
-    echo -e -n 'Taxon ID OR Clade name required. Exiting...\n\nUsage: sh download_orthodb_proteinset.sh <TaxonID -OR- Clade Name>\n'
-    echo -e -n 'E.g:\nsh Download_OrthoDB_ProtSet.sh mollusca\nOR\n'
+    echo -e -n 'Taxon ID OR Clade name required. Exiting...\n\nUsage: sh download_orthodb_proteinset.sh <TaxonID -OR- Clade Name> <Optional: OrthoDB version [e.g 12]>\n'
+    echo -e -n 'E.g:\nsh Download_OrthoDB_ProtSet.sh mollusca 12\nOR\nsh Download_OrthoDB_ProtSet.sh mollusca\nOR\n'
     echo 'sh Download_OrthoDB_ProtSet.sh 6447'
     exit 1
 else
@@ -55,7 +74,7 @@ fi
 # Function for testing taxonID vs clade name input
 is_int () { test "$@" -eq "$@" 2> /dev/null; }
 
-## Get the lastest information related to the current version set of *.tab.gz files hosted on OrthoDB:
+## Get the latest information related to the current version set of *.tab.gz files hosted on OrthoDB:
 wget -q $ORTHODB_FILE_URL -O OrthoDB_Download.html
 ODB_LEVEL2SPECIES=`grep -e '_level2species.tab.gz' OrthoDB_Download.html | perl -pe 'if ( $_ =~ m/odb[0-9]+v[0-9]+_level2species.tab.gz/){print $&."\n";};' | head -n 1`
 ODB_LEVELS=`grep -e '_levels.tab.gz' OrthoDB_Download.html | perl -pe 'if ( $_ =~ m/odb[0-9]+v[0-9]+_levels.tab.gz/){print $&."\n";};' | head -n 1`
@@ -129,7 +148,7 @@ echo -e -n "$CLADE_NAME clade contains set of $TAXON_COUNT Taxon IDs => [ $CLADE
 echo -e -n "\tSee Taxon information from uniprot in file: ${CLADE_NAME}.orthodb.uniprot.tsv\n\n" | tee -a $PROCESSING_LOG
 
 ## Get the set of OrthoDB clusters based on clade of interest using taxonID info
-CLUSTER_IDS_URL="https://data.orthodb.org/current/search?universal=0.9&singlecopy=&level=${TAXON_ID}&species=${TAXON_ID}&take=5000" ## <- Updated endpoint
+CLUSTER_IDS_URL="https://data.orthodb.org/current/search?universal=0.9&singlecopy=&level=${TAXON_ID}&species=${TAXON_ID}&take=10000"
 
 ## Download cluster json using Taxon ID
 CLUSTER_JSON="${CLADE_NAME}.orthodb_clusters.json"
@@ -182,7 +201,7 @@ perl ${PERL_SCRIPTS_DIR}/remove_dup_seqs.pl $ORIG_CLUST_JUSTFILE > $DEDUP_OUT_TM
 echo "## Processing deduplicated seq headers, isolating to unique OrthoDB gene ID..." | tee -a $PROCESSING_LOG
 perl ${PERL_SCRIPTS_DIR}/reheader_orthodb.pl $DEDUP_OUT_TMP $BASENAME
 
-# Create final outputfile based on reheadered orthoDB file
+# Create final output file based on reheadered orthoDB file
 mv $REHEADER_OUT $FINAL_ORTHO_FASTA
 
 ## Generate samtools index file
