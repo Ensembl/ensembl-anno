@@ -1669,9 +1669,7 @@ def set_attributes(attributes, feature_type):
 # 5       genBlastG       coding_exon     69461131        69461741        .       +       .       ID=259454-R1-1-A1-E2;Parent=259454-R1-1-A1
 
 
-def split_protein_file(protein_file, protein_output_dir, batch_size):
-    if batch_size is None:
-        batch_size = 20
+def split_protein_file(protein_file, protein_output_dir, batch_size_geneblast):
 
     batched_protein_files = []
 
@@ -1687,7 +1685,7 @@ def split_protein_file(protein_file, protein_output_dir, batch_size):
     while line:
         num_dir = random.randint(0, 9)
         match = re.search(r">(.+)$", line)
-        if match and not initial_seq and seq_count % batch_size == 0:
+        if match and not initial_seq and seq_count % batch_size_geneblast == 0:
             file_out_name = os.path.join(
                 protein_output_dir,
                 ("bin_" + str(random.randint(0, 9))),
@@ -4255,6 +4253,14 @@ if __name__ == "__main__":
         help="Path where the output and temp files will write to. \
         Uses current dir by default",
     )
+
+    parser.add_argument(
+        "--batch_size_geneblast",
+        type=int,
+        default=20,
+        help="Batch size to use with genblast. Defaults to 20",
+    )
+
     parser.add_argument(
         "--genome_file",
         type=str,
@@ -4524,6 +4530,7 @@ if __name__ == "__main__":
     work_dir = args.output_dir
     genome_file = args.genome_file
     num_threads = args.num_threads
+    batch_size_geneblast = args.batch_size_geneblast
     # masked_genome_file = genome_file  # This will be updated later if Red is run
     run_masking = args.run_masking
     red_path = args.red_path
