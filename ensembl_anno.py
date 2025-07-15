@@ -1436,6 +1436,7 @@ def run_genblast_align(
     max_intron_length,
     num_threads,
     genblast_timeout_secs,
+    batch_size_geneblast
 ):
 
     if not genblast_path:
@@ -1498,7 +1499,7 @@ def run_genblast_align(
 
     run_makeblastdb(makeblastdb_path, masked_genome_file, asnb_file)
 
-    batched_protein_files = split_protein_file(protein_file, genblast_dir, 20)
+    batched_protein_files = split_protein_file(protein_file, genblast_dir, batch_size_geneblast)
 
     pool = multiprocessing.Pool(int(num_threads))
     for batched_protein_file in batched_protein_files:
@@ -4828,6 +4829,7 @@ if __name__ == "__main__":
             max_intron_length,
             num_threads,
             genblast_timeout,
+            batch_size_geneblast
         )
 
     # Run GenBlast on BUSCO set, gives higher priority when creating thei
@@ -4845,6 +4847,7 @@ if __name__ == "__main__":
             max_intron_length,
             num_threads,
             genblast_timeout,
+            batch_size_geneblast
         )
 
     #################################
