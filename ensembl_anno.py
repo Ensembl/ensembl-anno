@@ -3665,32 +3665,24 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
                     single_cds_exon_transcript = 1
 
             exon_lines = parsed_gtf_genes[gene_id][transcript_id]["exons"]
-            validation_results = combined_results[transcript_id]
-            rnasamba_coding_probability = float(validation_results[0])
-            rnasamba_coding_potential = validation_results[1]
-            cpc2_coding_probability = float(validation_results[2])
-            cpc2_coding_potential = validation_results[3]
-            transcript_length = int(validation_results[4])
-            peptide_length = int(validation_results[5])
-            diamond_e_value = None
-            if len(validation_results) == 7:
-                diamond_e_value = validation_results[6]
-
-            avg_coding_probability = (
+            validation_results = combined_results.get(transcript_id)
+            if validation_results:
+                rnasamba_coding_probability = float(validation_results[0])
+                rnasamba_coding_potential = validation_results[1]
+                cpc2_coding_probability = float(validation_results[2])
+                cpc2_coding_potential = validation_results[3]
+                transcript_length = int(validation_results[4])
+                peptide_length = int(validation_results[5])
+                diamond_e_value = None
+                if len(validation_results) == 7:
+                    diamond_e_value = validation_results[6]
+                avg_coding_probability = (
                 rnasamba_coding_probability + cpc2_coding_probability
-            ) / 2
-            max_coding_probability = max(
+                ) / 2
+                max_coding_probability = max(
                 rnasamba_coding_probability, cpc2_coding_probability
-            )
-
-            match = re.search(r'; biotype "([^"]+)";', transcript_line)
-            biotype = match.group(1)
-            if biotype == "busco" or biotype == "protein":
-                transcript_line = re.sub(
-                    '; biotype "' + biotype + '";',
-                    '; biotype "protein_coding";',
-                    transcript_line,
                 )
+                
                 output_lines.append(transcript_line)
                 output_lines.extend(exon_lines)
                 continue
