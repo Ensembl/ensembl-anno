@@ -264,6 +264,38 @@ foreach my $slice_name (keys(%{$transcripts_by_slice})) {
     }
   }
 
+  say "Filtering transcripts with extremely short translations";
+
+  my $filtered_transcripts_tmp = [];
+  foreach my $transcript (@$joined_transcripts) {
+      my $tr_id = $transcript->stable_id // 'no_id';
+
+      my $translation = $transcript->translation;
+
+      if (!$translation) {
+          # No CDS, keep transcript
+          push @$filtered_transcripts_tmp, $transcript;
+          next;
+      }
+
+      my $aa_len  = $translation->length;
+      my $cds_len = $aa_len * 3;
+
+      if ($aa_len <= 1) {
+          # LOG EXACTLY WHAT IS FILTERED OUT
+          say "Removing 1-codon transcript: $tr_id  length=${cds_len}bp (${aa_len}aa) "
+            . "start=" . $transcript->start . " end=" . $transcript->end;
+          next;
+      }
+
+      push @$filtered_transcripts_tmp, $transcript;
+  }
+
+  # Replace original list
+  $joined_transcripts = $filtered_transcripts_tmp;
+  say "Remaining transcripts after 1-codon filtering: " . scalar(@$joined_transcripts);
+
+
 
   my $cleaned_transcripts;
   if($clean_transcripts) {
