@@ -2438,7 +2438,7 @@ def check_transcriptomic_output(main_output_dir):
         "minimap2_output",
     ]
     total_lines = 0
-    min_lines = 0
+    min_lines = 100000
     for transcriptomic_dir in transcriptomic_dirs:
         full_file_path = os.path.join(
             main_output_dir, transcriptomic_dir, "annotation.gtf"
@@ -3651,10 +3651,6 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
     for gene_id in parsed_gtf_genes.keys():
         transcript_ids = parsed_gtf_genes[gene_id].keys()
         for transcript_id in transcript_ids:
-            if transcript_id not in combined_results:
-            # ANNA skip/delete this transcript
-                continue
-
             transcript_line = parsed_gtf_genes[gene_id][transcript_id]["transcript"]
             single_cds_exon_transcript = 0
             translation_match = re.search(
@@ -3927,17 +3923,14 @@ def combine_results(rnasamba_results, cpc2_results, diamond_results):
         coding_potential = result[2]
         transcript_length = result[3]
         peptide_length = result[4]
-        
-        
-        if transcript_id in transcript_ids:  # ANNA only extend if exists
-            transcript_ids[transcript_id].extend(
-                [
-                    coding_probability,
-                    coding_potential,
-                    transcript_length,
-                    peptide_length,
-                ]
-            )
+        transcript_ids[transcript_id].extend(
+            [
+                coding_probability,
+                coding_potential,
+                transcript_length,
+                peptide_length,
+            ]
+        )
 
     if diamond_results is not None:
         for result in diamond_results:
