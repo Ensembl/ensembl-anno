@@ -35,7 +35,7 @@ logger = logging.getLogger("__name__." + __name__)
 #    config = json.load(f)
 
 
-def create_dir(input_dir: Path, dir_name: str) -> Path:
+def create_dir(input_dir: Path, dir_name: str or None) -> Path:
     """
     Create directory or subdirectory and log operations.
     Args:

@@ -29,7 +29,7 @@ from pathlib import Path
 import subprocess
 from typing import List
 
-from ensembl.tools.anno.utils._utils import (
+from src.python.ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,

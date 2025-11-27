@@ -31,7 +31,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 from typing import List, Union
 
-from ensembl.tools.anno.utils._utils import (
+from src.python.ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,

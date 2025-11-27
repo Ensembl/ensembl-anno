@@ -36,7 +36,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from ensembl.tools.anno.utils._utils import (
+from src.python.ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
