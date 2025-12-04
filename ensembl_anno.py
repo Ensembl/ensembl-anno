@@ -19,6 +19,8 @@ from src.python.ensembl.tools.anno.transcriptomic_annotation import star
 from src.python.ensembl.tools.anno.transcriptomic_annotation import stringtie
 from src.python.ensembl.tools.anno.protein_annotation import genblast
 from src.python.ensembl.tools.anno.finalise_genset import finalise_geneset_utils
+import legacy_finalisation
+import legacy_load_to_ensembl_db
 
 logger = logging.getLogger(__name__)
 
@@ -494,15 +496,17 @@ def main() -> None:
     if analysis_flags['finalise_geneset']:
         logger.info("Finalise geneset")
         logger.info("Finalise geneset genome file %s", genome_file)
-        run_finalise_geneset(
-	        main_script_dir,
-	        work_dir,
-	        genome_file,
-	        seq_region_names,
-	        validation_type,
-	        diamond_validation_db,
-	        num_threads,
+        main_script_dir = os.path.dirname(os.path.realpath(__file__))
+        legacy_finalisation.run_finalise_geneset(
+	        main_script_dir = main_script_dir,
+	        main_output_dir = work_dir,
+	        genome_file = genome_file,
+	        seq_region_names = seq_region_names,
+	        validation_type = validation_type,
+	        diamond_validation_db = diamond_validation_db,
+	        num_threads = num_threads,
         )
+
 
     #################################
     # Other analyses
@@ -510,10 +514,9 @@ def main() -> None:
     # Run Augustus
     if run_augustus:
         logger.info("Running Augustus")
-        run_augustus_predict(augustus_path, work_dir, masked_genome_file, num_threads)
 
     if load_to_ensembl_db:
-        load_results_to_ensembl_db(
+        legacy_load_to_ensembl_db.load_results_to_ensembl_db(
 	        main_script_dir,
 	        load_to_ensembl_db,
 	        genome_file,
@@ -522,17 +525,6 @@ def main() -> None:
 	        num_threads,
 	        repeatmasker_analysis,
         )
-
-
-
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     main()

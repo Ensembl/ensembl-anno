@@ -15,9 +15,11 @@
 # limitations under the License.
 
 import errno
+import gc
 import io
 import json
 import logging
+import multiprocessing
 import os
 from os import PathLike
 from pathlib import Path
@@ -408,7 +410,7 @@ def split_protein_file(
     protein_dataset: Path, output_dir: Path, batch_size: int = 20
 ) -> List:
     """
-    The protein dataset file is splitted by a number of sequence equals to the batch_size
+    The protein dataset file is split by a number of sequence equals to the batch_size
     in batch files stored in 10 output directories.
     protein_dataset : Path for the protein dataset.
     output_dir : Output directory path.
@@ -852,6 +854,37 @@ def batch_gtf_records(input_gtf_file, batch_size, output_dir, record_type):
 
     return records
 
+def get_seq_region_lengths(genome_file, min_seq_length):
+    """
+    Split the genomic sequence in slices defined by  min_seq_length
+    Args:
+        genome_file: str path for the genome file
+        min_seq_length: int slice length
+    Return: Dict Dictionary with the sequence headers as keys and the sequence lengths as values
+    """
+    current_header = ""
+    current_seq = ""
+
+    seq_regions = {}
+    with open(genome_file) as file_in:
+        for line in file_in:
+            match = re.search(r">(.+)$", line)
+            if match and current_header:
+                if len(current_seq) > min_seq_length:
+                    seq_regions[current_header] = len(current_seq)
+
+                current_seq = ""
+                current_header = match.group(1)
+            elif match:
+                current_header = match.group(1)
+            else:
+                current_seq += line.rstrip()
+
+        if len(current_seq) > min_seq_length:
+            seq_regions[current_header] = len(current_seq)
+
+    return seq_regions
+
 
 def run_find_orfs(genome_file, main_output_dir):
     min_orf_length = 600
@@ -909,6 +942,21 @@ def find_orf_phased_region(region_name, seq, phase, min_orf_length, orf_output_d
                 orf_seq += next_codon
         current_index += 3
     orf_out.close()
+
+def bed_to_exons(block_sizes, block_starts, offset):
+    exons = []
+    for i, element in enumerate(block_sizes):
+        block_start = offset + int(block_starts[i]) + 1
+        block_end = block_start + int(block_sizes[i]) - 1
+
+        if block_end < block_start:
+            logger.warning("Warning: block end is less than block start, skipping exon")
+            continue
+
+        exon_coords = [str(block_start), str(block_end)]
+        exons.append(exon_coords)
+
+    return exons
 
 def bed_to_gff(input_dir, hints_file):
     gff_out = open(hints_file, "w+")
