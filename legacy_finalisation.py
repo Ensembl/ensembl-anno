@@ -9,7 +9,7 @@ import multiprocessing
 logger = logging.getLogger(__name__)
 from src.python.ensembl.tools.anno.utils import _utils
 
-with open(os.environ["ENSCODE"] + "/ensembl-anno/config.json", "r") as f:
+with open(os.environ["ENSCODE"] + "/ensembl-anno/conf/config.json", "r") as f:
     config = json.load(f)
 
 
