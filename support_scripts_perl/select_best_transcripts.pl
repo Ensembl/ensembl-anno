@@ -245,6 +245,33 @@ foreach my $slice_name (keys(%{$transcripts_by_slice})) {
     $joined_transcripts = $sorted_transcripts;
   }
 
+  say "Filtering out 1-codon transcripts at the very start";
+  say "Number of transcripts before filtering: " . scalar(@$joined_transcripts);
+
+  my $filtered_transcripts = [];
+  foreach my $transcript (@$joined_transcripts) {
+      my $translation = $transcript->translation;
+      my $tr_id = $transcript->stable_id // 'no_id';
+
+      # Skip transcripts without translation
+      unless ($translation) {
+          push @$filtered_transcripts, $transcript;
+          next;
+      }
+
+      my $aa_len = $translation->length;
+      if ($aa_len <= 1) {
+          say "Removing 1-codon transcript early: $tr_id length=".($aa_len*3)."bp (${aa_len}aa) start=".$transcript->start." end=".$transcript->end;
+          next;
+      }
+
+      push @$filtered_transcripts, $transcript;
+  }
+
+  $joined_transcripts = $filtered_transcripts;
+  say "Remaining transcripts after early 1-codon filtering: ".scalar(@$joined_transcripts);
+
+
 
   say "Computing translations";
   foreach my $transcript (@$joined_transcripts) {
@@ -263,38 +290,6 @@ foreach my $slice_name (keys(%{$transcripts_by_slice})) {
       compute_translation($transcript);
     }
   }
-
-  say "Filtering transcripts with extremely short translations";
-
-  my $filtered_transcripts_tmp = [];
-  foreach my $transcript (@$joined_transcripts) {
-      my $tr_id = $transcript->stable_id // 'no_id';
-
-      my $translation = $transcript->translation;
-
-      if (!$translation) {
-          # No CDS, keep transcript
-          push @$filtered_transcripts_tmp, $transcript;
-          next;
-      }
-
-      my $aa_len  = $translation->length;
-      my $cds_len = $aa_len * 3;
-
-      if ($aa_len <= 1) {
-          # LOG EXACTLY WHAT IS FILTERED OUT
-          say "Removing 1-codon transcript: $tr_id  length=${cds_len}bp (${aa_len}aa) "
-            . "start=" . $transcript->start . " end=" . $transcript->end;
-          next;
-      }
-
-      push @$filtered_transcripts_tmp, $transcript;
-  }
-
-  # Replace original list
-  $joined_transcripts = $filtered_transcripts_tmp;
-  say "Remaining transcripts after 1-codon filtering: " . scalar(@$joined_transcripts);
-
 
 
   my $cleaned_transcripts;
