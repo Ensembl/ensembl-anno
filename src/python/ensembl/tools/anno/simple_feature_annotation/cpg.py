@@ -75,6 +75,9 @@ def run_cpg(
         :rtype: None
     """
 
+    # Use default path if user didn't supply one
+    cpg_bin = cpg_bin or Path("cpg_lh")
+
     check_exe(cpg_bin)
     cpg_dir = create_dir(output_dir, "cpg_output")
     output_file = cpg_dir / "annotation.gtf"

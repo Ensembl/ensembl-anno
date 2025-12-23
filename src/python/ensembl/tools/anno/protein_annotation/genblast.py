@@ -48,6 +48,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
+    split_protein_file
 )
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,10 @@ def run_genblast(#pylint:disable=dangerous-default-value
             :rtype: None
             
     """
+    # Use default path if user didn't supply one
+    genblast_bin = genblast_bin or Path("genblast")
+    convert2blastmask_bin = convert2blastmask_bin or Path("convert2blastmask")
+    makeblastdb_bin = makeblastdb_bin or Path("makeblastdb")
 
     check_exe(genblast_bin)
     check_exe(convert2blastmask_bin)
@@ -119,7 +124,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
         repo_root_dir = Path(__file__).parents[6]
         shutil.copy(Path(f"{repo_root_dir}/data/alignscore.txt"), genblast_dir)
 
-    if not masked_genome.exists():
+    if not Path(masked_genome).exists():
         raise IOError(f"Masked genome file does not exist: {masked_genome}")
     if not protein_dataset.exists():
         raise IOError(f"Protein file does not exist: {protein_dataset}")
@@ -142,6 +147,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
                 genblast_bin,
                 genblast_timeout_secs,
                 max_intron_length,
+                genblast_dir
             ),
         )
     pool.close()
@@ -158,6 +164,7 @@ def _multiprocess_genblast(
     genblast_bin: Path,
     genblast_timeout: int,
     max_intron_length: int,
+    genblast_dir: Path,
 ):
     """
     Executes GenBlast on genomic slice
@@ -245,16 +252,19 @@ def _multiprocess_genblast(
         "-o",
         str(protein_file),
     ]
-
+    logger.info("CWD for GenBlast: %s", genblast_dir)
     logger.info(" ".join(genblast_cmd))
     # Using the child process termination as described here:
     # https://alexandra-zaharia.github.io/posts/kill-subprocess
     # -and-its-children-on-timeout-python/
     try:
         p = subprocess.Popen(# pylint:disable=consider-using-with
-            genblast_cmd, start_new_session=True
+            genblast_cmd, start_new_session=True, cwd=str(genblast_dir),
         )
         p.wait(timeout=genblast_timeout)
+        # temporary check
+        logger.info("Files in genblast_dir: %s", [p.name for p in Path(genblast_dir).iterdir()])
+
     except subprocess.TimeoutExpired:
         logger.error("Timeout reached for file: %s \n", protein_file)
         subprocess.run(# pylint:disable=subprocess-run-check

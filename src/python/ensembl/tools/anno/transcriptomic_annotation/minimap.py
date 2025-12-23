@@ -67,6 +67,10 @@ def run_minimap2(
         :return: None
         :rtype: None
     """
+    # Use default path if user didn't supply one
+    minimap2_bin = minimap2_bin or Path("minimap2")
+    paftools_bin = paftools_bin or Path("paftools.js")
+
     check_exe(minimap2_bin)
     check_exe(paftools_bin)
     minimap2_dir = create_dir(output_dir, "minimap2_output")

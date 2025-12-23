@@ -1,17 +1,31 @@
+# filename: finalise_geneset_module.py
+import argparse
 import glob
-import json
-import logging.config
+import multiprocessing
 import os
+from pathlib import Path
 import re
 import subprocess
-import multiprocessing
+import logging
+import logging.config
+import json
+from typing import Any, Dict
 
-logger = logging.getLogger(__name__)
-from src.python.ensembl.tools.anno.utils import _utils
+from src.python.ensembl.tools.anno.utils._utils import (
+    check_file,
+    create_dir,
+    check_gtf_content,
+    get_seq_region_lengths,
+    split_protein_file,
+)
 
-with open(os.environ["ENSCODE"] + "/ensembl-anno/conf/config.json", "r") as f:
-    config = json.load(f)
+def load_json(path: str | Path) -> Dict[str, Any]:
+    path = Path(path)
+    with path.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
 
+# Use same config path layout as monolithic script
+config = load_json(Path(os.environ["ENSCODE"]) / "ensembl-anno" / "conf" /"config.json")
 
 def run_finalise_geneset(
     main_script_dir,
@@ -24,35 +38,35 @@ def run_finalise_geneset(
 ):
 
     if validation_type is None:
-        logger.info("Setting validation type to relaxed")
+        logging.info("Setting validation type to relaxed")
     else:
-        logger.info("Setting validation type to " + validation_type)
+        logging.info("Setting validation type to " + validation_type)
 
-    final_annotation_dir = _utils.create_dir(main_output_dir, "annotation_output")
-    region_annotation_dir = _utils.create_dir(final_annotation_dir, "initial_region_gtfs")
-    final_region_annotation_dir = _utils.create_dir(
+    final_annotation_dir = create_dir(main_output_dir, "annotation_output")
+    region_annotation_dir = create_dir(final_annotation_dir, "initial_region_gtfs")
+    final_region_annotation_dir = create_dir(
         final_annotation_dir, "final_region_gtfs"
     )
-    utr_region_annotation_dir = _utils.create_dir(final_annotation_dir, "utr_region_gtfs")
-    validation_dir = _utils.create_dir(final_annotation_dir, "cds_validation")
-    seq_region_lengths = _utils.get_seq_region_lengths(genome_file, 0)
+    utr_region_annotation_dir = create_dir(final_annotation_dir, "utr_region_gtfs")
+    validation_dir = create_dir(final_annotation_dir, "cds_validation")
+    seq_region_lengths = get_seq_region_lengths(genome_file, 0)
 
-    logger.info("Skip analysis if the gtf file already exists")
+    logging.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(final_annotation_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        logger.info("final_annotation_dir exists")
-        transcript_count = _utils.check_gtf_content(output_file, "transcript")
+        logging.info("final_annotation_dir exists")
+        transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
-            logger.info("Final gtf file exists")
+            logging.info("Final gtf file exists")
             return
     else:
-        logger.info("No gtf file, go on with the analysis")
+        logging.info("No gtf file, go on with the analysis")
     # This used to be a list of output dirs and a loop which was neat,
     # I'm coverting to a list of conditions as
     # it's more straightforward with the renaming
     # and having to merge scallop and stringtie
     protein_annotation_raw = os.path.join(
-        main_output_dir, "genblast_output", "annotation.gtf"
+        main_output_dir, "uniprot_output", "annotation.gtf"
     )
     minimap2_annotation_raw = os.path.join(
         main_output_dir, "minimap2_output", "annotation.gtf"
@@ -63,7 +77,7 @@ def run_finalise_geneset(
     scallop_annotation_raw = os.path.join(
         main_output_dir, "scallop_output", "annotation.gtf"
     )
-    busco_annotation_raw = os.path.join(main_output_dir, "busco_output", "annotation.gtf")
+    busco_annotation_raw = os.path.join(main_output_dir, "orthodb_output", "annotation.gtf")
 
     transcript_selector_script = os.path.join(
         main_script_dir, "support_scripts_perl", "select_best_transcripts.pl"
@@ -92,7 +106,7 @@ def run_finalise_geneset(
     ]:
 
         if not os.path.exists(transcriptomic_file):
-            logger.info(
+            logging.info(
                 "No annotation.gtf file found in " + transcriptomic_file + ", skipping"
             )
             continue
@@ -151,7 +165,7 @@ def run_finalise_geneset(
         )
 
         if os.path.exists(transcriptomic_annotation_raw):
-            logger.info("Finalising transcriptomic data for: " + seq_region_name)
+            logging.info("Finalising transcriptomic data for: " + seq_region_name)
             transcriptomic_annotation_select = re.sub(
                 "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
             )
@@ -172,7 +186,7 @@ def run_finalise_geneset(
             pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
 
         if os.path.exists(busco_annotation_raw):
-            logger.info("Finalising BUSCO data for: " + seq_region_name)
+            logging.info("Finalising OrthoDB data for: " + seq_region_name)
             busco_annotation_select = re.sub("_raw.gtf", "_sel.gtf", busco_annotation_raw)
             cmd = generic_select_cmd.copy()
             cmd.extend(
@@ -191,7 +205,7 @@ def run_finalise_geneset(
             pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
 
         if os.path.exists(protein_annotation_raw):
-            logger.info("Finalising protein data for: " + seq_region_name)
+            logging.info("Finalising Uniprot data for: " + seq_region_name)
             protein_annotation_select = re.sub(
                 "_raw.gtf", "_sel.gtf", protein_annotation_raw
             )
@@ -237,7 +251,7 @@ def run_finalise_geneset(
     fully_merged_gtf_out = open(fully_merged_gtf_path, "w+")
 
     merge_gtf_cmd = ["cat"]
-    merge_gtf_cmd.extend(glob.glob(final_annotation_dir + "/*_sel.gtf"))
+    merge_gtf_cmd.extend(glob.glob(str(final_annotation_dir) + "/*_sel.gtf"))
     subprocess.run(merge_gtf_cmd, stdout=fully_merged_gtf_out)
     fully_merged_gtf_out.close()
 
@@ -303,7 +317,7 @@ def run_finalise_geneset(
     cleaned_initial_gtf_file = os.path.join(final_annotation_dir, ("cleaned_pre_utr.gtf"))
     cleaned_utr_gtf_file = os.path.join(final_annotation_dir, ("annotation.gtf"))
 
-    logger.info("Cleaning initial set")
+    logging.info("Cleaning initial set")
     cleaning_cmd = [
         "perl",
         clean_geneset_script,
@@ -314,7 +328,7 @@ def run_finalise_geneset(
         "-output_gtf_file",
         cleaned_initial_gtf_file,
     ]
-    logger.info(" ".join(cleaning_cmd))
+    logging.info(" ".join(cleaning_cmd))
     subprocess.run(cleaning_cmd)
 
     # Clean UTRs
@@ -364,7 +378,7 @@ def run_finalise_geneset(
         ]
     )
 
-    logger.info("Dumping transcript and translation sequences")
+    logging.info("Dumping transcript and translation sequences")
     dumping_cmd = [
         "perl",
         gtf_to_seq_script,
@@ -373,10 +387,10 @@ def run_finalise_geneset(
         "-gtf_file",
         cleaned_utr_gtf_file,
     ]
-    logger.info(" ".join(dumping_cmd))
+    logging.info(" ".join(dumping_cmd))
     subprocess.run(dumping_cmd)
 
-    logger.info("Finished creating gene set")
+    logging.info("Finished creating gene set")
 
 
 def validate_coding_transcripts(
@@ -389,64 +403,77 @@ def validate_coding_transcripts(
     num_threads,
 ):
 
-    logger.info("Running CDS validation with RNAsamba and CPC2")
+    logging.info("Running CDS validation with RNAsamba")
     rnasamba_weights = config["rnasamba"]["weights"]
-    rnasamba_output_path = os.path.join(validation_dir, "rnasamba.tsv.txt")
-    cpc2_output_path = os.path.join(validation_dir, "cpc2.tsv")
-    rnasamba_volume = validation_dir + "/:/app:rw"
-    rnasamba_cmd = [
-        "singularity",
-        "exec",
-        "--bind",
-        rnasamba_volume,
-        config["rnasamba"]["software"],
-        "rnasamba",
-        "classify",
-        rnasamba_output_path,
-        cdna_file,
-        rnasamba_weights,
-    ]
-    logger.info(" ".join(rnasamba_cmd))
-    subprocess.run(rnasamba_cmd)
-    cpc2_volume = validation_dir + "/:/app:rw"
-    cpc2_cmd = [
-        "singularity",
-        "exec",
-        "--bind",
-        cpc2_volume,
-        config["cpc2"]["software"],
-        "python3",
-        "/CPC2_standalone-1.0.1/bin/CPC2.py",
-        "-i",
-        cdna_file,
-        "--ORF",
-        "-o",
-        cpc2_output_path,
-    ]
-    logger.info(" ".join(cpc2_cmd))
-    subprocess.run(cpc2_cmd)
-    cpc2_output_path = cpc2_output_path + ".txt"
+    rnasamba_output_path = Path(validation_dir) / "rnasamba.tsv.txt"
 
-    _utils.check_file(rnasamba_output_path)
-    _utils.check_file(cpc2_output_path)
+    if not rnasamba_output_path.exists():
+        rnasamba_volume = str(validation_dir) + "/:/app:rw"
+        rnasamba_cmd = [
+            "singularity",
+            "exec",
+            "--bind",
+            rnasamba_volume,
+            config["rnasamba"]["software"],
+            "rnasamba",
+            "classify",
+            rnasamba_output_path,
+            cdna_file,
+            rnasamba_weights,
+        ]
+        logging.info(" ".join(rnasamba_cmd))
+        subprocess.run(rnasamba_cmd)
 
-    logger.info("diamond validation")
+        check_file(Path(rnasamba_output_path))
+        logging.info("RNAsamba run sucessfully")
+    else:
+        logging.info("Found RNAsamba output file. Will not run again.")
+
+    cpc2_output_path = Path(validation_dir) / "cpc2.tsv.txt"
+    if not cpc2_output_path.exists():
+        logging.info("Running CDS validation with CPC2")
+        cpc2_volume = str(validation_dir) + "/:/app:rw"
+        cpc2_cmd = [
+            "singularity",
+            "exec",
+            "--bind",
+            cpc2_volume,
+            config["cpc2"]["software"],
+            "python3",
+            "/CPC2_standalone-1.0.1/bin/CPC2.py",
+            "-i",
+            cdna_file,
+            "--ORF",
+            "-o",
+            cpc2_output_path,
+        ]
+        logging.info(" ".join(cpc2_cmd))
+        subprocess.run(cpc2_cmd)
+        cpc2_output_path = cpc2_output_path + ".txt"
+
+        check_file(Path(cpc2_output_path))
+        logging.info("CPC2 run sucessfully")
+    
+    else:
+        logging.info("Found CPC2 output file. Will not run again.")
+
+    logging.info("Running Diamond validation")
     diamond_results = None
     if diamond_validation_db is not None:
-        diamond_output_dir = _utils.create_dir(validation_dir, "diamond_output")
+        diamond_output_dir = create_dir(validation_dir, "diamond_output")
         diamond_validation(
             diamond_validation_db,
             amino_acid_file,
-            diamond_output_dir,
+            str(diamond_output_dir),
             num_threads,
         )
         diamond_results = read_diamond_results(diamond_output_dir)
 
-    logger.info("read results")
+    logging.info("Reading validation results")
     rnasamba_results = read_rnasamba_results(rnasamba_output_path)
     cpc2_results = read_cpc2_results(cpc2_output_path)
     combined_results = combine_results(rnasamba_results, cpc2_results, diamond_results)
-    logger.info("read gtf genes")
+    logging.info("Reading gtf genes")
     parsed_gtf_genes = read_gtf_genes(gtf_file)
     updated_gtf_lines = update_gtf_genes(
         parsed_gtf_genes, combined_results, validation_type
@@ -458,48 +485,126 @@ def validate_coding_transcripts(
 def diamond_validation(
     diamond_validation_db, amino_acid_file, diamond_output_dir, num_threads
 ):
+    logging.info("Starting Diamond validation")
+    logging.info("Diamond DB: %s", diamond_validation_db)
+    logging.info("Amino acid file: %s", amino_acid_file)
+    logging.info("Diamond output dir: %s", diamond_output_dir)
+    logging.info("Threads: %s", num_threads)
 
-    batched_protein_files = _utils.split_protein_file(amino_acid_file, diamond_output_dir, 100)
+    batched_protein_files = split_protein_file(amino_acid_file, Path(diamond_output_dir), 100)
 
+    logging.info(
+            "Split protein file into %d batches", len(batched_protein_files)
+        )
+
+    if not batched_protein_files:
+        logging.error("No batched protein files created")
+        return
+    
     pool = multiprocessing.Pool(int(num_threads))
     for batched_protein_file in batched_protein_files:
+        logging.info(
+            "Submitting Diamond job for batch: %s", batched_protein_file
+        )
         pool.apply_async(
             multiprocess_diamond,
             args=(
-                batched_protein_file,
-                diamond_output_dir,
+                Path(batched_protein_file),
+                Path(diamond_output_dir),
                 diamond_validation_db,
             ),
         )
     pool.close()
     pool.join()
 
+    logging.info("Diamond validation finished")
+
 
 def multiprocess_diamond(
-    batched_protein_file,
-    diamond_output_dir,
-    diamond_validation_db,
+    batched_protein_file: Path,
+    diamond_output_dir: Path,
+    diamond_validation_db: str,
 ):
+    try:
+        logging.info("Diamond worker started for %s", batched_protein_file)
 
-    batch_num = os.path.splitext(batched_protein_file)[0]
-    batch_dir = os.path.dirname(batched_protein_file)
-    diamond_output_file = batched_protein_file + ".dmdout"
-    logger.info("Running diamond on " + batched_protein_file + ":")
+        if not batched_protein_file.exists():
+            logging.error("Batch file does not exist: %s", batched_protein_file)
+            return
 
-    diamond_cmd = [
-        "diamond",
-        "blastp",
-        "--query",
-        batched_protein_file,
-        "--db",
-        diamond_validation_db,
-        "--out",
-        diamond_output_file,
-    ]
+        diamond_output_file = diamond_output_dir / (
+            batched_protein_file.name + ".dmdout"
+        )
 
-    logger.info(" ".join(diamond_cmd))
-    subprocess.run(diamond_cmd)
-    subprocess.run(["mv", diamond_output_file, diamond_output_dir])
+        logging.info(
+            "Diamond output file will be: %s", diamond_output_file
+        )
+
+        diamond_cmd = [
+            "diamond",
+            "blastp",
+            "--query",
+            str(batched_protein_file),
+            "--db",
+            diamond_validation_db,
+            "--out",
+            str(diamond_output_file),
+            "--outfmt",
+            "6",
+            "--threads",
+            "1",
+        ]
+
+        logging.info("Running Diamond command:")
+        logging.info(" ".join(diamond_cmd))
+
+        result = subprocess.run(
+            diamond_cmd,
+            capture_output=True,
+            text=True,
+        )
+
+        logging.info(
+            "Diamond return code for %s: %s",
+            batched_protein_file,
+            result.returncode,
+        )
+
+        if result.stdout:
+            logging.debug("Diamond stdout:\n%s", result.stdout)
+
+        if result.stderr:
+            logging.warning("Diamond stderr:\n%s", result.stderr)
+
+        if result.returncode != 0:
+            logging.error(
+                "Diamond failed for %s", batched_protein_file
+            )
+            return
+
+        if not diamond_output_file.exists():
+            logging.error(
+                "Diamond produced no output file for %s",
+                batched_protein_file,
+            )
+            return
+
+        if diamond_output_file.stat().st_size == 0:
+            logging.error(
+                "Diamond output file is empty: %s",
+                diamond_output_file,
+            )
+            return
+
+        logging.info(
+            "Diamond completed successfully for %s",
+            batched_protein_file,
+        )
+
+    except Exception as e:
+        logging.exception(
+            "Unhandled exception in Diamond worker for %s", batched_protein_file
+        )
 
 
 def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
@@ -739,7 +844,7 @@ def read_cpc2_results(file_path):
 def read_diamond_results(diamond_output_dir):
 
     results = []
-    diamond_files = glob.glob(diamond_output_dir + "/*.dmdout")
+    diamond_files = glob.glob(str(diamond_output_dir) + "/*.dmdout")
     for file_path in diamond_files:
         file_in = open(file_path)
         line = file_in.readline()
@@ -843,7 +948,7 @@ def merge_finalise_output_files(
     final_annotation_dir, region_annotation_dir, extension, id_label
 ):
 
-    gtf_files = glob.glob(region_annotation_dir + "/*" + extension)
+    gtf_files = glob.glob(str(region_annotation_dir) + "/*" + extension)
 
     merged_gtf_file = os.path.join(final_annotation_dir, (id_label + "_sel.gtf"))
     merged_cdna_file = os.path.join(final_annotation_dir, (id_label + "_sel.cdna.fa"))
@@ -866,7 +971,7 @@ def merge_finalise_output_files(
     cdna_out = open(merged_cdna_file, "w+")
     amino_acid_out = open(merged_amino_acid_file, "w+")
     for gtf_file in gtf_files:
-        logger.info("GTF file: " + gtf_file)
+        logging.info("GTF file: " + gtf_file)
         cdna_seq_index = {}
         amino_acid_seq_index = {}
         cdna_file = gtf_file + ".cdna"

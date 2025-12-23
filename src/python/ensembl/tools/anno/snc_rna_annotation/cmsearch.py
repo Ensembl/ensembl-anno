@@ -161,8 +161,14 @@ def run_cmsearch(
         seed_descriptions,
     )
     slice_output_to_gtf(output_dir=rfam_dir, unique_ids=True, file_extension=".rfam.gtf")
-    for gtf_file in rfam_dir.glob("*.rfam.gtf"):
-        gtf_file.unlink()
+    final_gtf = rfam_dir / "annotation.gtf"
+    if final_gtf.exists():
+        transcripts = check_gtf_content(final_gtf, "transcript")
+        logger.info("Final annotation.gtf transcripts: %d", transcripts)
+    else:
+        logger.error("Rfam annotation.gtf was not created")
+    #for gtf_file in rfam_dir.glob("*.rfam.gtf"):
+    #    gtf_file.unlink()
 
 
 def _handle_failed_jobs(
@@ -328,6 +334,9 @@ def _multiprocess_cmsearch(
         end,
     )
     seq = get_sequence(region_name, int(start), int(end), 1, genome_file, rfam_dir)
+    if not seq:
+        logger.warning("Empty sequence for slice %s:%s-%s", region_name, start, end)
+        return
     slice_name = f"{region_name}.rs{start}.re{end}"
     slice_file = rfam_dir / f"{slice_name}.fa"
 
@@ -336,16 +345,14 @@ def _multiprocess_cmsearch(
     region_tblout = rfam_dir / f"{slice_name}.tblout"
     region_results = rfam_dir / f"{slice_name}.rfam.gtf"
     exception_results = rfam_dir / f"{slice_name}.rfam.except"
-    cmsearch_cmd.append(str(region_tblout))
-    cmsearch_cmd.append(str(rfam_selected_models_file))
-    cmsearch_cmd.append(str(slice_file))
-    logger.info(" ".join(cmsearch_cmd))
+    cmd = list(cmsearch_cmd) + [str(region_tblout), str(rfam_selected_models_file), str(slice_file)]
+    logger.info("Running cmsearch: %s", " ".join(cmd))
     # if memory_limit is not None:
     #    cmsearch_cmd = prlimit_command(cmsearch_cmd, memory_limit)
     return_value = None
     try:
         return_value = subprocess.check_output(
-            cmsearch_cmd,
+            cmd,
             stderr=subprocess.STDOUT,
             text=True,
         )
@@ -364,8 +371,16 @@ def _multiprocess_cmsearch(
         logger.error("Return value: %s", return_value)
         with open(exception_results, "w+") as exception_out:
             exception_out.write(f"{region_name} {start} {end}\n")
-        region_results.unlink()
-        region_tblout.unlink()
+        # Clean up intermediates on failure
+        try:
+            region_tblout.unlink(missing_ok=True)
+        except Exception:
+            pass
+        try:
+            slice_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+        # Do NOT unlink region_results here (it likely doesn't exist yet, and on success we keep .rfam.gtf until merge)
         raise ex  # Re-raise the exception to allow caller to handle it further if needed
 
     initial_table_results = _parse_rfam_tblout(region_tblout, region_name)
@@ -381,8 +396,17 @@ def _multiprocess_cmsearch(
         rfam_dir,
         rnafold_bin,
     )
-    region_results.unlink()
-    region_tblout.unlink()
+    
+    # Clean up slice intermediates that are no longer needed
+    try:
+        region_tblout.unlink(missing_ok=True)
+    except Exception:
+        pass
+    try:
+        slice_file.unlink(missing_ok=True)
+    except Exception:
+        pass
+    # Keep region_results (.rfam.gtf) for slice_output_to_gtf. It will be deleted later in run_cmsearch.
 
 
 def _parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, Any]]:
@@ -407,26 +431,29 @@ def _parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, 
     Returns:
         Formatted cmsearch output
     """
+
     with open(region_tblout, "r") as rfam_tbl_in:
         rfam_tbl_data = rfam_tbl_in.read()
 
-    tbl_results = rfam_tbl_data.split("\n")
-
-    all_parsed_results: List[Dict[str, Any]] = []
-    for result in tbl_results:
-        parsed_tbl_data: Dict[str, Any] = {}
-        if re.compile(rf"^{region_name}").match(result):
-            hit = result.split()
-            parsed_tbl_data = {
-                "accession": str(hit[3]),
-                "start": str(hit[7]),
-                "end": str(hit[8]),
-                "strand": 1 if hit[9] == "+" else -1,
-                "query_name": str(hit[2]),
-                "score": str(hit[14]),
-            }
-            all_parsed_results.append(parsed_tbl_data)
-    return all_parsed_results
+    results = []
+    for line in rfam_tbl_data.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        # Must start with region_name exactly
+        if not re.match(rf"^{re.escape(region_name)}\b", line):
+            continue
+        hit = line.split()
+        if len(hit) < 16:
+            continue
+        results.append({
+            "accession": hit[3],
+            "start": hit[7],
+            "end": hit[8],
+            "strand": 1 if hit[9] == "+" else -1,
+            "query_name": hit[2],
+            "score": hit[14],
+        })
+    return results
 
 
 def _remove_rfam_overlap(parsed_tbl_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -662,28 +689,29 @@ def check_rnafold_structure(seq: str, rfam_dir: Path, rnafold_bin: Path = Path("
     # Could consider implementing this when running
     # for loading into an Ensembl db
     free_energy_score = None
+    rna_in_file_path = None
     try:
         with tempfile.NamedTemporaryFile(mode="w+t", delete=False, dir=rfam_dir) as rna_temp_in:
             rna_temp_in.writelines(">seq1\n" + seq + "\n")
             rna_in_file_path = rna_temp_in.name
         rnafold_cmd = [str(rnafold_bin), "--infile", str(rna_in_file_path)]
-        rnafold_output = subprocess.check_output(
-            rnafold_cmd,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
+        rnafold_output = subprocess.check_output(rnafold_cmd, stderr=subprocess.STDOUT, text=True)
         for line in rnafold_output.splitlines():
             match = re.search(r"([().]+)\s\(\s*(-*\d+.\d+)\)", line)
             if match:
-                structure = match.group(1) # pylint: disable=unused-variable
-                free_energy_score = float(match.group(2))  # TOADD DAF
+                free_energy_score = float(match.group(2))
                 break
     except (subprocess.CalledProcessError, OSError) as e:
-        logging.error("Error while running RNAfold: %s", e)
+        logger.error("Error while running RNAfold: %s", e)
     finally:
-        #rna_in_file_path.unlink()
-        logger.info("FREE ENERGY %s", free_energy_score)    
+        if rna_in_file_path:
+            try:
+                Path(rna_in_file_path).unlink()
+            except Exception as cleanup_err:
+                logger.warning("Failed to remove RNAfold temp file %s: %s", rna_in_file_path, cleanup_err)
+        logger.info("FREE ENERGY %s", free_energy_score)
     return free_energy_score
+
 
 
 # this function is useful for the DnaAlignFeature and it should help when we load into the ensembl db

@@ -56,7 +56,7 @@ def run_star(  # pylint:disable=too-many-branches
     sampling_via_percentage: bool = False,
     sampling_via_read_limit_percentage: bool = False,
     num_threads: int = 1,
-    star_bin: Path = Path("star"),
+    star_bin: Path = Path("STAR"),
     samtools_bin: Path = Path("samtools"),
     trim_galore_bin: Path = Path("trim_galore"),
 ) -> None:
@@ -99,6 +99,11 @@ def run_star(  # pylint:disable=too-many-branches
         :return: None
         :rtype: None
     """
+    # Use default path if user didn't supply one
+    star_bin = star_bin or Path("STAR")
+    samtools_bin = samtools_bin or Path("samtools")
+    trim_galore_bin = trim_galore_bin or Path("trim_galore")
+
     
     check_exe(star_bin)
     # If trimming has been enabled then switch the path for

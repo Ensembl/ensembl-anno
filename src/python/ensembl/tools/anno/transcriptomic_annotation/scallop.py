@@ -67,6 +67,10 @@ def run_scallop(
         :return: None
         :rtype: None
     """
+    # Use default path if user didn't supply one
+    scallop_bin = scallop_bin or Path("scallop")
+    stringtie_bin = stringtie_bin or Path("stringtie")
+
     check_exe(scallop_bin)
     check_exe(stringtie_bin)
     scallop_dir = create_dir(output_dir, "scallop_output")

@@ -7,7 +7,7 @@
     },
     "bedtools": {
       "software" : "bedtools"
-    }
+    },
     "cmsearch": {
         "software": "cmsearch",
         "rfam_dbname" : "Rfam",

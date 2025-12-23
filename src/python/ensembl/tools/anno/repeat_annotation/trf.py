@@ -86,6 +86,10 @@ def run_trf(
             :return: None
             :rtype: None
     """
+
+    # Use default path if user didn't supply one
+    trf_bin = trf_bin or Path("trf")
+
     check_exe(trf_bin)
     trf_dir = create_dir(output_dir, "trf_output")
     os.chdir(str(trf_dir))

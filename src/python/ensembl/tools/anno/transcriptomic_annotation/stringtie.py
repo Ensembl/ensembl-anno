@@ -54,6 +54,9 @@ def run_stringtie(
         :return: None
         :rtype: None
     """
+    # Use default path if user didn't supply one
+    stringtie_bin = stringtie_bin or Path("stringtie")
+
     check_exe(stringtie_bin)
     stringtie_dir = create_dir(output_dir, "stringtie_output")
     logging.info("Skip analysis if the gtf file already exists")

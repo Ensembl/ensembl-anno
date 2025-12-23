@@ -68,8 +68,12 @@ def run_trnascan(
         :return: None
         :rtype: None
     """
+    # Use default path if user didn't supply one
+    trnascan_bin = trnascan_bin or Path("tRNAscan-SE")
+    trnascan_filter = trnascan_filter or Path("EukHighConfidenceFilter")
+
     check_exe(trnascan_bin)
-    check_file(trnascan_filter)
+    check_exe(trnascan_filter)
     trnascan_dir = create_dir(output_dir, "trnascan_output")
     output_file = trnascan_dir / "annotation.gtf"
     if output_file.exists():

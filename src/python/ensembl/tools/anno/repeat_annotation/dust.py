@@ -68,6 +68,9 @@ def run_dust(
         :rtype: None
     """
 
+    # Use default path if user didn't supply one
+    dust_bin = dust_bin or Path("dustmasker")
+
     check_exe(dust_bin)
     dust_dir = create_dir(output_dir, "dust_output")
     os.chdir(str(dust_dir))

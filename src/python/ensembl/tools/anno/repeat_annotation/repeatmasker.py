@@ -74,6 +74,10 @@ def run_repeatmasker(
         :return: None
         :rtype: None
     """
+
+    # Use default path if user didn't supply one
+    repeatmasker_bin = repeatmasker_bin or Path("RepeatMasker")
+
     check_exe(repeatmasker_bin)
     repeatmasker_dir = create_dir(output_dir, "repeatmasker_output")
 

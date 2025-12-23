@@ -71,6 +71,10 @@ def run_eponine(
         :return: None
         :rtype: None
     """
+    # Use default path if user didn't supply one
+    eponine_bin = eponine_bin or Path("/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar")
+    java_bin = java_bin or Path("java")
+
     check_file(eponine_bin)
     check_exe(java_bin)
     eponine_dir = create_dir(output_dir, "eponine_output")
