@@ -290,6 +290,27 @@ foreach my $slice_name (keys(%{$transcripts_by_slice})) {
       compute_translation($transcript);
     }
   }
+# SECOND 1-codon filter: after translations are up to date
+my $post_translation_filtered = [];
+foreach my $transcript (@$joined_transcripts) {
+  my $translation = $transcript->translation;
+  my $tr_id = $transcript->stable_id // 'no_id';
+
+  # Keep non-coding transcripts (no translation)
+  unless ($translation) {
+    push @$post_translation_filtered, $transcript;
+    next;
+  }
+
+  my $aa_len = $translation->length;
+  if ($aa_len <= 1) {
+    say "Removing 1-codon transcript after recomputing translations: $tr_id length=".($aa_len*3)."bp (${aa_len}aa) start=".$transcript->start." end=".$transcript->end;
+    next;
+  }
+
+  push @$post_translation_filtered, $transcript;
+}
+$joined_transcripts = $post_translation_filtered;
 
 
   my $cleaned_transcripts;
