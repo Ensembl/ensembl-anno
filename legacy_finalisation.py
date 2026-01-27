@@ -1,5 +1,4 @@
-# filename: finalise_geneset_module.py
-import argparse
+# Legacy finalisation module
 import glob
 import multiprocessing
 import os
@@ -9,7 +8,7 @@ import subprocess
 import logging
 import logging.config
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 from src.python.ensembl.tools.anno.utils._utils import (
     check_file,
@@ -19,10 +18,31 @@ from src.python.ensembl.tools.anno.utils._utils import (
     split_protein_file,
 )
 
-def load_json(path: str | Path) -> Dict[str, Any]:
+def load_json(path: Union[str, Path]) -> Dict[str, Any]:
     path = Path(path)
     with path.open("r", encoding="utf-8") as fh:
         return json.load(fh)
+   
+# File check helpers:
+def file_ok(path: Union[str, Path], min_size: int = 1) -> bool:
+    path = Path(path)
+    return path.exists() and path.is_file() and path.stat().st_size >= min_size
+
+
+def gtf_ok(path: Union[str, Path]) -> bool:
+    if not file_ok(path):
+        return False
+    try:
+        return check_gtf_content(path, "transcript") > 0
+    except Exception:
+        return False
+
+
+def skip_if_exists(desc: str, path: Union[str, Path], check_fn=file_ok) -> bool:
+    if check_fn(path):
+        logging.info("%s exists (%s), skipping", desc, path)
+        return True
+    return False
 
 # Use same config path layout as monolithic script
 config = load_json(Path(os.environ["ENSCODE"]) / "ensembl-anno" / "conf" /"config.json")
@@ -51,7 +71,7 @@ def run_finalise_geneset(
     validation_dir = create_dir(final_annotation_dir, "cds_validation")
     seq_region_lengths = get_seq_region_lengths(genome_file, 0)
 
-    logging.info("Skip analysis if the gtf file already exists")
+    logging.info("Check if gtf file already exists")
     output_file = os.path.join(final_annotation_dir, "annotation.gtf")
     if os.path.exists(output_file):
         logging.info("final_annotation_dir exists")
@@ -98,26 +118,20 @@ def run_finalise_geneset(
     transcriptomic_annotation_raw = os.path.join(
         final_annotation_dir, "transcriptomic_raw.gtf"
     )
-    file_out = open(transcriptomic_annotation_raw, "w+")
-    for transcriptomic_file in [
-        minimap2_annotation_raw,
-        scallop_annotation_raw,
-        stringtie_annotation_raw,
-    ]:
+    if not skip_if_exists("Transcriptomic raw GTF", transcriptomic_annotation_raw):
+        with open(transcriptomic_annotation_raw, "w+") as file_out:
+            for transcriptomic_file in [
+                minimap2_annotation_raw,
+                scallop_annotation_raw,
+                stringtie_annotation_raw,
+            ]:
+                if not os.path.exists(transcriptomic_file):
+                    logging.info("Missing %s, skipping", transcriptomic_file)
+                    continue
 
-        if not os.path.exists(transcriptomic_file):
-            logging.info(
-                "No annotation.gtf file found in " + transcriptomic_file + ", skipping"
-            )
-            continue
-
-        file_in = open(transcriptomic_file)
-        line = file_in.readline()
-        while line:
-            print(line.rstrip(), file=file_out)
-            line = file_in.readline()
-        file_in.close()
-    file_out.close()
+                with open(transcriptomic_file) as file_in:
+                    for line in file_in:
+                        file_out.write(line)
 
     # Copy the raw files into the annotation dir, this is not needed
     # as such, but collecting them in one place and relabelling is
@@ -164,67 +178,81 @@ def run_finalise_geneset(
             region_annotation_dir, (region_details + ".protein.gtf")
         )
 
+        # Transcriptomic data
         if os.path.exists(transcriptomic_annotation_raw):
-            logging.info("Finalising transcriptomic data for: " + seq_region_name)
-            transcriptomic_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
-            )
-            cmd = generic_select_cmd.copy()
-            cmd.extend(
-                [
-                    "-region_details",
-                    region_details,
-                    "-input_gtf_file",
-                    transcriptomic_annotation_raw,
-                    "-output_gtf_file",
-                    transcriptomic_region_gtf_path,
-                    "-cds_search",
-                    "-final_biotype",
-                    "transcriptomic",
-                ]
-            )
-            pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
-
+            if not gtf_ok(transcriptomic_region_gtf_path):
+                logging.info("Finalising transcriptomic data for: " + seq_region_name)
+                transcriptomic_annotation_select = re.sub(
+                    "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
+                )
+                cmd = generic_select_cmd.copy()
+                cmd.extend(
+                    [
+                        "-region_details",
+                        region_details,
+                        "-input_gtf_file",
+                        transcriptomic_annotation_raw,
+                        "-output_gtf_file",
+                        transcriptomic_region_gtf_path,
+                        "-cds_search",
+                        "-final_biotype",
+                        "transcriptomic",
+                    ]
+                )
+                pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            else:
+                logging.info("Transcriptomic region GTF exists, skipping: %s",
+                     transcriptomic_region_gtf_path)
+                
+        # Protein data
         if os.path.exists(busco_annotation_raw):
-            logging.info("Finalising OrthoDB data for: " + seq_region_name)
-            busco_annotation_select = re.sub("_raw.gtf", "_sel.gtf", busco_annotation_raw)
-            cmd = generic_select_cmd.copy()
-            cmd.extend(
-                [
-                    "-region_details",
-                    region_details,
-                    "-input_gtf_file",
-                    busco_annotation_raw,
-                    "-output_gtf_file",
-                    busco_region_gtf_path,
-                    "-all_cds_exons",
-                    "-final_biotype",
-                    "busco",
-                ]
-            )
-            pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            if not gtf_ok(busco_region_gtf_path):
+                logging.info("Finalising OrthoDB data for: " + seq_region_name)
+                busco_annotation_select = re.sub("_raw.gtf", "_sel.gtf", busco_annotation_raw)
+                cmd = generic_select_cmd.copy()
+                cmd.extend(
+                    [
+                        "-region_details",
+                        region_details,
+                        "-input_gtf_file",
+                        busco_annotation_raw,
+                        "-output_gtf_file",
+                        busco_region_gtf_path,
+                        "-all_cds_exons",
+                        "-final_biotype",
+                        "busco",
+                    ]
+                )
+                pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            else:
+                logging.info("OrthoDB/BUSCO region GTF exists, skipping: %s",
+                     busco_region_gtf_path)
 
         if os.path.exists(protein_annotation_raw):
-            logging.info("Finalising Uniprot data for: " + seq_region_name)
-            protein_annotation_select = re.sub(
-                "_raw.gtf", "_sel.gtf", protein_annotation_raw
-            )
-            cmd = generic_select_cmd.copy()
-            cmd.extend(
-                [
-                    "-region_details",
-                    region_details,
-                    "-input_gtf_file",
-                    protein_annotation_raw,
-                    "-output_gtf_file",
-                    protein_region_gtf_path,
-                    "-clean_transcripts",
-                    "-all_cds_exons",
-                    "-final_biotype",
-                    "protein",
-                ]
-            )
-            pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            if not gtf_ok(protein_region_gtf_path):
+                logging.info("Finalising Uniprot data for: " + seq_region_name)
+                protein_annotation_select = re.sub(
+                    "_raw.gtf", "_sel.gtf", protein_annotation_raw
+                )
+                cmd = generic_select_cmd.copy()
+                cmd.extend(
+                    [
+                        "-region_details",
+                        region_details,
+                        "-input_gtf_file",
+                        protein_annotation_raw,
+                        "-output_gtf_file",
+                        protein_region_gtf_path,
+                        "-clean_transcripts",
+                        "-all_cds_exons",
+                        "-final_biotype",
+                        "protein",
+                    ]
+                )
+                pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+            else:
+                logging.info("UniProt region GTF exists, skipping: %s",
+                            protein_region_gtf_path)
 
     pool.close()
     pool.join()
@@ -271,19 +299,21 @@ def run_finalise_geneset(
         final_region_gtf_path = os.path.join(
             final_region_annotation_dir, (region_details + ".final.gtf")
         )
-
-        cmd = generic_finalise_cmd.copy()
-        cmd.extend(
-            [
-                "-region_details",
-                region_details,
-                "-input_gtf_file",
-                fully_merged_gtf_path,
-                "-output_gtf_file",
-                final_region_gtf_path,
-            ]
-        )
-        pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
+        if gtf_ok(final_region_gtf_path):
+            logging.info("Final region GTF exists, skipping: %s", final_region_gtf_path)
+        else:
+            cmd = generic_finalise_cmd.copy()
+            cmd.extend(
+                [
+                    "-region_details",
+                    region_details,
+                    "-input_gtf_file",
+                    fully_merged_gtf_path,
+                    "-output_gtf_file",
+                    final_region_gtf_path,
+                ]
+            )
+            pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
 
     pool.close()
     pool.join()
@@ -299,20 +329,23 @@ def run_finalise_geneset(
     merged_amino_acid_file = os.path.join(
         final_annotation_dir, ("prevalidation_sel.prot.fa")
     )
-    updated_gtf_lines = validate_coding_transcripts(
-        merged_cdna_file,
+
+    postvalidation_gtf_file = os.path.join(final_annotation_dir, ("postvalidation.gtf"))
+
+    # Check if already run
+    if gtf_ok(postvalidation_gtf_file):
+        logging.info("Post-validation GTF exists, skipping validation")
+    
+    else:
+        updated_gtf_lines = validate_coding_transcripts(merged_cdna_file,
         merged_amino_acid_file,
         validation_dir,
         validation_type,
         diamond_validation_db,
         merged_gtf_file,
-        num_threads,
-    )
-    postvalidation_gtf_file = os.path.join(final_annotation_dir, ("postvalidation.gtf"))
-    file_out = open(postvalidation_gtf_file, "w+")
-    for line in updated_gtf_lines:
-        file_out.write(line)
-    file_out.close()
+        num_threads,)
+        with open(postvalidation_gtf_file, "w+") as file_out:
+            file_out.writelines(updated_gtf_lines)
 
     cleaned_initial_gtf_file = os.path.join(final_annotation_dir, ("cleaned_pre_utr.gtf"))
     cleaned_utr_gtf_file = os.path.join(final_annotation_dir, ("annotation.gtf"))
@@ -329,7 +362,10 @@ def run_finalise_geneset(
         cleaned_initial_gtf_file,
     ]
     logging.info(" ".join(cleaning_cmd))
-    subprocess.run(cleaning_cmd)
+    if not gtf_ok(cleaned_utr_gtf_file):
+        subprocess.run(cleaning_cmd)
+    else:
+        logging.info("Cleaned annotation.gtf exists, skipping cleaning")
 
     # Clean UTRs
     generic_clean_utrs_cmd = [
@@ -417,7 +453,7 @@ def validate_coding_transcripts(
             config["rnasamba"]["software"],
             "rnasamba",
             "classify",
-            rnasamba_output_path,
+            str(rnasamba_output_path),
             cdna_file,
             rnasamba_weights,
         ]
@@ -429,8 +465,10 @@ def validate_coding_transcripts(
     else:
         logging.info("Found RNAsamba output file. Will not run again.")
 
-    cpc2_output_path = Path(validation_dir) / "cpc2.tsv.txt"
-    if not cpc2_output_path.exists():
+    cpc2_output_file_path = Path(validation_dir) / "cpc2.tsv.txt"
+    cpc2_output_path = Path(validation_dir) / "cpc2.tsv"
+    
+    if not cpc2_output_file_path.exists():
         logging.info("Running CDS validation with CPC2")
         cpc2_volume = str(validation_dir) + "/:/app:rw"
         cpc2_cmd = [
@@ -447,11 +485,10 @@ def validate_coding_transcripts(
             "-o",
             cpc2_output_path,
         ]
-        logging.info(" ".join(cpc2_cmd))
+        logging.info(" ".join(map(str, cpc2_cmd)))
         subprocess.run(cpc2_cmd)
-        cpc2_output_path = cpc2_output_path + ".txt"
 
-        check_file(Path(cpc2_output_path))
+        check_file(Path(cpc2_output_file_path))
         logging.info("CPC2 run sucessfully")
     
     else:
@@ -471,7 +508,7 @@ def validate_coding_transcripts(
 
     logging.info("Reading validation results")
     rnasamba_results = read_rnasamba_results(rnasamba_output_path)
-    cpc2_results = read_cpc2_results(cpc2_output_path)
+    cpc2_results = read_cpc2_results(cpc2_output_file_path)
     combined_results = combine_results(rnasamba_results, cpc2_results, diamond_results)
     logging.info("Reading gtf genes")
     parsed_gtf_genes = read_gtf_genes(gtf_file)
@@ -899,11 +936,6 @@ def combine_results(rnasamba_results, cpc2_results, diamond_results):
         for result in diamond_results:
             transcript_id = result[0]
             e_value = result[1]
-            # There seems to be an issue where there are a small number
-            # of sequences that don't make it into the cpc2/rnasamba output
-            # Should code in a system for this, but it would be good to
-            # understand why it happens to begin with. Seems to be the same
-            # number of missing seqs in both, so maybe a shared cut-off
             if transcript_id in transcript_ids:
                 transcript_ids[transcript_id].extend([e_value])
 

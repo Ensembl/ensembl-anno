@@ -475,7 +475,7 @@ def main() -> None:
     # Run GenBlast on OrthoDB or other set, gives higher priority when creating the
     # final genes in cases where transcriptomic data are missing or fragmented
     if analysis_flags['run_busco']:
-        logger.info("Running GenBlast of OrthoDB or FungiDB proteins")
+        logger.info("Running GenBlast on OrthoDB or FungiDB proteins")
         logger.info("run_busco genome file %s", masked_genome_file)
         genblast.run_genblast(
 	        genblast_bin = genblast_path,
@@ -499,13 +499,15 @@ def main() -> None:
         logger.info("Finalise geneset genome file %s", genome_file)
         main_script_dir = Path(__file__).resolve().parent
         logger.info(
-            "ANNA main_script_dir = %s (type=%s)",
+            "main_script_dir set as %s (type=%s)",
             main_script_dir,
             type(main_script_dir),
         )
         # Get seq_region_names
         seq_region_names = _utils.seq_region_names(genome_file)
         logger.info("Got seq_region_names")
+        logger.info("Seq regions count: %d", len(seq_region_names))
+
         legacy_finalisation.run_finalise_geneset(
 	        main_script_dir = main_script_dir,
 	        main_output_dir = work_dir,
@@ -528,7 +530,7 @@ def main() -> None:
         logger.info("Load to ensembl db requested")
         main_script_dir = os.path.dirname(os.path.realpath(__file__))
         logger.info(
-            "ANNA main_script_dir = %s (type=%s)",
+            "main_script_dir set as %s (type=%s)",
             main_script_dir,
             type(main_script_dir),
         )
@@ -541,6 +543,19 @@ def main() -> None:
 	        num_threads = num_threads,
 	        repeatmasker_analysis = repeatmasker_analysis,
         )
+
+    # Log summary
+    logger.info("========== Anno done ==========")
+    def log_analysis_summary(analysis_flags: dict) -> None:
+        logger.info("========== FINAL ANALYSIS SUMMARY ==========")
+        for flag, ran in sorted(analysis_flags.items()):
+            status = "RAN" if ran else "SKIPPED"
+            logger.info("%-25s : %s", flag, status)
+        logger.info("======================================")
+    
+    log_analysis_summary(analysis_flags)
+
+
 
 
 if __name__ == "__main__":
