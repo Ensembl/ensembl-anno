@@ -58,7 +58,7 @@ def create_dir(input_dir: Path, dir_name: str or None) -> Path:
     logger.info("Attempting to create target dir: %s", target_dir)
 
     try:
-        os.mkdir(target_dir)
+        os.makekdirs(target_dir)
     except OSError:
         logger.error("Creation of the dir failed, path used: %s", target_dir)
     else:
