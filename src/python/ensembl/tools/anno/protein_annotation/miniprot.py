@@ -140,6 +140,7 @@ def convert_miniprot_gff_to_gtf(input_file=None,output_file=None):
         header_line = nblock_lines[0]
         nblock = [x for x in block.split("\n") if x!=''][1:] # split the block by newline and remove empty lines
         nblock = np.array([x.split("\t") for x in nblock if x!='']) # split each line in the nblock by tab
+        nblock = nblock.astype("object") #avoid fixed-width string truncation
         if "fs:i:" in header_line: ##   FILTER: keep only fs:i:0 and st:i:0
             m_fs = re.search(r"fs:i:(\d+)", header_line)
             if m_fs and int(m_fs.group(1)) != 0:
