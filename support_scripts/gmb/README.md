@@ -6,7 +6,7 @@ Originally developed for eukaryotic genomes, the pipeline has been heavily optim
 
 ---
 
-## 🚀 Features
+## Features
 
 *   **Evidence Integration:** Merges and reconciles models from Scallop, StringTie, and Helixer.
 *   **Protein Evidence Support:** Uses OrthoDB and UniProt alignments to confirm models and identify true open reading frames.
@@ -19,7 +19,7 @@ Originally developed for eukaryotic genomes, the pipeline has been heavily optim
 
 ---
 
-## 🛠️ Installation
+## 🛠️Installation
 
 Requirements:
 *   Python 3.8+
@@ -35,7 +35,7 @@ pip install pandas pyranges biopython pyyaml matplotlib
 
 ---
 
-## 📖 Usage
+## Usage
 
 ### Quickstart
 
@@ -117,7 +117,7 @@ This generates:
 
 ---
 
-## 🧰 Project Structure
+## Project Structure
 
 | File | Description |
 | :--- | :--- |
@@ -133,7 +133,7 @@ This generates:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 The pipeline is fully covered by a custom test suite.
 
@@ -152,7 +152,7 @@ Test coverage includes:
 
 ---
 
-## 🧬 Pipeline Logic Diagram
+## Pipeline Logic Diagram
 
 1. **Load Transcriptomics** (Scallop, StringTie)
 2. **Load Ab Initio** (Helixer)
