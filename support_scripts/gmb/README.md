@@ -1,0 +1,168 @@
+# Gene Model Builder
+
+A robust, configurable Python pipeline for generating high-quality consensus gene models by integrating transcriptomic assemblies (Scallop, StringTie), *ab initio* predictions (Helixer), and protein alignment evidence (OrthoDB, UniProt).
+
+Originally developed for eukaryotic genomes, the pipeline has been heavily optimized with a "fungal-friendly" configuration preset, handling compact genomes with single-exon genes and short ORFs accurately.
+
+---
+
+## 🚀 Features
+
+*   **Evidence Integration:** Merges and reconciles models from Scallop, StringTie, and Helixer.
+*   **Protein Evidence Support:** Uses OrthoDB and UniProt alignments to confirm models and identify true open reading frames.
+*   **Pre-Genebuild Evidence Filtering:** Radically reduces noise before clustering by filtering out competing fragments, redundant protein alignments, short artifactual Helixer models, and transcriptomic chimeras (e.g., UTR-joined genes).
+*   **Configurable Scoring System:** Selects the best isoform for a locus based on a weighted sum of protein evidence, *ab initio* support, and transcriptomic support.
+*   **Fungal Optimization:** Defaults cater to fungal biology (e.g., lower `min_codons` threshold of 33, `allow_single_exon` enabled, stringent chimera intron length limits).
+*   **100% Python:** No Perl or external script dependencies for FASTA extraction or CDS annotation.
+*   **Comprehensive Output:** Generates GFF3 annotations, cDNA/CDS/Protein FASTA files, and detailed summary metrics (JSON/TSV).
+*   **Annotation Validation:** Built-in scripts to compare generated consensus annotations against community references (e.g., GenBank), with locus-level classification and visualization tools.
+
+---
+
+## 🛠️ Installation
+
+Requirements:
+*   Python 3.8+
+*   `pandas`
+*   `pyranges`
+*   `biopython`
+*   `pyyaml`
+*   `matplotlib` (for QC plotting)
+
+```bash
+pip install pandas pyranges biopython pyyaml matplotlib
+```
+
+---
+
+## 📖 Usage
+
+### Quickstart
+
+If you just cloned the repository, we recommend running the provided smoke test to ensure all dependencies are met.
+
+```bash
+# Install the package and dependencies
+pip install -e .
+
+# Run the smoke test
+cd examples
+./run_smoke_test.sh
+```
+
+### Inputs expected
+
+The pipeline expects GFF3/GTF files for the evidence tracks (Scallop, StringTie, Helixer, OrthoDB, UniProt) and a standard FASTA file for the genome. All evidence intervals must share coordinate systems with the genome FASTA (use `--assembly-report` if seq-names differ).
+
+### Outputs produced
+
+All output files are generated in the specified `--output-dir` (e.g., `output/`). See the **Main Pipeline** section below for a breakdown.
+
+### Main Pipeline
+
+The core entry point is `gene_model_builder.py`.
+
+```bash
+python gene_model_builder.py \
+    --scallop scallop_annotation.gtf \
+    --stringtie stringtie_annotation.gtf \
+    --helixer helixer_remapped.gff3 \
+    --orthodb orthodb_annotation.gtf \
+    --uniprot uniprot_annotation.gtf \
+    --genome reference_genome.fa \
+    --config default_config.yaml \
+    --output-dir output/
+```
+
+**Output Files (`output/`):**
+*   `consensus_genes.gff3`: Final structural annotation with CDS and UTR features.
+*   `cdna.fa`: Spliced transcript sequences.
+*   `cds.fa`: Coding sequences.
+*   `prot.fa`: Translated protein sequences.
+*   `report.json` / `report.tsv`: Detailed metrics on retained/filtered evidence and final gene counts.
+
+### Configuration (`default_config.yaml`)
+
+The pipeline behaviour is deeply customizable via the YAML configuration file. The default configuration uses the `fungi` preset.
+
+Key configurable areas:
+*   `annotation.min_codons`: Minimum ORF length (default 33 for fungi).
+*   `protein_filter`: Thresholds for dropping fragmented or poorly supported protein alignments.
+*   `chimera_filter`: Thresholds for identifying artificially merged transcript models (e.g., max intron length).
+*   `helixer_filter`: Rules for filtering unreliable *ab initio* models.
+*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support).
+
+### Output Validation & Comparison
+
+Use `compare_annotations.py` to evaluate your consensus against a reference (like GenBank).
+
+```bash
+python compare_annotations.py \
+    --consensus output/consensus_genes.gff3 \
+    --reference GenBank_annotation.gff3.gz \
+    --assembly-report assembly_report.txt \
+    --output-dir validation/ \
+    --plots-per-category 3 \
+    --scallop scallop_annotation.gtf \
+    --stringtie stringtie_annotation.gtf \
+    --helixer helixer_remapped.gff3 \
+    --orthodb orthodb_annotation.gtf \
+    --uniprot uniprot_annotation.gtf
+```
+
+This generates:
+*   Locus-level classifications (`Exact_Match`, `Partial_Match`, `Structural_Mismatch`, `Missed`, `Novel`).
+*   Sensitivity metrics and tabular reports.
+*   Visual plots of representative loci comparing all evidence tracks side-by-side.
+
+---
+
+## 🧰 Project Structure
+
+| File | Description |
+| :--- | :--- |
+| `gene_model_builder.py` | Main orchestrator script running the 15-step pipeline. |
+| `config.py` & `.yaml` | Clade-specific pipeline configuration and dataclass definitions. |
+| `evidence_filter.py` | Logic for purging noise (fragments, chimeras, poor ab initio models). |
+| `scoring.py` | Evaluating gene models and selecting the top isoform(s) per locus. |
+| `annotate_cds_utrs.py` | Deriving ORF, CDS boundaries, UTR regions, and handling partial edges. |
+| `fasta_export.py` | Exporting strand-aware sequences (cDNA, CDS, Protein). |
+| `reporting.py` | Compiling filtering stats and pipeline metrics. |
+| `compare_annotations.py`| Validation tool for scoring consensus vs reference + Locus plot generation. |
+| `visualize_disagreements.py`| Diagnostic tool for visualizing locus models during pipeline dev. |
+
+---
+
+## 🧪 Testing
+
+The pipeline is fully covered by a custom test suite.
+
+```bash
+# Run all tests (requires pytest)
+pytest test_*.py
+```
+
+Test coverage includes:
+*   `test_annotate_cds_utrs.py`: Core ORF finding and CDS logic.
+*   `test_evidence_filter.py`: Filtering logic for proteins, chimeras, and Helixer.
+*   `test_scoring.py`: Isoform selection and weighting.
+*   `test_fasta_export.py`: Reverse-strand sequence extraction and FASTA header formatting.
+*   `test_config.py`: YAML parsing and preset overrides.
+*   `test_integration.py`: End-to-end synthetic pipeline execution.
+
+---
+
+## 🧬 Pipeline Logic Diagram
+
+1. **Load Transcriptomics** (Scallop, StringTie)
+2. **Load Ab Initio** (Helixer)
+3. **Load Protein Aligns** (OrthoDB, UniProt)
+4. **Pre-Genebuild Filtering**:
+   * *Drop fragmented proteins (competing with better models).*
+   * *Drop spurious Helixer models (single-exon, no start/stop, low support).*
+   * *Drop transcriptomic chimeras (massive introns).*
+5. **Cluster Loci**: Group overlapping evidence using PyRanges.
+6. **Score & Select**: Pick top isoforms based on configurable weightings.
+7. **Annotate**: Deduce CDS/UTRs for selected models via longest-ORF discovery.
+8. **Export**: Write GFF3 and FASTA sets.
+9. **Report**: Write summary metrics.

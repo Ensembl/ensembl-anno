@@ -1,0 +1,9 @@
+# Runtime dependencies for Gene Model Builder
+pandas
+pyranges
+biopython
+pyyaml
+matplotlib
+
+# Note: These are unpinned to allow flexibility and standard widely compatible solutions.
+# Pin versions if reproducible isolated environments are needed (e.g., pandas==2.0.3).
