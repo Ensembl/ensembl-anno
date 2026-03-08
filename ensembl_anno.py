@@ -19,6 +19,7 @@ from src.python.ensembl.tools.anno.transcriptomic_annotation import scallop
 from src.python.ensembl.tools.anno.transcriptomic_annotation import star
 from src.python.ensembl.tools.anno.transcriptomic_annotation import stringtie
 from src.python.ensembl.tools.anno.protein_annotation import genblast
+from src.python.ensembl.tools.anno.protein_annotation import miniprot
 from src.python.ensembl.tools.anno.finalise_genset import finalise_geneset_utils
 import legacy_finalisation
 import legacy_load_to_ensembl_db
@@ -55,12 +56,14 @@ def configure_analysis_flags(
     run_stringtie=None,
     run_minimap2=None,
     run_genblast=None,
-    run_busco=None,
+    run_genblast_op=None,
+    run_miniprot=None,
+    run_miniprot_op=None,
     rfam_accessions_file=None,
     short_read_fastq_dir=None,
     long_read_fastq_dir=None,
     protein_file=None,
-    busco_protein_file=None,
+    other_protein_file=None,
     finalise_geneset=None
 ):
     """
@@ -107,7 +110,9 @@ def configure_analysis_flags(
 
     # Proteins
     flags['run_genblast'] = (run_genblast if run_genblast is not None else run_proteins) and protein_file is not None
-    flags['run_busco'] = (run_busco if run_busco is not None else run_proteins) and busco_protein_file is not None
+    flags['run_genblast_op'] = (run_genblast_op if run_genblast_op is not None else run_proteins) and other_protein_file is not None
+    flags['run_miniprot'] = (run_miniprot if run_miniprot is not None else run_proteins) and protein_file is not None
+    flags['run_miniprot_op'] = (run_miniprot_op if run_miniprot_op is not None else run_proteins) and other_protein_file is not None
 
     # Finalisation
     flags['finalise_geneset'] = finalise_geneset if finalise_geneset is not None else finalise_geneset
@@ -122,13 +127,16 @@ def parse_args():
     parser.add_argument("--run_masking", action="store_const", const=True, default=None, help="Run Red to find repeats and softmask the genome. Otherwise provide a softmasked genome")
     parser.add_argument("--red_path", type=str, help="Path to Red executable. See http://toolsmith.ens.utulsa.edu")
     parser.add_argument("--genblast_path", type=str, help="Path to GenBlast executable. See http://genome.sfu.ca/genblast/download.html")
+    parser.add_argument("--miniprot_path", type=str, help="Path to Miniprot executable")
     parser.add_argument("--convert2blastmask_path", type=str, help="Path to convert2blastmask executable")
     parser.add_argument("--makeblastdb_path", type=str, help="Path to makeblastdb executable")
     parser.add_argument("--run_genblast", action="store_const", const=True, default=None, help="Run GenBlast to align protein sequences")
     parser.add_argument("--genblast_timeout", type=int, help="GenBlast timeout in seconds", default=10800)
-    parser.add_argument("--run_busco", action="store_const", const=True, default=None, help="Run GenBlast to align BUSCO (OrthoDB) protein sequences")
+    parser.add_argument("--run_genblast_op", action="store_const", const=True, default=None, help="Run GenBlast to align other protein sequences")
+    parser.add_argument("--run_miniprot", action="store_const", const=True, default=None, help="Run Miniprot to align protein sequences")
+    parser.add_argument("--run_miniprot_op", action="store_const", const=True, default=None, help="Run Miniprot to align other protein sequences")
     parser.add_argument("--protein_file", type=str, help="Path to a fasta file with protein sequences")
-    parser.add_argument("--busco_protein_file", type=str, help="Path to a fasta file with BUSCO (OrthoDB) protein sequences")
+    parser.add_argument("--other_protein_file", type=str, help="Path to a fasta file with other protein sequences")
     parser.add_argument("--rfam_accessions_file", type=str, help="Path to a file with Rfam CM accessions, one accession per line, to use with cmsearch")
     parser.add_argument("--run_star", action="store_const", const=True, default=None, help="Run Star for short read alignment")
     parser.add_argument("--star_path", type=str, help="Path to Star for short read alignment")
@@ -192,6 +200,7 @@ def main() -> None:
     # masked_genome_file = genome_file  # This will be updated later if Red is run
     red_path = Path(args.red_path) if args.red_path else None
     genblast_path = Path(args.genblast_path) if args.genblast_path else None
+    miniprot_path = Path(args.miniprot_path) if args.miniprot_path else None
     convert2blastmask_path = Path(args.convert2blastmask_path) if args.convert2blastmask_path else None
     makeblastdb_path = Path(args.makeblastdb_path) if args.makeblastdb_path else None
     genblast_timeout = args.genblast_timeout
@@ -294,7 +303,9 @@ def main() -> None:
 	    run_stringtie=args.run_stringtie,
 	    run_minimap2=args.run_minimap2,
 	    run_genblast=args.run_genblast,
-	    run_busco=args.run_busco,
+	    run_genblast_op=args.run_genblast_op,
+        run_miniprot=args.run_miniprot,
+        run_miniprot_op=args.run_miniprot_op,
         rfam_accessions_file=args.rfam_accessions_file,
         short_read_fastq_dir=args.short_read_fastq_dir,
         long_read_fastq_dir=long_read_fastq_dir,
@@ -474,21 +485,47 @@ def main() -> None:
 
     # Run GenBlast on OrthoDB or other set, gives higher priority when creating the
     # final genes in cases where transcriptomic data are missing or fragmented
-    if analysis_flags['run_busco']:
+    if analysis_flags['run_genblast_op']:
         logger.info("Running GenBlast of OrthoDB or FungiDB proteins")
-        logger.info("run_busco genome file %s", masked_genome_file)
+        logger.info("run_genblast_op genome file %s", masked_genome_file)
         genblast.run_genblast(
 	        genblast_bin = genblast_path,
 	        convert2blastmask_bin = convert2blastmask_path,
 	        makeblastdb_bin = makeblastdb_path,
 	        output_dir = work_dir,
-	        protein_dataset = busco_protein_file,
+	        protein_dataset = other_protein_file,
 	        masked_genome = Path(masked_genome_file),
 	        max_intron_length = max_intron_length,
 	        num_threads = num_threads,
 	        genblast_timeout_secs = genblast_timeout,
 	        protein_set="orthodb"
         )
+
+    if analysis_flags['run_miniprot']:
+        logger.info("Running Miniprot")
+        logger.info("run_miniprot genome file %s", masked_genome_file)
+        miniprot.run_miniprot(
+            miniprot_bin = miniprot_path,
+            output_dir = work_dir,
+            protein_dataset = protein_file,
+            masked_genome = masked_genome_file,
+            num_threads = num_threads,
+            protein_set = "uniprot",
+        )
+
+    # Run Miniprot on OrthoDB or other set
+    if analysis_flags['run_miniprot_op']:
+        logger.info("Running Miniprot on OrthoDB or other proteins")
+        logger.info("run_other_protein genome file %s", masked_genome_file)
+        miniprot.run_miniprot(
+            miniprot_bin = miniprot_path,
+            output_dir = work_dir,
+            protein_dataset = other_protein_file,
+            masked_genome = Path(masked_genome_file),
+            num_threads = num_threads,
+            protein_set="orthodb"
+        )
+
 
     #################################
     # Finalisation not yet modularised

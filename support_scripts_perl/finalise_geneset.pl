@@ -59,13 +59,15 @@ my $output_path;
 my $genome_file;
 my $input_gtf_file;
 my $output_gtf_file;
-my $biotypes_hash = ['transcriptomic','busco','protein'];
+my $biotypes_hash = ['transcriptomic','genblast-protein','miniprot-protein','genblast-orthodb','miniprot-orthodb'];
 my $good_biotype;
 my $bad_biotype;
 my $genes_by_biotype = {};
 $genes_by_biotype->{'transcriptomic'} = [];
-$genes_by_biotype->{'busco'} = [];
-$genes_by_biotype->{'protein'} = [];
+$genes_by_biotype->{'genblast-protein'} = [];
+$genes_by_biotype->{'miniprot-protein'} = [];
+$genes_by_biotype->{'genblast-orthodb'} = [];
+$genes_by_biotype->{'miniprot-orthodb'} = [];
 
 GetOptions( 'gtf_file=s'       => \$input_gtf_file,
             'region_details=s' => \$region_details,
@@ -254,246 +256,316 @@ sub process_genes {
   my ($genes_by_biotype) = @_;
   my $final_genes = [];
 
-  my $transcriptomic_biotype = 'transcriptomic';
-  my $busco_biotype = 'busco';
-  my $protein_biotype = 'protein';
+  my $transcriptomic_biotype      = 'transcriptomic';
+  my $genblast_protein_biotype    = 'genblast-protein';
+  my $miniprot_protein_biotype    = 'miniprot-protein';
+  my $genblast_orthodb_biotype    = 'genblast-orthodb';
+  my $miniprot_orthodb_biotype    = 'miniprot-orthodb';
 
+  my $transcriptomic_genes     = $genes_by_biotype->{$transcriptomic_biotype}   || [];
+  my $genblast_protein_genes   = $genes_by_biotype->{$genblast_protein_biotype} || [];
+  my $miniprot_protein_genes   = $genes_by_biotype->{$miniprot_protein_biotype} || [];
+  my $genblast_orthodb_genes   = $genes_by_biotype->{$genblast_orthodb_biotype} || [];
+  my $miniprot_orthodb_genes   = $genes_by_biotype->{$miniprot_orthodb_biotype} || [];
 
-  my $transcriptomic_genes = $genes_by_biotype->{$transcriptomic_biotype};
-  my $busco_genes = $genes_by_biotype->{$busco_biotype};
-  my $protein_genes = $genes_by_biotype->{$protein_biotype};
+  push(@$final_genes,
+       @$transcriptomic_genes,
+       @$genblast_protein_genes,
+       @$miniprot_protein_genes,
+       @$genblast_orthodb_genes,
+       @$miniprot_orthodb_genes);
 
-  # Include the all the genes into the final set to begin with, these will be layered later
-  push(@$final_genes,@$transcriptomic_genes);
-  push(@$final_genes,@$busco_genes);
-  push(@$final_genes,@$protein_genes);
-
-  say "Clustering genes from input_dbs...";
+  # ------------------------------------------------------------
+  ## Cluster each biotype independently
+  # ------------------------------------------------------------
+  #
 
   my $types_hash->{'transcriptomic'} = [$transcriptomic_biotype];
-  my ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap($transcriptomic_genes,$types_hash);
+  my ($clusters, $unclustered) =
+    cluster_Genes_by_coding_exon_overlap($transcriptomic_genes,$types_hash);
   my $transcriptomic_clusters = [@$clusters, @$unclustered];
-  say "Found ".scalar(@$transcriptomic_clusters)." transcriptomic clusters";
 
-  $types_hash->{'busco'} = [$busco_biotype];
-  ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap($busco_genes,$types_hash);
-  my $busco_clusters = [@$clusters, @$unclustered];
-  say "Found ".scalar(@$busco_clusters)." BUSCO clusters";
+  $types_hash->{'genblast-protein'} = [$genblast_protein_biotype];
+  ($clusters, $unclustered) =
+    cluster_Genes_by_coding_exon_overlap($genblast_protein_genes,$types_hash);
+  my $genblast_protein_clusters = [@$clusters, @$unclustered];
+  
+  $types_hash->{'miniprot-protein'} = [$miniprot_protein_biotype];
+  ($clusters, $unclustered) =
+    cluster_Genes_by_coding_exon_overlap($miniprot_protein_genes,$types_hash);
+  my $miniprot_protein_clusters = [@$clusters, @$unclustered];
 
-  $types_hash->{'protein'} = [$protein_biotype];
-  ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap($protein_genes,$types_hash);
-  my $protein_clusters = [@$clusters, @$unclustered];
-  say "Found ".scalar(@$protein_clusters)." protein clusters";
+  $types_hash->{'genblast-orthodb'} = [$genblast_orthodb_biotype];
+   ($clusters, $unclustered) =
+    cluster_Genes_by_coding_exon_overlap($genblast_orthodb_genes,$types_hash);
+  my $genblast_orthodb_clusters = [@$clusters, @$unclustered];
+
+  $types_hash->{'miniprot-orthodb'} = [$miniprot_orthodb_biotype];
+  ($clusters, $unclustered) =
+    cluster_Genes_by_coding_exon_overlap($miniprot_orthodb_genes,$types_hash);
+  my $miniprot_orthodb_clusters = [@$clusters, @$unclustered];
 
 
   foreach my $transcriptomic_cluster (@$transcriptomic_clusters) {
     my $tc_genes = $transcriptomic_cluster->get_Genes();
     my $tc_canonical_gene = select_canonical_gene($tc_genes);
-    my $tc_canonical_transcript = ${$tc_canonical_gene->get_all_Transcripts}[0];
+    my $tc_canonical_transcript = ${ $tc_canonical_gene->get_all_Transcripts }[0];
 
-    foreach my $busco_cluster (@$busco_clusters) {
-      unless(features_overlap($transcriptomic_cluster,$busco_cluster)) {
+   foreach my $genblast_protein_cluster (@$genblast_protein_clusters) {
+      unless(features_overlap($transcriptomic_cluster,$genblast_protein_cluster)) {
         next;
       }
-
-      # At this point the two clusters overlap, so first get all the genes from the BUSCO cluster
-      # that have a coding exon overlap with the canonical from the transcriptomic cluster
-      # Then select the canonical from the overlapping BUSCO genes and calculate the overlap
-      # If there is less than X percent overlap on the BUSCO canonical seq, add it
-      my $bc_genes = $busco_cluster->get_Genes();
-      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$tc_canonical_gene,@$bc_genes],$types_hash);
+      my $gpc_genes = $genblast_protein_cluster->get_Genes();
+      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$tc_canonical_gene,@$gpc_genes],$types_hash);
       foreach my $canonical_cluster (@$clusters) {
-        my $overlapping_bc_genes = $canonical_cluster->get_Genes_by_Set($busco_biotype);
+        my $overlapping_gpc_genes = $canonical_cluster->get_Genes_by_Set($genblast_protein_biotype);
         my $overlapping_tc_genes = $canonical_cluster->get_Genes_by_Set($transcriptomic_biotype);
-        say "Found ".scalar(@$overlapping_bc_genes)." BUSCO gene(s) overlapping ".scalar(@$overlapping_tc_genes)." transcriptomic gene(s)";
+        say "Found ".scalar(@$overlapping_gpc_genes)." Genblast protein gene(s) overlapping ".scalar(@$overlapping_tc_genes)." transcriptomic gene(s)";
 
-        my $bc_canonical_gene = select_canonical_gene($overlapping_bc_genes);
-        my $bc_canonical_transcript = ${$bc_canonical_gene->get_all_Transcripts}[0];
+        my $gpc_canonical_gene = select_canonical_gene($overlapping_gpc_genes);
+        my $gpc_canonical_transcript = ${$gpc_canonical_gene->get_all_Transcripts}[0];
 
         if(scalar(@$overlapping_tc_genes) && $tc_canonical_transcript->translation()) {
-          my $coding_overlap = coding_exon_overlap($tc_canonical_transcript,$bc_canonical_transcript);
-          my $bc_canonical_length = length($bc_canonical_transcript->translateable_seq());
-          if($coding_overlap/$bc_canonical_length <= 0.9) {
-            my $clone_gene = clone_Gene($bc_canonical_gene);
+          my $coding_overlap = coding_exon_overlap($tc_canonical_transcript,$gpc_canonical_transcript);
+          my $gpc_canonical_length = length($gpc_canonical_transcript->translateable_seq());
+          if($coding_overlap/$gpc_canonical_length <= 0.8) {
+            my $clone_gene = clone_Gene($gpc_canonical_gene);
             $clone_gene->biotype('transcriptomic');
             push(@$final_genes,$clone_gene);
           }
         } else {
-          my $clone_gene = clone_Gene($bc_canonical_gene);
+          my $clone_gene = clone_Gene($gpc_canonical_gene);
           $clone_gene->biotype('transcriptomic');
           push(@$final_genes,$clone_gene);
         }
       }
-    } # End foreach my $busco_cluster
+    } # End foreach my $genblast_protein_cluster 
 
-    foreach my $protein_cluster (@$protein_clusters) {
-      unless(features_overlap($transcriptomic_cluster,$protein_cluster)) {
+   foreach my $miniprot_protein_cluster (@$miniprot_protein_clusters) {
+      unless(features_overlap($transcriptomic_cluster,$miniprot_protein_cluster)) {
         next;
       }
-
-      my $pc_genes = $protein_cluster->get_Genes();
-      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$tc_canonical_gene,@$pc_genes],$types_hash);
+      my $mpc_genes = $miniprot_protein_cluster->get_Genes();
+      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$tc_canonical_gene,@$mpc_genes],$types_hash);
       foreach my $canonical_cluster (@$clusters) {
-        my $overlapping_pc_genes = $canonical_cluster->get_Genes_by_Set($protein_biotype);
+        my $overlapping_mpc_genes = $canonical_cluster->get_Genes_by_Set($miniprot_protein_biotype);
         my $overlapping_tc_genes = $canonical_cluster->get_Genes_by_Set($transcriptomic_biotype);
-        say "Found ".scalar(@$overlapping_pc_genes)." protein gene(s) overlapping ".scalar(@$overlapping_tc_genes)." transcriptomic gene(s)";
+        say "Found ".scalar(@$overlapping_mpc_genes)." Miniprot protein gene(s) overlapping ".scalar(@$overlapping_tc_genes)." transcriptomic gene(s)";
 
-        my $pc_canonical_gene = select_canonical_gene($overlapping_pc_genes);
-        my $pc_canonical_transcript = ${$pc_canonical_gene->get_all_Transcripts}[0];
+        my $mpc_canonical_gene = select_canonical_gene($overlapping_mpc_genes);
+        my $mpc_canonical_transcript = ${$mpc_canonical_gene->get_all_Transcripts}[0];
 
         if(scalar(@$overlapping_tc_genes) && $tc_canonical_transcript->translation()) {
-          my $coding_overlap = coding_exon_overlap($tc_canonical_transcript,$pc_canonical_transcript);
-          my $pc_canonical_length = length($pc_canonical_transcript->translateable_seq());
-          if($coding_overlap/$pc_canonical_length <= 0.8) {
-            my $clone_gene = clone_Gene($pc_canonical_gene);
+          my $coding_overlap = coding_exon_overlap($tc_canonical_transcript,$mpc_canonical_transcript);
+          my $mpc_canonical_length = length($mpc_canonical_transcript->translateable_seq());
+          if($coding_overlap/$mpc_canonical_length <= 0.8) {
+            my $clone_gene = clone_Gene($mpc_canonical_gene);
             $clone_gene->biotype('transcriptomic');
             push(@$final_genes,$clone_gene);
           }
         } else {
-          my $clone_gene = clone_Gene($pc_canonical_gene);
+          my $clone_gene = clone_Gene($mpc_canonical_gene);
           $clone_gene->biotype('transcriptomic');
+          push(@$final_genes,$clone_gene);
+        }
+      }
+    } # End foreach my $miniprot_protein_cluster
+
+  foreach my $genblast_orthodb_cluster (@$genblast_orthodb_clusters) {
+      unless(features_overlap($transcriptomic_cluster,$genblast_orthodb_cluster)) {
+        next;
+      }
+      my $goc_genes = $genblast_orthodb_cluster->get_Genes();
+      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$tc_canonical_gene,@$goc_genes],$types_hash);
+      foreach my $canonical_cluster (@$clusters) {
+        my $overlapping_goc_genes = $canonical_cluster->get_Genes_by_Set($genblast_orthodb_biotype);
+        my $overlapping_tc_genes = $canonical_cluster->get_Genes_by_Set($transcriptomic_biotype);
+        say "Found ".scalar(@$overlapping_goc_genes)." Genblast orthodb gene(s) overlapping ".scalar(@$overlapping_tc_genes)." transcriptomic gene(s)";
+
+        my $goc_canonical_gene = select_canonical_gene($overlapping_goc_genes);
+        my $goc_canonical_transcript = ${$goc_canonical_gene->get_all_Transcripts}[0];
+
+        if(scalar(@$overlapping_tc_genes) && $tc_canonical_transcript->translation()) {
+          my $coding_overlap = coding_exon_overlap($tc_canonical_transcript,$goc_canonical_transcript);
+          my $goc_canonical_length = length($goc_canonical_transcript->translateable_seq());
+          if($coding_overlap/$goc_canonical_length <= 0.9) {
+            my $clone_gene = clone_Gene($goc_canonical_gene);
+            $clone_gene->biotype('transcriptomic');
+            push(@$final_genes,$clone_gene);
+          }
+        } else {
+          my $clone_gene = clone_Gene($goc_canonical_gene);
+          $clone_gene->biotype('transcriptomic');
+          push(@$final_genes,$clone_gene);
+        }
+      }
+    } # End foreach my $genblast_orthodb_cluster
+
+  foreach my $miniprot_orthodb_cluster (@$miniprot_orthodb_clusters) {
+      unless(features_overlap($transcriptomic_cluster,$miniprot_orthodb_cluster)) {
+        next;
+      }
+      my $moc_genes = $miniprot_orthodb_cluster->get_Genes();
+      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$tc_canonical_gene,@$moc_genes],$types_hash);
+      foreach my $canonical_cluster (@$clusters) {
+        my $overlapping_moc_genes = $canonical_cluster->get_Genes_by_Set($miniprot_orthodb_biotype);
+        my $overlapping_tc_genes = $canonical_cluster->get_Genes_by_Set($transcriptomic_biotype);
+        say "Found ".scalar(@$overlapping_moc_genes)." Miniprot orthodb gene(s) overlapping ".scalar(@$overlapping_tc_genes)." transcriptomic gene(s)";
+
+        my $moc_canonical_gene = select_canonical_gene($overlapping_moc_genes);
+        my $moc_canonical_transcript = ${$moc_canonical_gene->get_all_Transcripts}[0];
+
+        if(scalar(@$overlapping_tc_genes) && $tc_canonical_transcript->translation()) {
+          my $coding_overlap = coding_exon_overlap($tc_canonical_transcript,$moc_canonical_transcript);
+          my $moc_canonical_length = length($moc_canonical_transcript->translateable_seq());
+          if($coding_overlap/$moc_canonical_length <= 0.9) {
+            my $clone_gene = clone_Gene($moc_canonical_gene);
+            $clone_gene->biotype('transcriptomic');
+            push(@$final_genes,$clone_gene);
+          }
+        } else {
+          my $clone_gene = clone_Gene($moc_canonical_gene);
+          $clone_gene->biotype('transcriptomic');
+          push(@$final_genes,$clone_gene);
+        }
+      }
+    } # End foreach my $miniprot_orthodb_cluster
+  }
+  # ------------------------------------------------------------
+  # Non-transcriptomic resolution (BUSCO/protein analogue)
+  # ------------------------------------------------------------
+
+  foreach my $genblast_orthodb_cluster (@$genblast_orthodb_clusters) {
+    my $goc_genes = $genblast_orthodb_cluster->get_Genes();
+    my $goc_canonical_gene = select_canonical_gene($goc_genes);
+    my $goc_canonical_transcript = ${$goc_canonical_gene->get_all_Transcripts}[0];
+
+    foreach my $genblast_protein_cluster (@$genblast_protein_clusters) {
+      unless(features_overlap($genblast_orthodb_cluster,$genblast_protein_cluster)) {
+        next;
+      }
+
+      my $gpc_genes = $genblast_protein_cluster->get_Genes();
+      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$goc_canonical_gene,@$gpc_genes],$types_hash);
+      foreach my $canonical_cluster (@$clusters) {
+        my $overlapping_gpc_genes = $canonical_cluster->get_Genes_by_Set($genblast_protein_biotype);
+        my $overlapping_goc_genes = $canonical_cluster->get_Genes_by_Set($genblast_orthodb_biotype);
+        say "Found ".scalar(@$overlapping_gpc_genes)." protein gene(s) overlapping ".scalar(@$overlapping_goc_genes)." orthodb gene(s)";
+
+        my $gpc_canonical_gene = select_canonical_gene($overlapping_gpc_genes);
+        my $gpc_canonical_transcript = ${$gpc_canonical_gene->get_all_Transcripts}[0];
+
+        if(scalar(@$overlapping_goc_genes) && $goc_canonical_transcript->translation()) {
+          my $coding_overlap = coding_exon_overlap($goc_canonical_transcript,$gpc_canonical_transcript);
+          my $gpc_canonical_length = length($gpc_canonical_transcript->translateable_seq());
+          if($coding_overlap/$gpc_canonical_length <= 0.8) {
+            my $clone_gene = clone_Gene($gpc_canonical_gene);
+            $clone_gene->biotype('genblast-orthodb');
+            push(@$final_genes,$clone_gene);
+          }
+        } else {
+          my $clone_gene = clone_Gene($gpc_canonical_gene);
+          $clone_gene->biotype('genblast-orthodb');
           push(@$final_genes,$clone_gene);
         }
       }
     }
 
-  } # End foreach my $transcriptomic_cluster
+  } # End foreach my $genblast_cluster
 
+  foreach my $miniprot_orthodb_cluster (@$miniprot_orthodb_clusters) {
+    my $moc_genes = $miniprot_orthodb_cluster->get_Genes();
+    my $moc_canonical_gene = select_canonical_gene($moc_genes);
+    my $moc_canonical_transcript = ${$moc_canonical_gene->get_all_Transcripts}[0];
 
-  # At this point all the transcriptomic clusters have been processed and BUSCO/protein canonicals added as appropriate
-  # Now clusters that don't have overlapping transcriptomic CDS data need to be processed. Cluster everything again and
-  # ignore clusters with transcriptomic genes
-
-  foreach my $busco_cluster (@$busco_clusters) {
-    my $bc_genes = $busco_cluster->get_Genes();
-    my $bc_canonical_gene = select_canonical_gene($bc_genes);
-    my $bc_canonical_transcript = ${$bc_canonical_gene->get_all_Transcripts}[0];
-
-    foreach my $protein_cluster (@$protein_clusters) {
-      unless(features_overlap($busco_cluster,$protein_cluster)) {
+    foreach my $miniprot_protein_cluster (@$miniprot_protein_clusters) {
+      unless(features_overlap($miniprot_orthodb_cluster,$miniprot_protein_cluster)) {
         next;
       }
 
-      my $pc_genes = $protein_cluster->get_Genes();
-      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$bc_canonical_gene,@$pc_genes],$types_hash);
+      my $mpc_genes = $miniprot_protein_cluster->get_Genes();
+      ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap([$moc_canonical_gene,@$mpc_genes],$types_hash);
       foreach my $canonical_cluster (@$clusters) {
-        my $overlapping_pc_genes = $canonical_cluster->get_Genes_by_Set($protein_biotype);
-        my $overlapping_bc_genes = $canonical_cluster->get_Genes_by_Set($busco_biotype);
-        say "Found ".scalar(@$overlapping_pc_genes)." protein gene(s) overlapping ".scalar(@$overlapping_bc_genes)." BUSCO gene(s)";
+        my $overlapping_mpc_genes = $canonical_cluster->get_Genes_by_Set($miniprot_protein_biotype);
+        my $overlapping_moc_genes = $canonical_cluster->get_Genes_by_Set($miniprot_orthodb_biotype);
+        say "Found ".scalar(@$overlapping_mpc_genes)." protein gene(s) overlapping ".scalar(@$overlapping_moc_genes)." orthodb gene(s)";
 
-        my $pc_canonical_gene = select_canonical_gene($overlapping_pc_genes);
-        my $pc_canonical_transcript = ${$pc_canonical_gene->get_all_Transcripts}[0];
+        my $mpc_canonical_gene = select_canonical_gene($overlapping_mpc_genes);
+        my $mpc_canonical_transcript = ${$mpc_canonical_gene->get_all_Transcripts}[0];
 
-        if(scalar(@$overlapping_bc_genes) && $bc_canonical_transcript->translation()) {
-          my $coding_overlap = coding_exon_overlap($bc_canonical_transcript,$pc_canonical_transcript);
-          my $pc_canonical_length = length($pc_canonical_transcript->translateable_seq());
-          if($coding_overlap/$pc_canonical_length <= 0.8) {
-            my $clone_gene = clone_Gene($pc_canonical_gene);
-            $clone_gene->biotype('busco');
+        if(scalar(@$overlapping_moc_genes) && $moc_canonical_transcript->translation()) {
+          my $coding_overlap = coding_exon_overlap($moc_canonical_transcript,$mpc_canonical_transcript);
+          my $mpc_canonical_length = length($mpc_canonical_transcript->translateable_seq());
+          if($coding_overlap/$mpc_canonical_length <= 0.8) {
+            my $clone_gene = clone_Gene($mpc_canonical_gene);
+            $clone_gene->biotype('miniprot-orthodb');
             push(@$final_genes,$clone_gene);
           }
         } else {
-          my $clone_gene = clone_Gene($pc_canonical_gene);
-          $clone_gene->biotype('busco');
+          my $clone_gene = clone_Gene($mpc_canonical_gene);
+          $clone_gene->biotype('miniprot-orthodb');
           push(@$final_genes,$clone_gene);
         }
       }
     }
 
-  } # End foreach my $busco_cluster
+  } # End foreach my $miniprot_cluster
 
-
-  # Now both the transcriptomic clusters and BUSCO clusters have been augmented by canonicals that represent
-  # overlapping CDS that was not captured in the original clustered genes. Once this is done, layering can be
-  # performed to select the final gene set. Layering will prioritise:
-  # - Augmented transcriptomic set
-  # - Augmented BUSCO set
-  # - Protein set
-
+  # ------------------------------------------------------------
+  # Final layering
+  # ------------------------------------------------------------
 
   my $layered_genes = [];
-  ($clusters, $unclustered) = cluster_Genes_by_coding_exon_overlap($final_genes,$types_hash);
+  ($clusters,$unclustered) =
+    cluster_Genes_by_coding_exon_overlap($final_genes,$types_hash);
+
   foreach my $cluster (@$clusters) {
-    my $tc_genes = $cluster->get_Genes_by_Set($transcriptomic_biotype);
-    my $bc_genes = $cluster->get_Genes_by_Set($busco_biotype);
-    my $pc_genes = $cluster->get_Genes_by_Set($protein_biotype);
+    my $transcriptomic_genes =
+      $cluster->get_Genes_by_Set($transcriptomic_biotype);
+    my $genblast_protein_genes =
+      $cluster->get_Genes_by_Set($genblast_protein_biotype);
+    my $miniprot_protein_genes =
+      $cluster->get_Genes_by_Set($miniprot_protein_biotype);
+    my $genblast_orthodb_genes =
+      $cluster->get_Genes_by_Set($genblast_orthodb_biotype);
+    my $miniprot_orthodb_genes =
+      $cluster->get_Genes_by_Set($miniprot_orthodb_biotype);
 
-    if(scalar(@$tc_genes)) {
-      push(@$layered_genes,@$tc_genes);
-    } elsif(scalar(@$bc_genes)) {
-      push(@$layered_genes,@$bc_genes);
-    } else {
-      push(@$layered_genes,@$pc_genes);
-    }
-
+    if    (scalar(@$transcriptomic_genes))   { push(@$layered_genes, @$transcriptomic_genes); }
+    elsif (scalar(@$genblast_protein_genes)) { push(@$layered_genes, @$genblast_protein_genes); }
+    elsif (scalar(@$miniprot_protein_genes)) { push(@$layered_genes, @$miniprot_protein_genes); }
+    elsif (scalar(@$genblast_orthodb_genes)) { push(@$layered_genes, @$genblast_orthodb_genes); }
+    else                                      { push(@$layered_genes, @$miniprot_orthodb_genes); }
   }
 
   foreach my $singleton (@$unclustered) {
     my $genes = $singleton->get_Genes();
     if(scalar(@$genes)) {
-      push(@$layered_genes,@$genes);
+      push(@$layered_genes, @$genes);
     }
   }
-
+  
   say "Found ".scalar(@$layered_genes)." genes post layering";
 
-
   my $runnable = Bio::EnsEMBL::Analysis::Runnable::GeneBuilder->new(
-                     -query => $slice,
-                     -analysis => $analysis,
-                     -genes => $layered_genes,
-                     -output_biotype => 'gbuild',
-                     -max_transcripts_per_cluster => 100,
-                     -min_short_intron_len => 7,
-                     -max_short_intron_len => 15,
-                     -blessed_biotypes => {},
-                     -skip_readthrough_check => 1,
-                     -max_exon_length => 50000,
-                     -coding_only => 1,
-                   );
+    -query                       => $slice,
+    -analysis                    => $analysis,
+    -genes                       => $layered_genes,
+    -output_biotype              => 'gbuild',
+    -max_transcripts_per_cluster => 100,
+    -min_short_intron_len        => 7,
+    -max_short_intron_len        => 15,
+    -blessed_biotypes            => {},
+    -skip_readthrough_check      => 1,
+    -max_exon_length             => 50000,
+    -coding_only                 => 1,
+  );
 
   $runnable->run();
-
   my $output_genes = $runnable->output();
 
-  return($output_genes);
+  return $output_genes;
 }
-
-
-#foreach my $transcript (@$transcripts) {
-#  if($transcript->translation) {
-#    say ">".$transcript->stable_id;
-#    say $transcript->translation->seq();
-#    say "Transcript seq:\n".$transcript->seq->seq();
-#    say "Translation seq:\n".$transcript->translation->seq();
-#  }
-#}
-
-
-#my $transcripts_by_slice = sort_transcripts_by_slice($transcripts);
-#foreach my $slice_name (keys(%{$transcripts_by_slice})) {
-#  say "Processing region: ".$slice_name;
-#  my $sorted_transcripts = $transcripts_by_slice->{$slice_name};
-
-  # We want to keep the original set of transcripts for processing, but make a copy
-  # for modifying/merging
-#  my $cloned_transcripts = [];
-#  foreach my $transcript(@$sorted_transcripts) {
-#    $transcript->biotype('orig');
-#    push(@$cloned_transcripts,clone_Transcript($transcript));
-#  }
-
-#  if($set_canonical) {
-#    foreach my $gene (@$genes_to_write) {
-#      set_canonical_transcript($gene);
-#    }
-#  }
-
-#  write_to_gtf_file($genes_to_write,$output_gtf_file,$analysis_name);
-#}
-
-exit;
-
 
 sub features_overlap {
 # return 1 if there featureA overlaps feature B
