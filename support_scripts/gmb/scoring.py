@@ -78,6 +78,16 @@ def score_model(model, config, protein_supported_tids, genome=None):
     else:
         model['protein_support'] = model.get('protein_support', False)
 
+    # Protein Validation Score (if run)
+    if 'protein_coding_score' in model:
+        val_cfg = config.protein_validation
+        if val_cfg.enabled and val_cfg.policy == 'penalize':
+            # E.g. penalty if it falls below min_score
+            if model['protein_coding_score'] < val_cfg.min_score:
+                score -= 5.0 # Arbitrary high penalty. Can be tied to config later.
+        elif val_cfg.enabled and val_cfg.policy == 'bonus':
+            score += model['protein_coding_score']
+
     # Splice-site penalty (only if genome provided and multi-exon)
     if genome and model['exon_count'] > 1:
         chrom = model['chrom']
@@ -131,6 +141,8 @@ def select_isoforms(locus_df, config, protein_supported_tids,
             'exon_count': len(grp),
             'combined_evidence': grp['combined_evidence'].iloc[0]
                 if 'combined_evidence' in grp.columns else source,
+            'protein_coding_score': grp['protein_coding_score'].iloc[0]
+                if 'protein_coding_score' in grp.columns else 0.0,
         })
 
     if not models:
@@ -157,6 +169,9 @@ def select_isoforms(locus_df, config, protein_supported_tids,
             s['protein_support'] = True
             if not s['rep']['protein_support']:
                 s['rep'] = m
+        # Propagate validation score if available
+        if 'protein_coding_score' in m:
+            s['rep']['protein_coding_score'] = m['protein_coding_score']
 
     # Score each merged structure
     for key, s in merged.items():
@@ -169,16 +184,36 @@ def select_isoforms(locus_df, config, protein_supported_tids,
 
     # Quality gate: keep models meeting minimum criteria
     candidates = []
+    val_cfg = config.protein_validation
+    
     for s in merged.values():
         keep = False
+        
+        # Check Protein Validation Strict Drop Policy first
+        if val_cfg.enabled and val_cfg.policy == 'drop':
+            if 'protein_coding_score' in s['rep']:
+                if s['rep']['protein_coding_score'] < val_cfg.min_score:
+                    continue  # strictly drops the model
+                    
+        # Apply configured gating logic
         if s['protein_support']:
             keep = True
-        elif 'Helixer' in s['sources']:
+        elif 'Helixer' in s['sources'] and scfg.keep_helixer_without_support:
             keep = True
         elif len(s['sources']) > 1:
-            keep = True
+            if scfg.require_protein_support_for_single_source and not s['protein_support']:
+                # Example: configuring strict logic where multi-source without protein drops
+                # But since it's multi-source, normally we keep it. For this codebase, 
+                # we just stick to boolean flags to keep multi-source.
+                keep = True
+            else:
+                keep = True
         elif 'StringTie' in s['sources'] and s['rep']['exon_count'] > 1:
-            keep = True
+            if not scfg.require_protein_support_for_single_source:
+                keep = True
+        elif 'Scallop' in s['sources'] and s['rep']['exon_count'] > 1:
+             if not scfg.require_protein_support_for_single_source:
+                keep = True
         elif (scfg.fungal_single_exon_mode and
               s['rep']['exon_count'] == 1 and
               s['score'] >= scfg.min_alternate_score):
@@ -194,21 +229,43 @@ def select_isoforms(locus_df, config, protein_supported_tids,
     # Sort by score descending
     candidates.sort(key=lambda s: s['score'], reverse=True)
 
-    # Select primary + alternates
-    selected = []
-    primary = candidates[0]
-    primary['rep']['is_primary'] = True
-    selected.append(primary['rep'])
+    def is_same_gene(m1, m2):
+        if m1['intron_chain'] != 'single-exon' and m2['intron_chain'] != 'single-exon':
+            i1 = set(m1['intron_chain'].split(','))
+            i2 = set(m2['intron_chain'].split(','))
+            if i1.intersection(i2):
+                return True
+        overlap = min(m1['end'], m2['end']) - max(m1['start'], m2['start'])
+        if overlap > 0:
+            len1 = m1['end'] - m1['start']
+            len2 = m2['end'] - m2['start']
+            if (overlap / min(len1, len2)) > 0.15:
+                return True
+        return False
 
-    # Alternates: different intron chain, above threshold
-    for s in candidates[1:]:
-        if len(selected) >= scfg.max_isoforms_per_locus:
-            break
-        if s['score'] >= scfg.min_alternate_score:
-            # Must have different structure from primary
-            if s['rep']['intron_chain'] != primary['rep']['intron_chain']:
-                s['rep']['is_primary'] = False
-                selected.append(s['rep'])
+    genes = []
+    
+    for s in candidates:
+        r = s['rep']
+        # Try to assign to an existing gene sub-cluster
+        found = -1
+        for i, g_isoforms in enumerate(genes):
+            if is_same_gene(r, g_isoforms[0]):
+                found = i
+                break
+                
+        if found == -1:
+            r['is_primary'] = True
+            genes.append([r])
+        else:
+            g_isoforms = genes[found]
+            primary = g_isoforms[0]
+            if len(g_isoforms) < scfg.max_isoforms_per_locus:
+                if s['score'] >= scfg.min_alternate_score:
+                    if r['intron_chain'] != primary['intron_chain']:
+                        r['is_primary'] = False
+                        g_isoforms.append(r)
 
-    selected.sort(key=lambda m: m['start'])
-    return selected
+    # Sort genes by start coordinate
+    genes.sort(key=lambda g: min(m['start'] for m in g))
+    return genes

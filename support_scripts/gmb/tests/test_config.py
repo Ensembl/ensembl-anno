@@ -56,6 +56,22 @@ class TestYamlOverride:
         assert cfg.scoring.weights.helixer == 3.0
         assert cfg.scoring.weights.scallop == 1.0  # unchanged
 
+    def test_override_list(self, tmp_path):
+        yaml_file = tmp_path / 'test.yaml'
+        yaml_file.write_text(
+            'qc:\n'
+            '  skip_orf_inference_tracks:\n'
+            '    - UniProt\n'
+        )
+        cfg = load_config(str(yaml_file))
+        assert list(cfg.qc.skip_orf_inference_tracks) == ['UniProt']
+    
+    def test_unknown_key_raises(self, tmp_path):
+        yaml_file = tmp_path / 'test.yaml'
+        yaml_file.write_text('nonexistent_key: true\n')
+        with pytest.raises(ValueError, match="Unknown configuration key"):
+            cfg = load_config(str(yaml_file))
+
     def test_missing_file_returns_defaults(self):
         cfg = load_config('/nonexistent/path.yaml')
         assert cfg.orf.min_codons == 33

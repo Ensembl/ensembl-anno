@@ -39,6 +39,9 @@ class ProteinFilterConfig:
     top_n_per_locus: int = 3
     max_span_bp: int = 50_000
     keep_secondary: bool = True
+    min_alignment_coverage: float = 0.8
+    min_percent_identity: float = 60.0
+    min_bitscore: float = 50.0
 
 
 @dataclass
@@ -73,6 +76,21 @@ class ScoringConfig:
     max_isoforms_per_locus: int = 2
     min_alternate_score: float = 3.0
     fungal_single_exon_mode: bool = True
+    keep_helixer_without_support: bool = True
+    require_protein_support_for_single_source: bool = False
+
+
+@dataclass
+class ProteinValidationConfig:
+    enabled: bool = False
+    diamond_path: str = "diamond"
+    psauron_path: str = "psauron"
+    diamond_db: str = "swissprot.dmnd"
+    psauron_model: str = "default"
+    diamond_weight: float = 0.5
+    psauron_weight: float = 0.5
+    min_score: float = 0.5
+    policy: str = "drop" # 'drop' or 'penalize'
 
 
 @dataclass
@@ -108,6 +126,8 @@ class PipelineConfig:
     helixer_filter: HelixerFilterConfig = field(
         default_factory=HelixerFilterConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
+    protein_validation: ProteinValidationConfig = field(
+        default_factory=ProteinValidationConfig)
     qc: QcConfig = field(default_factory=QcConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
@@ -117,16 +137,24 @@ class PipelineConfig:
 # Loaders
 # ---------------------------------------------------------------------------
 
-def _update_dataclass(dc, d: dict):
-    """Recursively update a dataclass instance from a dict."""
+def _update_dataclass(dc, d: dict, path_prefix: str = ""):
+    """Recursively update a dataclass instance from a dict with strict merge rules.
+    
+    Rules:
+      - dict -> deep merge
+      - list -> replace entirely
+      - scalar -> override
+      - unknown keys -> raise ValueError
+    """
     if d is None:
         return dc
     for key, val in d.items():
         if not hasattr(dc, key):
-            continue
+            raise ValueError(f"Unknown configuration key: '{path_prefix}{key}'")
+        
         current = getattr(dc, key)
         if hasattr(current, '__dataclass_fields__') and isinstance(val, dict):
-            _update_dataclass(current, val)
+            _update_dataclass(current, val, path_prefix=f"{path_prefix}{key}.")
         else:
             setattr(dc, key, val)
     return dc
@@ -141,7 +169,7 @@ def load_config(path: Optional[str] = None,
     path : str or None
         Path to a YAML config file.  If None, uses built-in defaults.
     preset : str
-        Preset name (currently only 'fungi' is defined).
+        Preset name ('fungi' uses configs/fungi_default.yaml).
 
     Returns
     -------
@@ -149,14 +177,19 @@ def load_config(path: Optional[str] = None,
     """
     cfg = PipelineConfig(preset=preset)
 
-    # Try loading the bundled default config first
-    if path is None:
+    # Base configuration based on preset
+    if preset == "fungi":
         default_yaml = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "default_config.yaml")
+            "configs", "fungi_default.yaml")
         if os.path.exists(default_yaml):
-            path = default_yaml
+            with open(default_yaml) as fh:
+                data = yaml.safe_load(fh) or {}
+            _update_dataclass(cfg, data)
+        else:
+            raise FileNotFoundError(f"Missing default config preset: {default_yaml}")
 
+    # User overrides
     if path is not None and os.path.exists(path):
         with open(path) as fh:
             data = yaml.safe_load(fh) or {}

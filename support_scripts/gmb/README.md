@@ -81,16 +81,20 @@ python gene_model_builder.py \
 *   `prot.fa`: Translated protein sequences.
 *   `report.json` / `report.tsv`: Detailed metrics on retained/filtered evidence and final gene counts.
 
-### Configuration (`default_config.yaml`)
+### Configuration (`configs/fungi_default.yaml`)
 
-The pipeline behaviour is deeply customizable via the YAML configuration file. The default configuration uses the `fungi` preset.
+The pipeline behaviour is deeply customizable via the YAML configuration file. The default configuration uses the `fungi_default.yaml` preset, which explicitly locks in rules optimized for fungal genes, but the merging logic allows overriding specific keys.
 
 Key configurable areas:
-*   `annotation.min_codons`: Minimum ORF length (default 33 for fungi).
-*   `protein_filter`: Thresholds for dropping fragmented or poorly supported protein alignments.
-*   `chimera_filter`: Thresholds for identifying artificially merged transcript models (e.g., max intron length).
+*   `orf.min_codons`: Minimum ORF length (default 33 for fungi).
+*   `protein_filter`: Thresholds for dropping fragmented or poorly supported protein alignments. **OrthoDB filters**: now configurable via `min_alignment_coverage`, `min_percent_identity`, and `min_bitscore` here.
+*   `transcriptomic_filter`: Thresholds for identifying artificially merged transcript models (e.g., max intron length).
 *   `helixer_filter`: Rules for filtering unreliable *ab initio* models.
-*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support).
+*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support/configurable thresholds for keeping Helixer models).
+*   `protein_validation`: **New feature**. Enable a batch validation stage (`enabled: true`) that writes translated candidate models to a FASTA, runs DIAMOND and Psauron, and injects a derived `protein_coding_score` back into the candidate gating logic. This logic is intended to replace legacy tools (like RNAsamba and CPC2 found in `ensembl_anno.py`) with a modern, configuration-first scoring mechanism built directly into GMB.
+
+**Config Merge Rules:**
+Dicts deep-merge, lists replace entirely, unknown keys raise an error to catch typos.
 
 ### Output Validation & Comparison
 

@@ -104,7 +104,7 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, 'output')
 
-        script = os.path.join(os.path.dirname(__file__),
+        script = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                               'gene_model_builder.py')
         cmd = [
             sys.executable, script,
@@ -130,7 +130,7 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, 'output')
 
-        script = os.path.join(os.path.dirname(__file__),
+        script = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                               'gene_model_builder.py')
         cmd = [
             sys.executable, script,
@@ -158,7 +158,7 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, 'output')
 
-        script = os.path.join(os.path.dirname(__file__),
+        script = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                               'gene_model_builder.py')
         cmd = [
             sys.executable, script,
@@ -188,7 +188,7 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, 'output')
 
-        script = os.path.join(os.path.dirname(__file__),
+        script = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                               'gene_model_builder.py')
         cmd = [
             sys.executable, script,
@@ -223,7 +223,7 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, 'output')
 
-        script = os.path.join(os.path.dirname(__file__),
+        script = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                               'gene_model_builder.py')
         cmd = [
             sys.executable, script,

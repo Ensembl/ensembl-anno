@@ -1,35 +1,19 @@
-import pandas as pd
-import csv
+import argparse
 import sys
 
-# URL for assembly report
-REPORT_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/002/759/435/GCA_002759435.3_Cand_auris_B8441_V3/GCA_002759435.3_Cand_auris_B8441_V3_assembly_report.txt"
-HELIXER_FILE = "GCA_002759435.3_Cand_auris_B8441_V3_genomic.gff3"
-OUTPUT_FILE = "helixer_remapped.gff3"
+def parse_args():
+    parser = argparse.ArgumentParser(description="Remap Helixer GFF3 sequence IDs using an NCBI assembly report.")
+    parser.add_argument('--input', required=True, help="Input Helixer GFF3 file")
+    parser.add_argument('--assembly-report', required=True, help="NCBI assembly report TXT file")
+    parser.add_argument('--output', required=True, help="Output remapped GFF3 file")
+    return parser.parse_args()
 
 def main():
-    print("Downloading assembly report...")
-    # We can use pandas to read the table directly if it's clean, but it has comments.
-    # Let's use requests or just standard lib for robustness if we had it, but here we can just curl it first or use pandas with comment char.
-    
-    try:
-        # Skip comment lines
-        report = pd.read_csv(REPORT_URL, sep='\t', comment='#', header=None)
-        # The columns in the file without comments might be tricky. 
-        # Let's inspect the file structure again. 
-        # The header line starts with # Sequence-Name, so pandas comment='#' might skip the header.
-        # It's safer to download and parse manually.
-        pass
-    except:
-        pass
-
-    # Let's just download it using shell command in the workflow, but here inside python:
-    import urllib.request
-    urllib.request.urlretrieve(REPORT_URL, "assembly_report.txt")
+    args = parse_args()
     
     mapping = {}
-    print("Parsing mapping...")
-    with open("assembly_report.txt") as f:
+    print(f"Parsing mapping from {args.assembly_report}...")
+    with open(args.assembly_report) as f:
         for line in f:
             if line.startswith("#"):
                 continue
@@ -48,9 +32,9 @@ def main():
                     
     print(f"Loaded {len(mapping)} mappings: {mapping}")
     
-    print(f"Remapping {HELIXER_FILE}...")
+    print(f"Remapping {args.input}...")
     remapped_count = 0
-    with open(HELIXER_FILE, 'r') as infile, open(OUTPUT_FILE, 'w') as outfile:
+    with open(args.input, 'r') as infile, open(args.output, 'w') as outfile:
         for line in infile:
             if line.startswith("#"):
                 outfile.write(line)
@@ -71,7 +55,7 @@ def main():
                 # Usually keep original if it's a scaffold not in the main chromosome list
                 outfile.write(line)
                 
-    print(f"Created {OUTPUT_FILE} with {remapped_count} overlapping lines remapped.")
+    print(f"Created {args.output} with {remapped_count} overlapping lines remapped.")
 
 if __name__ == "__main__":
     main()

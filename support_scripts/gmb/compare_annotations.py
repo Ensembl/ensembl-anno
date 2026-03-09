@@ -98,14 +98,25 @@ def load_gff(path, source_label='Reference'):
 
     # Normalise transcript_id
     if 'transcript_id' not in df.columns:
-        if 'Parent' in df.columns:
-            df['transcript_id'] = df['Parent']
-        elif 'ID' in df.columns:
-            df['transcript_id'] = df['ID']
-        elif 'gene_id' in df.columns:
-            df['transcript_id'] = df['gene_id']
-        else:
-            df['transcript_id'] = 'unknown'
+        df['transcript_id'] = pd.NA
+        
+    m_mask = df['Feature'].isin(['mRNA', 'transcript'])
+    e_mask = df['Feature'].isin(['exon', 'CDS'])
+    
+    if 'ID' in df.columns:
+        df.loc[m_mask, 'transcript_id'] = df.loc[m_mask, 'transcript_id'].fillna(df.loc[m_mask, 'ID'])
+    if 'Parent' in df.columns:
+        df.loc[e_mask, 'transcript_id'] = df.loc[e_mask, 'transcript_id'].fillna(df.loc[e_mask, 'Parent'])
+        
+    # Cascade any remaining
+    if 'Parent' in df.columns:
+        df['transcript_id'] = df['transcript_id'].fillna(df['Parent'])
+    if 'ID' in df.columns:
+        df['transcript_id'] = df['transcript_id'].fillna(df['ID'])
+    if 'gene_id' in df.columns:
+        df['transcript_id'] = df['transcript_id'].fillna(df['gene_id'])
+    
+    df['transcript_id'] = df['transcript_id'].fillna('unknown')
 
     # For GenBank GFF: gene_id from ID attribute on gene rows
     if 'gene_id' not in df.columns:

@@ -43,6 +43,7 @@ def filter_protein_evidence(protein_df, config, stats=None,
     """Filter protein evidence (OrthoDB / UniProt GTF exon rows).
 
     Three-stage pipeline:
+      0. Remove alignments failing basic thresholds (coverage, identity, bitscore)
       1. Remove short fragments (< min_protein_aa * 3 bp total CDS span)
       2. Collapse redundant mappings (same locus, high overlap)
       3. Locus competition (keep top-N per locus)
@@ -51,7 +52,7 @@ def filter_protein_evidence(protein_df, config, stats=None,
     ----------
     protein_df : DataFrame
         Exon-level rows with Chromosome, Start, End, Strand, transcript_id,
-        Source columns.
+        Source columns. May also contain Score, Coverage, Identity attributes.
     config : PipelineConfig
     stats : dict or None
         Mutable dict to record filtering stats.
@@ -72,10 +73,49 @@ def filter_protein_evidence(protein_df, config, stats=None,
 
     n_input_tx = protein_df['transcript_id'].nunique()
     stats['protein_input_transcripts'] = n_input_tx
+    
+    # --- Stage 0: Threshold filters (OrthoDB padding/noise) ---
+    remove_tids = set()
+    # Apply filters if columns exist (usually parsed from attributes)
+    tids = protein_df['transcript_id'].unique()
+    for tid, grp in protein_df.groupby('transcript_id'):
+        # Usually these attributes are on the transcript-level row, but we might only have exon rows.
+        # We take the max or mean across exons for that transcript, or simply the first available.
+        if 'Coverage' in grp.columns:
+            # Handle string percentages
+            cov_val = grp['Coverage'].iloc[0]
+            if isinstance(cov_val, str): cov_val = float(cov_val.replace('%', '')) / 100.0 if '%' in cov_val else float(cov_val)
+            if cov_val < pcfg.min_alignment_coverage:
+                remove_tids.add(tid)
+                continue
+        
+        if 'Identity' in grp.columns:
+            id_val = grp['Identity'].iloc[0]
+            if isinstance(id_val, str): id_val = float(id_val.replace('%', ''))
+            if id_val < pcfg.min_percent_identity:
+                remove_tids.add(tid)
+                continue
+        
+        if 'Score' in grp.columns:
+            score_val = grp['Score'].iloc[0]
+            if isinstance(score_val, str) and score_val != '.':
+                if float(score_val) < pcfg.min_bitscore:
+                    remove_tids.add(tid)
+                    continue
+
+    stats['protein_threshold_filtered'] = len(remove_tids)
+    
+    filtered_0 = protein_df[~protein_df['transcript_id'].isin(remove_tids)].copy()
+    if filtered_0.empty:
+        stats['protein_after_fragment_filter'] = 0
+        stats['protein_after_redundancy'] = 0
+        stats['protein_after_competition'] = 0
+        return filtered_0
+
 
     # --- Stage 1: Remove short fragments ---
     min_span_bp = pcfg.min_protein_aa * 3
-    spans = _transcript_span(protein_df)
+    spans = _transcript_span(filtered_0)
     spans['span'] = spans['End'] - spans['Start']
 
     # Keep transcripts with sufficient span
@@ -83,13 +123,13 @@ def filter_protein_evidence(protein_df, config, stats=None,
     # Also remove absurdly long spans
     long_tids = set(
         spans[spans['span'] > pcfg.max_span_bp]['transcript_id'])
-    remove_tids = short_tids | long_tids
+    remove_tids_1 = short_tids | long_tids
 
     stats['protein_short_fragments_removed'] = len(short_tids)
     stats['protein_long_artifacts_removed'] = len(long_tids)
 
-    filtered = protein_df[
-        ~protein_df['transcript_id'].isin(remove_tids)].copy()
+    filtered = filtered_0[
+        ~filtered_0['transcript_id'].isin(remove_tids_1)].copy()
 
     if filtered.empty:
         stats['protein_after_fragment_filter'] = 0
