@@ -194,6 +194,11 @@ def select_isoforms(locus_df, config, protein_supported_tids,
             if 'protein_coding_score' in s['rep']:
                 if s['rep']['protein_coding_score'] < val_cfg.min_score:
                     continue  # strictly drops the model
+        
+        # CDS length gate: skip models with very short CDS
+        cds_bp = s['rep'].get('cds_bp', 0)
+        if cds_bp > 0 and cds_bp < scfg.min_cds_bp:
+            continue
                     
         # Apply configured gating logic
         if s['protein_support']:
@@ -219,6 +224,11 @@ def select_isoforms(locus_df, config, protein_supported_tids,
               s['score'] >= scfg.min_alternate_score):
             # Fungal mode: keep well-supported single-exon models
             keep = True
+
+        # Single-exon models require protein support when configured
+        if keep and scfg.require_support_for_single_exon and s['rep']['exon_count'] == 1:
+            if not s['protein_support'] and len(s['sources']) < 2:
+                keep = False
 
         if keep:
             candidates.append(s)

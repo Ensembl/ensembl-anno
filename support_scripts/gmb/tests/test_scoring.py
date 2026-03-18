@@ -97,7 +97,8 @@ class TestSelectIsoforms:
                 combined_evidence='Helixer'))
         locus_df = _make_locus_df(models)
         selected = select_isoforms(locus_df, config, set())
-        assert len(selected) <= config.scoring.max_isoforms_per_locus
+        flat_selected = [m for g in selected for m in g]
+        assert len(flat_selected) <= config.scoring.max_isoforms_per_locus
 
     def test_protein_supported_preferred(self, config):
         """Protein-supported model should be selected as primary."""
@@ -108,8 +109,9 @@ class TestSelectIsoforms:
                          combined_evidence='Scallop')
         locus_df = _make_locus_df([m1, m2])
         selected = select_isoforms(locus_df, config, {'tx1'})
+        flat_selected = [m for g in selected for m in g]
         # tx1 should be selected (protein support)
-        selected_ids = {m['id'] for m in selected}
+        selected_ids = {m['id'] for m in flat_selected}
         assert 'tx1' in selected_ids
 
     def test_empty_locus(self, config):

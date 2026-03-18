@@ -651,6 +651,52 @@ class TestSyntheticTranscripts:
         assert result['frame_ok']
 
 
+def test_compute_utr_end_support():
+    """Test utr end support logic."""
+    from gene_model_builder import compute_utr_end_support
+    from config import PipelineConfig
+    import pandas as pd
+    
+    cfg = PipelineConfig()
+    cfg.utr.require_end_support = True
+    cfg.utr.end_support_mode = 'multisource_end_agreement'
+    cfg.utr.end_support_sources = ['StringTie', 'Scallop']
+    cfg.utr.end_tolerance_bp = 10
+    cfg.utr.require_multisource_for_utr_5p = True
+    cfg.utr.require_multisource_for_utr_3p = True
+    cfg.utr.fallback_policy_when_unsupported = 'drop_utr'
+    
+    # Locus df with other models
+    data = [
+        # Scallop model (matching 5p, mismatched 3p)
+        {'transcript_id': 'sc_1', 'Feature': 'exon', 'Start': 1005, 'End': 1500, 'Source': 'Scallop', 'Strand': '+'},
+        {'transcript_id': 'sc_1', 'Feature': 'exon', 'Start': 1600, 'End': 2500, 'Source': 'Scallop', 'Strand': '+'},
+    ]
+    df = pd.DataFrame(data)
+    
+    # The model we are testing
+    model = {
+        'id': 'st_1',
+        'strand': '+',
+        'start': 1000,
+        'end': 2900,
+        # 'protein_coding_score' not set
+    }
+    
+    res = compute_utr_end_support(model, df, cfg)
+    
+    # 5p should be supported (1000 vs 1005 with tol 10)
+    assert res['supported_5p'] is True
+    # 3p should not be supported (2900 vs 2500, diff 400 > tol)
+    assert res['supported_3p'] is False
+    assert res['action_3p'] == 'dropped'
+    
+    # Try with drop_transcript fallback
+    cfg.utr.fallback_policy_when_unsupported = 'drop_transcript'
+    res = compute_utr_end_support(model, df, cfg)
+    assert res['action_3p'] == 'drop_transcript'
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------

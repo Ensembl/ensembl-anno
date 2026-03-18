@@ -3,21 +3,28 @@
 Compare Annotations
 ===================
 Locus-level comparison of consensus annotation against a reference
-(GenBank community annotation).  Produces:
+(GenBank community annotation). Produces:
   - comparison_summary.json / .tsv
   - comparison_details.tsv (one row per gene with classification)
   - Representative locus plots per category (in qc/ subdirectory)
 
 Usage:
-    python compare_annotations.py \\
-        --consensus consensus_genes.gff3 \\
-        --reference GCA_002759435.3_Cand_auris_B8441_V3_genomic.gff.gz \\
-        --assembly-report assembly_report.txt \\
-        --genome candida_auris_softmasked_toplevel.fa \\
-        --output-dir validation/ \\
-        [--evidence-gtfs scallop.gtf stringtie.gtf orthodb.gtf uniprot.gtf] \\
-        [--helixer helixer_remapped.gff3] \\
+    python compare_annotations.py \
+        --consensus consensus_genes.gff3 \
+        --reference GCA_002759435.3_Cand_auris_B8441_V3_genomic.gff.gz \
+        [--assembly-report assembly_report.txt] \
+        [--seqname-map custom_mapping.tsv] \
+        --genome candida_auris_softmasked_toplevel.fa \
+        --output-dir validation/ \
+        [--evidence-gtfs scallop.gtf stringtie.gtf orthodb.gtf uniprot.gtf] \
+        [--helixer helixer_remapped.gff3] \
         [--plots-per-category 3]
+
+Options for Seqname Mapping:
+    --assembly-report: Standard NCBI assembly_report.txt to map GenBank accessions to chromosome names.
+    --seqname-map: Custom TSV or CSV with 2 columns: from_seqname, to_seqname.
+                   Can have headers (from_seqname/to_seqname), ignores # comments.
+                   Takes precedence over --assembly-report on collisions.
 """
 
 import argparse
@@ -60,10 +67,52 @@ def load_assembly_mapping(report_path):
     return mapping
 
 
-def remap_df_seqnames(df, mapping):
-    """Remap Chromosome column using assembly report mapping."""
+def load_seqname_map(path):
+    """Parse custom seqname mapping TSV/CSV.
+    Expects 2 columns: from_seqname, to_seqname.
+    Ignores comments (#) and handles optional headers.
+    """
+    mapping = {}
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('\t')
+            if len(parts) < 2:
+                parts = line.split(',')
+            
+            if len(parts) >= 2:
+                from_id = parts[0].strip()
+                to_id = parts[1].strip()
+                if from_id.lower() in ('from_seqname', 'from', 'seqname', 'old', 'old_name') and 'to' in to_id.lower():
+                    continue
+                mapping[from_id] = to_id
+    return mapping
+
+
+def remap_df_seqnames(df, mapping, label=""):
+    """Remap Chromosome column using a mapping dict.
+    Also optionally prints safety information about uniquely mapped and unmapped seqnames.
+    """
+    if df is None or df.empty or not mapping:
+        return df
+
     df = df.copy()
+    
+    unique_before = set(df['Chromosome'].unique())
+    num_before = len(unique_before)
+    
     df['Chromosome'] = df['Chromosome'].map(lambda x: mapping.get(x, x))
+    
+    unique_after = set(df['Chromosome'].unique())
+    num_after = len(unique_after)
+    
+    if label:
+        unmapped = sorted(list(x for x in unique_before if x not in mapping))
+        print(f"  {label} seqnames remapped: {num_before} unique -> {num_after} unique")
+        if unmapped:
+            print(f"  Warning: {label} has unmapped seqnames: {', '.join(unmapped)}")
     return df
 
 
@@ -739,6 +788,8 @@ def main():
                         help='Reference GFF3 (can be .gz)')
     parser.add_argument('--assembly-report', default=None,
                         help='NCBI assembly report for seqname remapping')
+    parser.add_argument('--seqname-map', default=None,
+                        help='Custom TSV/CSV mapping for seqnames (from_seqname, to_seqname)')
     parser.add_argument('--genome', default=None,
                         help='Genome FASTA (for protein extraction)')
     parser.add_argument('--output-dir', default='validation',
@@ -757,11 +808,17 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # --- Load assembly mapping ---
-    mapping = None
+    # --- Load mappings ---
+    mapping = {}
     if args.assembly_report:
-        mapping = load_assembly_mapping(args.assembly_report)
-        print(f"Loaded assembly mapping: {len(mapping)} entries")
+        report_map = load_assembly_mapping(args.assembly_report)
+        mapping.update(report_map)
+        print(f"Loaded assembly mapping: {len(report_map)} entries")
+        
+    if args.seqname_map:
+        seq_map = load_seqname_map(args.seqname_map)
+        mapping.update(seq_map)  # takes precedence
+        print(f"Loaded seqname mapping: {len(seq_map)} entries")
 
     # --- Load reference ---
     print("Loading reference annotation...")
@@ -770,7 +827,7 @@ def main():
     if mapping:
         ref_exons = remap_df_seqnames(ref_exons, mapping)
         ref_cds = remap_df_seqnames(ref_cds, mapping)
-        ref_genes = remap_df_seqnames(ref_genes, mapping)
+        ref_genes = remap_df_seqnames(ref_genes, mapping, label="Reference")
     print(f"  Reference: {ref_genes.shape[0]} genes, "
           f"{ref_exons['transcript_id'].nunique()} transcripts")
 
@@ -778,6 +835,10 @@ def main():
     print("Loading consensus annotation...")
     cons_genes, cons_exons, cons_cds, cons_mrna = load_consensus_genes(
         args.consensus)
+    if mapping:
+        cons_exons = remap_df_seqnames(cons_exons, mapping)
+        cons_cds = remap_df_seqnames(cons_cds, mapping)
+        cons_genes = remap_df_seqnames(cons_genes, mapping, label="Consensus")
     print(f"  Consensus: {cons_genes.shape[0]} genes, "
           f"{cons_exons['transcript_id'].nunique()} transcripts")
 
@@ -826,9 +887,11 @@ def main():
     # Optional evidence tracks
     if args.scallop and os.path.exists(args.scallop):
         sc_exons, _, _ = load_gff(args.scallop, 'Scallop')
+        if mapping: sc_exons = remap_df_seqnames(sc_exons, mapping)
         evidence_tracks['Scallop'] = (sc_exons, pd.DataFrame())
     if args.stringtie and os.path.exists(args.stringtie):
         st_exons, _, _ = load_gff(args.stringtie, 'StringTie')
+        if mapping: st_exons = remap_df_seqnames(st_exons, mapping)
         evidence_tracks['StringTie'] = (st_exons, pd.DataFrame())
     if args.helixer and os.path.exists(args.helixer):
         hx_exons, hx_cds, _ = load_gff(args.helixer, 'Helixer')
@@ -839,9 +902,11 @@ def main():
         evidence_tracks['Helixer'] = (hx_exons, hx_cds)
     if args.orthodb and os.path.exists(args.orthodb):
         od_exons, _, _ = load_gff(args.orthodb, 'OrthoDB')
+        if mapping: od_exons = remap_df_seqnames(od_exons, mapping)
         evidence_tracks['OrthoDB'] = (od_exons, pd.DataFrame())
     if args.uniprot and os.path.exists(args.uniprot):
         up_exons, _, _ = load_gff(args.uniprot, 'UniProt')
+        if mapping: up_exons = remap_df_seqnames(up_exons, mapping)
         evidence_tracks['UniProt'] = (up_exons, pd.DataFrame())
 
     # --- Generate plots ---

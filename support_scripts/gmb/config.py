@@ -78,6 +78,8 @@ class ScoringConfig:
     fungal_single_exon_mode: bool = True
     keep_helixer_without_support: bool = True
     require_protein_support_for_single_source: bool = False
+    min_cds_bp: int = 150
+    require_support_for_single_exon: bool = True
 
 
 @dataclass
@@ -100,6 +102,65 @@ class QcConfig:
         default_factory=lambda: ["OrthoDB", "UniProt"])
     parallel: bool = False
     workers: int = 4
+
+
+@dataclass
+class ValidationConfig:
+    mode: str = "drop"      # "error" | "fix" | "drop_transcript"
+    log_violations: bool = True
+    max_feature_drift_bp: int = 1500
+    feature_outside_exons_policy: str = "drop"  # "drop" | "trim" | "error"
+    max_exon_len_bp: int = 15000
+    
+    # Percentile-based guardrails vs mega-exons / massive transcripts
+    max_exon_len_mode: str = "fixed"  # "fixed" | "percentile"
+    max_exon_len_percentile: float = 99.5
+    max_exon_len_factor: float = 1.5
+    max_exon_len_reference: str = "candidates_supported"  # "candidates_supported" | "reference"
+
+    max_transcript_span_mode: str = "off"  # "off" | "fixed" | "percentile"
+    max_transcript_span_bp: int = 100_000
+    max_transcript_span_percentile: float = 99.5
+    max_transcript_span_factor: float = 1.5
+
+
+@dataclass
+class UtrConfig:
+    max_5p_bp: int = 2000
+    max_3p_bp: int = 3000
+    max_total_bp: int = 5000
+    max_utr_to_cds_ratio: float = 5.0
+    trim_policy: str = "hard_cap"  # "hard_cap" | "drop_utrs"
+    
+    # End support logic
+    require_end_support: bool = True
+    end_support_mode: str = "multisource_end_agreement"
+    end_support_sources: List[str] = field(default_factory=lambda: ["Scallop", "StringTie"])
+    end_tolerance_bp: int = 50
+    require_multisource_for_utr_5p: bool = True
+    require_multisource_for_utr_3p: bool = True
+    fallback_policy_when_unsupported: str = "drop_utr"
+    
+    # Optional extensions
+    min_protein_coding_score_for_utr: Optional[float] = None
+    max_end_extension_bp: Optional[int] = None
+    
+    def __post_init__(self):
+        valid_modes = {"multisource_end_agreement", "protein_validated", "either", "off"}
+        if self.end_support_mode not in valid_modes:
+            raise ValueError(f"Invalid end_support_mode: {self.end_support_mode}")
+            
+        valid_fallbacks = {"drop_utr", "hard_cap", "drop_transcript"}
+        if self.fallback_policy_when_unsupported not in valid_fallbacks:
+            raise ValueError(f"Invalid fallback_policy_when_unsupported: {self.fallback_policy_when_unsupported}")
+
+
+@dataclass
+class DedupConfig:
+    enabled: bool = True
+    reciprocal_overlap_threshold: float = 0.80
+    same_structure_tolerance_bp: int = 10
+    policy: str = "merge_as_isoforms"  # | "keep_best_drop_rest" | "keep_both_if_opposite_strand"
 
 
 @dataclass
@@ -128,6 +189,9 @@ class PipelineConfig:
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     protein_validation: ProteinValidationConfig = field(
         default_factory=ProteinValidationConfig)
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
+    utr: UtrConfig = field(default_factory=UtrConfig)
+    dedup: DedupConfig = field(default_factory=DedupConfig)
     qc: QcConfig = field(default_factory=QcConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
@@ -158,6 +222,17 @@ def _update_dataclass(dc, d: dict, path_prefix: str = ""):
         else:
             setattr(dc, key, val)
     return dc
+
+
+def _validate_dataclass(dc):
+    """Recursively run __post_init__ validation on all dataclasses after manual updates."""
+    if hasattr(dc, '__post_init__'):
+        dc.__post_init__()
+    if hasattr(dc, '__dataclass_fields__'):
+        for field_name in dc.__dataclass_fields__:
+            val = getattr(dc, field_name)
+            if hasattr(val, '__dataclass_fields__'):
+                _validate_dataclass(val)
 
 
 def load_config(path: Optional[str] = None,
@@ -195,4 +270,5 @@ def load_config(path: Optional[str] = None,
             data = yaml.safe_load(fh) or {}
         _update_dataclass(cfg, data)
 
+    _validate_dataclass(cfg)
     return cfg

@@ -171,8 +171,11 @@ class TestIntegration:
             '--output-dir', output_dir,
             '--gene-prefix', 'TEST',
         ]
+        script_dir = os.path.dirname(__file__)
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.path.dirname(script_dir)
         subprocess.run(cmd, capture_output=True, text=True,
-                        cwd=os.path.dirname(__file__))
+                        cwd=script_dir, env=env)
 
         gff3_path = os.path.join(output_dir, 'consensus.gff3')
         with open(gff3_path) as f:
@@ -201,8 +204,11 @@ class TestIntegration:
             '--output-dir', output_dir,
             '--gene-prefix', 'TEST',
         ]
+        script_dir = os.path.dirname(__file__)
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.path.dirname(script_dir)
         subprocess.run(cmd, capture_output=True, text=True,
-                        cwd=os.path.dirname(__file__))
+                        cwd=script_dir, env=env)
 
         prot_path = os.path.join(output_dir, 'prot.fa')
         with open(prot_path) as f:
@@ -236,8 +242,11 @@ class TestIntegration:
             '--output-dir', output_dir,
             '--gene-prefix', 'TEST',
         ]
+        script_dir = os.path.dirname(__file__)
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.path.dirname(script_dir)
         subprocess.run(cmd, capture_output=True, text=True,
-                        cwd=os.path.dirname(__file__))
+                        cwd=script_dir, env=env)
 
         with open(os.path.join(output_dir, 'summary.json')) as f:
             report = json.load(f)

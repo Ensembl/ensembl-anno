@@ -549,6 +549,7 @@ def annotate_transcript(exons_df, chrom, strand, genome,
         splice = check_splice_sites(exons, strand, chrom_seq)
         frame_ok = check_frame_continuity(cds_intervals, strand)
         return {
+            'exons': exons,
             'cds': cds_intervals,
             'five_prime_utr': five_utr,
             'three_prime_utr': three_utr,
@@ -569,6 +570,7 @@ def annotate_transcript(exons_df, chrom, strand, genome,
     splice = check_splice_sites(exons, strand, chrom_seq)
     if orf is None:
         return {
+            'exons': exons,
             'cds': [],
             'five_prime_utr': [],
             'three_prime_utr': [],
@@ -600,6 +602,7 @@ def annotate_transcript(exons_df, chrom, strand, genome,
     frame_ok = check_frame_continuity(cds_intervals, strand)
 
     return {
+        'exons': exons,
         'cds': cds_intervals,
         'five_prime_utr': five_utr,
         'three_prime_utr': three_utr,
@@ -617,6 +620,7 @@ def annotate_transcript(exons_df, chrom, strand, genome,
 
 def _empty_result(exons):
     return {
+        'exons': exons,
         'cds': [],
         'five_prime_utr': [],
         'three_prime_utr': [],
