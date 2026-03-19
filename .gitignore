@@ -19,3 +19,6 @@ downloads/
 .cache
 .pytest_cache
 
+#IDEA
+.vscode/
+

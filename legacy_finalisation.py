@@ -161,101 +161,105 @@ def run_finalise_geneset(
         "-genome_file",
         genome_file,
     ]
-    pool = multiprocessing.Pool(int(num_threads))
-    for seq_region_name in seq_region_names:
-        # The selection script needs different params depending on
-        # whether the seqs are from transcriptomic data or not
-        region_details = (
-            seq_region_name + ".rs1" + ".re" + str(seq_region_lengths[seq_region_name])
-        )
-        transcriptomic_region_gtf_path = os.path.join(
-            region_annotation_dir, (region_details + ".trans.gtf")
-        )
-        busco_region_gtf_path = os.path.join(
-            region_annotation_dir, (region_details + ".busco.gtf")
-        )
-        protein_region_gtf_path = os.path.join(
-            region_annotation_dir, (region_details + ".protein.gtf")
-        )
+    # Select best transcript
+    # we are now running a pool per biotype instead all together to avoid resource fails
+    def run_biotype(
+        biotype_name,
+        annotation_raw,
+        output_suffix,
+        extra_args,
+        threads=None
+    ):
+        async_results = []
+        pool_size = threads if threads is not None else int(num_threads)
+        pool = multiprocessing.Pool(pool_size)
 
-        # Transcriptomic data
-        if os.path.exists(transcriptomic_annotation_raw):
-            if not gtf_ok(transcriptomic_region_gtf_path):
-                logging.info("Finalising transcriptomic data for: " + seq_region_name)
-                transcriptomic_annotation_select = re.sub(
-                    "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
-                )
-                cmd = generic_select_cmd.copy()
-                cmd.extend(
-                    [
-                        "-region_details",
-                        region_details,
-                        "-input_gtf_file",
-                        transcriptomic_annotation_raw,
-                        "-output_gtf_file",
-                        transcriptomic_region_gtf_path,
-                        "-cds_search",
-                        "-final_biotype",
-                        "transcriptomic",
-                    ]
-                )
-                pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
-            else:
-                logging.info("Transcriptomic region GTF exists, skipping: %s",
-                     transcriptomic_region_gtf_path)
-                
-        # Protein data
-        if os.path.exists(busco_annotation_raw):
-            if not gtf_ok(busco_region_gtf_path):
-                logging.info("Finalising OrthoDB data for: " + seq_region_name)
-                busco_annotation_select = re.sub("_raw.gtf", "_sel.gtf", busco_annotation_raw)
-                cmd = generic_select_cmd.copy()
-                cmd.extend(
-                    [
-                        "-region_details",
-                        region_details,
-                        "-input_gtf_file",
-                        busco_annotation_raw,
-                        "-output_gtf_file",
-                        busco_region_gtf_path,
-                        "-all_cds_exons",
-                        "-final_biotype",
-                        "busco",
-                    ]
-                )
-                pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
-            else:
-                logging.info("OrthoDB/BUSCO region GTF exists, skipping: %s",
-                     busco_region_gtf_path)
+        for seq_region_name in seq_region_names:
+            region_details = (
+                seq_region_name + ".rs1" + ".re" + str(seq_region_lengths[seq_region_name])
+            )
 
-        if os.path.exists(protein_annotation_raw):
-            if not gtf_ok(protein_region_gtf_path):
-                logging.info("Finalising Uniprot data for: " + seq_region_name)
-                protein_annotation_select = re.sub(
-                    "_raw.gtf", "_sel.gtf", protein_annotation_raw
-                )
-                cmd = generic_select_cmd.copy()
-                cmd.extend(
-                    [
-                        "-region_details",
-                        region_details,
-                        "-input_gtf_file",
-                        protein_annotation_raw,
-                        "-output_gtf_file",
-                        protein_region_gtf_path,
-                        "-clean_transcripts",
-                        "-all_cds_exons",
-                        "-final_biotype",
-                        "protein",
-                    ]
-                )
-                pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
-            else:
-                logging.info("UniProt region GTF exists, skipping: %s",
-                            protein_region_gtf_path)
+            region_gtf_path = os.path.join(
+                region_annotation_dir, f"{region_details}.{output_suffix}.gtf"
+            )
 
-    pool.close()
-    pool.join()
+            if not os.path.exists(annotation_raw):
+                continue
+
+            if gtf_ok(region_gtf_path):
+                logging.info(
+                    "%s region GTF exists, skipping: %s",
+                    biotype_name,
+                    region_gtf_path,
+                )
+                continue
+
+            logging.info("Finalising %s data for: %s", biotype_name, seq_region_name)
+
+            cmd = generic_select_cmd.copy()
+            cmd.extend(
+                [
+                    "-region_details",
+                    region_details,
+                    "-input_gtf_file",
+                    annotation_raw,
+                    "-output_gtf_file",
+                    region_gtf_path,
+                    "-final_biotype",
+                    biotype_name,
+                ]
+                + extra_args
+            )
+
+            result = pool.apply_async(
+                multiprocess_finalise_geneset,
+                args=(cmd,),
+            )
+            async_results.append((seq_region_name, biotype_name, result))
+
+        pool.close()
+        pool.join()
+
+        # Surface failures (CRITICAL)
+        for region_name, biotype, result in async_results:
+            try:
+                result.get()
+            except Exception as e:
+                logging.error(
+                    "Job exception for %s (%s): %s",
+                    region_name,
+                    biotype,
+                    e,
+                )
+                raise
+    # Transcriptomic
+    run_biotype(
+        biotype_name="transcriptomic",
+        annotation_raw=transcriptomic_annotation_raw,
+        output_suffix="trans",
+        extra_args=["-cds_search"],
+    )
+    logging.info("Transciptomic select best transcript finished")
+
+    # BUSCO / OrthoDB
+    run_biotype(
+        biotype_name="busco",
+        annotation_raw=busco_annotation_raw,
+        output_suffix="busco",
+        extra_args=["-all_cds_exons"],
+        threads=1,
+    )
+    logging.info("BUSCO select best transcript finished")
+
+    # Protein / UniProt
+    run_biotype(
+        biotype_name="protein",
+        annotation_raw=protein_annotation_raw,
+        output_suffix="protein",
+        extra_args=["-clean_transcripts", "-all_cds_exons"],
+    )
+    logging.info("Protein select best transcript finished")
+
 
     # At this point we will have the region files for all the,
     merge_finalise_output_files(
@@ -651,6 +655,9 @@ def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
     for gene_id in parsed_gtf_genes.keys():
         transcript_ids = parsed_gtf_genes[gene_id].keys()
         for transcript_id in transcript_ids:
+            if transcript_id not in combined_results:
+            # ANNA skip/delete this transcript TEMPORARY FIX FOR 3BP CDS
+                continue
             transcript_line = parsed_gtf_genes[gene_id][transcript_id]["transcript"]
             single_cds_exon_transcript = 0
             translation_match = re.search(
@@ -923,19 +930,27 @@ def combine_results(rnasamba_results, cpc2_results, diamond_results):
         coding_potential = result[2]
         transcript_length = result[3]
         peptide_length = result[4]
-        transcript_ids[transcript_id].extend(
-            [
-                coding_probability,
-                coding_potential,
-                transcript_length,
-                peptide_length,
-            ]
-        )
+        
+        #TEMPORARY FIX FOR 3BP CDS
+        if transcript_id in transcript_ids:  # ANNA only extend if exists
+            transcript_ids[transcript_id].extend(
+                [
+                    coding_probability,
+                    coding_potential,
+                    transcript_length,
+                    peptide_length,
+                ]
+            )
 
     if diamond_results is not None:
         for result in diamond_results:
             transcript_id = result[0]
             e_value = result[1]
+            # There seems to be an issue where there are a small number
+            # of sequences that don't make it into the cpc2/rnasamba output
+            # Should code in a system for this, but it would be good to
+            # understand why it happens to begin with. Seems to be the same
+            # number of missing seqs in both, so maybe a shared cut-off
             if transcript_id in transcript_ids:
                 transcript_ids[transcript_id].extend([e_value])
 
@@ -1109,6 +1124,30 @@ def multiprocess_generic(cmd):
 
 
 def multiprocess_finalise_geneset(cmd):
+    """Run command and fail hard on error"""
+    logging.info("Worker executing: %s", " ".join(cmd))
 
-    print(" ".join(cmd))
-    subprocess.run(cmd)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        logging.error(
+            "Command failed with return code %d: %s",
+            result.returncode,
+            " ".join(cmd),
+        )
+        logging.error("STDERR:\n%s", result.stderr)
+        if result.stdout:
+            logging.error("STDOUT:\n%s", result.stdout)
+
+        # propagate failure to parent
+        raise RuntimeError(
+            f"Selector failed (return code {result.returncode})"
+        )
+
+    logging.info("Command succeeded: %s", " ".join(cmd) )
+    return result
