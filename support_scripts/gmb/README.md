@@ -91,7 +91,8 @@ Key configurable areas:
 *   `transcriptomic_filter`: Thresholds for identifying artificially merged transcript models (e.g., max intron length).
 *   `helixer_filter`: Rules for filtering unreliable *ab initio* models.
 *   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support/configurable thresholds for keeping Helixer models).
-*   `protein_validation`: **New feature**. Enable a batch validation stage (`enabled: true`) that writes translated candidate models to a FASTA, runs DIAMOND and Psauron, and injects a derived `protein_coding_score` back into the candidate gating logic. This logic is intended to replace legacy tools (like RNAsamba and CPC2 found in `ensembl_anno.py`) with a modern, configuration-first scoring mechanism built directly into GMB.
+*   `protein_validation`: Enable a batch validation stage (`enabled: true`) that writes translated candidate models to a FASTA, runs DIAMOND and Psauron, and injects a derived `protein_coding_score` back into the candidate gating logic.
+*   `utr`: Thresholds and criteria for keeping or trimming Untranslated Regions. Features robust "end support" validation (`require_end_support: true`), allowing you to configure exactly which evidence assemblies must agree on a transcript's start/end coordinates (`end_support_sources`), with a distance tolerance (`end_tolerance_bp`). If the transcript edges lack multi-source agreement or protein validation (depending on `end_support_mode` policy), they can fallback to `drop_utr`, `hard_cap` to a hardcoded base definition, or `drop_transcript` fully based on `fallback_policy_when_unsupported`.
 
 **Config Merge Rules:**
 Dicts deep-merge, lists replace entirely, unknown keys raise an error to catch typos.
