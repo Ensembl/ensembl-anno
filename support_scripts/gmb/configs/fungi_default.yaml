@@ -1,0 +1,109 @@
+orf:
+  min_codons: 33
+  allow_partial_5: true
+  allow_partial_3: true
+  allow_non_atg_start: false
+  stop_codon_char: "*"
+  partial_prefix: ""
+
+protein_filter:
+  min_protein_aa: 30
+  min_exon_count_for_short: 1
+  redundancy_overlap: 0.8
+  top_n_per_locus: 3
+  max_span_bp: 50000
+  keep_secondary: true
+  min_alignment_coverage: 0.8
+  min_percent_identity: 60.0
+  min_bitscore: 50.0
+
+transcriptomic_filter:
+  max_transcript_length: 20000
+  max_intron_length: 3000
+  min_intergenic_gap: 500
+  allow_single_exon: true
+  strand_consistency_check: false
+
+helixer_filter:
+  min_cds_bp: 90
+  max_exons: 50
+  enabled: true
+
+scoring:
+  weights:
+    helixer: 2.0
+    scallop: 1.0
+    stringtie: 1.0
+  protein_overlap_bonus: 2.0
+  multi_source_bonus: 1.0
+  noncanonical_splice_penalty: 0.5
+  max_isoforms_per_locus: 2
+  min_alternate_score: 3.0
+  fungal_single_exon_mode: true
+  keep_helixer_without_support: true
+  require_protein_support_for_single_source: false
+  min_cds_bp: 150
+  require_support_for_single_exon: true
+
+protein_validation:
+  enabled: false
+  diamond_path: "diamond"
+  psauron_path: "psauron"
+  diamond_db: "swissprot.dmnd"
+  psauron_model: "default"
+  diamond_weight: 0.5
+  psauron_weight: 0.5
+  min_score: 0.5
+  policy: "drop"
+
+validation:
+  mode: "drop"
+  log_violations: true
+  max_feature_drift_bp: 1500
+  feature_outside_exons_policy: "drop"
+  max_exon_len_bp: 15000
+  
+  max_exon_len_mode: "fixed"
+  max_exon_len_percentile: 99.5
+  max_exon_len_factor: 1.5
+  max_exon_len_reference: "candidates_supported"
+
+  max_transcript_span_mode: "off"
+  max_transcript_span_bp: 100000
+  max_transcript_span_percentile: 99.5
+  max_transcript_span_factor: 1.5
+
+utr:
+  max_5p_bp: 2000
+  max_3p_bp: 3000
+  max_total_bp: 5000
+  max_utr_to_cds_ratio: 5.0
+  trim_policy: "hard_cap"
+  require_end_support: true
+  end_support_mode: "multisource_end_agreement"
+  end_support_sources: ["Scallop", "StringTie"]
+  end_tolerance_bp: 50
+  require_multisource_for_utr_5p: true
+  require_multisource_for_utr_3p: true
+  fallback_policy_when_unsupported: "drop_utr"
+
+dedup:
+  enabled: true
+  reciprocal_overlap_threshold: 0.80
+  same_structure_tolerance_bp: 10
+  policy: "merge_as_isoforms"
+
+qc:
+  max_transcripts_per_track: 5
+  skip_orf_inference_tracks: ["OrthoDB", "UniProt"]
+  parallel: false
+  workers: 4
+
+export:
+  write_cdna: true
+  write_protein: true
+  write_cds: true
+  include_partial: true
+
+reporting:
+  formats: ["json", "tsv"]
