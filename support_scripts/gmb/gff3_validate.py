@@ -16,8 +16,7 @@ Also provides UTR trimming against biological length limits.
 """
 
 import sys
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 # ---------------------------------------------------------------------------
 # Validation helpers
@@ -43,10 +42,7 @@ def _interval_in_union(
     union_intervals: List[Tuple[int, int]], target_s: int, target_e: int
 ) -> bool:
     """Check if target interval is fully contained within ANY SINGLE disjoint interval from the union."""
-    for cs, ce in union_intervals:
-        if cs <= target_s and ce >= target_e:
-            return True
-    return False
+    return any(cs <= target_s and ce >= target_e for cs, ce in union_intervals)
 
 
 def _intersect_with_union(union_intervals: List[Tuple[int, int]], row: dict) -> List[dict]:

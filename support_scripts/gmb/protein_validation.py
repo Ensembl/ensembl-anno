@@ -6,15 +6,11 @@ in batch. Deduplicates strict sequences within run to optimize throughput,
 and returns a score dict mapping sequences or structural hashes to their results.
 """
 
-import ast
-import json
 import os
 import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-
-from config import PipelineConfig
 
 
 def check_dependencies(val_cfg):
@@ -133,7 +129,7 @@ def batch_score_proteins(protein_dict, config):
 
         diamond_scores = {}
         if os.path.exists(diamond_out):
-            with open(diamond_out, "r") as fh:
+            with open(diamond_out) as fh:
                 for line in fh:
                     parts = line.strip().split("\t")
                     if len(parts) >= 5:
@@ -168,7 +164,7 @@ def batch_score_proteins(protein_dict, config):
 
         psauron_scores = {}
         if os.path.exists(psauron_out):
-            with open(psauron_out, "r") as fh:
+            with open(psauron_out) as fh:
                 for line in fh:
                     if line.startswith("#") or not line.strip():
                         continue

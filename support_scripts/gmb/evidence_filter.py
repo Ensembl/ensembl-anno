@@ -7,7 +7,6 @@ assemblies, and Helixer predictions before consensus building.
 All thresholds are driven by PipelineConfig (YAML).
 """
 
-from collections import defaultdict
 
 import pandas as pd
 import pyranges as pr
@@ -76,7 +75,6 @@ def filter_protein_evidence(protein_df, config, stats=None, transcriptomic_df=No
     # --- Stage 0: Threshold filters (OrthoDB padding/noise) ---
     remove_tids = set()
     # Apply filters if columns exist (usually parsed from attributes)
-    tids = protein_df["transcript_id"].unique()
     for tid, grp in protein_df.groupby("transcript_id"):
         # Usually these attributes are on the transcript-level row, but we might only have exon rows.
         # We take the max or mean across exons for that transcript, or simply the first available.
@@ -161,7 +159,6 @@ def filter_protein_evidence(protein_df, config, stats=None, transcriptomic_df=No
 
     # Within each cluster, collapse models with high reciprocal overlap
     keep_tids = set()
-    secondary_tids = set()
     redundant_removed = 0
 
     for _cid, grp in cdf.groupby(cluster_col):
@@ -546,7 +543,6 @@ def filter_helixer_models(helixer_df, helixer_cds, config, stats=None):
     if helixer_cds is not None and not helixer_cds.empty:
         cds_lengths = helixer_cds.groupby("transcript_id").agg(total_cds=("End", "sum")).copy()
         # Compute actual CDS bp per transcript
-        cds_starts = helixer_cds.groupby("transcript_id")["Start"].sum()
         cds_lengths["total_cds"] = (
             helixer_cds.groupby("transcript_id")["End"].sum()
             - helixer_cds.groupby("transcript_id")["Start"].sum()

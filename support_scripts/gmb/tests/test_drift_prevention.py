@@ -1,4 +1,3 @@
-import pytest
 
 from config import UtrConfig, ValidationConfig
 from gff3_validate import trim_utrs, validate_transcript

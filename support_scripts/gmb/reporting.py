@@ -34,7 +34,6 @@ def generate_report(stats, loci, output_dir, config):
 
     # Evidence breakdown
     evidence_counter = Counter()
-    cds_lengths = []
     exon_counts = []
 
     for _, models in loci:

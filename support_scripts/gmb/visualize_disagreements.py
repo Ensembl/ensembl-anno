@@ -1,11 +1,8 @@
 import argparse
 import os
-import sys
-from functools import lru_cache
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-import pandas as pd
 import pyranges as pr
 
 from annotate_cds_utrs import (
@@ -22,13 +19,10 @@ from annotate_cds_utrs import (
     translate,
 )
 from subset_utils import (
-    Region,
     add_subset_args,
     build_mapping,
-    parse_region,
     remap_df_seqnames,
     resolve_subset_regions,
-    subset_df_by_regions,
 )
 
 # ---------------------------------------------------------------------------

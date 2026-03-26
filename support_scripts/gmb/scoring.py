@@ -7,9 +7,8 @@ scoring function.  Default parameters are tuned for fungal genomes.
 All thresholds are driven by PipelineConfig (YAML).
 """
 
-from collections import defaultdict
 
-from annotate_cds_utrs import build_spliced_seq, check_splice_sites
+from annotate_cds_utrs import check_splice_sites
 
 # ---------------------------------------------------------------------------
 # Intron-chain utility (reused from gene_model_builder)
@@ -174,7 +173,7 @@ def select_isoforms(locus_df, config, protein_supported_tids, genome=None):
             s["rep"]["protein_coding_score"] = m["protein_coding_score"]
 
     # Score each merged structure
-    for key, s in merged.items():
+    for _key, s in merged.items():
         rep = s["rep"]
         rep["combined_evidence"] = ",".join(sorted(s["sources"]))
         if s["protein_support"]:
@@ -200,9 +199,7 @@ def select_isoforms(locus_df, config, protein_supported_tids, genome=None):
             continue
 
         # Apply configured gating logic
-        if s["protein_support"]:
-            keep = True
-        elif "Helixer" in s["sources"] and scfg.keep_helixer_without_support:
+        if s["protein_support"] or ("Helixer" in s["sources"] and scfg.keep_helixer_without_support):
             keep = True
         elif len(s["sources"]) > 1:
             if scfg.require_protein_support_for_single_source and not s["protein_support"]:
@@ -212,10 +209,7 @@ def select_isoforms(locus_df, config, protein_supported_tids, genome=None):
                 keep = True
             else:
                 keep = True
-        elif "StringTie" in s["sources"] and s["rep"]["exon_count"] > 1:
-            if not scfg.require_protein_support_for_single_source:
-                keep = True
-        elif "Scallop" in s["sources"] and s["rep"]["exon_count"] > 1:
+        elif ("StringTie" in s["sources"] and s["rep"]["exon_count"] > 1) or ("Scallop" in s["sources"] and s["rep"]["exon_count"] > 1):
             if not scfg.require_protein_support_for_single_source:
                 keep = True
         elif (

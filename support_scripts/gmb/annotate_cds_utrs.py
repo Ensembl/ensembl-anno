@@ -9,8 +9,6 @@ Behavioral reference: gtf_to_seq.pl  (Ensembl compute_translation logic).
 """
 
 import argparse
-import os
-import sys
 
 import pandas as pd
 import pyranges as pr
@@ -190,10 +188,6 @@ def find_best_orf(cdna_seq, min_codons=100):
     best_non_atg = None
 
     for frame in range(3):
-        pos = frame
-        # Scan all codons in this frame
-        orfs_in_frame = []
-
         # Find all ATG positions and stop positions in this frame
         atg_positions = []
         stop_positions = []
@@ -208,7 +202,7 @@ def find_best_orf(cdna_seq, min_codons=100):
 
         # Add sentinel at end for 3′-partial ORFs
         # (the stop position is at the very end of the sequence)
-        has_terminal_stop = len(stop_positions) > 0 and stop_positions[-1] + 3 >= seq_len - 2
+        _has_terminal_stop = len(stop_positions) > 0 and stop_positions[-1] + 3 >= seq_len - 2
 
         # For each ATG, find the next stop
         for atg_pos in atg_positions:
@@ -723,7 +717,7 @@ def annotate_all_transcripts(exon_df, genome, cds_df=None, min_codons=100):
     for tid, grp in exon_df.groupby("transcript_id"):
         chrom = grp["Chromosome"].iloc[0]
         strand = grp["Strand"].iloc[0]
-        existing_cds = cds_by_tid.get(tid, None)
+        existing_cds = cds_by_tid.get(tid)
         results[tid] = annotate_transcript(
             grp, chrom, strand, genome, cds_df=existing_cds, min_codons=min_codons
         )

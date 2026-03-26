@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
 from config import load_config
-from protein_validation import batch_score_proteins, check_dependencies
+from protein_validation import check_dependencies
 
 
 @pytest.fixture

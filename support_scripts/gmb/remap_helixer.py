@@ -1,5 +1,4 @@
 import argparse
-import sys
 
 
 def parse_args():
@@ -38,7 +37,7 @@ def main():
 
     print(f"Remapping {args.input}...")
     remapped_count = 0
-    with open(args.input, "r") as infile, open(args.output, "w") as outfile:
+    with open(args.input) as infile, open(args.output, "w") as outfile:
         for line in infile:
             if line.startswith("#"):
                 outfile.write(line)

@@ -33,7 +33,6 @@ import csv
 import gzip
 import json
 import os
-import sys
 from collections import Counter, defaultdict
 
 import matplotlib.patches as patches
@@ -42,11 +41,7 @@ import pandas as pd
 import pyranges as pr
 
 from annotate_cds_utrs import (
-    build_spliced_seq,
-    derive_utrs,
-    find_best_orf,
     load_genome,
-    map_cds_to_genomic,
     reverse_complement,
     translate,
 )
@@ -185,7 +180,7 @@ def _group_by_transcript(exons_df, cds_df=None):
                 continue
             tx_dict[tid]["cds"].append((row["Start"], row["End"]))
 
-    for tid, data in tx_dict.items():
+    for _tid, data in tx_dict.items():
         data["exons"] = sorted(data["exons"])
         data["cds"] = sorted(data["cds"])
     return tx_dict
@@ -490,7 +485,7 @@ def classify_locus_pairs(
 
     # Classify consensus genes
     cons_results = []
-    ref_matched_ids = {r["matched_id"] for r in ref_results if r["classification"] != "Missed"}
+    _ref_matched_ids = {r["matched_id"] for r in ref_results if r["classification"] != "Missed"}
 
     for entry in cons_entries:
         gid = entry["gene_id"]

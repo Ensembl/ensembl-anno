@@ -5,8 +5,6 @@ Ensures that core PyRanges operations used by the pipeline work correctly
 under the supported version range (pandas 2.x–3.0, pyranges ≤0.1.4).
 """
 
-import os
-import sys
 
 import pandas as pd
 import pyranges as pr

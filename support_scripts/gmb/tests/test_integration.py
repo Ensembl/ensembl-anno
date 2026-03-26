@@ -14,7 +14,6 @@ Runs the pipeline and verifies outputs exist and are well-formed.
 import os
 import subprocess
 import sys
-import tempfile
 
 import pytest
 

@@ -70,14 +70,21 @@ ignore = [
     "B905",   # zip strict — not available in Python 3.8
     "SIM108", # ternary — sometimes less readable
     "UP007",  # use X | Y for union types — not available in 3.8
+    "UP022",  # capture_output — requires Python 3.7+ but reads less clearly
+    "RUF002", # ambiguous unicode in docstring — prime symbols (′) intentional in genomics
+    "RUF003", # ambiguous unicode in comment — same reason
+    "SIM102", # nested if — collapsing hurts readability in complex filter logic
+    "SIM115", # context manager — false positives in try/finally patterns
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B", "SIM", "RUF"]
-"debug_scoring.py" = ["F", "E"]
+"tests/*" = ["B", "SIM", "RUF", "F841", "E712", "F401"]
+"debug_scoring.py" = ["F", "E", "B"]
 "check_lengths.py" = ["F", "E"]
 "gen_extra_plots.py" = ["F", "E"]
 "test_clustering.py" = ["F", "E"]
+"visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
+"compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
 
 # ---------------------------------------------------------------------------
 # pytest

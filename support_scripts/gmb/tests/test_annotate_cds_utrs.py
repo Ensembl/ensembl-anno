@@ -7,7 +7,6 @@ and Helixer predictions as ground truth.
 
 import os
 import sys
-import tempfile
 
 import pandas as pd
 import pytest
@@ -15,7 +14,6 @@ import pytest
 sys.path.insert(0, os.path.dirname(__file__))
 from annotate_cds_utrs import (
     _make_orf_label,
-    annotate_all_transcripts,
     annotate_transcript,
     build_spliced_seq,
     check_frame_continuity,

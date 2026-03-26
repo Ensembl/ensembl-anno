@@ -3,7 +3,6 @@
 
 import os
 import sys
-import tempfile
 
 import pandas as pd
 import pytest
@@ -12,9 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from subset_utils import (
     Region,
     build_mapping,
-    load_assembly_mapping,
     load_regions_file,
-    load_seqname_map,
     parse_region,
     remap_df_seqnames,
     sample_loci,

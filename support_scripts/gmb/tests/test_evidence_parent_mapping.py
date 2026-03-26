@@ -1,7 +1,5 @@
 import os
-import subprocess
 import tempfile
-from collections import defaultdict
 
 import pandas as pd
 import pytest
@@ -31,7 +29,7 @@ def test_evidence_parent_mapping():
 
     # 1. Parse GFF3
     mrna_parent = {}
-    with open(gff3_path, "r") as fh:
+    with open(gff3_path) as fh:
         for line in fh:
             if line.startswith("#") or not line.strip():
                 continue

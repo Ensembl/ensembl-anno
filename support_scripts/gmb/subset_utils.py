@@ -6,10 +6,9 @@ visualize_disagreements.py to provide a consistent "fast test" capability.
 """
 
 import csv
-import json
 import os
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import pandas as pd

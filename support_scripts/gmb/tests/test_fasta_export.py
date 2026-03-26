@@ -3,13 +3,12 @@
 
 import os
 import sys
-import tempfile
 
 import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from annotate_cds_utrs import load_genome, reverse_complement, translate
+from annotate_cds_utrs import reverse_complement
 from config import load_config
 from fasta_export import export_fasta
 

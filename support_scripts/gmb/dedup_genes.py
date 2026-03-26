@@ -162,7 +162,7 @@ def dedup_genes(gff_rows, config):
             output_rows.extend(by_parent.get(m["ID"], []))
 
         # Merge any absorbed gene's mRNAs as isoforms
-        for j, gj in enumerate(gene_info):
+        for _j, gj in enumerate(gene_info):
             if gj.get("merged_into") == i:
                 for m in gj["mrnas"]:
                     m_copy = dict(m)
