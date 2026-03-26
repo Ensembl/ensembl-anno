@@ -20,3 +20,14 @@ downloads/
 .cache
 .pytest_cache
 
+# Large data files / symlinks (not tracked in git)
+support_scripts/gmb/z_tritici
+support_scripts/gmb/c_albicans
+support_scripts/gmb/c_auris
+support_scripts/gmb/swissprot.dmnd
+support_scripts/gmb/uniprot_sprot.fasta
+support_scripts/gmb/*_output*/
+support_scripts/gmb/*_comparison*/
+support_scripts/gmb/output/
+support_scripts/gmb/comparison/
+
