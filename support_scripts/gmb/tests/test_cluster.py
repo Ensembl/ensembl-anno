@@ -1,12 +1,9 @@
 import pandas as pd
 import pyranges as pr
 
-df = pd.DataFrame({
-    'Chromosome': ['1', '1'],
-    'Start': [100, 100],
-    'End': [200, 200],
-    'Strand': ['+', '-']
-})
+df = pd.DataFrame(
+    {"Chromosome": ["1", "1"], "Start": [100, 100], "End": [200, 200], "Strand": ["+", "-"]}
+)
 
 gr = pr.PyRanges(df)
 print("Original:")
@@ -26,7 +23,7 @@ try:
     print(c)
     print(f"Clusters: {c.Cluster.unique()}")
 except Exception as e:
-        print(e)
+    print(e)
 
 print("\ncluster(strand=False):")
 try:

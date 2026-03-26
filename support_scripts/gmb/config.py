@@ -21,6 +21,7 @@ import yaml
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class OrfConfig:
     min_codons: int = 33
@@ -102,26 +103,25 @@ class ProteinValidationConfig:
     diamond_weight: float = 0.5
     psauron_weight: float = 0.5
     min_score: float = 0.5
-    policy: str = "drop" # 'drop' or 'penalize'
+    policy: str = "drop"  # 'drop' or 'penalize'
 
 
 @dataclass
 class QcConfig:
     max_transcripts_per_track: int = 5
-    skip_orf_inference_tracks: List[str] = field(
-        default_factory=lambda: ["OrthoDB", "UniProt"])
+    skip_orf_inference_tracks: List[str] = field(default_factory=lambda: ["OrthoDB", "UniProt"])
     parallel: bool = False
     workers: int = 4
 
 
 @dataclass
 class ValidationConfig:
-    mode: str = "drop"      # "error" | "fix" | "drop_transcript"
+    mode: str = "drop"  # "error" | "fix" | "drop_transcript"
     log_violations: bool = True
     max_feature_drift_bp: int = 1500
     feature_outside_exons_policy: str = "drop"  # "drop" | "trim" | "error"
     max_exon_len_bp: int = 15000
-    
+
     # Percentile-based guardrails vs mega-exons / massive transcripts
     max_exon_len_mode: str = "fixed"  # "fixed" | "percentile"
     max_exon_len_percentile: float = 99.5
@@ -141,7 +141,7 @@ class UtrConfig:
     max_total_bp: int = 5000
     max_utr_to_cds_ratio: float = 5.0
     trim_policy: str = "hard_cap"  # "hard_cap" | "drop_utrs"
-    
+
     # End support logic
     require_end_support: bool = True
     end_support_mode: str = "multisource_end_agreement"
@@ -150,19 +150,21 @@ class UtrConfig:
     require_multisource_for_utr_5p: bool = True
     require_multisource_for_utr_3p: bool = True
     fallback_policy_when_unsupported: str = "drop_utr"
-    
+
     # Optional extensions
     min_protein_coding_score_for_utr: Optional[float] = None
     max_end_extension_bp: Optional[int] = None
-    
+
     def __post_init__(self):
         valid_modes = {"multisource_end_agreement", "protein_validated", "either", "off"}
         if self.end_support_mode not in valid_modes:
             raise ValueError(f"Invalid end_support_mode: {self.end_support_mode}")
-            
+
         valid_fallbacks = {"drop_utr", "hard_cap", "drop_transcript"}
         if self.fallback_policy_when_unsupported not in valid_fallbacks:
-            raise ValueError(f"Invalid fallback_policy_when_unsupported: {self.fallback_policy_when_unsupported}")
+            raise ValueError(
+                f"Invalid fallback_policy_when_unsupported: {self.fallback_policy_when_unsupported}"
+            )
 
 
 @dataclass
@@ -190,17 +192,16 @@ class ReportingConfig:
 class PipelineConfig:
     preset: str = "fungi"
     orf: OrfConfig = field(default_factory=OrfConfig)
-    protein_filter: ProteinFilterConfig = field(
-        default_factory=ProteinFilterConfig)
+    protein_filter: ProteinFilterConfig = field(default_factory=ProteinFilterConfig)
     transcriptomic_filter: TranscriptomicFilterConfig = field(
-        default_factory=TranscriptomicFilterConfig)
+        default_factory=TranscriptomicFilterConfig
+    )
     transcript_splitting: TranscriptSplittingConfig = field(
-        default_factory=TranscriptSplittingConfig)
-    helixer_filter: HelixerFilterConfig = field(
-        default_factory=HelixerFilterConfig)
+        default_factory=TranscriptSplittingConfig
+    )
+    helixer_filter: HelixerFilterConfig = field(default_factory=HelixerFilterConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
-    protein_validation: ProteinValidationConfig = field(
-        default_factory=ProteinValidationConfig)
+    protein_validation: ProteinValidationConfig = field(default_factory=ProteinValidationConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     utr: UtrConfig = field(default_factory=UtrConfig)
     dedup: DedupConfig = field(default_factory=DedupConfig)
@@ -213,9 +214,10 @@ class PipelineConfig:
 # Loaders
 # ---------------------------------------------------------------------------
 
+
 def _update_dataclass(dc, d: dict, path_prefix: str = ""):
     """Recursively update a dataclass instance from a dict with strict merge rules.
-    
+
     Rules:
       - dict -> deep merge
       - list -> replace entirely
@@ -227,9 +229,9 @@ def _update_dataclass(dc, d: dict, path_prefix: str = ""):
     for key, val in d.items():
         if not hasattr(dc, key):
             raise ValueError(f"Unknown configuration key: '{path_prefix}{key}'")
-        
+
         current = getattr(dc, key)
-        if hasattr(current, '__dataclass_fields__') and isinstance(val, dict):
+        if hasattr(current, "__dataclass_fields__") and isinstance(val, dict):
             _update_dataclass(current, val, path_prefix=f"{path_prefix}{key}.")
         else:
             setattr(dc, key, val)
@@ -238,17 +240,16 @@ def _update_dataclass(dc, d: dict, path_prefix: str = ""):
 
 def _validate_dataclass(dc):
     """Recursively run __post_init__ validation on all dataclasses after manual updates."""
-    if hasattr(dc, '__post_init__'):
+    if hasattr(dc, "__post_init__"):
         dc.__post_init__()
-    if hasattr(dc, '__dataclass_fields__'):
+    if hasattr(dc, "__dataclass_fields__"):
         for field_name in dc.__dataclass_fields__:
             val = getattr(dc, field_name)
-            if hasattr(val, '__dataclass_fields__'):
+            if hasattr(val, "__dataclass_fields__"):
                 _validate_dataclass(val)
 
 
-def load_config(path: Optional[str] = None,
-                preset: str = "fungi") -> PipelineConfig:
+def load_config(path: Optional[str] = None, preset: str = "fungi") -> PipelineConfig:
     """Load pipeline configuration.
 
     Parameters
@@ -267,8 +268,8 @@ def load_config(path: Optional[str] = None,
     # Base configuration based on preset
     if preset == "fungi":
         default_yaml = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "configs", "fungi_default.yaml")
+            os.path.dirname(os.path.abspath(__file__)), "configs", "fungi_default.yaml"
+        )
         if os.path.exists(default_yaml):
             with open(default_yaml) as fh:
                 data = yaml.safe_load(fh) or {}

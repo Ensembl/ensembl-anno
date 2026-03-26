@@ -20,33 +20,82 @@ import pyranges as pr
 # ---------------------------------------------------------------------------
 
 CODON_TABLE = {
-    'TTT': 'F', 'TTC': 'F', 'TTA': 'L', 'TTG': 'L',
-    'CTT': 'L', 'CTC': 'L', 'CTA': 'L', 'CTG': 'L',
-    'ATT': 'I', 'ATC': 'I', 'ATA': 'I', 'ATG': 'M',
-    'GTT': 'V', 'GTC': 'V', 'GTA': 'V', 'GTG': 'V',
-    'TCT': 'S', 'TCC': 'S', 'TCA': 'S', 'TCG': 'S',
-    'CCT': 'P', 'CCC': 'P', 'CCA': 'P', 'CCG': 'P',
-    'ACT': 'T', 'ACC': 'T', 'ACA': 'T', 'ACG': 'T',
-    'GCT': 'A', 'GCC': 'A', 'GCA': 'A', 'GCG': 'A',
-    'TAT': 'Y', 'TAC': 'Y', 'TAA': '*', 'TAG': '*',
-    'CAT': 'H', 'CAC': 'H', 'CAA': 'Q', 'CAG': 'Q',
-    'AAT': 'N', 'AAC': 'N', 'AAA': 'K', 'AAG': 'K',
-    'GAT': 'D', 'GAC': 'D', 'GAA': 'E', 'GAG': 'E',
-    'TGT': 'C', 'TGC': 'C', 'TGA': '*', 'TGG': 'W',
-    'CGT': 'R', 'CGC': 'R', 'CGA': 'R', 'CGG': 'R',
-    'AGT': 'S', 'AGC': 'S', 'AGA': 'R', 'AGG': 'R',
-    'GGT': 'G', 'GGC': 'G', 'GGA': 'G', 'GGG': 'G',
+    "TTT": "F",
+    "TTC": "F",
+    "TTA": "L",
+    "TTG": "L",
+    "CTT": "L",
+    "CTC": "L",
+    "CTA": "L",
+    "CTG": "L",
+    "ATT": "I",
+    "ATC": "I",
+    "ATA": "I",
+    "ATG": "M",
+    "GTT": "V",
+    "GTC": "V",
+    "GTA": "V",
+    "GTG": "V",
+    "TCT": "S",
+    "TCC": "S",
+    "TCA": "S",
+    "TCG": "S",
+    "CCT": "P",
+    "CCC": "P",
+    "CCA": "P",
+    "CCG": "P",
+    "ACT": "T",
+    "ACC": "T",
+    "ACA": "T",
+    "ACG": "T",
+    "GCT": "A",
+    "GCC": "A",
+    "GCA": "A",
+    "GCG": "A",
+    "TAT": "Y",
+    "TAC": "Y",
+    "TAA": "*",
+    "TAG": "*",
+    "CAT": "H",
+    "CAC": "H",
+    "CAA": "Q",
+    "CAG": "Q",
+    "AAT": "N",
+    "AAC": "N",
+    "AAA": "K",
+    "AAG": "K",
+    "GAT": "D",
+    "GAC": "D",
+    "GAA": "E",
+    "GAG": "E",
+    "TGT": "C",
+    "TGC": "C",
+    "TGA": "*",
+    "TGG": "W",
+    "CGT": "R",
+    "CGC": "R",
+    "CGA": "R",
+    "CGG": "R",
+    "AGT": "S",
+    "AGC": "S",
+    "AGA": "R",
+    "AGG": "R",
+    "GGT": "G",
+    "GGC": "G",
+    "GGA": "G",
+    "GGG": "G",
 }
 
-STOP_CODONS = {'TAA', 'TAG', 'TGA'}
-START_CODON = 'ATG'
+STOP_CODONS = {"TAA", "TAG", "TGA"}
+START_CODON = "ATG"
 
-COMPLEMENT = str.maketrans('ACGTacgtNn', 'TGCAtgcaNn')
+COMPLEMENT = str.maketrans("ACGTacgtNn", "TGCAtgcaNn")
 
 
 # ---------------------------------------------------------------------------
 # FASTA handling
 # ---------------------------------------------------------------------------
+
 
 def load_genome(fasta_path):
     """Load a FASTA file into a dict of {chrom: sequence (uppercase)}."""
@@ -55,16 +104,16 @@ def load_genome(fasta_path):
     chunks = []
     with open(fasta_path) as fh:
         for line in fh:
-            line = line.rstrip('\n')
-            if line.startswith('>'):
+            line = line.rstrip("\n")
+            if line.startswith(">"):
                 if current_name is not None:
-                    genome[current_name] = ''.join(chunks).upper()
+                    genome[current_name] = "".join(chunks).upper()
                 current_name = line[1:].split()[0]
                 chunks = []
             else:
                 chunks.append(line)
         if current_name is not None:
-            genome[current_name] = ''.join(chunks).upper()
+            genome[current_name] = "".join(chunks).upper()
     return genome
 
 
@@ -76,6 +125,7 @@ def reverse_complement(seq):
 # ---------------------------------------------------------------------------
 # Spliced transcript sequence
 # ---------------------------------------------------------------------------
+
 
 def build_spliced_seq(exons, strand, genome):
     """Build the spliced cDNA sequence for a transcript.
@@ -97,9 +147,9 @@ def build_spliced_seq(exons, strand, genome):
     parts = []
     for start, end in sorted(exons):
         parts.append(genome[start:end])
-    cdna = ''.join(parts)
+    cdna = "".join(parts)
 
-    if strand == '-':
+    if strand == "-":
         cdna = reverse_complement(cdna)
     return cdna
 
@@ -107,6 +157,7 @@ def build_spliced_seq(exons, strand, genome):
 # ---------------------------------------------------------------------------
 # ORF finding
 # ---------------------------------------------------------------------------
+
 
 def find_best_orf(cdna_seq, min_codons=100):
     """Find the best ORF in a cDNA sequence.
@@ -135,7 +186,7 @@ def find_best_orf(cdna_seq, min_codons=100):
     if seq_len < 3:
         return None
 
-    best_atg = None      # (length, start, end, partial5, partial3)
+    best_atg = None  # (length, start, end, partial5, partial3)
     best_non_atg = None
 
     for frame in range(3):
@@ -148,7 +199,7 @@ def find_best_orf(cdna_seq, min_codons=100):
         stop_positions = []
         i = frame
         while i + 3 <= seq_len:
-            codon = cdna_seq[i:i+3]
+            codon = cdna_seq[i : i + 3]
             if codon == START_CODON:
                 atg_positions.append(i)
             if codon in STOP_CODONS:
@@ -157,8 +208,7 @@ def find_best_orf(cdna_seq, min_codons=100):
 
         # Add sentinel at end for 3′-partial ORFs
         # (the stop position is at the very end of the sequence)
-        has_terminal_stop = len(stop_positions) > 0 and \
-            stop_positions[-1] + 3 >= seq_len - 2
+        has_terminal_stop = len(stop_positions) > 0 and stop_positions[-1] + 3 >= seq_len - 2
 
         # For each ATG, find the next stop
         for atg_pos in atg_positions:
@@ -185,7 +235,7 @@ def find_best_orf(cdna_seq, min_codons=100):
         orf_start = frame
         partial_5 = True
         # Check if the frame itself starts with ATG
-        if frame + 3 <= seq_len and cdna_seq[frame:frame+3] == START_CODON:
+        if frame + 3 <= seq_len and cdna_seq[frame : frame + 3] == START_CODON:
             partial_5 = False  # Actually has ATG, covered above
 
         if partial_5:
@@ -240,15 +290,16 @@ def translate(cds_seq):
     """
     protein = []
     for i in range(0, len(cds_seq) - 2, 3):
-        codon = cds_seq[i:i+3]
-        aa = CODON_TABLE.get(codon, 'X')
+        codon = cds_seq[i : i + 3]
+        aa = CODON_TABLE.get(codon, "X")
         protein.append(aa)
-    return ''.join(protein)
+    return "".join(protein)
 
 
 # ---------------------------------------------------------------------------
 # Genomic coordinate mapping
 # ---------------------------------------------------------------------------
+
 
 def map_cds_to_genomic(cds_start, cds_end, exons, strand):
     """Map transcript-relative CDS coordinates to genomic CDS intervals.
@@ -269,7 +320,7 @@ def map_cds_to_genomic(cds_start, cds_end, exons, strand):
     """
     # Build the exon order as seen in the transcript (5′→3′)
     sorted_exons = sorted(exons)
-    if strand == '-':
+    if strand == "-":
         # Transcript order is reverse of genomic order for minus strand
         tx_exons = list(reversed(sorted_exons))
     else:
@@ -289,7 +340,7 @@ def map_cds_to_genomic(cds_start, cds_end, exons, strand):
 
         if overlap_start < overlap_end:
             # Convert back to genomic coordinates
-            if strand == '+':
+            if strand == "+":
                 g_cds_start = g_start + (overlap_start - exon_tx_start)
                 g_cds_end = g_start + (overlap_end - exon_tx_start)
             else:
@@ -349,7 +400,7 @@ def derive_utrs(exons, cds_intervals, strand):
                 # Check for gaps between CDS intervals within this exon
                 pass  # Covered by the min/max logic above
 
-    if strand == '+':
+    if strand == "+":
         return upstream_utrs, downstream_utrs
     else:
         return downstream_utrs, upstream_utrs
@@ -358,6 +409,7 @@ def derive_utrs(exons, cds_intervals, strand):
 # ---------------------------------------------------------------------------
 # QC helpers
 # ---------------------------------------------------------------------------
+
 
 def get_start_stop_positions(cds_intervals, strand):
     """Return genomic positions of start and stop codons.
@@ -378,12 +430,12 @@ def get_start_stop_positions(cds_intervals, strand):
     if not cds_intervals:
         return None, None
     sorted_cds = sorted(cds_intervals)
-    if strand == '+':
-        start_pos = sorted_cds[0][0]       # leftmost CDS start
-        stop_pos = sorted_cds[-1][1] - 3   # 3bp before CDS end
+    if strand == "+":
+        start_pos = sorted_cds[0][0]  # leftmost CDS start
+        stop_pos = sorted_cds[-1][1] - 3  # 3bp before CDS end
     else:
         start_pos = sorted_cds[-1][1] - 3  # rightmost 3bp (start on - strand)
-        stop_pos = sorted_cds[0][0]        # leftmost CDS start (stop on -)
+        stop_pos = sorted_cds[0][0]  # leftmost CDS start (stop on -)
     return start_pos, stop_pos
 
 
@@ -416,10 +468,10 @@ def check_splice_sites(exons, strand, chrom_seq):
             continue
 
         # Raw genomic dinucleotides at intron boundaries
-        donor_raw = chrom_seq[intron_start:min(intron_start + 2, seq_len)]
-        acceptor_raw = chrom_seq[max(intron_end - 2, 0):intron_end]
+        donor_raw = chrom_seq[intron_start : min(intron_start + 2, seq_len)]
+        acceptor_raw = chrom_seq[max(intron_end - 2, 0) : intron_end]
 
-        if strand == '+':
+        if strand == "+":
             donor, acceptor = donor_raw, acceptor_raw
         else:
             # Reverse complement for minus strand
@@ -427,20 +479,22 @@ def check_splice_sites(exons, strand, chrom_seq):
             acceptor = reverse_complement(donor_raw)
 
         pair = (donor, acceptor)
-        if pair == ('GT', 'AG'):
-            cls = 'canonical'
-        elif pair in (('GC', 'AG'), ('AT', 'AC')):
-            cls = 'known_noncanonical'
+        if pair == ("GT", "AG"):
+            cls = "canonical"
+        elif pair in (("GC", "AG"), ("AT", "AC")):
+            cls = "known_noncanonical"
         else:
-            cls = 'noncanonical'
+            cls = "noncanonical"
 
-        results.append({
-            'intron_start': intron_start,
-            'intron_end': intron_end,
-            'donor': donor,
-            'acceptor': acceptor,
-            'class': cls,
-        })
+        results.append(
+            {
+                "intron_start": intron_start,
+                "intron_end": intron_end,
+                "donor": donor,
+                "acceptor": acceptor,
+                "class": cls,
+            }
+        )
     return results
 
 
@@ -467,17 +521,17 @@ def check_frame_continuity(cds_intervals, strand):
 def _make_orf_label(protein, is_partial_5, is_partial_3):
     """Build a compact ORF status string like 'ORF: 312aa ATG+STOP'."""
     if protein is None:
-        return 'no ORF'
+        return "no ORF"
     aa_len = len(protein)
     parts = []
     if not is_partial_5:
-        parts.append('ATG')
+        parts.append("ATG")
     else:
-        parts.append('partial5')
+        parts.append("partial5")
     if not is_partial_3:
-        parts.append('STOP')
+        parts.append("STOP")
     else:
-        parts.append('partial3')
+        parts.append("partial3")
     return f'ORF:{aa_len}aa {"|".join(parts)}'
 
 
@@ -485,8 +539,8 @@ def _make_orf_label(protein, is_partial_5, is_partial_3):
 # Per-transcript annotation
 # ---------------------------------------------------------------------------
 
-def annotate_transcript(exons_df, chrom, strand, genome,
-                        cds_df=None, min_codons=100):
+
+def annotate_transcript(exons_df, chrom, strand, genome, cds_df=None, min_codons=100):
     """Annotate a single transcript with CDS, UTR, and QC info.
 
     Parameters
@@ -520,7 +574,7 @@ def annotate_transcript(exons_df, chrom, strand, genome,
         'frame_ok': bool
         'orf_label': str (compact status string)
     """
-    exons = sorted(zip(exons_df['Start'].values, exons_df['End'].values))
+    exons = sorted(zip(exons_df["Start"].values, exons_df["End"].values))
 
     if chrom not in genome:
         return _empty_result(exons)
@@ -529,39 +583,37 @@ def annotate_transcript(exons_df, chrom, strand, genome,
 
     # Path A: CDS already provided
     if cds_df is not None and not cds_df.empty:
-        cds_intervals = sorted(
-            zip(cds_df['Start'].values, cds_df['End'].values))
+        cds_intervals = sorted(zip(cds_df["Start"].values, cds_df["End"].values))
         five_utr, three_utr = derive_utrs(exons, cds_intervals, strand)
         cdna = build_spliced_seq(exons, strand, chrom_seq)
         # Build CDS sequence for translation
         cds_seq_parts = []
-        for cs, ce in (sorted(cds_intervals) if strand == '+'
-                       else reversed(sorted(cds_intervals))):
+        for cs, ce in sorted(cds_intervals) if strand == "+" else reversed(sorted(cds_intervals)):
             cds_seq_parts.append(chrom_seq[cs:ce])
-        cds_nuc = ''.join(cds_seq_parts)
-        if strand == '-':
+        cds_nuc = "".join(cds_seq_parts)
+        if strand == "-":
             cds_nuc = reverse_complement(cds_nuc)
         protein = translate(cds_nuc)
         # Remove trailing stop
-        if protein.endswith('*'):
+        if protein.endswith("*"):
             protein = protein[:-1]
         start_pos, stop_pos = get_start_stop_positions(cds_intervals, strand)
         splice = check_splice_sites(exons, strand, chrom_seq)
         frame_ok = check_frame_continuity(cds_intervals, strand)
         return {
-            'exons': exons,
-            'cds': cds_intervals,
-            'five_prime_utr': five_utr,
-            'three_prime_utr': three_utr,
-            'cdna': cdna,
-            'protein': protein,
-            'is_partial_5': False,
-            'is_partial_3': False,
-            'start_pos': start_pos,
-            'stop_pos': stop_pos,
-            'splice_sites': splice,
-            'frame_ok': frame_ok,
-            'orf_label': _make_orf_label(protein, False, False),
+            "exons": exons,
+            "cds": cds_intervals,
+            "five_prime_utr": five_utr,
+            "three_prime_utr": three_utr,
+            "cdna": cdna,
+            "protein": protein,
+            "is_partial_5": False,
+            "is_partial_3": False,
+            "start_pos": start_pos,
+            "stop_pos": stop_pos,
+            "splice_sites": splice,
+            "frame_ok": frame_ok,
+            "orf_label": _make_orf_label(protein, False, False),
         }
 
     # Path B: predict ORF
@@ -570,19 +622,19 @@ def annotate_transcript(exons_df, chrom, strand, genome,
     splice = check_splice_sites(exons, strand, chrom_seq)
     if orf is None:
         return {
-            'exons': exons,
-            'cds': [],
-            'five_prime_utr': [],
-            'three_prime_utr': [],
-            'cdna': cdna,
-            'protein': None,
-            'is_partial_5': False,
-            'is_partial_3': False,
-            'start_pos': None,
-            'stop_pos': None,
-            'splice_sites': splice,
-            'frame_ok': True,
-            'orf_label': 'no ORF',
+            "exons": exons,
+            "cds": [],
+            "five_prime_utr": [],
+            "three_prime_utr": [],
+            "cdna": cdna,
+            "protein": None,
+            "is_partial_5": False,
+            "is_partial_3": False,
+            "start_pos": None,
+            "stop_pos": None,
+            "splice_sites": splice,
+            "frame_ok": True,
+            "orf_label": "no ORF",
         }
 
     cds_start, cds_end, is_partial_5, is_partial_3 = orf
@@ -591,7 +643,7 @@ def annotate_transcript(exons_df, chrom, strand, genome,
 
     cds_nuc = cdna[cds_start:cds_end]
     protein = translate(cds_nuc)
-    if protein.endswith('*'):
+    if protein.endswith("*"):
         protein = protein[:-1]
 
     start_pos, stop_pos = get_start_stop_positions(cds_intervals, strand)
@@ -602,43 +654,44 @@ def annotate_transcript(exons_df, chrom, strand, genome,
     frame_ok = check_frame_continuity(cds_intervals, strand)
 
     return {
-        'exons': exons,
-        'cds': cds_intervals,
-        'five_prime_utr': five_utr,
-        'three_prime_utr': three_utr,
-        'cdna': cdna,
-        'protein': protein,
-        'is_partial_5': is_partial_5,
-        'is_partial_3': is_partial_3,
-        'start_pos': start_pos,
-        'stop_pos': stop_pos,
-        'splice_sites': splice,
-        'frame_ok': frame_ok,
-        'orf_label': _make_orf_label(protein, is_partial_5, is_partial_3),
+        "exons": exons,
+        "cds": cds_intervals,
+        "five_prime_utr": five_utr,
+        "three_prime_utr": three_utr,
+        "cdna": cdna,
+        "protein": protein,
+        "is_partial_5": is_partial_5,
+        "is_partial_3": is_partial_3,
+        "start_pos": start_pos,
+        "stop_pos": stop_pos,
+        "splice_sites": splice,
+        "frame_ok": frame_ok,
+        "orf_label": _make_orf_label(protein, is_partial_5, is_partial_3),
     }
 
 
 def _empty_result(exons):
     return {
-        'exons': exons,
-        'cds': [],
-        'five_prime_utr': [],
-        'three_prime_utr': [],
-        'cdna': '',
-        'protein': None,
-        'is_partial_5': False,
-        'is_partial_3': False,
-        'start_pos': None,
-        'stop_pos': None,
-        'splice_sites': [],
-        'frame_ok': True,
-        'orf_label': 'no ORF',
+        "exons": exons,
+        "cds": [],
+        "five_prime_utr": [],
+        "three_prime_utr": [],
+        "cdna": "",
+        "protein": None,
+        "is_partial_5": False,
+        "is_partial_3": False,
+        "start_pos": None,
+        "stop_pos": None,
+        "splice_sites": [],
+        "frame_ok": True,
+        "orf_label": "no ORF",
     }
 
 
 # ---------------------------------------------------------------------------
 # Batch annotation
 # ---------------------------------------------------------------------------
+
 
 def annotate_all_transcripts(exon_df, genome, cds_df=None, min_codons=100):
     """Annotate all transcripts in a DataFrame.
@@ -664,16 +717,16 @@ def annotate_all_transcripts(exon_df, genome, cds_df=None, min_codons=100):
     # Build CDS lookup
     cds_by_tid = {}
     if cds_df is not None and not cds_df.empty:
-        for tid, grp in cds_df.groupby('transcript_id'):
+        for tid, grp in cds_df.groupby("transcript_id"):
             cds_by_tid[tid] = grp
 
-    for tid, grp in exon_df.groupby('transcript_id'):
-        chrom = grp['Chromosome'].iloc[0]
-        strand = grp['Strand'].iloc[0]
+    for tid, grp in exon_df.groupby("transcript_id"):
+        chrom = grp["Chromosome"].iloc[0]
+        strand = grp["Strand"].iloc[0]
         existing_cds = cds_by_tid.get(tid, None)
         results[tid] = annotate_transcript(
-            grp, chrom, strand, genome,
-            cds_df=existing_cds, min_codons=min_codons)
+            grp, chrom, strand, genome, cds_df=existing_cds, min_codons=min_codons
+        )
 
     return results
 
@@ -681,6 +734,7 @@ def annotate_all_transcripts(exon_df, genome, cds_df=None, min_codons=100):
 # ---------------------------------------------------------------------------
 # GFF3 output helpers
 # ---------------------------------------------------------------------------
+
 
 def annotations_to_gff_rows(annotations, transcript_id, parent_tid):
     """Convert annotation dict to GFF3-style row dicts.
@@ -699,51 +753,78 @@ def write_augmented_gff3(input_gff3, annotations, output_path):
 
     new_rows = []
     for tid, ann in annotations.items():
-        if not ann['cds']:
+        if not ann["cds"]:
             continue
 
         # Find the chromosome and strand for this transcript
-        tx_rows = df[(df.get('Parent', df.get('transcript_id', '')) == tid) |
-                     (df.get('ID', '') == tid)]
+        tx_rows = df[
+            (df.get("Parent", df.get("transcript_id", "")) == tid) | (df.get("ID", "") == tid)
+        ]
         if tx_rows.empty:
             continue
-        chrom = tx_rows['Chromosome'].iloc[0]
-        strand = tx_rows['Strand'].iloc[0]
+        chrom = tx_rows["Chromosome"].iloc[0]
+        strand = tx_rows["Strand"].iloc[0]
 
-        for i, (s, e) in enumerate(ann['cds']):
-            new_rows.append({
-                'Chromosome': chrom, 'Source': 'GeneBuilder',
-                'Feature': 'CDS', 'Start': s, 'End': e,
-                'Score': '.', 'Strand': strand, 'Frame': '.',
-                'ID': f'{tid}.cds{i+1}', 'Parent': tid,
-            })
-        for i, (s, e) in enumerate(ann['five_prime_utr']):
-            new_rows.append({
-                'Chromosome': chrom, 'Source': 'GeneBuilder',
-                'Feature': 'five_prime_UTR', 'Start': s, 'End': e,
-                'Score': '.', 'Strand': strand, 'Frame': '.',
-                'ID': f'{tid}.5utr{i+1}', 'Parent': tid,
-            })
-        for i, (s, e) in enumerate(ann['three_prime_utr']):
-            new_rows.append({
-                'Chromosome': chrom, 'Source': 'GeneBuilder',
-                'Feature': 'three_prime_UTR', 'Start': s, 'End': e,
-                'Score': '.', 'Strand': strand, 'Frame': '.',
-                'ID': f'{tid}.3utr{i+1}', 'Parent': tid,
-            })
+        for i, (s, e) in enumerate(ann["cds"]):
+            new_rows.append(
+                {
+                    "Chromosome": chrom,
+                    "Source": "GeneBuilder",
+                    "Feature": "CDS",
+                    "Start": s,
+                    "End": e,
+                    "Score": ".",
+                    "Strand": strand,
+                    "Frame": ".",
+                    "ID": f"{tid}.cds{i+1}",
+                    "Parent": tid,
+                }
+            )
+        for i, (s, e) in enumerate(ann["five_prime_utr"]):
+            new_rows.append(
+                {
+                    "Chromosome": chrom,
+                    "Source": "GeneBuilder",
+                    "Feature": "five_prime_UTR",
+                    "Start": s,
+                    "End": e,
+                    "Score": ".",
+                    "Strand": strand,
+                    "Frame": ".",
+                    "ID": f"{tid}.5utr{i+1}",
+                    "Parent": tid,
+                }
+            )
+        for i, (s, e) in enumerate(ann["three_prime_utr"]):
+            new_rows.append(
+                {
+                    "Chromosome": chrom,
+                    "Source": "GeneBuilder",
+                    "Feature": "three_prime_UTR",
+                    "Start": s,
+                    "End": e,
+                    "Score": ".",
+                    "Strand": strand,
+                    "Frame": ".",
+                    "ID": f"{tid}.3utr{i+1}",
+                    "Parent": tid,
+                }
+            )
 
     if new_rows:
         new_df = pd.DataFrame(new_rows)
         df = pd.concat([df, new_df], ignore_index=True)
 
-    df = df.sort_values(['Chromosome', 'Start'])
-    with open(output_path, 'w') as fh:
-        fh.write('##gff-version 3\n')
+    df = df.sort_values(["Chromosome", "Start"])
+    with open(output_path, "w") as fh:
+        fh.write("##gff-version 3\n")
         for _, r in df.iterrows():
             attr = f"ID={r.get('ID', '.')};Parent={r.get('Parent', '.')}"
-            fh.write(f"{r['Chromosome']}\t{r.get('Source', 'GeneBuilder')}\t"
-                     f"{r['Feature']}\t{r['Start']}\t{r['End']}\t.\t"
-                     f"{r['Strand']}\t.\t{attr}\n")
+            fh.write(
+                f"{r['Chromosome']}\t{r.get('Source', 'GeneBuilder')}\t"
+                f"{r['Feature']}\t{r['Start']}\t{r['End']}\t.\t"
+                f"{r['Strand']}\t.\t{attr}\n"
+            )
 
     print(f"Wrote augmented GFF3 to {output_path}")
 
@@ -752,58 +833,59 @@ def write_augmented_gff3(input_gff3, annotations, output_path):
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description='Annotate transcripts with CDS and UTR features')
-    parser.add_argument('--input', required=True,
-                        help='Input GFF3 or GTF with exon features')
-    parser.add_argument('--genome', required=True,
-                        help='Genome FASTA file')
-    parser.add_argument('--output', required=True,
-                        help='Output augmented GFF3')
-    parser.add_argument('--min-codons', type=int, default=100,
-                        help='Minimum ORF length in codons (default: 100)')
+    parser = argparse.ArgumentParser(description="Annotate transcripts with CDS and UTR features")
+    parser.add_argument("--input", required=True, help="Input GFF3 or GTF with exon features")
+    parser.add_argument("--genome", required=True, help="Genome FASTA file")
+    parser.add_argument("--output", required=True, help="Output augmented GFF3")
+    parser.add_argument(
+        "--min-codons", type=int, default=100, help="Minimum ORF length in codons (default: 100)"
+    )
     args = parser.parse_args()
 
-    print('Loading genome...')
+    print("Loading genome...")
     genome = load_genome(args.genome)
-    print(f'  Loaded {len(genome)} sequences')
+    print(f"  Loaded {len(genome)} sequences")
 
-    print('Loading annotations...')
-    if args.input.endswith('.gtf'):
+    print("Loading annotations...")
+    if args.input.endswith(".gtf"):
         gr = pr.read_gtf(args.input)
     else:
         gr = pr.read_gff3(args.input)
     df = gr.df
 
     # Separate exons and CDS
-    exon_df = df[df['Feature'] == 'exon'].copy()
-    cds_df = df[df['Feature'] == 'CDS'].copy()
+    exon_df = df[df["Feature"] == "exon"].copy()
+    cds_df = df[df["Feature"] == "CDS"].copy()
 
     # Ensure transcript_id column
     for sub_df in [exon_df, cds_df]:
-        if 'transcript_id' not in sub_df.columns:
-            if 'Parent' in sub_df.columns:
-                sub_df['transcript_id'] = sub_df['Parent']
+        if "transcript_id" not in sub_df.columns:
+            if "Parent" in sub_df.columns:
+                sub_df["transcript_id"] = sub_df["Parent"]
 
     if cds_df.empty:
         cds_df = None
 
-    print(f'  {exon_df["transcript_id"].nunique()} transcripts, '
-          f'{len(cds_df) if cds_df is not None else 0} existing CDS features')
+    print(
+        f'  {exon_df["transcript_id"].nunique()} transcripts, '
+        f"{len(cds_df) if cds_df is not None else 0} existing CDS features"
+    )
 
-    print('Annotating transcripts...')
+    print("Annotating transcripts...")
     annotations = annotate_all_transcripts(
-        exon_df, genome, cds_df=cds_df, min_codons=args.min_codons)
+        exon_df, genome, cds_df=cds_df, min_codons=args.min_codons
+    )
 
-    n_with_cds = sum(1 for a in annotations.values() if a['cds'])
+    n_with_cds = sum(1 for a in annotations.values() if a["cds"])
     n_total = len(annotations)
-    print(f'  {n_with_cds}/{n_total} transcripts have CDS')
+    print(f"  {n_with_cds}/{n_total} transcripts have CDS")
 
-    print('Writing output...')
+    print("Writing output...")
     write_augmented_gff3(args.input, annotations, args.output)
-    print('Done.')
+    print("Done.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -8,14 +8,14 @@ import tempfile
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import load_config, PipelineConfig
+from config import PipelineConfig, load_config
 
 
 class TestDefaultConfig:
     def test_loads_without_yaml(self):
         """Default config should load even with no YAML file."""
         cfg = PipelineConfig()
-        assert cfg.preset == 'fungi'
+        assert cfg.preset == "fungi"
         assert cfg.orf.min_codons == 33
         assert cfg.protein_filter.min_protein_aa == 30
 
@@ -36,20 +36,17 @@ class TestDefaultConfig:
 
 class TestYamlOverride:
     def test_override_min_codons(self, tmp_path):
-        yaml_file = tmp_path / 'test.yaml'
-        yaml_file.write_text('orf:\n  min_codons: 50\n')
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text("orf:\n  min_codons: 50\n")
         cfg = load_config(str(yaml_file))
         assert cfg.orf.min_codons == 50
         # Other values should remain default
         assert cfg.protein_filter.min_protein_aa == 30
 
     def test_override_nested(self, tmp_path):
-        yaml_file = tmp_path / 'test.yaml'
+        yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text(
-            'scoring:\n'
-            '  max_isoforms_per_locus: 5\n'
-            '  weights:\n'
-            '    helixer: 3.0\n'
+            "scoring:\n" "  max_isoforms_per_locus: 5\n" "  weights:\n" "    helixer: 3.0\n"
         )
         cfg = load_config(str(yaml_file))
         assert cfg.scoring.max_isoforms_per_locus == 5
@@ -57,23 +54,19 @@ class TestYamlOverride:
         assert cfg.scoring.weights.scallop == 1.0  # unchanged
 
     def test_override_list(self, tmp_path):
-        yaml_file = tmp_path / 'test.yaml'
-        yaml_file.write_text(
-            'qc:\n'
-            '  skip_orf_inference_tracks:\n'
-            '    - UniProt\n'
-        )
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text("qc:\n" "  skip_orf_inference_tracks:\n" "    - UniProt\n")
         cfg = load_config(str(yaml_file))
-        assert list(cfg.qc.skip_orf_inference_tracks) == ['UniProt']
-    
+        assert list(cfg.qc.skip_orf_inference_tracks) == ["UniProt"]
+
     def test_unknown_key_raises(self, tmp_path):
-        yaml_file = tmp_path / 'test.yaml'
-        yaml_file.write_text('nonexistent_key: true\n')
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text("nonexistent_key: true\n")
         with pytest.raises(ValueError, match="Unknown configuration key"):
             cfg = load_config(str(yaml_file))
 
     def test_missing_file_returns_defaults(self):
-        cfg = load_config('/nonexistent/path.yaml')
+        cfg = load_config("/nonexistent/path.yaml")
         assert cfg.orf.min_codons == 33
 
 
@@ -91,13 +84,13 @@ class TestUtrSupportConfig:
         assert cfg.utr.max_end_extension_bp is None
 
     def test_utr_support_yaml_override(self, tmp_path):
-        yaml_file = tmp_path / 'test.yaml'
+        yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text(
-            'utr:\n'
-            '  require_end_support: false\n'
+            "utr:\n"
+            "  require_end_support: false\n"
             '  end_support_mode: "protein_validated"\n'
-            '  end_support_sources:\n'
-            '    - Helixer\n'
+            "  end_support_sources:\n"
+            "    - Helixer\n"
             '  fallback_policy_when_unsupported: "drop_transcript"\n'
         )
         cfg = load_config(str(yaml_file))
@@ -107,17 +100,17 @@ class TestUtrSupportConfig:
         assert cfg.utr.fallback_policy_when_unsupported == "drop_transcript"
 
     def test_invalid_end_support_mode_raises(self, tmp_path):
-        yaml_file = tmp_path / 'test.yaml'
+        yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text('utr:\n  end_support_mode: "invalid_mode"\n')
         with pytest.raises(ValueError, match="Invalid end_support_mode: invalid_mode"):
             load_config(str(yaml_file))
 
     def test_invalid_fallback_policy_raises(self, tmp_path):
-        yaml_file = tmp_path / 'test.yaml'
+        yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text('utr:\n  fallback_policy_when_unsupported: "magic"\n')
         with pytest.raises(ValueError, match="Invalid fallback_policy_when_unsupported: magic"):
             load_config(str(yaml_file))
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
