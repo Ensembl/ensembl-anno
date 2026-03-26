@@ -1,0 +1,90 @@
+[project]
+name = "gene-model-builder"
+version = "2.0.0"
+description = "Consensus gene model builder for eukaryotic genomes"
+requires-python = ">=3.8"
+dependencies = [
+    "pandas>=2.0,<3",
+    "pyranges>=0.0.120,<=0.1.4",
+    "biopython",
+    "pyyaml",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+    "black>=24.0",
+    "isort>=5.12",
+]
+
+# ---------------------------------------------------------------------------
+# black
+# ---------------------------------------------------------------------------
+[tool.black]
+line-length = 99
+target-version = ["py38"]
+
+# ---------------------------------------------------------------------------
+# isort
+# ---------------------------------------------------------------------------
+[tool.isort]
+profile = "black"
+line_length = 99
+known_first_party = [
+    "config",
+    "evidence_filter",
+    "scoring",
+    "annotate_cds_utrs",
+    "fasta_export",
+    "gff3_validate",
+    "dedup_genes",
+    "protein_validation",
+    "reporting",
+    "subset_utils",
+    "visualize_disagreements",
+]
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 99
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "E501",   # line too long — handled by black
+    "E741",   # ambiguous variable name (common in genomics: l, s, e)
+    "B905",   # zip strict — not available in Python 3.8
+    "SIM108", # ternary — sometimes less readable
+    "UP007",  # use X | Y for union types — not available in 3.8
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "SIM", "RUF"]
+"debug_scoring.py" = ["F", "E"]
+"check_lengths.py" = ["F", "E"]
+"gen_extra_plots.py" = ["F", "E"]
+"test_clustering.py" = ["F", "E"]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: end-to-end tests using real data (may be slow)",
+    "external_tools: tests requiring DIAMOND / Psauron (skipped unless RUN_EXTERNAL_TOOLS=1)",
+]
