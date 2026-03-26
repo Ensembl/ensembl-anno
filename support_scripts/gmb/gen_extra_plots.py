@@ -1,7 +1,8 @@
 import sys
 sys.path.insert(0, '.')
+from subset_utils import load_assembly_mapping, remap_df_seqnames
 from compare_annotations import (
-    load_assembly_mapping, remap_df_seqnames, load_gff,
+    load_gff,
     load_consensus_genes, plot_comparison_locus
 )
 import pandas as pd

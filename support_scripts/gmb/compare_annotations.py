@@ -18,7 +18,8 @@ Usage:
         --output-dir validation/ \
         [--evidence-gtfs scallop.gtf stringtie.gtf orthodb.gtf uniprot.gtf] \
         [--helixer helixer_remapped.gff3] \
-        [--plots-per-category 3]
+        [--plots-per-category 3] \
+        [--sample-loci 50 --seed 42]
 
 Options for Seqname Mapping:
     --assembly-report: Standard NCBI assembly_report.txt to map GenBank accessions to chromosome names.
@@ -50,70 +51,20 @@ from annotate_cds_utrs import (
     reverse_complement,
 )
 
+from subset_utils import (
+    build_mapping,
+    remap_df_seqnames,
+    add_subset_args,
+    resolve_subset_regions,
+    subset_df_by_regions,
+    write_subset_manifest,
+)
+
 # ---------------------------------------------------------------------------
-# Seqname remapping
+# Seqname remapping — imported from subset_utils
+# (load_assembly_mapping, load_seqname_map, remap_df_seqnames are now in
+#  subset_utils.py; build_mapping merges them with correct precedence)
 # ---------------------------------------------------------------------------
-
-def load_assembly_mapping(report_path):
-    """Parse NCBI assembly report → {GenBank_accession: chromosome_name}."""
-    mapping = {}
-    with open(report_path) as fh:
-        for line in fh:
-            if line.startswith('#'):
-                continue
-            parts = line.strip().split('\t')
-            if len(parts) >= 5 and parts[2] != 'na':
-                mapping[parts[4]] = parts[2]
-    return mapping
-
-
-def load_seqname_map(path):
-    """Parse custom seqname mapping TSV/CSV.
-    Expects 2 columns: from_seqname, to_seqname.
-    Ignores comments (#) and handles optional headers.
-    """
-    mapping = {}
-    with open(path) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            parts = line.split('\t')
-            if len(parts) < 2:
-                parts = line.split(',')
-            
-            if len(parts) >= 2:
-                from_id = parts[0].strip()
-                to_id = parts[1].strip()
-                if from_id.lower() in ('from_seqname', 'from', 'seqname', 'old', 'old_name') and 'to' in to_id.lower():
-                    continue
-                mapping[from_id] = to_id
-    return mapping
-
-
-def remap_df_seqnames(df, mapping, label=""):
-    """Remap Chromosome column using a mapping dict.
-    Also optionally prints safety information about uniquely mapped and unmapped seqnames.
-    """
-    if df is None or df.empty or not mapping:
-        return df
-
-    df = df.copy()
-    
-    unique_before = set(df['Chromosome'].unique())
-    num_before = len(unique_before)
-    
-    df['Chromosome'] = df['Chromosome'].map(lambda x: mapping.get(x, x))
-    
-    unique_after = set(df['Chromosome'].unique())
-    num_after = len(unique_after)
-    
-    if label:
-        unmapped = sorted(list(x for x in unique_before if x not in mapping))
-        print(f"  {label} seqnames remapped: {num_before} unique -> {num_after} unique")
-        if unmapped:
-            print(f"  Warning: {label} has unmapped seqnames: {', '.join(unmapped)}")
-    return df
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +165,27 @@ def _exon_intervals(exon_df, tid):
     return sorted(zip(rows['Start'].values, rows['End'].values))
 
 
+def _group_by_transcript(exons_df, cds_df=None):
+    """Group exons and CDS by transcript_id.
+    Returns: dict of {transcript_id: {'exons': [(s,e)...], 'cds': [(s,e)...]}}
+    """
+    tx_dict = defaultdict(lambda: {'exons': [], 'cds': []})
+    for _, row in exons_df.iterrows():
+        tid = row['transcript_id']
+        tx_dict[tid]['exons'].append((row['Start'], row['End']))
+    if cds_df is not None and not cds_df.empty:
+        for _, row in cds_df.iterrows():
+            tid = row.get('transcript_id', row.get('Parent', ''))
+            if not tid:
+                continue
+            tx_dict[tid]['cds'].append((row['Start'], row['End']))
+    
+    for tid, data in tx_dict.items():
+        data['exons'] = sorted(data['exons'])
+        data['cds'] = sorted(data['cds'])
+    return tx_dict
+
+
 def _intron_chain(exons):
     """Return intron chain signature from sorted exon list."""
     if len(exons) < 2:
@@ -238,9 +210,10 @@ def _exon_overlap_fraction(exons_a, exons_b):
     return covered / total_a
 
 
-def classify_locus_pairs(ref_genes, ref_exons, cons_genes, cons_exons,
-                         cons_mrna):
-    """Classify each reference gene and each consensus gene.
+def classify_locus_pairs(ref_genes, ref_exons, ref_cds, cons_genes, cons_exons,
+                         cons_cds, cons_mrna):
+    """Classify each reference gene and each consensus gene using 
+    transcript-to-transcript comparisons (isoform-aware).
 
     Returns:
         ref_results: list of dicts (one per ref gene)
@@ -248,16 +221,36 @@ def classify_locus_pairs(ref_genes, ref_exons, cons_genes, cons_exons,
     """
     print("  Classifying loci...")
 
+    # Build ref transcript intervals
+    ref_tx = _group_by_transcript(ref_exons, ref_cds)
+    # Build cons transcript intervals
+    cons_tx = _group_by_transcript(cons_exons, cons_cds)
+
     # Build ref gene entries
     ref_entries = []
     for _, g in ref_genes.iterrows():
         gid = g.get('ID', g.get('gene_id', g.get('transcript_id', '')))
+        # get all transcript ids for this gene
+        mask = (ref_exons['Parent'] == gid)
+        if 'gene_id' in ref_exons.columns:
+            mask = mask | (ref_exons['gene_id'] == gid)
+        tids = ref_exons[mask]['transcript_id'].unique()
+        # Fallback if no matching standard ids
+        if len(tids) == 0:
+            gene_span = (g['Chromosome'], g['Start'], g['End'])
+            tids = ref_exons[
+                (ref_exons['Chromosome'] == gene_span[0]) & 
+                (ref_exons['Start'] >= gene_span[1]) & 
+                (ref_exons['End'] <= gene_span[2])
+            ]['transcript_id'].unique()
+
         ref_entries.append({
             'gene_id': gid,
             'chrom': g['Chromosome'],
             'start': g['Start'],
             'end': g['End'],
             'strand': g['Strand'],
+            'tids': list(tids)
         })
 
     # Build consensus gene entries
@@ -279,6 +272,19 @@ def classify_locus_pairs(ref_genes, ref_exons, cons_genes, cons_exons,
                         evidence = mrna_rows.iloc[0].get(attr_col, '')
                         break
 
+        # get all transcript ids for this consensus gene
+        mask = (cons_exons['Parent'] == gid)
+        if 'gene_id' in cons_exons.columns:
+            mask = mask | (cons_exons['gene_id'] == gid)
+        tids = cons_exons[mask]['transcript_id'].unique()
+        if len(tids) == 0:
+            gene_span = (g['Chromosome'], g['Start'], g['End'])
+            tids = cons_exons[
+                (cons_exons['Chromosome'] == gene_span[0]) & 
+                (cons_exons['Start'] >= gene_span[1]) & 
+                (cons_exons['End'] <= gene_span[2])
+            ]['transcript_id'].unique()
+
         cons_entries.append({
             'gene_id': gid,
             'chrom': g['Chromosome'],
@@ -286,6 +292,7 @@ def classify_locus_pairs(ref_genes, ref_exons, cons_genes, cons_exons,
             'end': g['End'],
             'strand': g['Strand'],
             'evidence': evidence,
+            'tids': list(tids)
         })
 
     # Build PyRanges for overlap detection
@@ -334,9 +341,12 @@ def classify_locus_pairs(ref_genes, ref_exons, cons_genes, cons_exons,
         matches = ref_to_cons.get(gid, [])
 
         if not matches:
-            entry['classification'] = 'Missed'
-            entry['matched_id'] = ''
-            entry['exon_overlap'] = 0.0
+            entry.update({
+                'classification': 'Missed', 'classification_cds': 'Missed',
+                'matched_id': '', 'best_ref_transcript_id': '',
+                'exon_overlap': 0.0, 'intron_chain_match': False,
+                'cds_overlap': 0.0, 'cds_intron_chain_match': False,
+            })
             ref_results.append(entry)
             continue
 
@@ -345,74 +355,92 @@ def classify_locus_pairs(ref_genes, ref_exons, cons_genes, cons_exons,
         diff_strand_matches = [m for m in matches if not m['same_strand']]
 
         if not same_strand_matches and diff_strand_matches:
-            entry['classification'] = 'Strand_Mismatch'
-            entry['matched_id'] = diff_strand_matches[0]['cons_id']
-            entry['exon_overlap'] = 0.0
+            entry.update({
+                'classification': 'Strand_Mismatch', 'classification_cds': 'Strand_Mismatch',
+                'matched_id': diff_strand_matches[0]['cons_id'], 'best_ref_transcript_id': '',
+                'exon_overlap': 0.0, 'intron_chain_match': False,
+                'cds_overlap': 0.0, 'cds_intron_chain_match': False,
+            })
             ref_results.append(entry)
             continue
 
-        # Get exon intervals for ref gene (first transcript)
-        ref_tids = ref_exons[
-            ref_exons['Chromosome'] == entry['chrom']
-        ]['transcript_id'].unique()
-        ref_gene_exon_tids = [
-            t for t in ref_tids
-            if any(gid in str(t) for _ in [1])
-        ]
-        # Simpler: get exons overlapping the gene span
-        ref_gene_exons_df = ref_exons[
-            (ref_exons['Chromosome'] == entry['chrom']) &
-            (ref_exons['Start'] >= entry['start']) &
-            (ref_exons['End'] <= entry['end'])
-        ]
-        ref_gene_exons = sorted(zip(
-            ref_gene_exons_df['Start'].values,
-            ref_gene_exons_df['End'].values))
-
-        best_class = 'Partial_Match'
-        best_match = same_strand_matches[0]['cons_id']
-        best_ovl = 0.0
+        best_exon_class, best_cds_class = 'Partial_Match', 'Partial_Match'
+        best_match_gid = same_strand_matches[0]['cons_id']
+        best_match_tid = ''
+        best_exon_ovl, best_cds_ovl = 0.0, 0.0
+        best_exon_ic, best_cds_ic = False, False
+        best_priority = -1 # Higher is better: 3=exact, 2=high_ovl_only, 1=partial
 
         for m in same_strand_matches:
             cgid = m['cons_id']
-            # Get consensus exons for this gene
-            cons_gene_entry = next(
-                (c for c in cons_entries if c['gene_id'] == cgid), None)
-            if cons_gene_entry is None:
-                continue
+            cons_gene_entry = next((c for c in cons_entries if c['gene_id'] == cgid), None)
+            if not cons_gene_entry: continue
 
-            cons_gene_exons_df = cons_exons[
-                (cons_exons['Chromosome'] == cons_gene_entry['chrom']) &
-                (cons_exons['Start'] >= cons_gene_entry['start']) &
-                (cons_exons['End'] <= cons_gene_entry['end'])
-            ]
-            cons_gene_exons = sorted(zip(
-                cons_gene_exons_df['Start'].values,
-                cons_gene_exons_df['End'].values))
+            for r_tid in entry['tids']:
+                rt_data = ref_tx.get(r_tid, {'exons': [], 'cds': []})
+                rt_exons, rt_cds = rt_data['exons'], rt_data['cds']
+                if not rt_exons: continue
+                rt_chain = _intron_chain(rt_exons)
+                rt_cds_chain = _intron_chain(rt_cds)
 
-            if ref_gene_exons and cons_gene_exons:
-                ovl_a = _exon_overlap_fraction(ref_gene_exons, cons_gene_exons)
-                ovl_b = _exon_overlap_fraction(cons_gene_exons, ref_gene_exons)
-                recip = min(ovl_a, ovl_b)
+                for c_tid in cons_gene_entry['tids']:
+                    ct_data = cons_tx.get(c_tid, {'exons': [], 'cds': []})
+                    ct_exons, ct_cds = ct_data['exons'], ct_data['cds']
+                    if not ct_exons: continue
 
-                if recip > best_ovl:
-                    best_ovl = recip
-                    best_match = cgid
+                    # Exon metrics
+                    ovl_ex_a = _exon_overlap_fraction(rt_exons, ct_exons)
+                    ovl_ex_b = _exon_overlap_fraction(ct_exons, rt_exons)
+                    recip_ex = min(ovl_ex_a, ovl_ex_b)
+                    ic_ex_match = (rt_chain == _intron_chain(ct_exons))
+                    
+                    ex_class = 'Partial_Match'
+                    if recip_ex >= 0.8:
+                        ex_class = 'Exact_Match' if ic_ex_match else 'Structural_Mismatch'
 
-                    ref_chain = _intron_chain(ref_gene_exons)
-                    cons_chain = _intron_chain(cons_gene_exons)
+                    # Priority logic for choosing the representative transcript pair
+                    priority = 0
+                    if ic_ex_match and recip_ex >= 0.8: priority = 3
+                    elif recip_ex >= 0.8: priority = 2
+                    elif recip_ex > 0: priority = 1
+                    
+                    if priority > best_priority or (priority == best_priority and recip_ex > best_exon_ovl):
+                        best_priority = priority
+                        best_exon_ovl = recip_ex
+                        best_exon_ic = ic_ex_match
+                        best_exon_class = ex_class
+                        best_match_gid = cgid
+                        best_match_tid = c_tid
 
-                    if recip >= 0.8:
-                        if ref_chain == cons_chain:
-                            best_class = 'Exact_Match'
+                        # Evaluate CDS metrics for this pair
+                        if rt_cds and ct_cds:
+                            ovl_cds_a = _exon_overlap_fraction(rt_cds, ct_cds)
+                            ovl_cds_b = _exon_overlap_fraction(ct_cds, rt_cds)
+                            recip_cds = min(ovl_cds_a, ovl_cds_b)
+                            ic_cds_match = (rt_cds_chain == _intron_chain(ct_cds))
+                            
+                            cds_class = 'Partial_Match'
+                            if recip_cds >= 0.8:
+                                cds_class = 'Exact_Match' if ic_cds_match else 'Structural_Mismatch'
+                            
+                            best_cds_ovl = recip_cds
+                            best_cds_ic = ic_cds_match
+                            best_cds_class = cds_class
                         else:
-                            best_class = 'Structural_Mismatch'
-                    else:
-                        best_class = 'Partial_Match'
+                            best_cds_ovl = 0.0
+                            best_cds_ic = False
+                            best_cds_class = 'No_CDS' if not rt_cds else 'Missed'
 
-        entry['classification'] = best_class
-        entry['matched_id'] = best_match
-        entry['exon_overlap'] = best_ovl
+        entry.update({
+            'classification': best_exon_class,
+            'classification_cds': best_cds_class,
+            'matched_id': best_match_gid,
+            'best_ref_transcript_id': best_match_tid, # Note: this is actually the consensus tid that matched the ref, so naming is slightly overloaded but consistent
+            'exon_overlap': best_exon_ovl,
+            'intron_chain_match': best_exon_ic,
+            'cds_overlap': best_cds_ovl,
+            'cds_intron_chain_match': best_cds_ic,
+        })
         ref_results.append(entry)
 
     # Classify consensus genes
@@ -425,21 +453,99 @@ def classify_locus_pairs(ref_genes, ref_exons, cons_genes, cons_exons,
         matches = cons_to_ref.get(gid, [])
 
         if not matches:
-            entry['classification'] = 'Novel'
-            entry['matched_id'] = ''
-            entry['exon_overlap'] = 0.0
+            entry.update({
+                'classification': 'Novel', 'classification_cds': 'Novel',
+                'matched_id': '', 'best_ref_transcript_id': '',
+                'exon_overlap': 0.0, 'intron_chain_match': False,
+                'cds_overlap': 0.0, 'cds_intron_chain_match': False
+            })
             cons_results.append(entry)
             continue
 
-        # Find the best matching ref
+        # Find the best matching ref based on transcripts
         same_strand = [m for m in matches if m['same_strand']]
-        if same_strand:
-            entry['classification'] = 'Matched'
-            entry['matched_id'] = same_strand[0]['ref_id']
-        else:
-            entry['classification'] = 'Strand_Mismatch'
-            entry['matched_id'] = matches[0]['ref_id']
-        entry['exon_overlap'] = 0.0
+        if not same_strand:
+            entry.update({
+                'classification': 'Strand_Mismatch', 'classification_cds': 'Strand_Mismatch',
+                'matched_id': matches[0]['ref_id'], 'best_ref_transcript_id': '',
+                'exon_overlap': 0.0, 'intron_chain_match': False,
+                'cds_overlap': 0.0, 'cds_intron_chain_match': False
+            })
+            cons_results.append(entry)
+            continue
+            
+        best_exon_class, best_cds_class = 'Partial_Match', 'Partial_Match'
+        best_match_gid = same_strand[0]['ref_id']
+        best_match_tid = ''
+        best_exon_ovl, best_cds_ovl = 0.0, 0.0
+        best_exon_ic, best_cds_ic = False, False
+        best_priority = -1
+
+        for m in same_strand:
+            rgid = m['ref_id']
+            ref_gene_entry = next((r for r in ref_entries if r['gene_id'] == rgid), None)
+            if not ref_gene_entry: continue
+
+            for c_tid in entry['tids']:
+                ct_data = cons_tx.get(c_tid, {'exons': [], 'cds': []})
+                ct_exons, ct_cds = ct_data['exons'], ct_data['cds']
+                if not ct_exons: continue
+                ct_chain = _intron_chain(ct_exons)
+                ct_cds_chain = _intron_chain(ct_cds)
+
+                for r_tid in ref_gene_entry['tids']:
+                    rt_data = ref_tx.get(r_tid, {'exons': [], 'cds': []})
+                    rt_exons, rt_cds = rt_data['exons'], rt_data['cds']
+                    if not rt_exons: continue
+
+                    # Exon metrics
+                    ovl_ex_a = _exon_overlap_fraction(ct_exons, rt_exons)
+                    ovl_ex_b = _exon_overlap_fraction(rt_exons, ct_exons)
+                    recip_ex = min(ovl_ex_a, ovl_ex_b)
+                    ic_ex_match = (ct_chain == _intron_chain(rt_exons))
+                    
+                    ex_class = 'Partial_Match'
+                    if recip_ex >= 0.8:
+                        ex_class = 'Exact_Match' if ic_ex_match else 'Structural_Mismatch'
+
+                    priority = 0
+                    if ic_ex_match and recip_ex >= 0.8: priority = 3
+                    elif recip_ex >= 0.8: priority = 2
+                    elif recip_ex > 0: priority = 1
+
+                    if priority > best_priority or (priority == best_priority and recip_ex > best_exon_ovl):
+                        best_priority = priority
+                        best_exon_ovl = recip_ex
+                        best_exon_ic = ic_ex_match
+                        best_exon_class = ex_class
+                        best_match_gid = rgid
+                        best_match_tid = r_tid
+
+                        # CDS metrics
+                        if ct_cds and rt_cds:
+                            ovl_cds_a = _exon_overlap_fraction(ct_cds, rt_cds)
+                            ovl_cds_b = _exon_overlap_fraction(rt_cds, ct_cds)
+                            recip_cds = min(ovl_cds_a, ovl_cds_b)
+                            ic_cds_match = (ct_cds_chain == _intron_chain(rt_cds))
+                            
+                            cds_class = 'Partial_Match'
+                            if recip_cds >= 0.8:
+                                cds_class = 'Exact_Match' if ic_cds_match else 'Structural_Mismatch'
+                            
+                            best_cds_ovl, best_cds_ic, best_cds_class = recip_cds, ic_cds_match, cds_class
+                        else:
+                            best_cds_ovl, best_cds_ic, best_cds_class = 0.0, False, 'No_CDS' if not ct_cds else 'Missed'
+
+        entry.update({
+            'classification': best_exon_class if best_priority > -1 else 'Matched',
+            'classification_cds': best_cds_class,
+            'matched_id': best_match_gid,
+            'best_ref_transcript_id': best_match_tid,
+            'exon_overlap': best_exon_ovl,
+            'intron_chain_match': best_exon_ic,
+            'cds_overlap': best_cds_ovl,
+            'cds_intron_chain_match': best_cds_ic,
+        })
         cons_results.append(entry)
 
     return ref_results, cons_results
@@ -462,10 +568,14 @@ def write_summary(ref_results, cons_results, output_dir):
     for r in ref_results:
         chr_breakdown[r['chrom']][r['classification']] += 1
 
+    cds_exact_but_exon_differs = sum(1 for r in ref_results 
+                                     if r['classification_cds'] == 'Exact_Match' and r['classification'] != 'Exact_Match')
+
     summary = {
         'total_reference_genes': len(ref_results),
         'total_consensus_genes': len(cons_results),
         'reference_classification': dict(ref_class_counts),
+        'reference_classification_cds': dict(Counter(r['classification_cds'] for r in ref_results)),
         'consensus_classification': dict(cons_class_counts),
         'per_chromosome': {
             c: dict(counts) for c, counts in sorted(chr_breakdown.items())
@@ -479,12 +589,17 @@ def write_summary(ref_results, cons_results, output_dir):
                 ref_class_counts.get('Structural_Mismatch', 0)
             ),
             'missed_count': ref_class_counts.get('Missed', 0),
-            'strand_mismatch_count': ref_class_counts.get(
-                'Strand_Mismatch', 0),
+            'strand_mismatch_count': ref_class_counts.get('Strand_Mismatch', 0),
+        },
+        'sensitivity_cds': {
+            'cds_exact_match_count': sum(1 for r in ref_results if r['classification_cds'] == 'Exact_Match'),
+            'cds_any_match_count': sum(1 for r in ref_results if r['classification_cds'] in ('Exact_Match', 'Partial_Match', 'Structural_Mismatch')),
+            'cds_missed_count': sum(1 for r in ref_results if r['classification_cds'] == 'Missed'),
+            'cds_exact_but_exon_differs': cds_exact_but_exon_differs,
         },
         'specificity': {
             'novel_consensus_count': cons_class_counts.get('Novel', 0),
-            'matched_consensus_count': cons_class_counts.get('Matched', 0),
+            'matched_consensus_count': cons_class_counts.get('Matched', 0) + sum(1 for c in cons_class_counts.values()) - cons_class_counts.get('Novel', 0) - cons_class_counts.get('Strand_Mismatch', 0),
         },
     }
 
@@ -517,6 +632,8 @@ def write_summary(ref_results, cons_results, output_dir):
             w.writerow([f'cons_{cls}', cnt])
         for k, v in summary['sensitivity'].items():
             w.writerow([f'sens_{k}', v])
+        for k, v in summary['sensitivity_cds'].items():
+            w.writerow([f'sens_{k}', v])
         for k, v in summary['specificity'].items():
             w.writerow([f'spec_{k}', v])
     print(f"  Summary: {tsv_path}")
@@ -525,18 +642,27 @@ def write_summary(ref_results, cons_results, output_dir):
     detail_path = os.path.join(output_dir, 'comparison_details.tsv')
     with open(detail_path, 'w', newline='') as fh:
         w = csv.writer(fh, delimiter='\t')
-        w.writerow(['source', 'gene_id', 'chrom', 'start', 'end', 'strand',
-                     'classification', 'matched_id', 'exon_overlap'])
+        w.writerow([
+            'source', 'gene_id', 'chrom', 'start', 'end', 'strand',
+            'classification', 'classification_cds', 'matched_id', 'best_match_transcript_id',
+            'exon_overlap', 'intron_chain_match', 'cds_overlap', 'cds_intron_chain_match', 'match_basis'
+        ])
+        
         for r in ref_results:
-            w.writerow(['Reference', r['gene_id'], r['chrom'],
-                         r['start'], r['end'], r['strand'],
-                         r['classification'], r['matched_id'],
-                         f"{r['exon_overlap']:.3f}"])
-        for r in cons_results:
-            w.writerow(['Consensus', r['gene_id'], r['chrom'],
-                         r['start'], r['end'], r['strand'],
-                         r['classification'], r['matched_id'],
-                         f"{r.get('exon_overlap', 0):.3f}"])
+            w.writerow([
+                'reference', r['gene_id'], r['chrom'], r['start'], r['end'], r['strand'],
+                r.get('classification', ''), r.get('classification_cds', ''), r.get('matched_id', ''), r.get('best_ref_transcript_id', ''),
+                round(r.get('exon_overlap', 0), 4), r.get('intron_chain_match', False),
+                round(r.get('cds_overlap', 0), 4), r.get('cds_intron_chain_match', False), 'exon'
+            ])
+            
+        for c in cons_results:
+            w.writerow([
+                'consensus', c['gene_id'], c['chrom'], c['start'], c['end'], c['strand'],
+                c.get('classification', ''), c.get('classification_cds', ''), c.get('matched_id', ''), c.get('best_ref_transcript_id', ''),
+                round(c.get('exon_overlap', 0), 4), c.get('intron_chain_match', False),
+                round(c.get('cds_overlap', 0), 4), c.get('cds_intron_chain_match', False), 'exon'
+            ])
     print(f"  Details: {detail_path}")
 
     return summary
@@ -804,21 +930,23 @@ def main():
     parser.add_argument('--extract-ref-proteins', action='store_true',
                         default=False,
                         help='Extract protein FASTA from reference for BUSCO')
+    parser.add_argument('--sample-from',
+                        choices=['reference', 'consensus', 'union'],
+                        default='union',
+                        help='Source of loci for --sample-loci '
+                             '(default: union)')
+    parser.add_argument('--evidence-attribution', type=str, default=None,
+                        help='Path to evidence_attribution.tsv to label with comparison results')
+    add_subset_args(parser)
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
 
     # --- Load mappings ---
-    mapping = {}
-    if args.assembly_report:
-        report_map = load_assembly_mapping(args.assembly_report)
-        mapping.update(report_map)
-        print(f"Loaded assembly mapping: {len(report_map)} entries")
-        
-    if args.seqname_map:
-        seq_map = load_seqname_map(args.seqname_map)
-        mapping.update(seq_map)  # takes precedence
-        print(f"Loaded seqname mapping: {len(seq_map)} entries")
+    mapping = build_mapping(
+        assembly_report=args.assembly_report,
+        seqname_map=getattr(args, 'seqname_map', None),
+    )
 
     # --- Load reference ---
     print("Loading reference annotation...")
@@ -843,13 +971,96 @@ def main():
           f"{cons_exons['transcript_id'].nunique()} transcripts")
 
     # --- Classify ---
+    # Apply subsetting before classification
+    subset_regions = None
+    if getattr(args, 'sample_loci', None) is not None:
+        # Build loci for sampling
+        sample_source = getattr(args, 'sample_from', 'union')
+        if sample_source == 'reference':
+            loci_df = ref_genes[['Chromosome', 'Start', 'End']].copy()
+        elif sample_source == 'consensus':
+            loci_df = cons_genes[['Chromosome', 'Start', 'End']].copy()
+        else:  # union
+            loci_df = pd.concat([
+                ref_genes[['Chromosome', 'Start', 'End']],
+                cons_genes[['Chromosome', 'Start', 'End']],
+            ], ignore_index=True)
+        subset_regions = resolve_subset_regions(args, loci_df=loci_df)
+    else:
+        subset_regions = resolve_subset_regions(args)
+
+    if subset_regions:
+        print(f"  Subsetting to {len(subset_regions)} region(s)...")
+        ref_genes = subset_df_by_regions(ref_genes, subset_regions)
+        ref_exons = subset_df_by_regions(ref_exons, subset_regions)
+        ref_cds = subset_df_by_regions(ref_cds, subset_regions)
+        cons_genes = subset_df_by_regions(cons_genes, subset_regions)
+        cons_exons = subset_df_by_regions(cons_exons, subset_regions)
+        cons_cds = subset_df_by_regions(cons_cds, subset_regions)
+        print(f"  After subsetting: {ref_genes.shape[0]} ref genes, "
+              f"{cons_genes.shape[0]} cons genes")
+        # Write manifest
+        manifest_path = os.path.join(args.output_dir, 'subset_regions.tsv')
+        write_subset_manifest(
+            subset_regions, getattr(args, 'seed', 1), manifest_path)
+
     print("Classifying loci...")
     ref_results, cons_results = classify_locus_pairs(
-        ref_genes, ref_exons, cons_genes, cons_exons, cons_mrna)
+        ref_genes, ref_exons, ref_cds, cons_genes, cons_exons, cons_cds, cons_mrna)
+
+    # Output transcript labels file
+    print("Writing consensus transcript labels...")
+    labels_path = os.path.join(args.output_dir, 'consensus_transcript_labels.tsv')
+    labeled_tx = []
+    with open(labels_path, 'w', newline='') as fh:
+        w = csv.writer(fh, delimiter='\t')
+        w.writerow(['transcript_id', 'gene_id', 'classification', 'best_ref_gene_id', 'best_ref_transcript_id', 'best_overlap', 'best_cds_overlap'])
+        for c in cons_results:
+            # The classification stored for the consensus gene is 'Matched', 'Strand_Mismatch', 'Novel' etc.
+            # Convert classification classes to the 3 base labels
+            cls = c['classification']
+            if cls in ('Exact_Match', 'Partial_Match', 'Structural_Mismatch', 'Matched'):
+                label = 'Matched'
+            elif cls == 'Strand_Mismatch':
+                label = 'Strand_Mismatch'
+            else:
+                label = 'Novel'
+
+            for tid in c.get('tids', []):
+                # Write a row per transcript
+                w.writerow([
+                    tid, c['gene_id'], label, c['matched_id'], c['best_ref_transcript_id'],
+                    round(c['exon_overlap'], 4), round(c['cds_overlap'], 4)
+                ])
+                labeled_tx.append({'transcript_id': tid, 'comparison_label': label})
+
+    # Evidence attribution labeling
+    if args.evidence_attribution and os.path.exists(args.evidence_attribution):
+        print("Labeling evidence attribution...")
+        ea_df = pd.read_csv(args.evidence_attribution, sep='\t')
+        labels_df = pd.DataFrame(labeled_tx)
+        
+        merged_df = ea_df.merge(labels_df, on='transcript_id', how='left')
+        
+        missing_labels = merged_df['comparison_label'].isna().sum()
+        if missing_labels > 0:
+            print(f"  Warning: {missing_labels} transcripts in evidence attribution lack comparison labels (e.g. subsetting).")
+            
+        out_ea = os.path.join(args.output_dir, 'evidence_attribution_labeled.tsv')
+        merged_df.to_csv(out_ea, sep='\t', index=False)
+        print(f"  Labeled evidence attribution: {out_ea}")
 
     # --- Summary ---
     print("Writing summary...")
     summary = write_summary(ref_results, cons_results, args.output_dir)
+    # Include subset info in summary
+    if subset_regions:
+        summary['subset_regions'] = [str(r) for r in subset_regions]
+        summary['subset_seed'] = getattr(args, 'seed', 1)
+        # Re-write the JSON with subset info
+        json_path = os.path.join(args.output_dir, 'comparison_summary.json')
+        with open(json_path, 'w') as fh:
+            json.dump(summary, fh, indent=2)
 
     # Print key metrics
     print("\n" + "=" * 60)

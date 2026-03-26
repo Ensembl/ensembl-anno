@@ -166,8 +166,104 @@ Test coverage includes:
    * *Drop fragmented proteins (competing with better models).*
    * *Drop spurious Helixer models (single-exon, no start/stop, low support).*
    * *Drop transcriptomic chimeras (massive introns).*
-5. **Cluster Loci**: Group overlapping evidence using PyRanges.
-6. **Score & Select**: Pick top isoforms based on configurable weightings.
-7. **Annotate**: Deduce CDS/UTRs for selected models via longest-ORF discovery.
-8. **Export**: Write GFF3 and FASTA sets.
-9. **Report**: Write summary metrics.
+5. **Transcript Splitting** *(optional, config-driven)*: Split mega-transcripts into local segments.
+6. **Cluster Loci**: Group overlapping evidence using PyRanges.
+7. **Score & Select**: Pick top isoforms based on configurable weightings.
+8. **Annotate**: Deduce CDS/UTRs for selected models via longest-ORF discovery.
+9. **Export**: Write GFF3 and FASTA sets.
+10. **Report**: Write summary metrics.
+
+---
+
+## Transcript Splitting
+
+### Why it exists
+
+Transcriptome assemblers (especially StringTie `--merge`) can produce pathological
+"mega-transcripts" — merged super-loci like `MSTRG.1.*` spanning tens or hundreds
+of kb. Without Helixer evidence, the validation step drops most of these, causing
+extremely low gene counts. Transcript splitting breaks them into multiple local
+candidate segments using exon geometry, so downstream clustering and selection
+operate on realistic segments rather than discarding entire evidence tracks.
+
+### How to enable
+
+In your config YAML (or via override):
+
+```yaml
+transcript_splitting:
+  split_enabled: true       # enable splitting
+  split_gap_bp: 3000        # gap threshold (default = max_intron_length)
+  split_on_large_exon_bp: 15000  # drop transcripts with any exon > this
+  max_segments_per_transcript: 50  # safety: drop transcript if exceeding this
+```
+
+Set `split_enabled: false` (the default for `fungi_default.yaml`) to disable.
+
+All thresholds are config-driven — no hard-coded species constants.
+
+---
+
+## Supported Dependency Versions
+
+| Package    | Base (`requirements.txt`)  | Compat target (`requirements-compat.txt`) |
+| :--------- | :------------------------- | :---------------------------------------- |
+| pandas     | `>=2.0,<3`                 | `==3.0.0`                                 |
+| pyranges   | `>=0.0.120,<=0.1.4`        | `==0.1.4`                                 |
+| biopython  | latest                     | latest                                    |
+| pyyaml     | latest                     | latest                                    |
+| matplotlib | latest                     | latest                                    |
+
+CI runs both the default and compat environments.
+
+---
+
+## Fast Test Mode
+
+All three main scripts (`gene_model_builder.py`, `compare_annotations.py`, `visualize_disagreements.py`) support consistent CLI flags for quick, reproducible testing on subsets:
+
+### Region-based subsetting
+
+```bash
+# Run builder on a single chromosome
+python gene_model_builder.py ... --seqname '1'
+
+# Run builder on a specific region
+python gene_model_builder.py ... --region '1:100000-200000'
+
+# Use a file with multiple regions
+python gene_model_builder.py ... --regions-file my_regions.txt
+```
+
+### Locus-based random sampling
+
+```bash
+# Compare on 50 random loci (reproducible with --seed)
+python compare_annotations.py ... --sample-loci 50 --seed 42
+
+# Sample from reference genes only
+python compare_annotations.py ... --sample-loci 50 --sample-from reference
+
+# Visualize 10 random structural mismatches
+python visualize_disagreements.py ... --sample-loci 10 \
+    --sample-from-category Structural_Mismatch
+```
+
+### Seqname mapping
+
+Mapping is applied **before** subsetting, so region names reference the mapped seqnames:
+
+```bash
+# Map GenBank accessions to chromosome numbers, then subset chr 1
+python compare_annotations.py ... \
+    --assembly-report assembly_report.txt \
+    --seqname '1'
+
+# Custom mapping (TSV: from_seqname → to_seqname), overrides assembly-report
+python gene_model_builder.py ... \
+    --seqname-map custom_mapping.tsv \
+    --region '1:100000-200000'
+```
+
+When subsetting is active, a `subset_regions.tsv` manifest is written to the output directory recording the selected regions and random seed.
+

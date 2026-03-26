@@ -1,9 +1,8 @@
 # Runtime dependencies for Gene Model Builder
-pandas
-pyranges
+# Conservative supported range — see requirements-compat.txt for exact
+# pandas 3.0 + pyranges 0.1.4 compatibility testing pins.
+pandas>=2.0,<3
+pyranges>=0.0.120,<=0.1.4
 biopython
 pyyaml
 matplotlib
-
-# Note: These are unpinned to allow flexibility and standard widely compatible solutions.
-# Pin versions if reproducible isolated environments are needed (e.g., pandas==2.0.3).

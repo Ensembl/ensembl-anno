@@ -24,6 +24,14 @@ transcriptomic_filter:
   allow_single_exon: true
   strand_consistency_check: false
 
+transcript_splitting:
+  split_enabled: true
+  split_gap_bp: 3000
+  split_on_contig_change: true
+  split_on_strand_change: true
+  split_on_large_exon_bp: 50000
+  max_segments_per_transcript: 50
+
 helixer_filter:
   min_cds_bp: 90
   max_exons: 50
@@ -53,11 +61,11 @@ protein_validation:
   psauron_model: "default"
   diamond_weight: 0.5
   psauron_weight: 0.5
-  min_score: 0.5
-  policy: "drop"
+  min_score: 0.1
+  policy: "penalize"
 
 validation:
-  mode: "drop"
+  mode: "drop_transcript"
   log_violations: true
   max_feature_drift_bp: 1500
   feature_outside_exons_policy: "drop"

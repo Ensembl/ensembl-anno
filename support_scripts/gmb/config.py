@@ -54,6 +54,16 @@ class TranscriptomicFilterConfig:
 
 
 @dataclass
+class TranscriptSplittingConfig:
+    split_enabled: bool = False
+    split_gap_bp: int = 3_000
+    split_on_contig_change: bool = True
+    split_on_strand_change: bool = True
+    split_on_large_exon_bp: Optional[int] = None
+    max_segments_per_transcript: int = 50
+
+
+@dataclass
 class HelixerFilterConfig:
     min_cds_bp: int = 90
     max_exons: int = 50
@@ -184,6 +194,8 @@ class PipelineConfig:
         default_factory=ProteinFilterConfig)
     transcriptomic_filter: TranscriptomicFilterConfig = field(
         default_factory=TranscriptomicFilterConfig)
+    transcript_splitting: TranscriptSplittingConfig = field(
+        default_factory=TranscriptSplittingConfig)
     helixer_filter: HelixerFilterConfig = field(
         default_factory=HelixerFilterConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)

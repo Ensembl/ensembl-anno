@@ -331,6 +331,171 @@ def filter_chimeras(tx_df, config, stats=None):
 
 
 # ---------------------------------------------------------------------------
+# Mega-transcript splitting
+# ---------------------------------------------------------------------------
+
+def split_mega_transcripts(tx_df, config, stats=None):
+    """Split pathological mega-transcripts into local candidate segments.
+
+    Transcriptome GTFs (especially StringTie --merge outputs) can contain
+    transcript models spanning huge genomic regions.  This function splits
+    them using exon geometry so downstream clustering/selection operates on
+    local segments rather than dropping entire transcripts.
+
+    Splitting is controlled by ``config.transcript_splitting``.
+
+    Parameters
+    ----------
+    tx_df : DataFrame
+        Exon-level transcriptomic rows.
+    config : PipelineConfig
+    stats : dict or None
+
+    Returns
+    -------
+    DataFrame : exon rows with updated transcript_id / gene_id for segments,
+        plus ``parent_transcript_id`` and ``parent_gene_id`` provenance columns.
+    """
+    scfg = config.transcript_splitting
+    if stats is None:
+        stats = {}
+
+    if tx_df.empty or not scfg.split_enabled:
+        return tx_df
+
+    n_input = tx_df['transcript_id'].nunique()
+
+    # QC: log top 20 worst offenders by span before splitting
+    span_per_tid = tx_df.groupby('transcript_id').agg(
+        span=('Start', lambda x: x.max()),
+        span_end=('End', 'max'),
+    )
+    span_per_tid['total_span'] = span_per_tid['span_end'] - span_per_tid['span']
+    top_offenders = span_per_tid.nlargest(20, 'total_span')
+    if not top_offenders.empty:
+        print("    Transcript splitting — top 20 widest transcripts before split:")
+        for tid, row in top_offenders.iterrows():
+            print(f"      {tid}: {int(row['total_span']):,} bp")
+
+    # Track stats
+    transcripts_split = 0
+    segments_emitted = 0
+    max_segs_per_original = 0
+    dropped_large_exon = 0
+    dropped_max_segments = 0
+    drop_reasons = []  # list of (tid, reason)
+
+    result_rows = []
+
+    for tid, grp in tx_df.groupby('transcript_id'):
+        orig_gene_id = grp['gene_id'].iloc[0]
+
+        # --- Large-exon check (before any splitting) ---
+        if scfg.split_on_large_exon_bp is not None:
+            exon_lens = grp['End'] - grp['Start']
+            if exon_lens.max() > scfg.split_on_large_exon_bp:
+                dropped_large_exon += 1
+                drop_reasons.append(
+                    (tid, f"exon_exceeds_large_exon_limit "
+                          f"(max_exon={int(exon_lens.max())} > "
+                          f"{scfg.split_on_large_exon_bp})"))
+                continue
+
+        # --- Group by (Chromosome, Strand) ---
+        contig_strand_groups = list(grp.groupby(['Chromosome', 'Strand']))
+
+        segments = []  # list of DataFrames, one per segment
+
+        for (_chrom, _strand), cs_grp in contig_strand_groups:
+            # Sort exons by Start within this contig/strand
+            cs_sorted = cs_grp.sort_values('Start')
+            starts = cs_sorted['Start'].values
+            ends = cs_sorted['End'].values
+
+            # Segment by gap threshold
+            seg_indices = [0]  # index into cs_sorted where new segments begin
+            for i in range(1, len(starts)):
+                gap_bp = max(0, int(starts[i]) - int(ends[i - 1]) - 1)
+                if gap_bp > scfg.split_gap_bp:
+                    seg_indices.append(i)
+
+            # Emit segments
+            for si in range(len(seg_indices)):
+                start_idx = seg_indices[si]
+                end_idx = (
+                    seg_indices[si + 1] if si + 1 < len(seg_indices)
+                    else len(cs_sorted)
+                )
+                seg_df = cs_sorted.iloc[start_idx:end_idx].copy()
+                segments.append(seg_df)
+
+        # --- Max-segments safety (drop, not cap) ---
+        if len(segments) > scfg.max_segments_per_transcript:
+            dropped_max_segments += 1
+            drop_reasons.append(
+                (tid, f"exceeded_max_segments "
+                      f"({len(segments)} > {scfg.max_segments_per_transcript})"))
+            continue
+
+        # --- Sort segments by genomic order (first exon Start) ---
+        segments.sort(key=lambda s: s['Start'].iloc[0])
+
+        if len(segments) == 1:
+            # No actual splitting needed — pass through with provenance cols
+            seg = segments[0].copy()
+            seg['parent_transcript_id'] = tid
+            seg['parent_gene_id'] = orig_gene_id
+            result_rows.append(seg)
+        else:
+            # Splitting occurred
+            transcripts_split += 1
+            was_multi_contig = len(contig_strand_groups) > 1
+            for seg_num, seg in enumerate(segments, start=1):
+                seg = seg.copy()
+                seg_label = f"__seg{seg_num:04d}"
+                seg['parent_transcript_id'] = tid
+                seg['parent_gene_id'] = orig_gene_id
+                seg['transcript_id'] = f"{tid}{seg_label}"
+                seg['gene_id'] = f"{orig_gene_id}{seg_label}"
+                result_rows.append(seg)
+            segments_emitted += len(segments)
+            max_segs_per_original = max(max_segs_per_original, len(segments))
+
+            if was_multi_contig:
+                drop_reasons.append(
+                    (tid, f"multi_contig_strand_split "
+                          f"(split into {len(segments)} segments)"))
+
+    # --- Log drop/split reasons ---
+    for tid, reason in drop_reasons:
+        print(f"    Split QC: {tid} — {reason}")
+
+    if result_rows:
+        result_df = pd.concat(result_rows, ignore_index=True)
+    else:
+        result_df = tx_df.iloc[:0].copy()
+        result_df['parent_transcript_id'] = pd.Series(dtype='object')
+        result_df['parent_gene_id'] = pd.Series(dtype='object')
+
+    n_output = result_df['transcript_id'].nunique()
+
+    # Populate stats
+    stats['transcripts_split'] = transcripts_split
+    stats['segments_emitted'] = segments_emitted
+    stats['max_segments_per_original'] = max_segs_per_original
+    stats['transcripts_dropped_large_exon'] = dropped_large_exon
+    stats['transcripts_dropped_max_segments'] = dropped_max_segments
+
+    if transcripts_split > 0 or dropped_large_exon > 0 or dropped_max_segments > 0:
+        print(f"    Transcript splitting: {n_input} → {n_output} transcripts "
+              f"({transcripts_split} split, {segments_emitted} segments, "
+              f"{dropped_large_exon} dropped-large-exon, "
+              f"{dropped_max_segments} dropped-max-segments)")
+
+    return result_df
+
+
+# ---------------------------------------------------------------------------
 # Helixer model filtering
 # ---------------------------------------------------------------------------
 
@@ -367,12 +532,18 @@ def filter_helixer_models(helixer_df, helixer_cds, config, stats=None):
 
     remove_tids = set()
 
-    # Check CDS length
+    # Check CDS length — use agg() for pandas 2.x / 3.0 compat
     if helixer_cds is not None and not helixer_cds.empty:
-        cds_lengths = helixer_cds.groupby('transcript_id').apply(
-            lambda g: (g['End'] - g['Start']).sum()
+        cds_lengths = helixer_cds.groupby('transcript_id').agg(
+            total_cds=('End', 'sum')
+        ).copy()
+        # Compute actual CDS bp per transcript
+        cds_starts = helixer_cds.groupby('transcript_id')['Start'].sum()
+        cds_lengths['total_cds'] = (
+            helixer_cds.groupby('transcript_id')['End'].sum()
+            - helixer_cds.groupby('transcript_id')['Start'].sum()
         )
-        short_cds = cds_lengths[cds_lengths < hcfg.min_cds_bp].index
+        short_cds = cds_lengths[cds_lengths['total_cds'] < hcfg.min_cds_bp].index
         remove_tids.update(short_cds)
         stats['helixer_short_cds_removed'] = len(short_cds)
 

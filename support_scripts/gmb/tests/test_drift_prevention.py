@@ -79,9 +79,9 @@ def test_compute_percentile_guardrails():
     
     params = compute_percentile_guardrails(df, cfg, protein_tids)
     
-    # HC exon lens: 2000, 1500, 500. 90th pctile is ~1950. Factor 2.0 => ~3900.
-    # HC spans: 2000, 4000. 90th pctile is ~3800. Factor 2.0 => ~7600.
-    assert params['effective_max_exon_len_bp'] >= 3900
+    # HC exon lens: 2000, 1500, 500. 90th pctile is 1900. Factor 2.0 => 3800.
+    # HC spans: 2000, 4000. 90th pctile is 3800. Factor 2.0 => 7600.
+    assert params['effective_max_exon_len_bp'] >= 3800
     assert params['effective_max_transcript_span_bp'] >= 7600
     
     # Assert limits are above floor but ignore the low confidence 10k outlier

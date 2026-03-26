@@ -8,6 +8,13 @@ import matplotlib.patches as patches
 import pandas as pd
 import pyranges as pr
 
+from subset_utils import (
+    build_mapping, remap_df_seqnames,
+    add_subset_args, resolve_subset_regions,
+    subset_df_by_regions,
+    Region, parse_region,
+)
+
 from annotate_cds_utrs import (
     load_genome,
     build_spliced_seq,
@@ -655,6 +662,10 @@ def main():
                              f'(default: {_DEFAULT_MAX_TX_PER_TRACK})')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Enable splice-qc + orf-labels + frame-qc')
+    parser.add_argument('--sample-from-category', default=None,
+                        help='Sample disagreements from a specific category '
+                             '(e.g. Structural_Mismatch, False_Negative)')
+    add_subset_args(parser)
 
     args = parser.parse_args()
 
@@ -672,7 +683,60 @@ def main():
         print(f"  Loaded {len(genome)} sequences")
 
     data, cds_data = load_data()
+
+    # --- Apply seqname mapping ---
+    mapping = build_mapping(
+        assembly_report=getattr(args, 'assembly_report', None),
+        seqname_map=getattr(args, 'seqname_map', None),
+    )
+    if mapping:
+        print("Applying seqname mapping...")
+        for name in list(data.keys()):
+            remapped = remap_df_seqnames(data[name].df, mapping, name)
+            data[name] = pr.PyRanges(remapped)
+        for name in list(cds_data.keys()):
+            remapped = remap_df_seqnames(cds_data[name].df, mapping)
+            cds_data[name] = pr.PyRanges(remapped)
+
     disagreements = find_disagreements(data)
+
+    # --- Apply subsetting / sampling ---
+    subset_regions = resolve_subset_regions(args)
+
+    if subset_regions:
+        # Filter disagreements to those overlapping subset regions
+        disagreements = [
+            (chrom, start, end, dtype, label)
+            for chrom, start, end, dtype, label in disagreements
+            if any(
+                r.seqname == chrom and (
+                    r.is_whole_contig() or
+                    (r.start <= end and r.end >= start)
+                )
+                for r in subset_regions
+            )
+        ]
+        print(f"  After region subsetting: {len(disagreements)} loci")
+
+    sample_n = getattr(args, 'sample_loci', None)
+    if sample_n is not None and disagreements:
+        import random as _rng
+        rng = _rng.Random(getattr(args, 'seed', 1))
+
+        category_filter = getattr(args, 'sample_from_category', None)
+        if category_filter:
+            filtered = [
+                d for d in disagreements if d[3] == category_filter
+            ]
+            if filtered:
+                disagreements = filtered
+            else:
+                print(f"  Warning: no disagreements in category "
+                      f"'{category_filter}', using all")
+
+        n = min(sample_n, len(disagreements))
+        disagreements = rng.sample(disagreements, n)
+        print(f"  Sampled {n} disagreements (seed={args.seed})")
 
     bed_lines = []
 

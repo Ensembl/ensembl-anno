@@ -14,7 +14,12 @@ import pyranges as pr
 from collections import defaultdict
 
 from config import load_config
-from evidence_filter import filter_protein_evidence, filter_chimeras, filter_helixer_models
+from evidence_filter import filter_protein_evidence, filter_chimeras, filter_helixer_models, split_mega_transcripts
+from subset_utils import (
+    build_mapping, remap_df_seqnames,
+    add_subset_args, resolve_subset_regions,
+    subset_df_by_regions, write_subset_manifest,
+)
 from protein_validation import check_dependencies, batch_score_proteins
 from scoring import select_isoforms
 from annotate_cds_utrs import load_genome, annotate_all_transcripts
@@ -202,7 +207,9 @@ def parse_args():
     parser.add_output_args = parser.add_argument_group('Outputs')
     parser.add_output_args.add_argument('--output-dir', required=True, help='Output directory')
     parser.add_output_args.add_argument('--gene-prefix', default='GENE', help='Prefix for new IDs')
-    
+
+    add_subset_args(parser)
+
     return parser.parse_args()
 
 
@@ -279,13 +286,33 @@ def main():
     uniprot_exons, uniprot_cds = load_evidence(args.uniprot, 'UniProt')
     
     stats = {}
-    
+
+    # --- Seqname mapping ---
+    mapping = build_mapping(
+        assembly_report=getattr(args, 'assembly_report', None),
+        seqname_map=getattr(args, 'seqname_map', None),
+    )
+    if mapping:
+        print("Applying seqname mapping to evidence...")
+        scallop_exons = remap_df_seqnames(scallop_exons, mapping, 'Scallop')
+        scallop_cds = remap_df_seqnames(scallop_cds, mapping)
+        stringtie_exons = remap_df_seqnames(stringtie_exons, mapping, 'StringTie')
+        stringtie_cds = remap_df_seqnames(stringtie_cds, mapping)
+        helixer_exons = remap_df_seqnames(helixer_exons, mapping, 'Helixer')
+        helixer_cds = remap_df_seqnames(helixer_cds, mapping)
+        orthodb_exons = remap_df_seqnames(orthodb_exons, mapping, 'OrthoDB')
+        orthodb_cds = remap_df_seqnames(orthodb_cds, mapping)
+        uniprot_exons = remap_df_seqnames(uniprot_exons, mapping, 'UniProt')
+        uniprot_cds = remap_df_seqnames(uniprot_cds, mapping)
+
     print("Filtering Evidence...")
     tx_frames = [df for df in [scallop_exons, stringtie_exons] if df is not None and not df.empty]
     tx_exons = pd.concat(tx_frames, ignore_index=True) if tx_frames else pd.DataFrame()
     tx_exons_filtered = filter_chimeras(tx_exons, config, stats)
-    
-    
+
+    if config.transcript_splitting.split_enabled:
+        tx_exons_filtered = split_mega_transcripts(tx_exons_filtered, config, stats)
+
     h_exons_filt, h_cds_filt = filter_helixer_models(
         helixer_exons if helixer_exons is not None else pd.DataFrame(), 
         helixer_cds if helixer_cds is not None else pd.DataFrame(), 
@@ -297,6 +324,55 @@ def main():
     prot_exons = pd.concat(prot_frames, ignore_index=True) if prot_frames else pd.DataFrame()
     prot_exons_filt = filter_protein_evidence(prot_exons, config, stats, tx_exons_filtered)
     
+    # --- Region subsetting (fast test mode) ---
+    subset_regions = None
+    if getattr(args, 'sample_loci', None) is not None:
+        # Build preliminary loci from candidate exons for sampling
+        import pyranges as _pr
+        _all_exons_for_loci = []
+        if not tx_exons_filtered.empty:
+            _all_exons_for_loci.append(tx_exons_filtered)
+        if not h_exons_filt.empty:
+            _all_exons_for_loci.append(h_exons_filt)
+        if _all_exons_for_loci:
+            from subset_utils import _build_loci_from_exons
+            _combined_ex = pd.concat(_all_exons_for_loci, ignore_index=True)
+            _loci_df = _build_loci_from_exons(_combined_ex)
+            print(f"  Built {len(_loci_df)} preliminary loci for sampling")
+            subset_regions = resolve_subset_regions(args, loci_df=_loci_df)
+    else:
+        subset_regions = resolve_subset_regions(args)
+
+    if subset_regions:
+        _n_before = {
+            'transcriptomic': tx_exons_filtered['transcript_id'].nunique() if not tx_exons_filtered.empty else 0,
+            'helixer': h_exons_filt['transcript_id'].nunique() if not h_exons_filt.empty else 0,
+            'protein': prot_exons_filt['transcript_id'].nunique() if not prot_exons_filt.empty else 0,
+        }
+        print(f"  Subsetting to {len(subset_regions)} region(s)...")
+        tx_exons_filtered = subset_df_by_regions(tx_exons_filtered, subset_regions)
+        h_exons_filt = subset_df_by_regions(h_exons_filt, subset_regions)
+        h_cds_filt = subset_df_by_regions(h_cds_filt, subset_regions)
+        prot_exons_filt = subset_df_by_regions(prot_exons_filt, subset_regions)
+        # Also subset CDS tracks
+        for _name, _cds_var in [('scallop', scallop_cds), ('stringtie', stringtie_cds)]:
+            if _cds_var is not None and not _cds_var.empty:
+                if _name == 'scallop':
+                    scallop_cds = subset_df_by_regions(_cds_var, subset_regions)
+                else:
+                    stringtie_cds = subset_df_by_regions(_cds_var, subset_regions)
+        _n_after = {
+            'transcriptomic': tx_exons_filtered['transcript_id'].nunique() if not tx_exons_filtered.empty else 0,
+            'helixer': h_exons_filt['transcript_id'].nunique() if not h_exons_filt.empty else 0,
+            'protein': prot_exons_filt['transcript_id'].nunique() if not prot_exons_filt.empty else 0,
+        }
+        for track, n_b in _n_before.items():
+            n_a = _n_after[track]
+            print(f"    {track}: {n_b} → {n_a} transcripts")
+        manifest_path = os.path.join(args.output_dir, 'subset_regions.tsv')
+        write_subset_manifest(
+            subset_regions, getattr(args, 'seed', 1), manifest_path)
+
     all_dfs = []
     if not tx_exons_filtered.empty: all_dfs.append(tx_exons_filtered)
     if not h_exons_filt.empty: all_dfs.append(h_exons_filt)
