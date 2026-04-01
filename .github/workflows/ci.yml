@@ -47,14 +47,11 @@ jobs:
         run: python -m pytest tests/ -v -m "not integration" --tb=short
 
   test-integration-subset:
-    name: Real-data integration test (z_tritici seqname 1)
+    name: Real-data integration test (z_tritici region fixtures, ~8 s)
     runs-on: ubuntu-latest
     needs: lint
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Need LFS or full checkout if data files are stored with LFS
-          lfs: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -63,10 +60,10 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-      - name: Run z_tritici seqname-1 subset integration test
+      - name: Run z_tritici region integration tests (pre-subsetted fixtures)
         working-directory: support_scripts/gmb
-        # Timeout: chromosome-1 subset should finish in under 5 min
-        timeout-minutes: 10
+        # Pre-subsetted fixtures run in ~8 seconds; allow 5 minutes for CI overhead
+        timeout-minutes: 5
         run: python -m pytest tests/test_z_tritici_subset.py -v -m integration --tb=short
 
   test-compat:
