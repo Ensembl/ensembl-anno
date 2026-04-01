@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate (or refresh) golden fixture files for the z_tritici seqname-1 regression test.
+"""Generate (or refresh) golden fixture files for the z_tritici region regression test.
 
 Usage::
 
@@ -11,11 +11,15 @@ Usage::
 
 The script writes into ``tests/fixtures/expected/``:
 
-    consensus_seqname1.gff3       -- copy of the consensus GFF3
-    seqname1_gene_count.txt       -- integer gene count (one line)
+    consensus_region1.gff3        -- copy of the consensus GFF3
+    region1_gene_count.txt        -- integer gene count (one line)
 
-These files are used by :class:`TestZTriticiGoldenRegression` in
+These files are used by :class:`TestRegion1GoldenRegression` in
 ``test_z_tritici_subset.py``.
+
+The pipeline is run on the pre-subsetted fixtures in
+``tests/fixtures/z_tritici_region1/`` (first 500 kb of chr 1, ~8 seconds).
+If those fixtures do not exist, run ``tests/create_fixtures.sh`` first.
 """
 
 from __future__ import annotations
@@ -29,8 +33,8 @@ from pathlib import Path
 
 _HERE = Path(__file__).parent
 _GMB_DIR = _HERE.parent
-_Z_TRITICI = _GMB_DIR / "z_tritici"
-_FIXTURES = _HERE / "fixtures" / "expected"
+_REGION_FIXTURES = _HERE / "fixtures" / "z_tritici_region1"
+_EXPECTED = _HERE / "fixtures" / "expected"
 _SCRIPT = _GMB_DIR / "gene_model_builder.py"
 
 
@@ -45,35 +49,39 @@ def _count_gff3_genes(gff3: Path) -> int:
 
 
 def run(from_dir: Path | None = None) -> None:
+    if not _REGION_FIXTURES.exists():
+        print(
+            f"ERROR: Region fixtures not found at {_REGION_FIXTURES}.\n"
+            "Run tests/create_fixtures.sh to generate them.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if from_dir:
         output_dir = from_dir
     else:
         tmp = tempfile.mkdtemp(prefix="golden_gen_")
         output_dir = Path(tmp)
-        print(f"Running pipeline into {output_dir} …")
+        print(f"Running pipeline on pre-subsetted region fixtures into {output_dir} …")
         cmd = [
             sys.executable,
             str(_SCRIPT),
             "--scallop",
-            str(_Z_TRITICI / "scallop_geneset.gtf"),
+            str(_REGION_FIXTURES / "scallop_geneset.gtf"),
             "--stringtie",
-            str(_Z_TRITICI / "stringtie_geneset.gtf"),
+            str(_REGION_FIXTURES / "stringtie_geneset.gtf"),
             "--helixer",
-            str(_Z_TRITICI / "helixer_remapped.gff3"),
+            str(_REGION_FIXTURES / "helixer_remapped.gff3"),
             "--orthodb",
-            str(_Z_TRITICI / "orthodb_geneset.gtf"),
+            str(_REGION_FIXTURES / "orthodb_geneset.gtf"),
             "--uniprot",
-            str(_Z_TRITICI / "uniprot_geneset.gtf"),
+            str(_REGION_FIXTURES / "uniprot_geneset.gtf"),
             "--genome",
-            str(_Z_TRITICI / "zymoseptoria_tritici.fa"),
-            "--assembly-report",
-            str(_Z_TRITICI / "GCF_000219625.1_MYCGR_v2.0_assembly_report.txt"),
+            str(_REGION_FIXTURES / "genome.fa"),
             "--output-dir",
             str(output_dir),
             "--gene-prefix",
             "ZTGOLD",
-            "--seqname",
-            "1",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -85,14 +93,14 @@ def run(from_dir: Path | None = None) -> None:
         print(f"ERROR: {gff3_src} not found", file=sys.stderr)
         sys.exit(1)
 
-    _FIXTURES.mkdir(parents=True, exist_ok=True)
+    _EXPECTED.mkdir(parents=True, exist_ok=True)
 
-    gff3_dst = _FIXTURES / "consensus_seqname1.gff3"
+    gff3_dst = _EXPECTED / "consensus_region1.gff3"
     shutil.copy(gff3_src, gff3_dst)
     print(f"Wrote {gff3_dst}")
 
     gene_count = _count_gff3_genes(gff3_src)
-    count_dst = _FIXTURES / "seqname1_gene_count.txt"
+    count_dst = _EXPECTED / "region1_gene_count.txt"
     count_dst.write_text(str(gene_count) + "\n")
     print(f"Wrote {count_dst}  ({gene_count} genes)")
 

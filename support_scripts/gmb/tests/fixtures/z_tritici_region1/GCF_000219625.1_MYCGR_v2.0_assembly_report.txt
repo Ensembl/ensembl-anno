@@ -1,0 +1,53 @@
+# Assembly name:  MYCGR v2.0
+# Organism name:  Zymoseptoria tritici IPO323 (ascomycete fungi)
+# Infraspecific name:  strain=IPO323
+# Taxid:          336722
+# BioSample:      SAMN02746078
+# BioProject:     PRJNA19047
+# Submitter:      DOE Joint Genome Institute
+# Date:           2011-07-06
+# Assembly type:  haploid
+# Release type:   major
+# Assembly level: Chromosome
+# Genome representation: full
+# WGS project:    ACPE01
+# Assembly method: JAZZ v. 1.0
+# Genome coverage: 8.9X
+# Sequencing technology: Sanger
+# Relation to type material: assembly from type material
+# RefSeq category: Reference Genome
+# GenBank assembly accession: GCA_000219625.1
+# RefSeq assembly accession: GCF_000219625.1
+# RefSeq assembly and GenBank assemblies identical: yes
+#
+## Assembly-Units:
+## GenBank Unit Accession	RefSeq Unit Accession	Assembly-Unit name
+## GCA_000219635.1	GCF_000219635.1	Primary Assembly
+#
+# Ordered by chromosome/plasmid; the chromosomes/plasmids are followed by
+# unlocalized scaffolds.
+# Unplaced scaffolds are listed at the end.
+# RefSeq is equal or derived from GenBank object.
+#
+# Sequence-Name	Sequence-Role	Assigned-Molecule	Assigned-Molecule-Location/Type	GenBank-Accn	Relationship	RefSeq-Accn	Assembly-Unit	Sequence-Length	UCSC-style-name
+MYCGRchr_1	assembled-molecule	1	Chromosome	CM001196.1	=	NC_018218.1	Primary Assembly	6088797	na
+MYCGRchr_2	assembled-molecule	2	Chromosome	CM001197.1	=	NC_018217.1	Primary Assembly	3860111	na
+MYCGRchr_3	assembled-molecule	3	Chromosome	CM001198.1	=	NC_018216.1	Primary Assembly	3505381	na
+MYCGRchr_4	assembled-molecule	4	Chromosome	CM001199.1	=	NC_018215.1	Primary Assembly	2880011	na
+MYCGRchr_5	assembled-molecule	5	Chromosome	CM001200.1	=	NC_018214.1	Primary Assembly	2861803	na
+MYCGRchr_6	assembled-molecule	6	Chromosome	CM001201.1	=	NC_018213.1	Primary Assembly	2674951	na
+MYCGRchr_7	assembled-molecule	7	Chromosome	CM001202.1	=	NC_018212.1	Primary Assembly	2665280	na
+MYCGRchr_8	assembled-molecule	8	Chromosome	CM001203.1	=	NC_018211.1	Primary Assembly	2443572	na
+MYCGRchr_9	assembled-molecule	9	Chromosome	CM001204.1	=	NC_018210.1	Primary Assembly	2142475	na
+MYCGRchr_10	assembled-molecule	10	Chromosome	CM001205.1	=	NC_018209.1	Primary Assembly	1682575	na
+MYCGRchr_11	assembled-molecule	11	Chromosome	CM001206.1	=	NC_018208.1	Primary Assembly	1624292	na
+MYCGRchr_12	assembled-molecule	12	Chromosome	CM001207.1	=	NC_018207.1	Primary Assembly	1462624	na
+MYCGRchr_13	assembled-molecule	13	Chromosome	CM001208.1	=	NC_018206.1	Primary Assembly	1185774	na
+MYCGRchr_14	assembled-molecule	14	Chromosome	CM001209.1	=	NC_018205.1	Primary Assembly	773098	na
+MYCGRchr_15	assembled-molecule	15	Chromosome	CM001210.1	=	NC_018204.1	Primary Assembly	639501	na
+MYCGRchr_16	assembled-molecule	16	Chromosome	CM001211.1	=	NC_018203.1	Primary Assembly	607044	na
+MYCGRchr_17	assembled-molecule	17	Chromosome	CM001212.1	=	NC_018202.1	Primary Assembly	584099	na
+MYCGRchr_18	assembled-molecule	18	Chromosome	CM001213.1	=	NC_018201.1	Primary Assembly	573698	na
+MYCGRchr_19	assembled-molecule	19	Chromosome	CM001214.1	=	NC_018200.1	Primary Assembly	549847	na
+MYCGRchr_20	assembled-molecule	20	Chromosome	CM001215.1	=	NC_018199.1	Primary Assembly	472105	na
+MYCGRchr_21	assembled-molecule	21	Chromosome	CM001216.1	=	NC_018198.1	Primary Assembly	409213	na
