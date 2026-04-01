@@ -50,7 +50,21 @@ cd support_scripts/gmb
 # Install Python dependencies
 pip install pandas "pyranges>=0.0.120,<=0.1.4" biopython pyyaml matplotlib
 
-# Quick smoke-test on chromosome 1 only (~2 min, representative subset)
+# Fastest smoke-test: pre-subsetted 500 kb region fixture (~8 seconds)
+# The fixture files cover chr 1 positions 1..500,000 and are already in
+# tests/fixtures/z_tritici_region1/ — no subsetting needed.
+python gene_model_builder.py \
+    --scallop   tests/fixtures/z_tritici_region1/scallop_geneset.gtf \
+    --stringtie tests/fixtures/z_tritici_region1/stringtie_geneset.gtf \
+    --helixer   tests/fixtures/z_tritici_region1/helixer_remapped.gff3 \
+    --orthodb   tests/fixtures/z_tritici_region1/orthodb_geneset.gtf \
+    --uniprot   tests/fixtures/z_tritici_region1/uniprot_geneset.gtf \
+    --genome    tests/fixtures/z_tritici_region1/genome.fa \
+    --output-dir output_region1/ \
+    --gene-prefix ZTRITICI
+
+# Full chromosome 1 using --seqname 1 (~25 min; large OrthoDB file loaded in full)
+# Useful to test seqname-mapping code path; not recommended for routine checks.
 python gene_model_builder.py \
     --scallop   z_tritici/scallop_geneset.gtf \
     --stringtie z_tritici/stringtie_geneset.gtf \
