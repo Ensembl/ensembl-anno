@@ -37,18 +37,140 @@ pip install pandas pyranges biopython pyyaml matplotlib
 
 ## Usage
 
-### Quickstart
+### Quickstart — bundled *Z. tritici* example data
 
-If you just cloned the repository, we recommend running the provided smoke test to ensure all dependencies are met.
+The repository includes a complete set of example evidence files for *Zymoseptoria tritici*
+(wheat yellow leaf blotch fungus) under `support_scripts/gmb/z_tritici/`, along with a
+pre-built DIAMOND database at `support_scripts/gmb/swissprot.dmnd`.  You can run the
+full pipeline immediately after cloning — no external downloads required.
 
 ```bash
-# Install the package and dependencies
-pip install -e .
+cd support_scripts/gmb
 
-# Run the smoke test
-cd examples
-./run_smoke_test.sh
+# Install Python dependencies
+pip install pandas "pyranges>=0.0.120,<=0.1.4" biopython pyyaml matplotlib
+
+# Quick smoke-test on chromosome 1 only (~2 min, representative subset)
+python gene_model_builder.py \
+    --scallop   z_tritici/scallop_geneset.gtf \
+    --stringtie z_tritici/stringtie_geneset.gtf \
+    --helixer   z_tritici/helixer_remapped.gff3 \
+    --orthodb   z_tritici/orthodb_geneset.gtf \
+    --uniprot   z_tritici/uniprot_geneset.gtf \
+    --genome    z_tritici/zymoseptoria_tritici.fa \
+    --assembly-report z_tritici/GCF_000219625.1_MYCGR_v2.0_assembly_report.txt \
+    --output-dir output_seqname1/ \
+    --gene-prefix ZTRITICI \
+    --seqname 1
+
+# Full genome run (all 21 chromosomes, ~15–30 min)
+python gene_model_builder.py \
+    --scallop   z_tritici/scallop_geneset.gtf \
+    --stringtie z_tritici/stringtie_geneset.gtf \
+    --helixer   z_tritici/helixer_remapped.gff3 \
+    --orthodb   z_tritici/orthodb_geneset.gtf \
+    --uniprot   z_tritici/uniprot_geneset.gtf \
+    --genome    z_tritici/zymoseptoria_tritici.fa \
+    --assembly-report z_tritici/GCF_000219625.1_MYCGR_v2.0_assembly_report.txt \
+    --output-dir output_full/ \
+    --gene-prefix ZTRITICI
 ```
+
+**Outputs in `output_seqname1/`:**
+
+| File | Description |
+| :--- | :--- |
+| `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
+| `cdna.fa` | Spliced transcript nucleotide sequences |
+| `cds.fa` | Coding sequences |
+| `prot.fa` | Translated protein sequences |
+| `summary.json` | Pipeline metrics (gene counts, filtering stats) |
+| `summary.tsv` | Same data in tabular form |
+| `subset_regions.tsv` | Records which regions were selected (when `--seqname` is used) |
+
+> **Note on seqname mapping:** The input GTF/GFF3 files use NCBI/GenBank accession
+> numbers (e.g. `CM001642.1`) while the genome FASTA uses short integer chromosome names
+> (`1`, `2`, …).  The `--assembly-report` flag handles this remapping automatically.
+> Always specify `--seqname` using the *mapped* name (e.g. `--seqname 1`), not the raw
+> accession.  See [KI-002](KNOWN_ISSUES.md#ki-002--seqname-mapping-is-applied-globally-before-any-subsetting)
+> for details.
+
+---
+
+### Protein validation with bundled DIAMOND database
+
+If DIAMOND and Psauron are installed, you can enable the protein validation stage using
+the bundled `swissprot.dmnd` database.  Edit `configs/fungi_default.yaml` (or pass a
+custom config) to add:
+
+```yaml
+protein_validation:
+  enabled: true
+  diamond_db: swissprot.dmnd   # path relative to the gmb/ working directory
+  diamond_threads: 4
+  psauron_threshold: 0.5
+```
+
+Then run:
+
+```bash
+python gene_model_builder.py \
+    ... \
+    --config configs/fungi_default.yaml \
+    --seqname 1
+```
+
+To verify that DIAMOND and Psauron are on `$PATH` before running:
+
+```bash
+python gene_model_builder.py --check-deps
+```
+
+> **CI note:** Protein validation is skipped in CI by default.  To run it locally, set
+> `RUN_EXTERNAL_TOOLS=1` before running pytest (see [Testing](#testing) below).
+
+---
+
+### Compare and validate the output
+
+After building the consensus annotation, compare it against the bundled Ensembl Fungi
+reference:
+
+```bash
+python compare_annotations.py \
+    --consensus output_seqname1/consensus.gff3 \
+    --reference z_tritici/ensembl_fungi_reference.gff3 \
+    --assembly-report z_tritici/GCF_000219625.1_MYCGR_v2.0_assembly_report.txt \
+    --seqname 1 \
+    --output-dir compare_seqname1/ \
+    --scallop   z_tritici/scallop_geneset.gtf \
+    --stringtie z_tritici/stringtie_geneset.gtf \
+    --helixer   z_tritici/helixer_remapped.gff3 \
+    --orthodb   z_tritici/orthodb_geneset.gtf \
+    --uniprot   z_tritici/uniprot_geneset.gtf
+```
+
+This produces per-locus classifications (`Exact_Match`, `Partial_Match`,
+`Structural_Mismatch`, `Missed`, `Novel`) plus sensitivity metrics and locus plots.
+
+---
+
+### Troubleshooting
+
+**"No features found on seqname X"**
+> Your evidence files likely use different chromosome/contig names from the genome FASTA.
+> Pass `--assembly-report` to remap NCBI accessions to chromosome numbers, or provide a
+> custom two-column TSV with `--seqname-map from_name,to_name`.
+
+**Pipeline produces 0 genes**
+> Check that `--helixer` points to `helixer_remapped.gff3` (not `helixer_geneset.gff3`).
+> The raw Helixer output uses NCBI accessions; the remapped file uses short chr names.
+
+**ImportError on pyranges**
+> Install a compatible version: `pip install "pyranges>=0.0.120,<=0.1.4"`.  The pipeline
+> does not support pyranges ≥ 0.2.
+
+---
 
 ### Inputs expected
 
@@ -140,20 +262,46 @@ This generates:
 
 ## Testing
 
-The pipeline is fully covered by a custom test suite.
+The pipeline ships with a pytest test suite covering unit logic, synthetic integration,
+and a real-data subset integration test using the bundled *Z. tritici* example data.
 
 ```bash
-# Run all tests (requires pytest)
-pytest test_*.py
+cd support_scripts/gmb
+
+# Install dev dependencies
+pip install pytest
+
+# Run all fast tests (~30 s)
+pytest tests/ -q
+
+# Run only integration tests (includes the z_tritici seqname-1 subset, ~2 min)
+pytest tests/ -m integration -v
+
+# Run external-tool tests (requires DIAMOND + Psauron on $PATH)
+RUN_EXTERNAL_TOOLS=1 pytest tests/ -m external_tools -v
 ```
 
-Test coverage includes:
-*   `test_annotate_cds_utrs.py`: Core ORF finding and CDS logic.
-*   `test_evidence_filter.py`: Filtering logic for proteins, chimeras, and Helixer.
-*   `test_scoring.py`: Isoform selection and weighting.
-*   `test_fasta_export.py`: Reverse-strand sequence extraction and FASTA header formatting.
-*   `test_config.py`: YAML parsing and preset overrides.
-*   `test_integration.py`: End-to-end synthetic pipeline execution.
+Key test modules:
+
+| Module | What it tests |
+| :--- | :--- |
+| `tests/test_integration.py` | End-to-end run on a tiny synthetic 501 bp dataset |
+| `tests/test_z_tritici_subset.py` | Real-data smoke test on bundled *Z. tritici* chr 1 |
+| `tests/test_scoring.py` | Isoform scoring and selection logic |
+| `tests/test_evidence_filter.py` | Chimera / protein / Helixer filtering logic |
+| `tests/test_annotate_cds_utrs.py` | ORF finding, CDS boundary derivation |
+| `tests/test_fasta_export.py` | Strand-aware FASTA sequence extraction |
+| `tests/test_config.py` | YAML config loading and preset merging |
+| `tests/test_compare_annotations.py` | Locus classification logic |
+| `tests/test_protein_validation.py` | Protein scoring (skipped without external tools) |
+
+**Golden regression fixtures** (optional, generated once and stored under
+`tests/fixtures/expected/`) enable exact locus-level regression testing on the
+*Z. tritici* chr-1 subset.  Generate or refresh them with:
+
+```bash
+python tests/generate_golden_fixtures.py
+```
 
 ---
 
