@@ -70,6 +70,7 @@ ignore = [
     "B905",   # zip strict — not available in Python 3.8
     "SIM108", # ternary — sometimes less readable
     "UP007",  # use X | Y for union types — not available in 3.8
+    "UP045",  # use X | None — same reason as UP007; Optional[X] is clearer for 3.8 compat
     "UP022",  # capture_output — requires Python 3.7+ but reads less clearly
     "RUF002", # ambiguous unicode in docstring — prime symbols (′) intentional in genomics
     "RUF003", # ambiguous unicode in comment — same reason

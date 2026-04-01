@@ -6,19 +6,26 @@ in batch. Deduplicates strict sequences within run to optimize throughput,
 and returns a score dict mapping sequences or structural hashes to their results.
 """
 
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
 import tempfile
 from collections import defaultdict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import PipelineConfig, ProteinValidationConfig
 
 
-def check_dependencies(val_cfg):
+def check_dependencies(val_cfg: ProteinValidationConfig) -> None:
     """Ensure tools and databases are present. Exits if missing.
 
     Parameters
     ----------
     val_cfg : ProteinValidationConfig
+        Protein validation configuration section.
     """
     if not val_cfg.enabled:
         return
@@ -56,19 +63,23 @@ def check_dependencies(val_cfg):
         sys.exit(1)
 
 
-def batch_score_proteins(protein_dict, config):
+def batch_score_proteins(
+    protein_dict: dict[str, str],
+    config: PipelineConfig,
+) -> dict[str, float]:
     """Run DIAMOND and Psauron in batch on unique sequences.
 
     Parameters
     ----------
     protein_dict : dict
-        Mapping of arbitrary keys (e.g. transcript ID or struct hash) to protein sequences (strings).
+        Mapping of arbitrary keys (e.g. transcript ID or struct hash) to
+        protein sequences (strings).
     config : PipelineConfig
 
     Returns
     -------
     dict
-        Mapping of arbitrary keys to float protein_coding_score.
+        Mapping of the same keys to float ``protein_coding_score``.
     """
     val_cfg = config.protein_validation
     if not val_cfg.enabled or not protein_dict:

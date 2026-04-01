@@ -5,23 +5,40 @@ Generates summary reports (JSON and/or TSV) with stage counts,
 locus statistics, and protein-evidence retention metrics.
 """
 
+from __future__ import annotations
+
 import csv
 import json
 import os
 from collections import Counter
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from config import PipelineConfig
 
 
-def generate_report(stats, loci, output_dir, config):
+def generate_report(
+    stats: dict[str, Any],
+    loci: list[tuple[Any, list[dict]]],
+    output_dir: str,
+    config: PipelineConfig,
+) -> dict:
     """Generate summary reports.
 
     Parameters
     ----------
     stats : dict
         Accumulated statistics from all pipeline stages.
-    loci : list of (cluster_id, [model_dicts])
+    loci : list of (cluster_id, list of model dicts)
         Final selected isoforms.
     output_dir : str
+        Directory to write report files into.
     config : PipelineConfig
+
+    Returns
+    -------
+    dict
+        The assembled report dictionary.
     """
     os.makedirs(output_dir, exist_ok=True)
 

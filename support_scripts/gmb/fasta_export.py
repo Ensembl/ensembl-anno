@@ -9,7 +9,15 @@ Python replacement for gtf_to_seq.pl.  Produces:
 All sequences use stable IDs matching the consensus GFF3.
 """
 
+from __future__ import annotations
+
 import os
+from typing import IO, TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from config import PipelineConfig
+
+import pandas as pd
 
 from annotate_cds_utrs import (
     build_spliced_seq,
@@ -20,7 +28,11 @@ from annotate_cds_utrs import (
 )
 
 
-def _build_cds_seq_from_intervals(cds_intervals, strand, chrom_seq):
+def _build_cds_seq_from_intervals(
+    cds_intervals: list[tuple[int, int]],
+    strand: str,
+    chrom_seq: str,
+) -> str:
     """Build CDS nucleotide sequence from genomic CDS intervals."""
     parts = []
     for cs, ce in sorted(cds_intervals) if strand == "+" else reversed(sorted(cds_intervals)):
@@ -31,18 +43,24 @@ def _build_cds_seq_from_intervals(cds_intervals, strand, chrom_seq):
     return cds_nuc
 
 
-def export_fasta(loci, genome, helixer_cds, config, output_dir):
+def export_fasta(
+    loci: list[tuple[Any, list[dict]]],
+    genome: dict[str, str],
+    helixer_cds: pd.DataFrame | None,
+    config: PipelineConfig,
+    output_dir: str,
+) -> dict[str, int]:
     """Export cDNA, protein, and CDS FASTA files.
 
     Parameters
     ----------
-    loci : list of (cluster_id, [model_dicts])
+    loci : list of (cluster_id, list of model dicts)
         Selected isoforms from the scoring stage.
         Each model dict has keys: id, chrom, strand, df (exon DataFrame),
         combined_evidence, and a stable output ID assigned during GFF3 writing.
     genome : dict
-        {chrom: sequence} from load_genome.
-    helixer_cds : DataFrame or None
+        ``{chrom: sequence}`` from ``load_genome``.
+    helixer_cds : pd.DataFrame or None
         CDS rows for Helixer models.
     config : PipelineConfig
     output_dir : str
@@ -50,7 +68,9 @@ def export_fasta(loci, genome, helixer_cds, config, output_dir):
 
     Returns
     -------
-    dict : export statistics.
+    dict
+        Export statistics with keys ``total_transcripts``, ``with_cds``,
+        ``with_protein``, ``partial_5``, ``partial_3``.
     """
     ecfg = config.export
     ocfg = config.orf
@@ -188,7 +208,7 @@ def export_fasta(loci, genome, helixer_cds, config, output_dir):
     return stats
 
 
-def _write_seq(fh, seq, line_width=80):
+def _write_seq(fh: IO[str], seq: str, line_width: int = 80) -> None:
     """Write a sequence in wrapped FASTA format."""
     for i in range(0, len(seq), line_width):
         fh.write(seq[i : i + line_width] + "\n")

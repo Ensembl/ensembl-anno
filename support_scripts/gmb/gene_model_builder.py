@@ -3,13 +3,35 @@
 
 Loads evidence, applies filters, performs optional protein validation,
 and generates consensus models.
+
+DataFrame Schema Contract
+-------------------------
+Evidence DataFrames passed through the pipeline share these columns:
+
+* ``Chromosome`` : str -- sequence/contig name
+* ``Start`` : int -- 0-based start (half-open, pyranges convention)
+* ``End`` : int -- 1-based end (half-open, pyranges convention)
+* ``Strand`` : str -- ``"+"`` or ``"-"``
+* ``transcript_id`` : str -- unique transcript identifier (source-prefixed)
+* ``gene_id`` : str -- gene-level grouping identifier (source-prefixed)
+* ``Source`` : str -- evidence origin, e.g. ``"Scallop"``, ``"Helixer"``
+* ``Feature`` : str -- GFF3/GTF feature type (``"exon"``, ``"CDS"``, etc.)
+
+Additional columns may be present depending on the source format
+(``Score``, ``Coverage``, ``Identity``, ``combined_evidence``, etc.).
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
 from collections import defaultdict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import PipelineConfig
 
 import numpy as np
 import pandas as pd
@@ -37,8 +59,30 @@ from subset_utils import (
 )
 
 
-def compute_percentile_guardrails(locus_df, config, protein_supported_tids):
-    """Compute effective guardrails based on high-confidence candidates."""
+def compute_percentile_guardrails(
+    locus_df: pd.DataFrame,
+    config: PipelineConfig,
+    protein_supported_tids: set[str],
+) -> dict[str, int]:
+    """Compute effective guardrails based on high-confidence candidates.
+
+    Parameters
+    ----------
+    locus_df : pd.DataFrame
+        Exon-level DataFrame for clustered loci, containing at least
+        ``transcript_id``, ``Source``, ``Start``, ``End``, and optionally
+        ``combined_evidence``.
+    config : PipelineConfig
+        Pipeline configuration with ``validation`` section.
+    protein_supported_tids : set of str
+        Transcript IDs that overlap protein evidence.
+
+    Returns
+    -------
+    dict
+        Keys ``"effective_max_exon_len_bp"`` and
+        ``"effective_max_transcript_span_bp"`` with integer limits.
+    """
     val_cfg = config.validation
 
     # Start with configured base limits
@@ -91,7 +135,7 @@ def compute_percentile_guardrails(locus_df, config, protein_supported_tids):
     # Calculate transcript spans
     if val_cfg.max_transcript_span_mode == "percentile":
         spans = []
-        for tid, grp in hc_exons.groupby("transcript_id"):
+        for _tid, grp in hc_exons.groupby("transcript_id"):
             s = grp["End"].max() - grp["Start"].min()
             spans.append(s)
         if spans:
@@ -104,8 +148,30 @@ def compute_percentile_guardrails(locus_df, config, protein_supported_tids):
     return runtime_params
 
 
-def compute_utr_end_support(model, locus_df, config):
-    """Determine if 5' and 3' ends are supported by other sources."""
+def compute_utr_end_support(
+    model: dict,
+    locus_df: pd.DataFrame,
+    config: PipelineConfig,
+) -> dict[str, object]:
+    """Determine if 5' and 3' ends are supported by other sources.
+
+    Parameters
+    ----------
+    model : dict
+        Candidate gene model dict with keys ``id``, ``strand``, ``start``,
+        ``end``, and optionally ``protein_coding_score``.
+    locus_df : pd.DataFrame
+        Exon-level DataFrame for the enclosing locus.
+    config : PipelineConfig
+        Pipeline configuration with ``utr`` and ``protein_validation``
+        sections.
+
+    Returns
+    -------
+    dict
+        Support results with keys ``supported_5p``, ``supported_3p``,
+        ``reason_5p``, ``reason_3p``, ``action_5p``, ``action_3p``.
+    """
     utr_cfg = config.utr
     res = {
         "supported_5p": False,
@@ -237,7 +303,25 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_evidence(path, source_label):
+def load_evidence(
+    path: str | None,
+    source_label: str,
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    """Load exon and CDS rows from a GTF or GFF3 file.
+
+    Parameters
+    ----------
+    path : str or None
+        Filesystem path to the annotation file. ``None`` or non-existent
+        paths return ``(None, None)``.
+    source_label : str
+        Label to assign as the ``Source`` column (e.g. ``"Scallop"``).
+
+    Returns
+    -------
+    tuple of (DataFrame or None, DataFrame or None)
+        ``(exons_df, cds_df)``. Both are ``None`` when *path* is missing.
+    """
     if not path or not os.path.exists(path):
         return None, None
     print(f"Loading {source_label} from {path}...")
@@ -288,7 +372,12 @@ def load_evidence(path, source_label):
     return exons, cds
 
 
-def main():
+def main() -> None:
+    """Entry point for the Gene Model Builder pipeline.
+
+    Parses CLI arguments, loads evidence, applies filtering, scoring,
+    validation, deduplication, and writes final GFF3 / FASTA outputs.
+    """
     args = parse_args()
     config = load_config(args.config, args.preset)
 
@@ -356,7 +445,6 @@ def main():
     subset_regions = None
     if getattr(args, "sample_loci", None) is not None:
         # Build preliminary loci from candidate exons for sampling
-        import pyranges as _pr
 
         _all_exons_for_loci = []
         if not tx_exons_filtered.empty:
@@ -470,7 +558,7 @@ def main():
 
     gene_counter = 1
 
-    for cid, locus_df in cluster_df.groupby("Cluster"):
+    for _cid, locus_df in cluster_df.groupby("Cluster"):
         genes = select_isoforms(locus_df, config, protein_supported_tids, genome_dict)
         if not genes:
             continue
@@ -744,18 +832,17 @@ def main():
     output_mrnas = [r for r in selected_gff_rows if r.get("Feature") == "mRNA"]
 
     # Extract original models to map UTR support metadata
-    models_by_tid = {}
-    for cid, locus_df in cluster_df.groupby("Cluster"):
+    for _cid, locus_df in cluster_df.groupby("Cluster"):
         genes = select_isoforms(locus_df, config, protein_supported_tids, genome_dict)
         if genes:
             for g in genes:
-                for idx, m in enumerate(g):
+                for _idx, _m in enumerate(g):
                     # Emitted ID matches `gene_id.t{idx+1}` logic
                     # To accurately find it here we need to reconstruct what it was called or just use order, but the logic in select isoforms creates it.
                     pass  # We will instead pass it via a side-channel or Evidence field since tid changes
 
     # Better approach: parse Evidence field or just store it in mRNA row temporarily
-    m_idx_map = {m["ID"]: m for m in output_mrnas}
+    {m["ID"]: m for m in output_mrnas}
 
     for m in output_mrnas:
         tid = m["ID"]

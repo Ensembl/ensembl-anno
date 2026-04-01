@@ -5,8 +5,15 @@ Clusters output genes by high reciprocal overlap on the same strand and
 resolves duplicates by merging identical structures or keeping best-scored.
 """
 
+from __future__ import annotations
 
-def _reciprocal_overlap(s1, e1, s2, e2):
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import PipelineConfig
+
+
+def _reciprocal_overlap(s1: int, e1: int, s2: int, e2: int) -> float:
     """Compute reciprocal overlap fraction between two intervals."""
     overlap = max(0, min(e1, e2) - max(s1, s2))
     len1 = e1 - s1
@@ -16,13 +23,17 @@ def _reciprocal_overlap(s1, e1, s2, e2):
     return overlap / min(len1, len2)
 
 
-def _get_exon_chain(children):
+def _get_exon_chain(children: list[dict]) -> list[tuple[int, int]]:
     """Extract sorted exon chain from child rows."""
     exons = [(r["Start"], r["End"]) for r in children if r["Feature"] == "exon"]
     return sorted(exons)
 
 
-def _chains_match(chain1, chain2, tolerance_bp=10):
+def _chains_match(
+    chain1: list[tuple[int, int]],
+    chain2: list[tuple[int, int]],
+    tolerance_bp: int = 10,
+) -> bool:
     """Check if two exon chains are structurally equivalent within tolerance."""
     if len(chain1) != len(chain2):
         return False
@@ -32,7 +43,10 @@ def _chains_match(chain1, chain2, tolerance_bp=10):
     return True
 
 
-def dedup_genes(gff_rows, config):
+def dedup_genes(
+    gff_rows: list[dict],
+    config: PipelineConfig,
+) -> tuple[list[dict], dict]:
     """Deduplicate overlapping genes in GFF3 output.
 
     Parameters
@@ -40,12 +54,12 @@ def dedup_genes(gff_rows, config):
     gff_rows : list of dict
         GFF3 rows with Feature, Start, End, Strand, ID, Parent keys.
     config : PipelineConfig
-        Must have .dedup attribute.
+        Must have ``.dedup`` attribute.
 
     Returns
     -------
-    list of dict : deduplicated rows
-    dict : stats
+    tuple of (list of dict, dict)
+        ``(deduplicated_rows, stats)``.
     """
     dedup_cfg = config.dedup
     if not dedup_cfg.enabled:

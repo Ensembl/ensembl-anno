@@ -7,6 +7,14 @@ scoring function.  Default parameters are tuned for fungal genomes.
 All thresholds are driven by PipelineConfig (YAML).
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import PipelineConfig
+
+import pandas as pd
 
 from annotate_cds_utrs import check_splice_sites
 
@@ -15,7 +23,7 @@ from annotate_cds_utrs import check_splice_sites
 # ---------------------------------------------------------------------------
 
 
-def _get_intron_chain(exon_df):
+def _get_intron_chain(exon_df: pd.DataFrame) -> str:
     """Return a string signature of the intron chain for one transcript."""
     exon_df = exon_df.sort_values("Start")
     if len(exon_df) < 2:
@@ -30,7 +38,12 @@ def _get_intron_chain(exon_df):
 # ---------------------------------------------------------------------------
 
 
-def score_model(model, config, protein_supported_tids, genome=None):
+def score_model(
+    model: dict,
+    config: PipelineConfig,
+    protein_supported_tids: set[str],
+    genome: dict[str, str] | None = None,
+) -> float:
     """Score a single gene model.
 
     Parameters
@@ -45,7 +58,8 @@ def score_model(model, config, protein_supported_tids, genome=None):
 
     Returns
     -------
-    float : composite score.
+    float
+        Composite score.
     """
     scfg = config.scoring
     score = 0.0
@@ -102,20 +116,27 @@ def score_model(model, config, protein_supported_tids, genome=None):
 # ---------------------------------------------------------------------------
 
 
-def select_isoforms(locus_df, config, protein_supported_tids, genome=None):
+def select_isoforms(
+    locus_df: pd.DataFrame,
+    config: PipelineConfig,
+    protein_supported_tids: set[str],
+    genome: dict[str, str] | None = None,
+) -> list[list[dict]]:
     """Score and select isoforms for a single locus.
 
     Parameters
     ----------
-    locus_df : DataFrame
+    locus_df : pd.DataFrame
         Exon rows for all models in this locus.
     config : PipelineConfig
-    protein_supported_tids : set
+    protein_supported_tids : set of str
     genome : dict or None
 
     Returns
     -------
-    list of model dicts (selected isoforms), sorted by start position.
+    list of list of dict
+        Each inner list is a gene sub-cluster of model dicts (selected
+        isoforms), sorted by genomic start position.
     """
     scfg = config.scoring
 

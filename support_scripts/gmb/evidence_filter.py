@@ -5,8 +5,29 @@ Filters and denoises protein evidence (OrthoDB/UniProt), transcriptomic
 assemblies, and Helixer predictions before consensus building.
 
 All thresholds are driven by PipelineConfig (YAML).
+
+DataFrame Schema Contract
+-------------------------
+Input DataFrames are exon-level rows sharing these columns:
+
+* ``Chromosome`` : str -- sequence/contig name
+* ``Start`` : int -- 0-based start (pyranges half-open convention)
+* ``End`` : int -- 1-based end
+* ``Strand`` : str -- ``"+"`` or ``"-"``
+* ``transcript_id`` : str -- unique transcript identifier (source-prefixed)
+* ``Source`` : str -- evidence origin, e.g. ``"OrthoDB"``, ``"Scallop"``
+* ``Feature`` : str -- always ``"exon"`` for exon DataFrames
+
+Protein DataFrames may additionally carry ``Score``, ``Coverage``,
+and ``Identity`` attribute columns parsed from GFF3/GTF.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import PipelineConfig
 
 import pandas as pd
 import pyranges as pr
@@ -16,7 +37,7 @@ import pyranges as pr
 # ---------------------------------------------------------------------------
 
 
-def _transcript_span(df):
+def _transcript_span(df: pd.DataFrame) -> pd.DataFrame:
     """Collapse exon-level DataFrame to transcript-level spans."""
     return df.groupby("transcript_id", as_index=False).agg(
         Chromosome=("Chromosome", "first"),
@@ -27,7 +48,7 @@ def _transcript_span(df):
     )
 
 
-def _reciprocal_overlap(s1, e1, s2, e2):
+def _reciprocal_overlap(s1: int, e1: int, s2: int, e2: int) -> float:
     """Compute reciprocal overlap fraction between two intervals."""
     overlap = max(0, min(e1, e2) - max(s1, s2))
     len1 = e1 - s1
@@ -37,7 +58,12 @@ def _reciprocal_overlap(s1, e1, s2, e2):
     return min(overlap / len1, overlap / len2)
 
 
-def filter_protein_evidence(protein_df, config, stats=None, transcriptomic_df=None):
+def filter_protein_evidence(
+    protein_df: pd.DataFrame,
+    config: PipelineConfig,
+    stats: dict | None = None,
+    transcriptomic_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     """Filter protein evidence (OrthoDB / UniProt GTF exon rows).
 
     Three-stage pipeline:
@@ -48,19 +74,20 @@ def filter_protein_evidence(protein_df, config, stats=None, transcriptomic_df=No
 
     Parameters
     ----------
-    protein_df : DataFrame
+    protein_df : pd.DataFrame
         Exon-level rows with Chromosome, Start, End, Strand, transcript_id,
         Source columns. May also contain Score, Coverage, Identity attributes.
     config : PipelineConfig
     stats : dict or None
         Mutable dict to record filtering stats.
-    transcriptomic_df : DataFrame or None
+    transcriptomic_df : pd.DataFrame or None
         If provided, used to boost protein models that overlap transcriptomic
         evidence.
 
     Returns
     -------
-    DataFrame : filtered exon-level rows.
+    pd.DataFrame
+        Filtered exon-level rows.
     """
     if protein_df.empty:
         return protein_df
@@ -274,7 +301,11 @@ def filter_protein_evidence(protein_df, config, stats=None, transcriptomic_df=No
 # ---------------------------------------------------------------------------
 
 
-def filter_chimeras(tx_df, config, stats=None):
+def filter_chimeras(
+    tx_df: pd.DataFrame,
+    config: PipelineConfig,
+    stats: dict | None = None,
+) -> pd.DataFrame:
     """Filter likely chimeric or artefactual transcriptomic models.
 
     - Remove transcripts with unreasonably large introns
@@ -282,14 +313,15 @@ def filter_chimeras(tx_df, config, stats=None):
 
     Parameters
     ----------
-    tx_df : DataFrame
+    tx_df : pd.DataFrame
         Exon-level transcriptomic rows.
     config : PipelineConfig
     stats : dict or None
 
     Returns
     -------
-    DataFrame : filtered exon rows.
+    pd.DataFrame
+        Filtered exon rows.
     """
     if tx_df.empty:
         return tx_df
@@ -333,7 +365,11 @@ def filter_chimeras(tx_df, config, stats=None):
 # ---------------------------------------------------------------------------
 
 
-def split_mega_transcripts(tx_df, config, stats=None):
+def split_mega_transcripts(
+    tx_df: pd.DataFrame,
+    config: PipelineConfig,
+    stats: dict | None = None,
+) -> pd.DataFrame:
     """Split pathological mega-transcripts into local candidate segments.
 
     Transcriptome GTFs (especially StringTie --merge outputs) can contain
@@ -345,14 +381,15 @@ def split_mega_transcripts(tx_df, config, stats=None):
 
     Parameters
     ----------
-    tx_df : DataFrame
+    tx_df : pd.DataFrame
         Exon-level transcriptomic rows.
     config : PipelineConfig
     stats : dict or None
 
     Returns
     -------
-    DataFrame : exon rows with updated transcript_id / gene_id for segments,
+    pd.DataFrame
+        Exon rows with updated transcript_id / gene_id for segments,
         plus ``parent_transcript_id`` and ``parent_gene_id`` provenance columns.
     """
     scfg = config.transcript_splitting
@@ -506,7 +543,12 @@ def split_mega_transcripts(tx_df, config, stats=None):
 # ---------------------------------------------------------------------------
 
 
-def filter_helixer_models(helixer_df, helixer_cds, config, stats=None):
+def filter_helixer_models(
+    helixer_df: pd.DataFrame,
+    helixer_cds: pd.DataFrame,
+    config: PipelineConfig,
+    stats: dict | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Filter implausible Helixer predictions.
 
     - Remove models with very short CDS (< min_cds_bp)
@@ -514,16 +556,17 @@ def filter_helixer_models(helixer_df, helixer_cds, config, stats=None):
 
     Parameters
     ----------
-    helixer_df : DataFrame
+    helixer_df : pd.DataFrame
         Exon-level Helixer rows.
-    helixer_cds : DataFrame
+    helixer_cds : pd.DataFrame
         CDS-level Helixer rows.
     config : PipelineConfig
     stats : dict or None
 
     Returns
     -------
-    (filtered_exons, filtered_cds) : (DataFrame, DataFrame)
+    tuple of (pd.DataFrame, pd.DataFrame)
+        ``(filtered_exons, filtered_cds)``.
     """
     if helixer_df.empty:
         return helixer_df, helixer_cds

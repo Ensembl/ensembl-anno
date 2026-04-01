@@ -15,15 +15,20 @@ Policies (configurable):
 Also provides UTR trimming against biological length limits.
 """
 
+from __future__ import annotations
+
 import sys
-from typing import List, Tuple
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import PipelineConfig, UtrConfig, ValidationConfig
 
 # ---------------------------------------------------------------------------
 # Validation helpers
 # ---------------------------------------------------------------------------
 
 
-def _merge_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+def _merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """Merge overlapping intervals into a disjoint set."""
     if not intervals:
         return []
@@ -39,13 +44,13 @@ def _merge_intervals(intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
 
 
 def _interval_in_union(
-    union_intervals: List[Tuple[int, int]], target_s: int, target_e: int
+    union_intervals: list[tuple[int, int]], target_s: int, target_e: int
 ) -> bool:
     """Check if target interval is fully contained within ANY SINGLE disjoint interval from the union."""
     return any(cs <= target_s and ce >= target_e for cs, ce in union_intervals)
 
 
-def _intersect_with_union(union_intervals: List[Tuple[int, int]], row: dict) -> List[dict]:
+def _intersect_with_union(union_intervals: list[tuple[int, int]], row: dict) -> list[dict]:
     """Intersect a single row (like CDS/UTR) with the union of intervals.
     Returns a list of split/trimmed rows bounded strictly within the union geometries."""
     target_s, target_e = row["Start"], row["End"]
@@ -61,14 +66,35 @@ def _intersect_with_union(union_intervals: List[Tuple[int, int]], row: dict) -> 
     return results
 
 
-def validate_transcript(mrna_row, exon_rows, cds_rows, utr_rows, config=None, runtime_params=None):
+def validate_transcript(
+    mrna_row: dict,
+    exon_rows: list[dict],
+    cds_rows: list[dict],
+    utr_rows: list[dict],
+    config: ValidationConfig | None = None,
+    runtime_params: dict[str, int] | None = None,
+) -> tuple[list[str], int, int]:
     """Validate structural integrity of a single transcript.
+
+    Parameters
+    ----------
+    mrna_row : dict
+        mRNA-level GFF3 row dict.
+    exon_rows : list of dict
+        Exon child rows.
+    cds_rows : list of dict
+        CDS child rows.
+    utr_rows : list of dict
+        UTR child rows (5' and 3' combined).
+    config : ValidationConfig or None
+        Validation configuration section.
+    runtime_params : dict or None
+        Effective runtime guardrails (e.g. percentile-derived limits).
 
     Returns
     -------
-    list of str : violation messages (empty = valid)
-    int : max_drift
-    float : transcript_span
+    tuple of (list of str, int, int)
+        ``(violation_messages, max_drift, transcript_span)``.
     """
     violations = []
     mrna_s, mrna_e = mrna_row["Start"], mrna_row["End"]
@@ -145,12 +171,20 @@ def validate_transcript(mrna_row, exon_rows, cds_rows, utr_rows, config=None, ru
     return violations, max_drift, transcript_span
 
 
-def validate_gene(gene_row, mrna_rows):
+def validate_gene(gene_row: dict, mrna_rows: list[dict]) -> list[str]:
     """Validate gene span covers all mRNA children.
+
+    Parameters
+    ----------
+    gene_row : dict
+        Gene-level GFF3 row dict.
+    mrna_rows : list of dict
+        mRNA child rows.
 
     Returns
     -------
-    list of str : violation messages (empty = valid)
+    list of str
+        Violation messages (empty means valid).
     """
     violations = []
     if not mrna_rows:
@@ -170,14 +204,31 @@ def validate_gene(gene_row, mrna_rows):
 # ---------------------------------------------------------------------------
 
 
-def fix_transcript(mrna_row, exon_rows, cds_rows, utr_rows):
+def fix_transcript(
+    mrna_row: dict,
+    exon_rows: list[dict],
+    cds_rows: list[dict],
+    utr_rows: list[dict],
+) -> list[dict]:
     """Auto-fix a transcript by recomputing spans and synthesizing missing exons.
 
     Mutates the rows in-place.
 
+    Parameters
+    ----------
+    mrna_row : dict
+        mRNA-level GFF3 row dict (mutated in-place).
+    exon_rows : list of dict
+        Exon child rows.
+    cds_rows : list of dict
+        CDS child rows.
+    utr_rows : list of dict
+        UTR child rows.
+
     Returns
     -------
-    list of dict : any synthesized exon rows to append
+    list of dict
+        Any synthesized exon rows to append.
     """
     synth_exons = []
 
@@ -193,7 +244,7 @@ def fix_transcript(mrna_row, exon_rows, cds_rows, utr_rows):
     return synth_exons
 
 
-def fix_gene(gene_row, mrna_rows):
+def fix_gene(gene_row: dict, mrna_rows: list[dict]) -> None:
     """Recompute gene span from mRNA children. Mutates in-place."""
     if mrna_rows:
         gene_row["Start"] = min(r["Start"] for r in mrna_rows)
@@ -205,20 +256,32 @@ def fix_gene(gene_row, mrna_rows):
 # ---------------------------------------------------------------------------
 
 
-def trim_utrs(utr_5p_rows, utr_3p_rows, cds_rows, exon_rows, config):
+def trim_utrs(
+    utr_5p_rows: list[dict],
+    utr_3p_rows: list[dict],
+    cds_rows: list[dict],
+    exon_rows: list[dict],
+    config: UtrConfig,
+) -> tuple[list[dict], list[dict], bool]:
     """Apply UTR length constraints.
 
     Parameters
     ----------
     utr_5p_rows : list of dict
+        Five-prime UTR GFF3 row dicts.
     utr_3p_rows : list of dict
+        Three-prime UTR GFF3 row dicts.
     cds_rows : list of dict
+        CDS GFF3 row dicts.
     exon_rows : list of dict
+        Exon GFF3 row dicts.
     config : UtrConfig
+        UTR configuration section.
 
     Returns
     -------
-    (trimmed_5p, trimmed_3p, was_trimmed) : (list, list, bool)
+    tuple of (list of dict, list of dict, bool)
+        ``(trimmed_5p, trimmed_3p, was_trimmed)``.
     """
     was_trimmed = False
 
@@ -322,7 +385,11 @@ def trim_utrs(utr_5p_rows, utr_3p_rows, cds_rows, exon_rows, config):
 # ---------------------------------------------------------------------------
 
 
-def validate_and_fix_gff3(gff_rows, config, runtime_params=None):
+def validate_and_fix_gff3(
+    gff_rows: list[dict],
+    config: PipelineConfig,
+    runtime_params: dict[str, int] | None = None,
+) -> tuple[list[dict], dict]:
     """Validate and optionally fix GFF3 rows.
 
     Parameters
@@ -330,14 +397,15 @@ def validate_and_fix_gff3(gff_rows, config, runtime_params=None):
     gff_rows : list of dict
         GFF3 row dicts with Feature, Start, End, ID, Parent keys.
     config : PipelineConfig
-        Must have .validation and .utr attributes.
-    runtime_params : dict, optional
+        Must have ``.validation`` and ``.utr`` attributes.
+    runtime_params : dict or None
         Effective runtime guardrails.
 
     Returns
     -------
-    list of dict : validated/fixed rows
-    dict : stats about violations found/fixed/dropped
+    tuple of (list of dict, dict)
+        ``(validated_rows, stats)`` where *stats* reports violations
+        found, fixed, and dropped.
     """
     val_cfg = config.validation
     utr_cfg = config.utr
