@@ -54,7 +54,7 @@ scoring:
   require_support_for_single_exon: true
 
 protein_validation:
-  enabled: false
+  enabled: true
   diamond_path: "diamond"
   psauron_path: "psauron"
   diamond_db: "swissprot.dmnd"
