@@ -1,6 +1,7 @@
 # Byte-compiled
 __pycache__/
 *.pyc
+__pycache__
 # pyenv
 .python-version
 # environments
@@ -19,4 +20,5 @@ downloads/
 #unit test
 .cache
 .pytest_cache
-
+.vscode
+.pyc
