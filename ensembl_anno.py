@@ -55,10 +55,10 @@ def configure_analysis_flags(
     run_scallop=None,
     run_stringtie=None,
     run_minimap2=None,
-    run_genblast=None,
-    run_genblast_op=None,
-    run_miniprot=None,
-    run_miniprot_op=None,
+    run_genblast_protein_file_1=None,
+    run_genblast_protein_file_2=None,
+    run_miniprot_protein_file_1=None,
+    run_miniprot_protein_file_2=None,
     rfam_accessions_file=None,
     short_read_fastq_dir=None,
     long_read_fastq_dir=None,
@@ -109,10 +109,10 @@ def configure_analysis_flags(
     flags['run_minimap2'] = (run_minimap2 if run_minimap2 is not None else run_transcriptomic) and long_read_fastq_dir is not None
 
     # Proteins
-    flags['run_genblast'] = (run_genblast if run_genblast is not None else run_proteins) and protein_file is not None
-    flags['run_genblast_op'] = (run_genblast_op if run_genblast_op is not None else run_proteins) and other_protein_file is not None
-    flags['run_miniprot'] = (run_miniprot if run_miniprot is not None else run_proteins) and protein_file is not None
-    flags['run_miniprot_op'] = (run_miniprot_op if run_miniprot_op is not None else run_proteins) and other_protein_file is not None
+    flags['run_genblast_protein_file_1'] = (run_genblast_protein_file_1 if run_genblast_protein_file_1 is not None else run_proteins) and protein_file is not None
+    flags['run_genblast_protein_file_2'] = (run_genblast_protein_file_1_op if run_genblast_protein_file_1_op is not None else run_proteins) and other_protein_file is not None
+    flags['run_miniprot_protein_file_1'] = (run_miniprot_protein_file_1 if run_miniprot_protein_file_1 is not None else run_proteins) and protein_file is not None
+    flags['run_miniprot_protein_file_2'] = (run_miniprot_protein_file_1_op if run_miniprot_protein_file_1_op is not None else run_proteins) and other_protein_file is not None
 
     # Finalisation
     flags['finalise_geneset'] = finalise_geneset if finalise_geneset is not None else finalise_geneset
@@ -130,11 +130,11 @@ def parse_args():
     parser.add_argument("--miniprot_path", type=str, help="Path to Miniprot executable")
     parser.add_argument("--convert2blastmask_path", type=str, help="Path to convert2blastmask executable")
     parser.add_argument("--makeblastdb_path", type=str, help="Path to makeblastdb executable")
-    parser.add_argument("--run_genblast", action="store_const", const=True, default=None, help="Run GenBlast to align protein sequences")
+    parser.add_argument("--run_genblast_protein_file_1", action="store_const", const=True, default=None, help="Run GenBlast to align protein sequences")
     parser.add_argument("--genblast_timeout", type=int, help="GenBlast timeout in seconds", default=10800)
-    parser.add_argument("--run_genblast_op", action="store_const", const=True, default=None, help="Run GenBlast to align other protein sequences")
-    parser.add_argument("--run_miniprot", action="store_const", const=True, default=None, help="Run Miniprot to align protein sequences")
-    parser.add_argument("--run_miniprot_op", action="store_const", const=True, default=None, help="Run Miniprot to align other protein sequences")
+    parser.add_argument("--run_genblast_protein_file_2", action="store_const", const=True, default=None, help="Run GenBlast to align other protein sequences")
+    parser.add_argument("--run_miniprot_protein_file_1", action="store_const", const=True, default=None, help="Run Miniprot to align protein sequences")
+    parser.add_argument("--run_miniprot_protein_file_2", action="store_const", const=True, default=None, help="Run Miniprot to align other protein sequences")
     parser.add_argument("--protein_file", type=str, help="Path to a fasta file with protein sequences")
     parser.add_argument("--other_protein_file", type=str, help="Path to a fasta file with other protein sequences")
     parser.add_argument("--rfam_accessions_file", type=str, help="Path to a file with Rfam CM accessions, one accession per line, to use with cmsearch")
@@ -302,10 +302,10 @@ def main() -> None:
 	    run_scallop=args.run_scallop,
 	    run_stringtie=args.run_stringtie,
 	    run_minimap2=args.run_minimap2,
-	    run_genblast=args.run_genblast,
-	    run_genblast_op=args.run_genblast_op,
-        run_miniprot=args.run_miniprot,
-        run_miniprot_op=args.run_miniprot_op,
+	    run_genblast_protein_file_1=args.run_genblast_protein_file_1,
+	    run_genblast_protein_file_2=args.run_genblast_protein_file_1_op,
+        run_miniprot_protein_file_1=args.run_miniprot_protein_file_1,
+        run_miniprot_protein_file_2=args.run_miniprot_protein_file_1_op,
         rfam_accessions_file=args.rfam_accessions_file,
         short_read_fastq_dir=args.short_read_fastq_dir,
         long_read_fastq_dir=long_read_fastq_dir,
@@ -467,10 +467,10 @@ def main() -> None:
     #################################
     # Protein analyses
     #################################
-    if analysis_flags['run_genblast']:
-        logger.info("Running GenBlast")
-        logger.info("run_genblast genome file %s", masked_genome_file)
-        genblast.run_genblast(
+    if analysis_flags['run_genblast_protein_file_1']:
+        logger.info("Running GenBlast on protein file 1")
+        logger.info("run_genblast_protein_file_1 genome file %s", masked_genome_file)
+        genblast.run_genblast_protein_file_1(
 	        genblast_bin = genblast_path,
 	        convert2blastmask_bin = convert2blastmask_path,
 	        makeblastdb_bin = makeblastdb_path,
@@ -485,10 +485,10 @@ def main() -> None:
 
     # Run GenBlast on OrthoDB or other set, gives higher priority when creating the
     # final genes in cases where transcriptomic data are missing or fragmented
-    if analysis_flags['run_genblast_op']:
-        logger.info("Running GenBlast of OrthoDB or FungiDB proteins")
-        logger.info("run_genblast_op genome file %s", masked_genome_file)
-        genblast.run_genblast(
+    if analysis_flags['run_genblast_protein_file_2']:
+        logger.info("Running GenBlast on protein file 2")
+        logger.info("run_genblast_protein_file_2 genome file %s", masked_genome_file)
+        genblast.run_genblast_protein_file_1(
 	        genblast_bin = genblast_path,
 	        convert2blastmask_bin = convert2blastmask_path,
 	        makeblastdb_bin = makeblastdb_path,
@@ -501,10 +501,10 @@ def main() -> None:
 	        protein_set="orthodb"
         )
 
-    if analysis_flags['run_miniprot']:
-        logger.info("Running Miniprot")
-        logger.info("run_miniprot genome file %s", masked_genome_file)
-        miniprot.run_miniprot(
+    if analysis_flags['run_miniprot_protein_file_1']:
+        logger.info("Running Miniprot on protein file 1")
+        logger.info("run_miniprot_protein_file_1 genome file %s", masked_genome_file)
+        miniprot.run_miniprot_protein_file_1(
             miniprot_bin = miniprot_path,
             output_dir = work_dir,
             protein_dataset = protein_file,
@@ -514,10 +514,10 @@ def main() -> None:
         )
 
     # Run Miniprot on OrthoDB or other set
-    if analysis_flags['run_miniprot_op']:
-        logger.info("Running Miniprot on OrthoDB or other proteins")
+    if analysis_flags['run_miniprot_protein_file_2']:
+        logger.info("Running Miniprot on protein file 2")
         logger.info("run_other_protein genome file %s", masked_genome_file)
-        miniprot.run_miniprot(
+        miniprot.run_miniprot_protein_file_1(
             miniprot_bin = miniprot_path,
             output_dir = work_dir,
             protein_dataset = other_protein_file,
