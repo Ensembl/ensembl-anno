@@ -734,6 +734,198 @@ def test_compute_utr_end_support():
 
 
 # ---------------------------------------------------------------------------
+# Test: multi-exon CDS translation correctness (plus- and minus-strand)
+#
+# These tests pin the exact peptide produced from a synthetic genome where
+# the correct protein is derivable by inspection.  They serve as regression
+# tests for the RC(X+Y)==RC(Y)+RC(X) ordering bug on minus-strand CDS.
+# ---------------------------------------------------------------------------
+
+
+class TestCdsTranslationMultiExon:
+    """Verify annotate_transcript produces the right protein for multi-exon genes.
+
+    Genome layout (0-based, half-open):
+        pos  0-9 : padding
+        pos 10-15: exon1_low  (used as-is for + ; RC'd for - strand 3' segment)
+        pos 16-49: padding
+        pos 50-55: exon2_high (used as-is for + ; RC'd for - strand 5' segment)
+        pos 56+  : padding
+
+    Plus strand CDS = genome[10:16] + genome[50:56]
+    Minus strand CDS (5'→3' mRNA) = RC(genome[50:56]) + RC(genome[10:16])
+
+    We choose sequences so that both orientations yield protein "MPG"
+    when assembled correctly:
+        + : "ATGCCC" + "GGGTAA" → ATG-CCC-GGG-TAA → MPG(stop)
+        - : RC("GGGTAA") + RC("ATGCCC") = "TTACCC"+"GGGCAT" in genome;
+            ascending-concat-then-RC → RC("TTACCC"+"GGGCAT")
+                                      = RC("GGGCAT")+RC("TTACCC")    [RC algebra]
+                                      = "ATGCCC" + "GGGTAA"         ✓
+            → same mRNA CDS → MPG(stop)
+    """
+
+    _PADDING = "AAAAAAAAAA"  # 10 bp
+    # Exon low [10:16]
+    _EXON1_PLUS = "ATGCCC"   # → codons ATG-CCC (M-P)
+    _EXON1_MINUS = "TTACCC"  # RC = GGGTAA (provides stop + 3' tail of - mRNA)
+    # Exon high [50:56]
+    _EXON2_PLUS = "GGGTAA"   # → codons GGG-TAA (G-stop)
+    _EXON2_MINUS = "GGGCAT"  # RC = ATGCCC (provides ATG + M-P of - mRNA)
+
+    _GAP = "N" * 34  # fills [16:50]
+    _TAIL = "TTTTTTTTTT"
+
+    @staticmethod
+    def _make_genome(exon1_seq: str, exon2_seq: str) -> dict:
+        """Build {chrom: seq} with exon1 at [10:16) and exon2 at [50:56)."""
+        padding = "AAAAAAAAAA"
+        gap = "N" * 34
+        tail = "TTTTTTTTTT"
+        seq = padding + exon1_seq + gap + exon2_seq + tail
+        assert seq[10:16] == exon1_seq
+        assert seq[50:56] == exon2_seq
+        return {"chr1": seq}
+
+    @staticmethod
+    def _cds_df(intervals):
+        return pd.DataFrame({"Start": [s for s, e in intervals],
+                             "End":   [e for s, e in intervals]})
+
+    @staticmethod
+    def _exon_df(intervals):
+        return pd.DataFrame({"Start": [s for s, e in intervals],
+                             "End":   [e for s, e in intervals]})
+
+    # ── plus strand ──────────────────────────────────────────────────────────
+
+    def test_plus_strand_multiexon_expected_peptide(self):
+        """+ strand multi-exon CDS: two exons → known peptide MPG, no internal stops."""
+        genome = self._make_genome(self._EXON1_PLUS, self._EXON2_PLUS)
+        exon_df = self._exon_df([(10, 16), (50, 56)])
+        cds_df  = self._cds_df([(10, 16), (50, 56)])
+
+        result = annotate_transcript(exon_df, "chr1", "+", genome, cds_df=cds_df)
+
+        protein = result["protein"]
+        assert protein is not None, "Should produce a protein"
+        assert "*" not in protein, f"Internal stop in + strand protein: {protein!r}"
+        assert protein == "MPG", f"Expected MPG, got: {protein!r}"
+
+    def test_plus_strand_multiexon_phase_continuity(self):
+        """+ strand: CDS total length must be multiple of 3 (frame preserved across exons)."""
+        genome = self._make_genome(self._EXON1_PLUS, self._EXON2_PLUS)
+        exon_df = self._exon_df([(10, 16), (50, 56)])
+        cds_df  = self._cds_df([(10, 16), (50, 56)])
+
+        result = annotate_transcript(exon_df, "chr1", "+", genome, cds_df=cds_df)
+
+        total_cds_bp = sum(e - s for s, e in result["cds"])
+        assert total_cds_bp % 3 == 0, (
+            f"CDS length {total_cds_bp} is not a multiple of 3 — reading frame broken"
+        )
+        assert result.get("frame_ok"), "frame_ok should be True"
+
+    # ── minus strand ─────────────────────────────────────────────────────────
+
+    def test_minus_strand_multiexon_expected_peptide(self):
+        """- strand multi-exon CDS: ascending-then-RC gives correct protein MPG.
+
+        If exons were concatenated in *descending* order before RC (the old bug),
+        the mRNA sequence would be reversed at the junction and produce internal
+        stop codons instead.
+        """
+        genome = self._make_genome(self._EXON1_MINUS, self._EXON2_MINUS)
+        # Exon intervals: low [10,16), high [50,56)  — sorted ascending in GFF3
+        exon_df = self._exon_df([(10, 16), (50, 56)])
+        cds_df  = self._cds_df([(10, 16), (50, 56)])
+
+        result = annotate_transcript(exon_df, "chr1", "-", genome, cds_df=cds_df)
+
+        protein = result["protein"]
+        assert protein is not None, "Should produce a protein"
+        assert "*" not in protein, (
+            f"Internal stop codon in - strand protein: {protein!r}\n"
+            "(Hint: exons are being concatenated in wrong order before RC)"
+        )
+        assert protein[0] == "M", f"Protein should start with Met, got: {protein!r}"
+        assert protein == "MPG", f"Expected MPG, got: {protein!r}"
+
+    def test_minus_strand_multiexon_phase_continuity(self):
+        """- strand: CDS total length must be multiple of 3 across exon boundary."""
+        genome = self._make_genome(self._EXON1_MINUS, self._EXON2_MINUS)
+        exon_df = self._exon_df([(10, 16), (50, 56)])
+        cds_df  = self._cds_df([(10, 16), (50, 56)])
+
+        result = annotate_transcript(exon_df, "chr1", "-", genome, cds_df=cds_df)
+
+        total_cds_bp = sum(e - s for s, e in result["cds"])
+        assert total_cds_bp % 3 == 0, (
+            f"CDS length {total_cds_bp} is not a multiple of 3 — reading frame broken"
+        )
+        assert result.get("frame_ok"), "frame_ok should be True"
+
+    def test_plus_minus_symmetry(self):
+        """+ and - strand CDS built from mirror sequences yield the same protein."""
+        # Plus genome
+        gp = self._make_genome(self._EXON1_PLUS, self._EXON2_PLUS)
+        # Minus genome (mirror): swap sequences so RC ordering produces same mRNA
+        gm = self._make_genome(self._EXON1_MINUS, self._EXON2_MINUS)
+
+        exon_df = self._exon_df([(10, 16), (50, 56)])
+        cds_df  = self._cds_df([(10, 16), (50, 56)])
+
+        rp = annotate_transcript(exon_df, "chr1", "+", gp, cds_df=cds_df)
+        rm = annotate_transcript(exon_df, "chr1", "-", gm, cds_df=cds_df)
+
+        assert rp["protein"] == rm["protein"], (
+            f"Plus protein {rp['protein']!r} != minus protein {rm['protein']!r}"
+        )
+
+    def test_minus_strand_three_exons_no_internal_stop(self):
+        """- strand with three CDS exons must produce no internal stop codons.
+
+        Three exons stress-test the ordering fix more thoroughly than two.
+        """
+        # Build genome with 3 CDS exons (each 6 bp = 2 codons) at [10:16), [50:56), [90:96)
+        # mRNA CDS (5'→3') = RC([90:96]) + RC([50:56]) + RC([10:16])
+        # Choose exon sequences so mRNA = ATG-CCC-GGG-TTT-AAA-TAA → MPGFKstop
+        # RC([90:96])=ATGCCC → [90:96]=GGGCAT
+        # RC([50:56])=GGGTTТ → [50:56]=AAACCC (wait: RC("AAACCC")=GGGTTT ✓)
+        # RC([10:16])=TTTAAA → [10:16]=TTTAAA (self-complementary for A/T pairs... RC("TTTAAA")=TTTAAA ✓)
+        # Actually: RC("TTTAAA") = complement(rev("TTTAAA")) = complement("AAATTT") = "TTTAAA" ✓ (palindrome)
+
+        # Verify: RC("GGGCAT")=ATGCCC, RC("AAACCC")=GGGTTT, RC("TTTAAA")=TTTAAA
+        # mRNA = ATGCCC + GGGTTT + TTTAAA → ATG-CCC-GGG-TTT-TTT-AAA
+        # protein = MPGFFK  (no stop in the middle, stop not included = partial? let's add one)
+        # Adjust: [10:16] = RC of "TAAYYY" for stop — let's use "TTAGGG" → RC="CCCTAA"
+        # mRNA = ATGCCC + GGGTTT + CCCTAA = ATG-CCC-GGG-TTT-CCC-TAA → MPGFP(stop)
+        # [10:16] = "TTAGGG"
+
+        seq = ("A" * 10       # [0:10]  padding
+               + "TTAGGG"     # [10:16] exon1_low  (RC=CCCTAA → 3' mRNA end)
+               + "N" * 34     # [16:50] gap
+               + "AAACCC"     # [50:56] exon2_mid  (RC=GGGTTT → middle of mRNA)
+               + "N" * 34     # [56:90] gap
+               + "GGGCAT"     # [90:96] exon3_high (RC=ATGCCC → 5' mRNA start)
+               + "A" * 10)    # padding
+
+        genome = {"chr1": seq}
+        exon_df = self._exon_df([(10, 16), (50, 56), (90, 96)])
+        cds_df  = self._cds_df([(10, 16), (50, 56), (90, 96)])
+
+        result = annotate_transcript(exon_df, "chr1", "-", genome, cds_df=cds_df)
+
+        protein = result["protein"]
+        assert protein is not None, "Should produce a protein"
+        assert "*" not in protein, (
+            f"Internal stop in 3-exon - strand protein: {protein!r}"
+        )
+        assert protein[0] == "M", f"Protein should start with Met, got: {protein!r}"
+        assert protein == "MPGFP", f"Expected MPGFP, got: {protein!r}"
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 

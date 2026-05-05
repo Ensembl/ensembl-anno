@@ -39,19 +39,24 @@ helixer_filter:
 
 scoring:
   weights:
-    helixer: 2.0
+    helixer: 3.1
     scallop: 1.0
     stringtie: 1.0
   protein_overlap_bonus: 2.0
-  multi_source_bonus: 1.0
+  multi_source_bonus: 0.5
   noncanonical_splice_penalty: 0.5
-  max_isoforms_per_locus: 2
-  min_alternate_score: 3.0
+  max_isoforms_per_locus: 5
+  min_alternate_score: 2.5
   fungal_single_exon_mode: true
   keep_helixer_without_support: true
   require_protein_support_for_single_source: false
   min_cds_bp: 150
-  require_support_for_single_exon: true
+  require_support_for_single_exon: false
+  #: Reciprocal-overlap fraction of the *smaller* model required for two
+  #: candidates to be treated as the same gene during isoform selection.
+  #: Raise to 0.30–0.50 to prevent compact Helixer genes being absorbed into
+  #: large spanning transcriptome models.
+  same_gene_overlap_threshold: 0.15
 
 protein_validation:
   enabled: true
@@ -61,14 +66,14 @@ protein_validation:
   psauron_model: "default"
   diamond_weight: 0.5
   psauron_weight: 0.5
-  min_score: 0.1
+  min_score: 0.7
   policy: "penalize"
 
 validation:
   mode: "drop_transcript"
   log_violations: true
   max_feature_drift_bp: 1500
-  feature_outside_exons_policy: "drop"
+  feature_outside_exons_policy: "trim"
   max_exon_len_bp: 15000
   
   max_exon_len_mode: "fixed"
@@ -90,7 +95,7 @@ utr:
   require_end_support: true
   end_support_mode: "multisource_end_agreement"
   end_support_sources: ["Scallop", "StringTie"]
-  end_tolerance_bp: 50
+  end_tolerance_bp: 30
   require_multisource_for_utr_5p: true
   require_multisource_for_utr_3p: true
   fallback_policy_when_unsupported: "drop_utr"

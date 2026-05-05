@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import load_config
+from config import PipelineConfig, load_config
 from scoring import score_model, select_isoforms
 
 
@@ -147,6 +147,98 @@ class TestLowMinCodons:
         seq = "ATG" + "GCT" * 18 + "TAA"  # 20 codons
         result = find_best_orf(seq, min_codons=33)
         assert result is not None  # fallback should still return it
+
+
+class TestSameGeneOverlapThreshold:
+    """Verify that same_gene_overlap_threshold controls absorption of a small
+    Helixer gene into a large transcriptome-spanning model.
+
+    Geometry
+    --------
+    Large TX (StringTie, multi-exon, protein-supported): 1000–5000 (span 4000)
+    Small Helixer (single-exon):                         4800–5600 (span  800)
+
+    Overlap = 5000 − 4800 = 200 bp
+    Overlap ratio relative to smaller model = 200 / 800 = 0.25
+
+    At threshold 0.15  → 0.25 > 0.15 → same gene → Helixer absorbed (dropped)
+    At threshold 0.30  → 0.25 < 0.30 → separate  → Helixer survives
+    """
+
+    def _make_locus_df(self):
+        """Build a locus DataFrame with the two-model geometry described above."""
+        tx_rows = pd.DataFrame(
+            {
+                "Start": [1000, 3000],
+                "End": [2500, 5000],
+                "Chromosome": ["1", "1"],
+                "Strand": ["+", "+"],
+                "Source": ["StringTie", "StringTie"],
+                "transcript_id": ["tx1", "tx1"],
+                # combined_evidence carries the multi-source tag used in scoring
+                "combined_evidence": ["StringTie,Scallop", "StringTie,Scallop"],
+            }
+        )
+        hx_rows = pd.DataFrame(
+            {
+                "Start": [4800],
+                "End": [5600],
+                "Chromosome": ["1"],
+                "Strand": ["+"],
+                "Source": ["Helixer"],
+                "transcript_id": ["hx1"],
+                "combined_evidence": ["Helixer"],
+            }
+        )
+        return pd.concat([tx_rows, hx_rows], ignore_index=True)
+
+    def _cfg(self, threshold: float) -> PipelineConfig:
+        """Return a PipelineConfig with the given overlap threshold.
+
+        max_isoforms_per_locus=1 ensures that once a primary is claimed at a
+        locus there is no room for a secondary — any absorbed model is dropped.
+        """
+        cfg = PipelineConfig()
+        cfg.scoring.same_gene_overlap_threshold = threshold
+        cfg.scoring.max_isoforms_per_locus = 1
+        return cfg
+
+    def test_low_threshold_absorbs_helixer(self):
+        """At threshold=0.15 the Helixer gene (overlap ratio 0.25) is merged
+        into the TX locus and dropped because the locus is already full."""
+        genes = select_isoforms(self._make_locus_df(), self._cfg(0.15), {"tx1"})
+        selected_ids = {m["id"] for g in genes for m in g}
+
+        assert "tx1" in selected_ids, "TX model should be selected"
+        assert "hx1" not in selected_ids, (
+            "Helixer gene should be absorbed into the TX locus at threshold=0.15"
+        )
+
+    def test_high_threshold_preserves_helixer(self):
+        """At threshold=0.30 the same Helixer gene (overlap ratio 0.25) is
+        treated as a separate locus and survives selection."""
+        genes = select_isoforms(self._make_locus_df(), self._cfg(0.30), {"tx1"})
+        selected_ids = {m["id"] for g in genes for m in g}
+
+        assert "tx1" in selected_ids, "TX model should be selected"
+        assert "hx1" in selected_ids, (
+            "Helixer gene should survive as a separate locus at threshold=0.30"
+        )
+        assert len(genes) == 2, (
+            f"Expected 2 separate gene loci, got {len(genes)}: "
+            f"{[m['id'] for g in genes for m in g]}"
+        )
+
+    def test_threshold_is_a_strict_boundary(self):
+        """A threshold set exactly equal to the overlap ratio (0.25) should
+        NOT trigger a merge (> comparison, not >=)."""
+        genes = select_isoforms(self._make_locus_df(), self._cfg(0.25), {"tx1"})
+        selected_ids = {m["id"] for g in genes for m in g}
+
+        assert "hx1" in selected_ids, (
+            "Overlap ratio equal to threshold should not trigger merge "
+            "(the comparison is strictly >, not >=)"
+        )
 
 
 if __name__ == "__main__":

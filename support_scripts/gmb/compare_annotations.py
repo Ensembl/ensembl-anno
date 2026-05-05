@@ -1022,11 +1022,10 @@ def extract_genbank_proteins(ref_exons, ref_cds, genome, output_path, mapping=No
 
             cds_intervals = sorted(zip(grp["Start"].values, grp["End"].values))
 
-            # Build CDS nucleotide
-            parts = []
-            for cs, ce in cds_intervals if strand == "+" else reversed(cds_intervals):
-                parts.append(genome[chrom][cs:ce])
-            cds_nuc = "".join(parts)
+            # Build CDS nucleotide: concatenate in ascending genomic order, then
+            # RC for minus strand.  RC(X+Y)==RC(Y)+RC(X) so ascending order
+            # places the highest-coordinate (5') exon first after RC.
+            cds_nuc = "".join(genome[chrom][cs:ce] for cs, ce in cds_intervals)
             if strand == "-":
                 cds_nuc = reverse_complement(cds_nuc)
 

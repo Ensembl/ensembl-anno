@@ -297,6 +297,11 @@ def parse_args():
     parser.add_output_args = parser.add_argument_group("Outputs")
     parser.add_output_args.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_output_args.add_argument("--gene-prefix", default="GENE", help="Prefix for new IDs")
+    parser.add_output_args.add_argument(
+        "--validate-fasta",
+        action="store_true",
+        help="Run FASTA QC checks at end of pipeline",
+    )
 
     add_subset_args(parser)
 
@@ -789,6 +794,19 @@ def main() -> None:
     final_gene_count = sum(1 for r in selected_gff_rows if r.get("Feature") == "gene")
     stats["total_loci"] = final_gene_count
 
+    # Reconcile FASTA with post-processed GFF rows.
+    # validate_and_fix_gff3 / dedup_genes may have dropped transcripts after
+    # FASTA entries were collected, so filter to surviving mRNA IDs only.
+    surviving_tids = {
+        r["ID"] for r in selected_gff_rows if r.get("Feature") == "mRNA"
+    }
+    selected_cdna_fa = [
+        rec for rec in selected_cdna_fa if rec.split("\n", 1)[0].lstrip(">") in surviving_tids
+    ]
+    selected_prot_fa = [
+        rec for rec in selected_prot_fa if rec.split("\n", 1)[0].lstrip(">") in surviving_tids
+    ]
+
     gff3_path = os.path.join(args.output_dir, "consensus.gff3")
     out_df = pd.DataFrame(selected_gff_rows)
 
@@ -927,6 +945,18 @@ def main() -> None:
         fh.write("Metric\tValue\n")
         for k, v in stats.items():
             fh.write(f"{k}\t{v}\n")
+
+    if getattr(args, "validate_fasta", False):
+        from fasta_qc import print_report, validate_fasta
+
+        genome_path = getattr(args, "genome", None)
+        qc_report = validate_fasta(args.output_dir, genome_path)
+        print_report(qc_report)
+        report_path = os.path.join(args.output_dir, "fasta_qc_report.json")
+        with open(report_path, "w") as fh:
+            json.dump(qc_report, fh, indent=2)
+        if not qc_report.get("pass", False):
+            print("WARNING: FASTA QC checks failed. See fasta_qc_report.json for details.")
 
     print("Done!")
 

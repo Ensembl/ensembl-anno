@@ -212,11 +212,9 @@ def _annotate_for_vis(
         frame_ok = check_frame_continuity(cds_intervals, strand)
         if genome and chrom in genome:
             splice = check_splice_sites(exons, strand, genome[chrom])
-            # Build protein for label
-            cds_parts = []
-            for cs, ce in cds_intervals if strand == "+" else reversed(cds_intervals):
-                cds_parts.append(genome[chrom][cs:ce])
-            cds_nuc = "".join(cds_parts)
+            # Build protein for label: ascending genomic order then RC for
+            # minus strand (RC(X+Y)==RC(Y)+RC(X) gives correct 5'→3' order).
+            cds_nuc = "".join(genome[chrom][cs:ce] for cs, ce in cds_intervals)
             if strand == "-":
                 cds_nuc = reverse_complement(cds_nuc)
             prot = translate(cds_nuc)

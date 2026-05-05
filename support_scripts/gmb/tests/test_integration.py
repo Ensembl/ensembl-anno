@@ -104,6 +104,16 @@ def _create_test_data(tmpdir):
     }
 
 
+# Config override that disables protein validation so the integration tests
+# don't require diamond/psauron to be installed on the test machine.
+_TEST_CONFIG = os.path.join(os.path.dirname(__file__), "fixtures", "test_no_pv.yaml")
+
+
+def _add_test_config(cmd: list) -> list:
+    """Append --config test_no_pv.yaml to a pipeline command list."""
+    return cmd + ["--config", _TEST_CONFIG]
+
+
 class TestIntegration:
     """Run the full pipeline on a tiny synthetic dataset."""
 
@@ -134,7 +144,7 @@ class TestIntegration:
             "--gene-prefix",
             "TEST",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        result = subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(__file__))
 
         assert result.returncode == 0, (
             f"Pipeline failed:\nstdout:\n{result.stdout}\n" f"stderr:\n{result.stderr}"
@@ -167,7 +177,7 @@ class TestIntegration:
             "--gene-prefix",
             "TEST",
         ]
-        subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(__file__))
 
         assert os.path.exists(os.path.join(output_dir, "consensus.gff3"))
         assert os.path.exists(os.path.join(output_dir, "cdna.fa"))
@@ -205,7 +215,7 @@ class TestIntegration:
         script_dir = os.path.dirname(__file__)
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.dirname(script_dir)
-        subprocess.run(cmd, capture_output=True, text=True, cwd=script_dir, env=env)
+        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env)
 
         gff3_path = os.path.join(output_dir, "consensus.gff3")
         with open(gff3_path) as f:
@@ -245,7 +255,7 @@ class TestIntegration:
         script_dir = os.path.dirname(__file__)
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.dirname(script_dir)
-        subprocess.run(cmd, capture_output=True, text=True, cwd=script_dir, env=env)
+        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env)
 
         prot_path = os.path.join(output_dir, "prot.fa")
         with open(prot_path) as f:
@@ -289,7 +299,7 @@ class TestIntegration:
         script_dir = os.path.dirname(__file__)
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.dirname(script_dir)
-        subprocess.run(cmd, capture_output=True, text=True, cwd=script_dir, env=env)
+        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env)
 
         with open(os.path.join(output_dir, "summary.json")) as f:
             report = json.load(f)

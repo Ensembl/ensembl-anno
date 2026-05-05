@@ -224,5 +224,83 @@ class TestHelixerCdsExport:
         assert prot[0] == "M"
 
 
+    def test_helixer_cds_minus_strand_multiexon(self, tmp_path, config):
+        """Minus-strand multi-exon Helixer CDS must not produce internal stop codons.
+
+        RC(X+Y) == RC(Y)+RC(X), so concatenating exon sequences in ascending
+        genomic order before RC'ing places the 5' (highest-coord) exon first in
+        the result.  Concatenating in descending order inverts the exon order and
+        produces wrong proteins with premature stops.
+        """
+        # Build a synthetic genome where we control the exact CDS sequence.
+        # Gene on - strand, two CDS exons:
+        #   exon1 (low coord):  positions 0-12  (12 bp)
+        #   exon2 (high coord): positions 20-32 (12 bp)
+        # Correct mRNA CDS = RC(seq[20:32]) + RC(seq[0:12])
+        # Choose sequences so the correct frame starts with ATG and has no stops.
+        #   RC(GTTGGCATGAAC) = GTTCATGCCAAC  → GTT-CAT-GCC-AAC = Val-His-Ala-Asn
+        #   RC(ATGCCCGGTTAA) = TTAACCGGGCAT → but this has TGA... let's be explicit.
+        # Use a known-good encoding: set exon2 RC = ATG AAA TTT, exon1 RC = GGG TAA
+        # exon2 genomic (RC to get mRNA) = RC(ATGAAATTT) = AAATTTCAT
+        # exon1 genomic (RC to get mRNA) = RC(GGGTAA) = TTACCC
+        # mRNA CDS = ATGAAATTT + GGGTAA → Met-Lys-Phe-Gly-stop → protein = MKF (no internal stop)
+        # Layout (0-based half-open):
+        #   exon1 at [0, 6):   TTACCC  → RC = GGGTAA  (3' end of mRNA CDS, includes stop)
+        #   gap   at [6, 20):  padding
+        #   exon2 at [20, 29): AAATTTCAT → RC = ATGAAATTT (5' end of mRNA CDS, start codon)
+        #
+        # Correct mRNA CDS (5'→3'): RC(exon2_genomic) + RC(exon1_genomic)
+        #   = ATGAAATTT + GGGTAA  →  ATG-AAA-TTT-GGG-TAA  →  M-K-F-G-*  →  protein "MKFG"
+        exon2_genomic = "AAATTTCAT"  # high coord → 5' in mRNA
+        exon1_genomic = "TTACCC"     # low coord  → 3' in mRNA
+        padding = "N" * 14           # gap so exon2 starts at exactly position 20
+        genome_seq = exon1_genomic + padding + exon2_genomic  # len = 6+14+9 = 29
+        genome = {"chr1": genome_seq}
+
+        exons_df = pd.DataFrame(
+            {
+                "Start": [0, 20],
+                "End": [6, 29],
+                "Chromosome": ["chr1", "chr1"],
+                "Strand": ["-", "-"],
+            }
+        )
+        helixer_cds = pd.DataFrame(
+            {
+                "Chromosome": ["chr1", "chr1"],
+                "Start": [0, 20],
+                "End": [6, 29],
+                "Strand": ["-", "-"],
+                "transcript_id": ["hx_minus", "hx_minus"],
+            }
+        )
+        model = {
+            "id": "hx_minus",
+            "source": "Helixer",
+            "chrom": "chr1",
+            "strand": "-",
+            "df": exons_df,
+            "start": 0,
+            "end": 29,
+            "exon_count": 2,
+            "combined_evidence": "Helixer",
+            "output_tid": "GENE_M.1",
+            "gene_id": "GENE_M",
+        }
+        loci = [(1, [model])]
+        out_dir = str(tmp_path / "output_minus")
+
+        stats = export_fasta(loci, genome, helixer_cds, config, out_dir)
+        assert stats["with_cds"] == 1
+
+        with open(os.path.join(out_dir, "prot.fa")) as f:
+            lines = f.readlines()
+        prot = "".join(l.strip() for l in lines[1:])
+        # Correct protein starts with M and has no internal stops
+        assert prot[0] == "M", f"Protein should start with Met, got: {prot!r}"
+        assert "*" not in prot, f"Protein has internal stop codons: {prot!r}"
+        assert prot == "MKFG", f"Expected MKFG, got: {prot!r}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

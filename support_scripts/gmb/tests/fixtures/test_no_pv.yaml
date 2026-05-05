@@ -1,0 +1,4 @@
+# Test override: disable protein validation so integration tests don't require
+# diamond/psauron to be installed.
+protein_validation:
+  enabled: false

@@ -28,7 +28,7 @@ class TestDefaultConfig:
         assert cfg.orf.min_codons == 33
         assert cfg.orf.allow_partial_5 is True
         assert cfg.protein_filter.top_n_per_locus == 3
-        assert cfg.scoring.max_isoforms_per_locus == 2
+        assert cfg.scoring.max_isoforms_per_locus == 5  # set to 5 in fungi_default.yaml
         assert cfg.scoring.fungal_single_exon_mode is True
         assert cfg.transcriptomic_filter.allow_single_exon is True
 

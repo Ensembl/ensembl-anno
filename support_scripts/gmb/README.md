@@ -95,11 +95,13 @@ python gene_model_builder.py \
 | File | Description |
 | :--- | :--- |
 | `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
-| `cdna.fa` | Spliced transcript nucleotide sequences |
-| `cds.fa` | Coding sequences |
-| `prot.fa` | Translated protein sequences |
+| `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
+| `cdna.fa` | Spliced transcript nucleotide sequences — one record per mRNA in `consensus.gff3` |
+| `cds.fa` | Coding sequences (absent when no CDS features were predicted) |
+| `prot.fa` | Translated protein sequences — one record per CDS-bearing mRNA in `consensus.gff3` |
 | `summary.json` | Pipeline metrics (gene counts, filtering stats) |
 | `summary.tsv` | Same data in tabular form |
+| `fasta_qc_report.json` | FASTA QC report (written when `--validate-fasta` is used) |
 | `subset_regions.tsv` | Records which regions were selected (when `--seqname` is used) |
 
 > **Note on seqname mapping:** The input GTF/GFF3 files use NCBI/GenBank accession
@@ -232,6 +234,45 @@ Key configurable areas:
 
 **Config Merge Rules:**
 Dicts deep-merge, lists replace entirely, unknown keys raise an error to catch typos.
+
+### How prot.fa and cdna.fa are generated
+
+Both FASTA files are derived from the **post-processed** `consensus.gff3` and are guaranteed to be consistent with it.
+
+**`cdna.fa`**
+- One record per `mRNA` feature in `consensus.gff3`.
+- Sequence is the spliced cDNA: exonic genomic sequence concatenated in 5′→3′ transcript order, reverse-complemented for minus-strand transcripts.
+- FASTA header: `>{transcript_id}` (matches the `ID=` attribute of the mRNA row).
+
+**`prot.fa`**
+- One record per `mRNA` that has at least one `CDS` child in `consensus.gff3`.
+- Sequence is the translated protein from the CDS interval(s). Terminal stop codons are stripped.
+- FASTA header: `>{transcript_id}` (same stable ID as the mRNA row).
+- UTR-only transcripts (no CDS rows) are excluded from `prot.fa` but still appear in `cdna.fa`.
+
+**ID guarantee**
+Every `>{id}` in `prot.fa` and `cdna.fa` maps to exactly one `mRNA` row in `consensus.gff3`. No transcript appears in the FASTA files unless it survived all GFF post-processing steps (structural validation, deduplication).
+
+**FASTA QC**
+
+Run the standalone QC tool to verify output integrity:
+
+```bash
+# Coverage checks only
+python fasta_qc.py output/
+
+# Coverage + sequence correctness (reconstructs from genome)
+python fasta_qc.py output/ --genome genome.fa
+
+# Or via the pipeline with --validate-fasta
+python gene_model_builder.py ... --validate-fasta
+```
+
+This writes `fasta_qc_report.json` summarising:
+- transcript/protein/cDNA record counts
+- missing or extra FASTA records (relative to GFF)
+- duplicate headers
+- protein and cDNA sequence reconstruction mismatches (when `--genome` is supplied)
 
 ### Output Validation & Comparison
 

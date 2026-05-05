@@ -241,8 +241,19 @@ def select_isoforms(
             # Fungal mode: keep well-supported single-exon models
             keep = True
 
-        # Single-exon models require protein support when configured
-        if keep and scfg.require_support_for_single_exon and s["rep"]["exon_count"] == 1:
+        # Single-exon models require protein support when configured.
+        # Exception: keep_helixer_without_support takes precedence — a Helixer
+        # single-exon gene should not be silently dropped by this gate when the
+        # operator has explicitly opted in to keeping Helixer without support.
+        helixer_protected = (
+            "Helixer" in s["sources"] and scfg.keep_helixer_without_support
+        )
+        if (
+            keep
+            and scfg.require_support_for_single_exon
+            and s["rep"]["exon_count"] == 1
+            and not helixer_protected
+        ):
             if not s["protein_support"] and len(s["sources"]) < 2:
                 keep = False
 
@@ -255,6 +266,8 @@ def select_isoforms(
     # Sort by score descending
     candidates.sort(key=lambda s: s["score"], reverse=True)
 
+    same_gene_ovlp_thresh = scfg.same_gene_overlap_threshold
+
     def is_same_gene(m1, m2):
         if m1["intron_chain"] != "single-exon" and m2["intron_chain"] != "single-exon":
             i1 = set(m1["intron_chain"].split(","))
@@ -265,7 +278,7 @@ def select_isoforms(
         if overlap > 0:
             len1 = m1["end"] - m1["start"]
             len2 = m2["end"] - m2["start"]
-            if (overlap / min(len1, len2)) > 0.15:
+            if (overlap / min(len1, len2)) > same_gene_ovlp_thresh:
                 return True
         return False
 

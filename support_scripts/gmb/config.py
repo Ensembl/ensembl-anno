@@ -91,6 +91,12 @@ class ScoringConfig:
     require_protein_support_for_single_source: bool = False
     min_cds_bp: int = 150
     require_support_for_single_exon: bool = True
+    #: Minimum reciprocal-overlap fraction of the *smaller* model for two
+    #: candidates to be treated as the same gene during isoform selection.
+    #: Lower values (default 0.15) merge more aggressively; raise to 0.3–0.5
+    #: to prevent small Helixer genes from being absorbed into large
+    #: spanning transcriptome models.
+    same_gene_overlap_threshold: float = 0.15
 
 
 @dataclass

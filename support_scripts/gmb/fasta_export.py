@@ -33,10 +33,15 @@ def _build_cds_seq_from_intervals(
     strand: str,
     chrom_seq: str,
 ) -> str:
-    """Build CDS nucleotide sequence from genomic CDS intervals."""
-    parts = []
-    for cs, ce in sorted(cds_intervals) if strand == "+" else reversed(sorted(cds_intervals)):
-        parts.append(chrom_seq[cs:ce])
+    """Build CDS nucleotide sequence from genomic CDS intervals.
+
+    Exons must be concatenated in ascending genomic order before
+    reverse-complementing.  RC(X+Y) == RC(Y)+RC(X), so concatenating in
+    ascending order and then RC'ing the whole string naturally places the
+    highest-coordinate exon (5' for minus-strand) first in the result.
+    Concatenating in descending order before RC'ing inverts the exon order.
+    """
+    parts = [chrom_seq[cs:ce] for cs, ce in sorted(cds_intervals)]
     cds_nuc = "".join(parts)
     if strand == "-":
         cds_nuc = reverse_complement(cds_nuc)

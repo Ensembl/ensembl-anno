@@ -580,11 +580,11 @@ def annotate_transcript(exons_df, chrom, strand, genome, cds_df=None, min_codons
         cds_intervals = sorted(zip(cds_df["Start"].values, cds_df["End"].values))
         five_utr, three_utr = derive_utrs(exons, cds_intervals, strand)
         cdna = build_spliced_seq(exons, strand, chrom_seq)
-        # Build CDS sequence for translation
-        cds_seq_parts = []
-        for cs, ce in sorted(cds_intervals) if strand == "+" else reversed(sorted(cds_intervals)):
-            cds_seq_parts.append(chrom_seq[cs:ce])
-        cds_nuc = "".join(cds_seq_parts)
+        # Build CDS sequence for translation.
+        # Concatenate in ascending genomic order; RC handles strand orientation.
+        # RC(X+Y)==RC(Y)+RC(X), so ascending + RC correctly places the
+        # highest-coordinate (5') exon first for minus-strand transcripts.
+        cds_nuc = "".join(chrom_seq[cs:ce] for cs, ce in sorted(cds_intervals))
         if strand == "-":
             cds_nuc = reverse_complement(cds_nuc)
         protein = translate(cds_nuc)
