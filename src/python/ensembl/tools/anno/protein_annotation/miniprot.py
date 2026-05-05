@@ -63,6 +63,8 @@ def run_miniprot(#pylint:disable=dangerous-default-value
     protein_dataset: Path,
     miniprot_bin: Path = Path("miniprot"),
     num_threads: int = 1,
+    top_n: int = 1,
+    outs: float = 1.0,
     protein_set: str = "uniprot",
 ) -> None:
     
@@ -97,9 +99,9 @@ def run_miniprot(#pylint:disable=dangerous-default-value
 	
     miniprot_cmd = [
         str(miniprot_bin),
-        "-t" + str(num_threads),
-        "-N", "1", #get exactly one alignment per protein, primary alignment
-        "--outs=1.0", #Keep only chains equal to best
+        "-t", str(num_threads),
+        "-N", str(top_n), #get exactly one alignment per protein, primary alignment
+        f"--outs={outs}", #Keep only chains equal to best
         "--gff",
         str(miniprot_index_file),
         str(protein_dataset),
@@ -108,27 +110,28 @@ def run_miniprot(#pylint:disable=dangerous-default-value
     logger.info(" ".join(miniprot_cmd))
     
     with open(initial_output_file, 'w') as process_output_file:
-        subprocess.run(miniprot_cmd, stdout=process_output_file)
+        subprocess.run(miniprot_cmd, stdout=process_output_file,check=True)
     logger.info("Completed running miniprot")
     logger.info("Creating standardised GFF")
     generate_miniprot_gtf(miniprot_dir) 
 
-def generate_miniprot_gtf(
-    miniprot_dir
-):
+def generate_miniprot_gtf(miniprot_dir:str)-> None:
     logger.info("generate_miniprot_gff")
-    file_out_name = os.path.join(miniprot_dir, "annotation.gtf")
+    file_out_name: str = os.path.join(miniprot_dir, "annotation.gtf")
     for root, dirs, files in os.walk(miniprot_dir):
         for miniprot_file in files:
             miniprot_file=os.path.join(root, miniprot_file)
             if miniprot_file.endswith(".gff"):
                 convert_miniprot_gff_to_gtf(input_file=miniprot_file,output_file=file_out_name)
 
-def convert_miniprot_gff_to_gtf(input_file=None,output_file=None):
+def convert_miniprot_gff_to_gtf(input_file: str | Path, output_file: str | Path) -> None:
     """
     params  input_file: input filename
     params  output_file: output gtf filename
     """
+    input_file = Path(input_file)
+    output_file = Path(output_file)
+
     blocks =  open(input_file, 'r').read().split('\n#') # read the gff file and split it in blocks, where each block contain mapping of a single transcript, #PAF alignment blocks
 
     file_out=open(output_file, 'w+')
@@ -181,21 +184,25 @@ def convert_miniprot_gff_to_gtf(input_file=None,output_file=None):
     file_out.close()
 
 def run_miniprot_index(
-    miniprot_bin, 
-    masked_genome, 
-    miniprot_index_file, 
-    num_threads
-):
+    miniprot_bin:str | Path, 
+    masked_genome: str | Path, 
+    miniprot_index_file: str | Path, 
+    num_threads: int,
+) -> None:
     """
     Executes Miniprot indexing on masked genome
     Args:
-    	    masked_genome : Masked genome file path.
+    	   masked_genome : Masked genome file path.
 	       miniprot_bin  : Software path.
 	       num_threads   : number of threads
     	   Command line options:
 	       -d FILE      save index to FILE
            -t INT       number of threads [4]
     """
+    miniprot_bin = Path(miniprot_bin)
+    masked_genome = Path(masked_genome)
+    miniprot_index_file = Path(miniprot_index_file)
+
     miniprot_index_cmd = [
         str(miniprot_bin),
         "-t" + str(num_threads),
@@ -204,7 +211,7 @@ def run_miniprot_index(
         str(masked_genome),
     ]
     logger.info(" ".join(miniprot_index_cmd))
-    subprocess.run(miniprot_index_cmd)
+    subprocess.run(miniprot_index_cmd, check=True)
     logger.info("Completed running miniprot indexing")
 
 def parse_args():
