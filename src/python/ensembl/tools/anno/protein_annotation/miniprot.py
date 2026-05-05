@@ -48,7 +48,7 @@ import subprocess
 import argparse
 
 
-from ensembl.tools.anno.utils._utils import (
+from src.ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
