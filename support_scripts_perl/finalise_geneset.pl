@@ -59,15 +59,15 @@ my $output_path;
 my $genome_file;
 my $input_gtf_file;
 my $output_gtf_file;
-my $biotypes_hash = ['transcriptomic','genblast-protein','miniprot-protein','genblast-orthodb','miniprot-orthodb'];
+my $biotypes_hash = ['transcriptomic','genblast-protein-evidence-1','miniprot-protein-evidence-1','genblast-protein-evidence-2','miniprot-protein-evidence-2'];
 my $good_biotype;
 my $bad_biotype;
 my $genes_by_biotype = {};
 $genes_by_biotype->{'transcriptomic'} = [];
-$genes_by_biotype->{'genblast-protein'} = [];
-$genes_by_biotype->{'miniprot-protein'} = [];
-$genes_by_biotype->{'genblast-orthodb'} = [];
-$genes_by_biotype->{'miniprot-orthodb'} = [];
+$genes_by_biotype->{'genblast-protein-evidence-1'} = [];
+$genes_by_biotype->{'miniprot-protein-evidence-1'} = [];
+$genes_by_biotype->{'genblast-protein-evidence-2'} = [];
+$genes_by_biotype->{'miniprot-protein-evidence-2'} = [];
 
 GetOptions( 'gtf_file=s'       => \$input_gtf_file,
             'region_details=s' => \$region_details,
@@ -257,10 +257,10 @@ sub process_genes {
   my $final_genes = [];
 
   my $transcriptomic_biotype      = 'transcriptomic';
-  my $genblast_protein_biotype    = 'genblast-protein';
-  my $miniprot_protein_biotype    = 'miniprot-protein';
-  my $genblast_orthodb_biotype    = 'genblast-orthodb';
-  my $miniprot_orthodb_biotype    = 'miniprot-orthodb';
+  my $genblast_protein_biotype    = 'genblast-protein-evidence-1';
+  my $miniprot_protein_biotype    = 'miniprot-protein-evidence-1';
+  my $genblast_orthodb_biotype    = 'genblast-protein-evidence-2';
+  my $miniprot_orthodb_biotype    = 'miniprot-protein-evidence-2';
 
   my $transcriptomic_genes     = $genes_by_biotype->{$transcriptomic_biotype}   || [];
   my $genblast_protein_genes   = $genes_by_biotype->{$genblast_protein_biotype} || [];
@@ -285,22 +285,22 @@ sub process_genes {
     cluster_Genes_by_coding_exon_overlap($transcriptomic_genes,$types_hash);
   my $transcriptomic_clusters = [@$clusters, @$unclustered];
 
-  $types_hash->{'genblast-protein'} = [$genblast_protein_biotype];
+  $types_hash->{'genblast-protein-evidence-1'} = [$genblast_protein_biotype];
   ($clusters, $unclustered) =
     cluster_Genes_by_coding_exon_overlap($genblast_protein_genes,$types_hash);
   my $genblast_protein_clusters = [@$clusters, @$unclustered];
   
-  $types_hash->{'miniprot-protein'} = [$miniprot_protein_biotype];
+  $types_hash->{'miniprot-protein-evidence-1'} = [$miniprot_protein_biotype];
   ($clusters, $unclustered) =
     cluster_Genes_by_coding_exon_overlap($miniprot_protein_genes,$types_hash);
   my $miniprot_protein_clusters = [@$clusters, @$unclustered];
 
-  $types_hash->{'genblast-orthodb'} = [$genblast_orthodb_biotype];
+  $types_hash->{'genblast-protein-evidence-2'} = [$genblast_orthodb_biotype];
    ($clusters, $unclustered) =
     cluster_Genes_by_coding_exon_overlap($genblast_orthodb_genes,$types_hash);
   my $genblast_orthodb_clusters = [@$clusters, @$unclustered];
 
-  $types_hash->{'miniprot-orthodb'} = [$miniprot_orthodb_biotype];
+  $types_hash->{'miniprot-protein-evidence-2'} = [$miniprot_orthodb_biotype];
   ($clusters, $unclustered) =
     cluster_Genes_by_coding_exon_overlap($miniprot_orthodb_genes,$types_hash);
   my $miniprot_orthodb_clusters = [@$clusters, @$unclustered];
@@ -460,12 +460,12 @@ sub process_genes {
           my $gpc_canonical_length = length($gpc_canonical_transcript->translateable_seq());
           if($coding_overlap/$gpc_canonical_length <= 0.8) {
             my $clone_gene = clone_Gene($gpc_canonical_gene);
-            $clone_gene->biotype('genblast-orthodb');
+            $clone_gene->biotype('genblast-protein-evidence-2');
             push(@$final_genes,$clone_gene);
           }
         } else {
           my $clone_gene = clone_Gene($gpc_canonical_gene);
-          $clone_gene->biotype('genblast-orthodb');
+          $clone_gene->biotype('genblast-protein-evidence-2');
           push(@$final_genes,$clone_gene);
         }
       }
@@ -498,12 +498,12 @@ sub process_genes {
           my $mpc_canonical_length = length($mpc_canonical_transcript->translateable_seq());
           if($coding_overlap/$mpc_canonical_length <= 0.8) {
             my $clone_gene = clone_Gene($mpc_canonical_gene);
-            $clone_gene->biotype('miniprot-orthodb');
+            $clone_gene->biotype('miniprot-protein-evidence-2');
             push(@$final_genes,$clone_gene);
           }
         } else {
           my $clone_gene = clone_Gene($mpc_canonical_gene);
-          $clone_gene->biotype('miniprot-orthodb');
+          $clone_gene->biotype('miniprot-protein-evidence-2');
           push(@$final_genes,$clone_gene);
         }
       }
