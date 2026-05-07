@@ -19,7 +19,7 @@ Originally developed for eukaryotic genomes, the pipeline has been heavily optim
 
 ---
 
-## 🛠️Installation
+## Installation
 
 Requirements:
 *   Python 3.8+
@@ -30,6 +30,11 @@ Requirements:
 *   `matplotlib` (for QC plotting)
 
 ```bash
+# Option 1: install as an editable package (recommended for development)
+cd support_scripts/gmb
+pip install -e ".[dev]"
+
+# Option 2: install dependencies only
 pip install pandas pyranges biopython pyyaml matplotlib
 ```
 
@@ -301,17 +306,60 @@ This generates:
 
 ## Project Structure
 
-| File | Description |
-| :--- | :--- |
-| `gene_model_builder.py` | Main orchestrator script running the 15-step pipeline. |
-| `config.py` & `.yaml` | Clade-specific pipeline configuration and dataclass definitions. |
-| `evidence_filter.py` | Logic for purging noise (fragments, chimeras, poor ab initio models). |
-| `scoring.py` | Evaluating gene models and selecting the top isoform(s) per locus. |
-| `annotate_cds_utrs.py` | Deriving ORF, CDS boundaries, UTR regions, and handling partial edges. |
-| `fasta_export.py` | Exporting strand-aware sequences (cDNA, CDS, Protein). |
-| `reporting.py` | Compiling filtering stats and pipeline metrics. |
-| `compare_annotations.py`| Validation tool for scoring consensus vs reference + Locus plot generation. |
-| `visualize_disagreements.py`| Diagnostic tool for visualizing locus models during pipeline dev. |
+The codebase is organised as a proper Python package (`gmb/`) with clear
+separation between pipeline logic, comparison tools, shared utilities, and CLI
+entry points.  Top-level scripts remain as thin **legacy wrappers** that
+re-export the public API for backward compatibility.
+
+```
+gmb/                         # Installable Python package
+  __init__.py                # Package root (__version__ = "2.0.0")
+  pipeline/                  # Core pipeline modules
+    builder.py               # Main orchestrator (15-step pipeline)
+    config.py                # YAML config loading & dataclass hierarchy
+    evidence_filter.py       # Noise removal (fragments, chimeras, etc.)
+    scoring.py               # Isoform scoring & selection
+    annotate_cds_utrs.py     # ORF/CDS/UTR derivation
+    fasta_export.py          # Strand-aware FASTA extraction
+    fasta_qc.py              # FASTA QC checks
+    gff3_validate.py         # GFF3 structural validation
+    dedup_genes.py           # Gene deduplication
+    protein_validation.py    # DIAMOND + Psauron scoring
+    reporting.py             # Summary metrics (JSON/TSV)
+    subset_utils.py          # Region/seqname subsetting
+  compare/                   # Annotation comparison tools
+    compare_annotations.py   # Consensus vs reference classification
+    visualize_disagreements.py  # Locus-level diagnostic plots
+    validate_annotation.py   # Standalone annotation validator
+  utils/                     # Shared helpers (no duplicated code)
+    intervals.py             # Interval overlap & merge functions
+    fasta.py                 # Genome loading, FASTA I/O
+    gff.py                   # GFF3 parsing utilities
+    io.py                    # Directory helpers
+    logging.py               # Logging setup
+  cli/                       # CLI entry points (installed via pip)
+    build.py                 # gmb-build
+    compare.py               # gmb-compare
+    visualize.py             # gmb-visualize
+gene_model_builder.py        # Legacy wrapper -> gmb.pipeline.builder
+compare_annotations.py       # Legacy wrapper -> gmb.compare.compare_annotations
+config.py                    # Legacy wrapper -> gmb.pipeline.config
+...                          # (other legacy wrappers)
+```
+
+### Installed CLI commands
+
+After `pip install -e .` (or `pip install .`), three console scripts are
+available:
+
+```bash
+gmb-build     --help    # equivalent to: python gene_model_builder.py --help
+gmb-compare   --help    # equivalent to: python compare_annotations.py --help
+gmb-visualize --help    # equivalent to: python visualize_disagreements.py --help
+```
+
+The legacy top-level scripts (`gene_model_builder.py`, etc.) continue to work
+unchanged for anyone who runs them directly.
 
 ---
 

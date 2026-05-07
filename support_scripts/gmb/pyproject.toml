@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
 [project]
 name = "gene-model-builder"
 version = "2.0.0"
@@ -19,6 +23,14 @@ dev = [
     "isort>=5.12",
 ]
 
+[project.scripts]
+gmb-build = "gmb.cli.build:main"
+gmb-compare = "gmb.cli.compare:main"
+gmb-visualize = "gmb.cli.visualize:main"
+
+[tool.setuptools.packages.find]
+include = ["gmb*"]
+
 # ---------------------------------------------------------------------------
 # black
 # ---------------------------------------------------------------------------
@@ -33,6 +45,7 @@ target-version = ["py38"]
 profile = "black"
 line_length = 99
 known_first_party = [
+    "gmb",
     "config",
     "evidence_filter",
     "scoring",
@@ -86,6 +99,8 @@ ignore = [
 "test_clustering.py" = ["F", "E"]
 "visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
 "compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
+"gmb/compare/visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
+"gmb/compare/compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
 
 # ---------------------------------------------------------------------------
 # pytest
