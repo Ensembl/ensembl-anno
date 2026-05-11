@@ -5,8 +5,8 @@ import tempfile
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from compare_annotations import classify_locus_pairs
-from subset_utils import load_seqname_map, remap_df_seqnames
+from gmb.compare.compare_annotations import classify_locus_pairs
+from gmb.pipeline.subset_utils import load_seqname_map, remap_df_seqnames
 
 
 def test_load_seqname_map():

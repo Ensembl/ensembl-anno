@@ -7,7 +7,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import PipelineConfig, load_config
+from gmb.pipeline.config import PipelineConfig, load_config
 
 
 def test_fungi_default_equivalence():

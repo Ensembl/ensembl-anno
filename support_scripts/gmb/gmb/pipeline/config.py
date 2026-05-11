@@ -104,7 +104,7 @@ class ProteinValidationConfig:
     diamond_weight: float = 0.5
     psauron_weight: float = 0.5
     min_score: float = 0.5
-    policy: str = "drop"  # 'drop' or 'penalize'
+    policy: str = "drop"  # 'drop' or 'penalize' (also accepts 'penalise')
 
 
 @dataclass

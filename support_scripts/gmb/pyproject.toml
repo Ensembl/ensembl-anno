@@ -46,17 +46,6 @@ profile = "black"
 line_length = 99
 known_first_party = [
     "gmb",
-    "config",
-    "evidence_filter",
-    "scoring",
-    "annotate_cds_utrs",
-    "fasta_export",
-    "gff3_validate",
-    "dedup_genes",
-    "protein_validation",
-    "reporting",
-    "subset_utils",
-    "visualize_disagreements",
 ]
 
 # ---------------------------------------------------------------------------
@@ -93,12 +82,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B", "SIM", "RUF", "F841", "E712", "F401"]
-"debug_scoring.py" = ["F", "E", "B"]
-"check_lengths.py" = ["F", "E"]
-"gen_extra_plots.py" = ["F", "E"]
-"test_clustering.py" = ["F", "E"]
-"visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
-"compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
+"exploratory/debug_scoring.py" = ["F", "E", "B"]
+"tools/check_lengths.py" = ["F", "E"]
+"exploratory/gen_extra_plots.py" = ["F", "E"]
+"exploratory/test_clustering.py" = ["F", "E"]
 "gmb/compare/visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
 "gmb/compare/compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
 

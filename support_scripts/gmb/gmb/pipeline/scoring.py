@@ -92,7 +92,7 @@ def score_model(
     # Protein Validation Score (if run)
     if "protein_coding_score" in model:
         val_cfg = config.protein_validation
-        if val_cfg.enabled and val_cfg.policy == "penalize":
+        if val_cfg.enabled and val_cfg.policy in ("penalize", "penalise"):
             # E.g. penalty if it falls below min_score
             if model["protein_coding_score"] < val_cfg.min_score:
                 score -= 5.0  # Arbitrary high penalty. Can be tied to config later.

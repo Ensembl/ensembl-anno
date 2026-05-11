@@ -7,8 +7,8 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import load_config
-from protein_validation import check_dependencies
+from gmb.pipeline.config import load_config
+from gmb.pipeline.protein_validation import check_dependencies
 
 
 @pytest.fixture

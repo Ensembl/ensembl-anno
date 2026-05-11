@@ -22,8 +22,8 @@ import os
 import sys
 from collections import defaultdict
 
-sys.path.insert(0, os.path.dirname(__file__))
-from annotate_cds_utrs import reverse_complement, translate
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from gmb.pipeline.annotate_cds_utrs import reverse_complement, translate
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

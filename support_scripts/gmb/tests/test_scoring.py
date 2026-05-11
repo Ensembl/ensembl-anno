@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import PipelineConfig, load_config
-from scoring import score_model, select_isoforms
+from gmb.pipeline.config import PipelineConfig, load_config
+from gmb.pipeline.scoring import score_model, select_isoforms
 
 
 @pytest.fixture
@@ -132,7 +132,7 @@ class TestSelectIsoforms:
 class TestLowMinCodons:
     def test_short_orf_accepted_with_fungal_config(self):
         """ORFs of 40 codons should be accepted with fungal min_codons=33."""
-        from annotate_cds_utrs import find_best_orf
+        from gmb.pipeline.annotate_cds_utrs import find_best_orf
 
         # 40-codon ORF: ATG + 38 coding + stop = 40 codons
         seq = "ATG" + "GCT" * 38 + "TAA"  # 40 codons
@@ -142,7 +142,7 @@ class TestLowMinCodons:
 
     def test_very_short_orf_still_found(self):
         """Even 20-codon ORFs should be found (as fallback)."""
-        from annotate_cds_utrs import find_best_orf
+        from gmb.pipeline.annotate_cds_utrs import find_best_orf
 
         seq = "ATG" + "GCT" * 18 + "TAA"  # 20 codons
         result = find_best_orf(seq, min_codons=33)

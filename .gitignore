@@ -11,6 +11,7 @@ venv/*
 # packaging
 build/
 *_build*
+!**/gene_model_builder.py
 eggs/
 .eggs*
 *.egg-info*

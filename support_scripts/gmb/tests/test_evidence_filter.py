@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import load_config
-from evidence_filter import filter_chimeras, filter_helixer_models, filter_protein_evidence
+from gmb.pipeline.config import load_config
+from gmb.pipeline.evidence_filter import filter_chimeras, filter_helixer_models, filter_protein_evidence
 
 
 @pytest.fixture

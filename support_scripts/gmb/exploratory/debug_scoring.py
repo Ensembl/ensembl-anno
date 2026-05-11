@@ -1,8 +1,13 @@
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import pyranges as pr
 
-from config import load_config
-from scoring import merge_identical_models, score_model, select_isoforms
+from gmb.pipeline.config import load_config
+from gmb.pipeline.scoring import merge_identical_models, score_model, select_isoforms
 
 config = load_config("configs/fungi_default.yaml")
 

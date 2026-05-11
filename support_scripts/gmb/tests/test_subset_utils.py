@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from subset_utils import (
+from gmb.pipeline.subset_utils import (
     Region,
     build_mapping,
     load_regions_file,

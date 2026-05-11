@@ -11,8 +11,8 @@ import os
 import json
 import pytest
 
-from annotate_cds_utrs import reverse_complement, translate
-from fasta_qc import (
+from gmb.pipeline.annotate_cds_utrs import reverse_complement, translate
+from gmb.pipeline.fasta_qc import (
     parse_fasta_ids,
     parse_fasta_records,
     parse_gff3,

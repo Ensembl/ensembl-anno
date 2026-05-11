@@ -7,7 +7,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from config import PipelineConfig, load_config
+from gmb.pipeline.config import PipelineConfig, load_config
 
 
 class TestDefaultConfig:
@@ -109,6 +109,24 @@ class TestUtrSupportConfig:
         yaml_file.write_text('utr:\n  fallback_policy_when_unsupported: "magic"\n')
         with pytest.raises(ValueError, match="Invalid fallback_policy_when_unsupported: magic"):
             load_config(str(yaml_file))
+
+
+class TestPolicyAlias:
+    def test_penalize_accepted(self, tmp_path):
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text('protein_validation:\n  policy: "penalize"\n')
+        cfg = load_config(str(yaml_file))
+        assert cfg.protein_validation.policy == "penalize"
+
+    def test_penalise_accepted(self, tmp_path):
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text('protein_validation:\n  policy: "penalise"\n')
+        cfg = load_config(str(yaml_file))
+        assert cfg.protein_validation.policy == "penalise"
+
+    def test_default_preset_uses_penalize(self):
+        cfg = load_config()
+        assert cfg.protein_validation.policy == "penalize"
 
 
 if __name__ == "__main__":

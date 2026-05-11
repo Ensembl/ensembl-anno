@@ -159,7 +159,7 @@ def load_data():
 
 
 # ---------------------------------------------------------------------------
-# Per-transcript annotation for visualization
+# Per-transcript annotation for visualisation
 # ---------------------------------------------------------------------------
 
 
@@ -336,7 +336,7 @@ def find_disagreements(data):
                     (chrom, start, end, "Strand_Mismatch", f"{rid}_vs_{cid}")
                 )
 
-    print(f"  Found {len(structural_mismatches)} Structural Mismatches " "to visualize.")
+    print(f"  Found {len(structural_mismatches)} Structural Mismatches " "to visualise.")
     disagreements.extend(structural_mismatches)
 
     # -----------------------------------------------------------------------
@@ -376,7 +376,7 @@ def find_disagreements(data):
                     if len(solved) < 5:
                         solved.append((chrom, start, end, "Solved_Overjoin", tid))
 
-        print(f"  Found {len(solved)} Solved Overjoins to visualize.")
+        print(f"  Found {len(solved)} Solved Overjoins to visualise.")
         disagreements.extend(solved)
 
     return disagreements

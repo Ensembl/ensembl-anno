@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from annotate_cds_utrs import (
+from gmb.pipeline.annotate_cds_utrs import (
     _make_orf_label,
     annotate_transcript,
     build_spliced_seq,
@@ -676,8 +676,8 @@ def test_compute_utr_end_support():
     """Test utr end support logic."""
     import pandas as pd
 
-    from config import PipelineConfig
-    from gene_model_builder import compute_utr_end_support
+    from gmb.pipeline.config import PipelineConfig
+    from gmb.pipeline.builder import compute_utr_end_support
 
     cfg = PipelineConfig()
     cfg.utr.require_end_support = True

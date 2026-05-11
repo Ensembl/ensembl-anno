@@ -8,9 +8,9 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
-from annotate_cds_utrs import reverse_complement
-from config import load_config
-from fasta_export import export_fasta
+from gmb.pipeline.annotate_cds_utrs import reverse_complement
+from gmb.pipeline.config import load_config
+from gmb.pipeline.fasta_export import export_fasta
 
 
 @pytest.fixture

@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from config import load_config
-from evidence_filter import split_mega_transcripts
+from gmb.pipeline.config import load_config
+from gmb.pipeline.evidence_filter import split_mega_transcripts
 
 
 def _make_config(**overrides):

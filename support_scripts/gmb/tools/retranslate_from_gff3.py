@@ -15,9 +15,8 @@ import os
 import sys
 from collections import defaultdict
 
-# Use the fixed annotate_cds_utrs functions from the gmb directory
-sys.path.insert(0, os.path.dirname(__file__))
-from annotate_cds_utrs import reverse_complement, translate
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from gmb.pipeline.annotate_cds_utrs import reverse_complement, translate
 
 
 def load_genome(fasta_path: str) -> dict[str, str]:

@@ -1,10 +1,11 @@
+import os
 import sys
 
-sys.path.insert(0, ".")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pandas as pd
 
-from compare_annotations import load_consensus_genes, load_gff, plot_comparison_locus
-from subset_utils import load_assembly_mapping, remap_df_seqnames
+from gmb.compare.compare_annotations import load_consensus_genes, load_gff, plot_comparison_locus
+from gmb.pipeline.subset_utils import load_assembly_mapping, remap_df_seqnames
 
 # Load mapping
 mapping = load_assembly_mapping("assembly_report.txt")

@@ -1215,9 +1215,9 @@ def main():
                 )
                 labeled_tx.append({"transcript_id": tid, "comparison_label": label})
 
-    # Evidence attribution labeling
+    # Evidence attribution labelling
     if args.evidence_attribution and os.path.exists(args.evidence_attribution):
-        print("Labeling evidence attribution...")
+        print("Labelling evidence attribution...")
         ea_df = pd.read_csv(args.evidence_attribution, sep="\t")
         labels_df = pd.DataFrame(labeled_tx)
 
@@ -1272,7 +1272,7 @@ def main():
     )
 
     # --- Evidence tracks for plotting ---
-    print("\nLoading evidence tracks for visualization...")
+    print("\nLoading evidence tracks for visualisation...")
     evidence_tracks = {}
 
     # Always include ref and consensus

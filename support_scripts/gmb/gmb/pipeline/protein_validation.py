@@ -2,7 +2,7 @@
 """Protein-coding validation stage for Gene Model Builder.
 
 Runs DIAMOND and Psauron against candidate translated sequences
-in batch. Deduplicates strict sequences within run to optimize throughput,
+in batch. Deduplicates strict sequences within run to optimise throughput,
 and returns a score dict mapping sequences or structural hashes to their results.
 """
 
@@ -146,7 +146,7 @@ def batch_score_proteins(
                     if len(parts) >= 5:
                         qseqid = parts[0]
                         bitscore = float(parts[4])
-                        # Normalize between 0 and 1, assuming max bitscore around 1000
+                        # Normalise between 0 and 1, assuming max bitscore around 1000
                         norm_bs = min(1.0, bitscore / 1000.0)
                         diamond_scores[qseqid] = norm_bs
 
