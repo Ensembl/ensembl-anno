@@ -228,8 +228,8 @@ python -m gmb.cli.build \
     --helixer helixer_remapped.gff3 \
     --orthodb orthodb_annotation.gtf \
     --uniprot uniprot_annotation.gtf \
-    --genome reference_genome.fa \
-    --config default_config.yaml \
+    --genome genome.fa \
+    --config config.yaml \
     --output-dir output/
 ```
 
