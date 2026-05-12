@@ -45,18 +45,13 @@ scoring:
   protein_overlap_bonus: 2.0
   multi_source_bonus: 0.5
   noncanonical_splice_penalty: 0.5
-  max_isoforms_per_locus: 5
+  max_isoforms_per_locus: 3
   min_alternate_score: 2.5
   fungal_single_exon_mode: true
   keep_helixer_without_support: true
-  require_protein_support_for_single_source: false
+  require_protein_support_for_single_source: true
   min_cds_bp: 150
-  require_support_for_single_exon: false
-  #: Reciprocal-overlap fraction of the *smaller* model required for two
-  #: candidates to be treated as the same gene during isoform selection.
-  #: Raise to 0.30–0.50 to prevent compact Helixer genes being absorbed into
-  #: large spanning transcriptome models.
-  same_gene_overlap_threshold: 0.15
+  require_support_for_single_exon: true
 
 protein_validation:
   enabled: true
@@ -64,8 +59,8 @@ protein_validation:
   psauron_path: "psauron"
   diamond_db: "swissprot.dmnd"
   psauron_model: "default"
-  diamond_weight: 0.5
-  psauron_weight: 0.5
+  diamond_weight: 0.7
+  psauron_weight: 0.3
   min_score: 0.7
   policy: "penalize"
 
