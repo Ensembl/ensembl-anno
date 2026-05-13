@@ -35,7 +35,6 @@ _HERE = Path(__file__).parent
 _GMB_DIR = _HERE.parent
 _REGION_FIXTURES = _HERE / "fixtures" / "z_tritici_region1"
 _EXPECTED = _HERE / "fixtures" / "expected"
-_SCRIPT = _GMB_DIR / "gene_model_builder.py"
 
 
 def _count_gff3_genes(gff3: Path) -> int:
@@ -65,7 +64,8 @@ def run(from_dir: Path | None = None) -> None:
         print(f"Running pipeline on pre-subsetted region fixtures into {output_dir} …")
         cmd = [
             sys.executable,
-            str(_SCRIPT),
+            "-m",
+            "gmb.cli.build",
             "--scallop",
             str(_REGION_FIXTURES / "scallop_geneset.gtf"),
             "--stringtie",
@@ -83,7 +83,7 @@ def run(from_dir: Path | None = None) -> None:
             "--gene-prefix",
             "ZTGOLD",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(_GMB_DIR))
         if result.returncode != 0:
             print("PIPELINE FAILED:", result.stderr[-2000:], file=sys.stderr)
             sys.exit(1)

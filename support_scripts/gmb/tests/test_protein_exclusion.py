@@ -13,10 +13,10 @@ def test_protein_exclusion():
     with tempfile.TemporaryDirectory() as tmpdir:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, "output")
-        script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gene_model_builder.py")
         cmd = [
             sys.executable,
-            script,
+            "-m",
+            "gmb.cli.build",
             "--scallop",
             files["scallop"],
             "--stringtie",
@@ -35,7 +35,7 @@ def test_protein_exclusion():
             "TEST",
         ]
 
-        subprocess.run(cmd, capture_output=True, text=True)
+        subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(__file__)))
         gff3_path = os.path.join(output_dir, "consensus.gff3")
 
         with open(gff3_path) as f:

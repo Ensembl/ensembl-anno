@@ -55,7 +55,6 @@ import pytest
 _HERE = Path(__file__).parent
 _GMB_DIR = _HERE.parent
 _Z_TRITICI = _GMB_DIR / "z_tritici"
-_SCRIPT = _GMB_DIR / "gene_model_builder.py"
 _FIXTURES = _HERE / "fixtures" / "expected"
 _REGION_FIXTURES = _HERE / "fixtures" / "z_tritici_region1"
 
@@ -75,7 +74,8 @@ def _run_pipeline_region(output_dir: Path) -> subprocess.CompletedProcess:
     """Run gene_model_builder on the pre-subsetted 500 kb region fixture."""
     cmd = [
         sys.executable,
-        str(_SCRIPT),
+        "-m",
+        "gmb.cli.build",
         "--scallop",
         str(_REGION_FIXTURES / "scallop_geneset.gtf"),
         "--stringtie",
@@ -93,9 +93,7 @@ def _run_pipeline_region(output_dir: Path) -> subprocess.CompletedProcess:
         "--gene-prefix",
         "ZTTEST",
     ]
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(_GMB_DIR)
-    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=str(_GMB_DIR))
 
 
 def _run_pipeline_seqname1(output_dir: Path) -> subprocess.CompletedProcess:
@@ -106,7 +104,8 @@ def _run_pipeline_seqname1(output_dir: Path) -> subprocess.CompletedProcess:
     """
     cmd = [
         sys.executable,
-        str(_SCRIPT),
+        "-m",
+        "gmb.cli.build",
         "--scallop",
         str(_Z_TRITICI / "scallop_geneset.gtf"),
         "--stringtie",
@@ -128,9 +127,7 @@ def _run_pipeline_seqname1(output_dir: Path) -> subprocess.CompletedProcess:
         "--seqname",
         "1",
     ]
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(_GMB_DIR)
-    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=str(_GMB_DIR))
 
 
 def _parse_gff3_genes(gff3_path: Path) -> list[dict]:

@@ -58,10 +58,10 @@ gmb-compare   --help
 gmb-visualize --help
 ```
 
-**Backward-compatible wrapper scripts** are provided at the top level
-(`gene_model_builder.py`, `compare_annotations.py`, `visualize_disagreements.py`)
-and under `scripts/`. CLI arguments are identical — these simply delegate to
-the package entry points.
+**Backward-compatible wrapper scripts** are also available under `scripts/`
+(`scripts/gene_model_builder.py`, `scripts/compare_annotations.py`,
+`scripts/visualize_disagreements.py`). CLI arguments are identical — these
+simply delegate to the package entry points.
 
 ### Quickstart — bundled *Z. tritici* example data
 
@@ -117,7 +117,6 @@ python -m gmb.cli.build \
 
 | File | Description |
 | :--- | :--- |
-| `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
 | `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
 | `cdna.fa` | Spliced transcript nucleotide sequences — one record per mRNA in `consensus.gff3` |
 | `cds.fa` | Coding sequences (absent when no CDS features were predicted) |
@@ -297,7 +296,7 @@ This writes `fasta_qc_report.json` summarising:
 
 ### Output Validation & Comparison
 
-Use `compare_annotations.py` to evaluate your consensus against a reference (like GenBank).
+Use `gmb.cli.compare` to evaluate your consensus against a reference (like GenBank).
 
 ```bash
 python -m gmb.cli.compare \
@@ -369,9 +368,6 @@ exploratory/                 # Debugging & one-off analysis scripts
   debug_scoring.py           # Interactive scoring inspection
   gen_extra_plots.py         # Generate additional comparison plots
   test_clustering.py         # Ad-hoc clustering experiments
-gene_model_builder.py        # Backward-compatible wrapper (top-level)
-compare_annotations.py       # Backward-compatible wrapper (top-level)
-visualize_disagreements.py   # Backward-compatible wrapper (top-level)
 ```
 
 ---

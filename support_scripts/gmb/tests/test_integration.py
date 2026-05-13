@@ -123,10 +123,10 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, "output")
 
-        script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gene_model_builder.py")
         cmd = [
             sys.executable,
-            script,
+            "-m",
+            "gmb.cli.build",
             "--scallop",
             files["scallop"],
             "--stringtie",
@@ -144,7 +144,7 @@ class TestIntegration:
             "--gene-prefix",
             "TEST",
         ]
-        result = subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        result = subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(__file__)))
 
         assert result.returncode == 0, (
             f"Pipeline failed:\nstdout:\n{result.stdout}\n" f"stderr:\n{result.stderr}"
@@ -156,10 +156,10 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, "output")
 
-        script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gene_model_builder.py")
         cmd = [
             sys.executable,
-            script,
+            "-m",
+            "gmb.cli.build",
             "--scallop",
             files["scallop"],
             "--stringtie",
@@ -177,7 +177,7 @@ class TestIntegration:
             "--gene-prefix",
             "TEST",
         ]
-        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(__file__)))
 
         assert os.path.exists(os.path.join(output_dir, "consensus.gff3"))
         assert os.path.exists(os.path.join(output_dir, "cdna.fa"))
@@ -191,10 +191,10 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, "output")
 
-        script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gene_model_builder.py")
         cmd = [
             sys.executable,
-            script,
+            "-m",
+            "gmb.cli.build",
             "--scallop",
             files["scallop"],
             "--stringtie",
@@ -231,10 +231,10 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, "output")
 
-        script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gene_model_builder.py")
         cmd = [
             sys.executable,
-            script,
+            "-m",
+            "gmb.cli.build",
             "--scallop",
             files["scallop"],
             "--stringtie",
@@ -275,10 +275,10 @@ class TestIntegration:
         files = _create_test_data(tmpdir)
         output_dir = os.path.join(tmpdir, "output")
 
-        script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gene_model_builder.py")
         cmd = [
             sys.executable,
-            script,
+            "-m",
+            "gmb.cli.build",
             "--scallop",
             files["scallop"],
             "--stringtie",
