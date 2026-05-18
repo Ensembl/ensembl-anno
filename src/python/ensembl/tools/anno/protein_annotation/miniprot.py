@@ -1,3 +1,4 @@
+
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -28,9 +29,10 @@ import re
 import subprocess
 
 from pathlib import Path
-from typing import Union
+from typing import List, Union, cast
 
 import numpy as np
+from numpy.typing import NDArray
 
 from src.ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -164,18 +166,25 @@ def convert_miniprot_gff_to_gtf(
 
     with open(output_file, "w", encoding="utf-8") as file_out:
         for block in blocks:
-            nblock_lines = [line for line in block.split("\n") if line]
+            nblock_lines: List[str] = [
+                line for line in block.split("\n") if line
+            ]
 
             if not nblock_lines:
                 continue
 
             header_line = nblock_lines[0]
 
-            nblock = [line.split("\t") for line in nblock_lines[1:]]
+            nblock_list: List[List[str]] = [
+                line.split("\t") for line in nblock_lines[1:]
+            ]
 
-            nblock = np.array(
-                nblock,
-                dtype=object,
+            nblock: NDArray[np.object_] = cast(
+                NDArray[np.object_],
+                np.array(
+                    nblock_list,
+                    dtype=object,
+                ),
             )
 
             if "fs:i:" in header_line:
@@ -204,24 +213,33 @@ def convert_miniprot_gff_to_gtf(
                 "transcript",
             )
 
-            nblock[1:nrows, 2] = [value.replace("CDS", "exon") for value in nblock[1:nrows, 2]]
+            nblock[1:nrows, 2] = [
+                value.replace("CDS", "exon")
+                for value in nblock[1:nrows, 2]
+            ]
 
             target_info = [
                 value.replace("Target=", "")
                 for value in re.split(
-                    ";|\\s",
-                    nblock[0, 8],
+                    r";|\s",
+                    str(nblock[0, 8]),
                 )
                 if "Target" in value
             ][0]
 
-            gene_transcript = f'gene_id "{target_info}"; ' f'transcript_id "{target_info}";'
+            gene_transcript = (
+                f'gene_id "{target_info}"; '
+                f'transcript_id "{target_info}";'
+            )
 
             for index in range(nrows):
                 if index == 0:
                     nblock[index, 8] = gene_transcript
                 else:
-                    nblock[index, 8] = f"{gene_transcript} " f'exon_number "{index}";'
+                    nblock[index, 8] = (
+                        f'{gene_transcript} '
+                        f'exon_number "{index}";'
+                    )
 
             if nblock[nrows - 1, 2] == "stop_codon":
                 if nblock[0, 6] == "-":
@@ -272,10 +290,12 @@ def run_miniprot_index(
     logger.info("Completed running miniprot indexing")
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
 
-    parser = argparse.ArgumentParser(description="Miniprot arguments")
+    parser = argparse.ArgumentParser(
+        description="Miniprot arguments"
+    )
 
     parser.add_argument(
         "--masked_genome_file",
