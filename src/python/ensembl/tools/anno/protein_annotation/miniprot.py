@@ -1,4 +1,3 @@
-
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -57,9 +56,7 @@ def run_miniprot(  # pylint: disable=too-many-arguments
     check_exe(miniprot_bin)
 
     if protein_set not in {"uniprot", "orthodb"}:
-        raise ValueError(
-            "protein_set must be either 'uniprot' or 'orthodb'"
-        )
+        raise ValueError("protein_set must be either 'uniprot' or 'orthodb'")
 
     if protein_set == "uniprot":
         miniprot_dir = create_dir(
@@ -81,20 +78,14 @@ def run_miniprot(  # pylint: disable=too-many-arguments
             "transcript",
         )
         if transcript_count > 0:
-            logger.info(
-                "Miniprot GTF file exists, skipping analysis"
-            )
+            logger.info("Miniprot GTF file exists, skipping analysis")
             return
 
     if not masked_genome.exists():
-        raise IOError(
-            f"Masked genome file does not exist: {masked_genome}"
-        )
+        raise IOError(f"Masked genome file does not exist: {masked_genome}")
 
     if not protein_dataset.exists():
-        raise IOError(
-            f"Protein file does not exist: {protein_dataset}"
-        )
+        raise IOError(f"Protein file does not exist: {protein_dataset}")
 
     miniprot_index_file = Path(f"{masked_genome}.mpi")
 
@@ -106,9 +97,7 @@ def run_miniprot(  # pylint: disable=too-many-arguments
             num_threads,
         )
     else:
-        logger.info(
-            "Found an existing miniprot index, skipping indexing"
-        )
+        logger.info("Found an existing miniprot index, skipping indexing")
 
     miniprot_cmd = [
         str(miniprot_bin),
@@ -175,20 +164,14 @@ def convert_miniprot_gff_to_gtf(
 
     with open(output_file, "w", encoding="utf-8") as file_out:
         for block in blocks:
-            nblock_lines = [
-                line for line in block.split("\n")
-                if line
-            ]
+            nblock_lines = [line for line in block.split("\n") if line]
 
             if not nblock_lines:
                 continue
 
             header_line = nblock_lines[0]
 
-            nblock = [
-                line.split("\t")
-                for line in nblock_lines[1:]
-            ]
+            nblock = [line.split("\t") for line in nblock_lines[1:]]
 
             nblock = np.array(
                 nblock,
@@ -221,10 +204,7 @@ def convert_miniprot_gff_to_gtf(
                 "transcript",
             )
 
-            nblock[1:nrows, 2] = [
-                value.replace("CDS", "exon")
-                for value in nblock[1:nrows, 2]
-            ]
+            nblock[1:nrows, 2] = [value.replace("CDS", "exon") for value in nblock[1:nrows, 2]]
 
             target_info = [
                 value.replace("Target=", "")
@@ -235,19 +215,13 @@ def convert_miniprot_gff_to_gtf(
                 if "Target" in value
             ][0]
 
-            gene_transcript = (
-                f'gene_id "{target_info}"; '
-                f'transcript_id "{target_info}";'
-            )
+            gene_transcript = f'gene_id "{target_info}"; ' f'transcript_id "{target_info}";'
 
             for index in range(nrows):
                 if index == 0:
                     nblock[index, 8] = gene_transcript
                 else:
-                    nblock[index, 8] = (
-                        f'{gene_transcript} '
-                        f'exon_number "{index}";'
-                    )
+                    nblock[index, 8] = f"{gene_transcript} " f'exon_number "{index}";'
 
             if nblock[nrows - 1, 2] == "stop_codon":
                 if nblock[0, 6] == "-":
@@ -265,9 +239,7 @@ def convert_miniprot_gff_to_gtf(
                     nblock = nblock[:-1]
 
             for element in nblock:
-                file_out.write(
-                    "%s\n" % "\t".join(element)
-                )
+                file_out.write("%s\n" % "\t".join(element))
 
 
 def run_miniprot_index(
@@ -297,17 +269,13 @@ def run_miniprot_index(
         check=True,
     )
 
-    logger.info(
-        "Completed running miniprot indexing"
-    )
+    logger.info("Completed running miniprot indexing")
 
 
 def parse_args():
     """Parse command line arguments."""
 
-    parser = argparse.ArgumentParser(
-        description="Miniprot arguments"
-    )
+    parser = argparse.ArgumentParser(description="Miniprot arguments")
 
     parser.add_argument(
         "--masked_genome_file",
@@ -355,16 +323,9 @@ def main() -> None:
 
     args = parse_args()
 
-    log_file_path = (
-        create_dir(args.output_dir, "log")
-        / "miniprot.log"
-    )
+    log_file_path = create_dir(args.output_dir, "log") / "miniprot.log"
 
-    loginipath = (
-        Path(__file__).parents[6]
-        / "conf"
-        / "logging.conf"
-    )
+    loginipath = Path(__file__).parents[6] / "conf" / "logging.conf"
 
     logging.config.fileConfig(
         loginipath,
