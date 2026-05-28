@@ -37,7 +37,7 @@ use FindBin;
 use lib "$FindBin::Bin/../conf";
 
 use LoggerConfig;
-use Utils qw(check_gtf_file setup_fasta set_slice create_analysis_object set_transcript set_exon set_translation set_canonical_transcript \
+use Utils qw(check_gtf_file set_slice create_analysis_object set_transcript set_exon set_translation set_canonical_transcript \
 parse_region_details set_attributes build_translation);
 
 my $analysis_name = "ensembl";
@@ -63,7 +63,9 @@ my $analysis = create_analysis_object($analysis_name, $module_name);
 # Validate GTF file
 check_gtf_file($gtf_file);
 # Setup fasta
-setup_fasta($genome_file);
+if ($genome_file && -e $genome_file) {
+  setup_fasta(-FASTA => $genome_file);
+}
 
 # Parse region details
 my ($region_name, $region_start, $region_end) = parse_region_details($region_details);

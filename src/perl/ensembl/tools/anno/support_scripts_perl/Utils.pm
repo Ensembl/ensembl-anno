@@ -59,7 +59,6 @@ use vars qw (@ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(
   check_gtf_file
-  setup_fasta
   set_slice  
   create_analysis_object        
   set_transcript
@@ -69,6 +68,11 @@ use vars qw (@ISA @EXPORT);
   parse_region_details
   set_attributes
   build_translation
+  write_to_gtf_file
+  build_gtf_record
+  create_single_transcript_genes
+  sort_features_by_slice
+  run_gene_builder_for_slice
             );
 
 
@@ -84,19 +88,6 @@ sub check_gtf_file {
     die "Could not open the GTF file, path used: $gtf_file" unless -e $gtf_file;
 }
 
-=head2 setup_fasta
-
-Set up fasta file
-
-=cut
-sub setup_fasta {
-    my $genome_file = @_;
-
-    if ($genome_file && -e $genome_file) {
-        setup_fasta(-FASTA => $genome_file);
-    }
-
-}
 
 
 =head2 set_slice
@@ -182,10 +173,15 @@ sub set_translation {
 
 =head2 set_canonical_transcript
 
-        # This array will store exactly what to write. By default, we would write the gene as constructed to this point.
-        # However, if the run is just to process a particular type of transcripts into a cleaned set, we may want to
-        # pull those back out into single transcript genes for further processing later. In that case, the array will
-        # be replaced with single transcript genes
+    This function determines and sets the canonical transcript for a given gene.
+    The canonical transcript is selected based on the following criteria:
+    
+    1. Prefer transcripts with a translation (coding transcripts).
+    2. Among coding transcripts, choose the one with the longest translation.
+    3. If translations are of equal length, choose the transcript with the longest total length.
+    4. If no coding transcripts are available, choose the longest non-coding transcript.
+
+    The chosen transcript is then set as the canonical transcript for the gene.
 
 =cut
 
@@ -199,7 +195,11 @@ sub set_canonical_transcript {
     foreach my $transcript (@$transcripts) {
         my $current_translation = $current_canonical->translation();
         my $new_translation = $transcript->translation();
-
+        # Update the canonical transcript if:
+        # - The current transcript has no translation, and the new one does
+        # - The new translation is longer than the current canonical translation
+        # - If translations are of equal length, but the new transcript is longer overall
+        # - If both transcripts are non-coding, choose the longest one
         if (!$current_translation || ($current_translation->length() < $new_translation->length()) ||
             ($current_translation->length() == $new_translation->length() && $current_canonical->length() < $transcript->length()) ||
             !($current_canonical->translation()) && $current_canonical->length() < $transcript->length()) {
@@ -236,6 +236,48 @@ sub set_attributes {
 
     return($attribute_pairs);
 }
+
+=head2 create_single_transcript_genes
+
+Create one gene per transcript.
+
+=cut
+
+sub create_single_transcript_genes {
+    my ($transcripts) = @_;
+    # Creates single transcript genes for use with things like genebuilder
+    my $single_transcript_genes = [];
+    foreach my $transcript (@$transcripts) {
+        my $gene = Bio::EnsEMBL::Gene->new();
+        $gene->stable_id($transcript->stable_id());
+        $gene->biotype($transcript->biotype);
+        $gene->slice($transcript->slice());
+        $gene->analysis($analysis);
+        $gene->add_Transcript($transcript);
+        push(@$single_transcript_genes,$gene);
+    }
+    return($single_transcript_genes);
+}
+
+=head2 sort_features_by_slice
+
+    Group features by slice name
+
+=cut
+
+sub sort_features_by_slice {
+    my ($features) = @_;
+
+    # Create a hash to store features grouped by slice name
+    my $features_by_slice = {};
+
+    # Group features by slice name 
+    #//= operator to initialize the array reference only if it doesn't already exist for a given slice name.
+    push @{$features_by_slice->{$_->slice->name} //= []}, $_ for @$features;
+
+    return $features_by_slice;
+}
+
 =head2 parse_region_details
 
 Parse region details.
@@ -298,3 +340,148 @@ sub build_translation {
     $transcript->translation($translation);
     calculate_exon_phases($transcript, 0);
 }
+}
+
+=head2 write_to_gtf_file
+
+    Write geneset into gtf, transcript sequences in cdna file and protein sequences in protein files.
+
+=cut
+
+
+sub write_to_gtf_file {
+    my ($genes_to_write, $output_gtf_file, $analysis_name, $write_cdna_prot, $final_biotype) = @_;
+
+    # Prepare additional output files for transcript and protein 
+    my $output_transcript_seq_file = "$output_gtf_file.cdna";
+    my $output_transcript_prot_file = "$output_gtf_file.prot";
+
+    # Open output files
+    open(my $out_gtf, ">", $output_gtf_file);
+    #open(my $out_cdna, ">", $output_transcript_seq_file);
+    #open(my $out_prot, ">", $output_transcript_prot_file);
+    if ($write_cdna_prot) {
+        open($out_cdna, ">", "$output_gtf_file.cdna") or die "Cannot open cDNA file: $!";
+        open($out_prot, ">", "$output_gtf_file.prot") or die "Cannot open protein file: $!";
+    }
+
+    my $gene_count = 1;
+    my $transcript_count = 1;
+
+    # Iterate through each gene and its transcripts
+    foreach my $gene (@$genes_to_write) {
+        my $gene_id = "${analysis_name}_${gene_count}";
+        my $transcripts = $gene->get_all_Transcripts();
+
+        foreach my $transcript (@$transcripts) {
+            my $transcript_id = "${analysis_name}_${transcript_count}";
+            my $exons = $transcript->get_all_Exons();
+            my $translation = $transcript->translation();
+            my $biotype = $final_biotype // $transcript->biotype(); # Use provided biotype or default to $transcript->biotype()
+
+            # Build and print GTF record
+            my $gtf_record = build_gtf_record($transcript, $exons, $analysis_name, $gene_id, $transcript_id, $translation, $biotype);
+            say $out_gtf join("\n", @$gtf_record);
+
+            # Print transcript sequence
+            #say $out_cdna ">${transcript_id}\n" . $transcript->seq->seq();
+
+            # Print protein sequence if available
+            #say $out_prot ">${transcript_id}\n" . ($translation ? $translation->seq() : "");
+            # If requested, write cDNA and protein sequences
+            if ($write_cdna_prot) {
+                # Print transcript sequence
+                say $out_cdna ">${transcript_id}\n" . $transcript->seq->seq();
+                # Print protein sequence if available
+                say $out_prot ">${transcript_id}\n" . ($translation ? $translation->seq() : "");
+            }
+            $transcript_count++;
+        }
+
+        $gene_count++;
+    }
+
+    # Close output files
+    close $out_gtf;
+    close $out_cdna if $write_cdna_prot;
+    close $out_prot if $write_cdna_prot;
+}
+
+=head2 build_gtf_record
+
+    Define transcript and exon records for the GTF file
+
+=cut
+
+sub build_gtf_record {
+    my ($transcript, $exons, $analysis_name, $gene_id, $transcript_id, $translation, $transcript_biotype) = @_;
+
+    my $record = [];
+    my $strand = ($transcript->strand() == -1) ? "-" : "+";
+
+    # Build attributes for the transcript
+    my $transcript_attribs = qq{gene_id "${gene_id}"; transcript_id "${transcript_id}"; biotype "${transcript_biotype}";};
+    if ($translation) {
+        # Encode translation information
+        my $start_exon = $translation->start_Exon();
+        my $end_exon = $translation->end_Exon();
+        my $translation_coords = qq{ translation_coords \"${start_exon->start()}:${start_exon->end()}:${translation->start()}:${end_exon->start()}:${end_exon->end()}:${translation->end()}\";};
+        $transcript_attribs .= $translation_coords;
+    }
+    if($transcript->is_canonical()) {
+        $transcript_attribs .= " canonical_transcript;"
+    }
+    # Construct GTF line for the transcript
+    my @transcript_cols = ($transcript->slice->seq_region_name(), $analysis_name, 'transcript', $transcript->start(), $transcript->end(), '.', $strand, '.', $transcript_attribs);
+    my $transcript_line = join("\t", @transcript_cols);
+    push(@$record, $transcript_line);
+
+    # Build attributes for exons
+    my $exon_attribs_generic = qq{gene_id "${gene_id}"; transcript_id "${transcript_id}";};
+    my $exon_rank = 1;
+
+    # Construct GTF lines for each exon
+    foreach my $exon (@$exons) {
+        my $exon_attribs = qq{${exon_attribs_generic} exon_number "${exon_rank}";};
+        my @exon_cols = ($transcript->slice->seq_region_name(), $analysis_name, 'exon', $exon->start(), $exon->end(), '.', $strand, '.', $exon_attribs);
+        my $exon_line = join("\t", @exon_cols);
+        push(@$record, $exon_line);
+        $exon_rank++;
+    }
+
+    return $record;
+}
+
+=head2 run_gene_builder_for_slice
+
+    Run gene builder for a slice
+
+=cut
+
+sub run_gene_builder_for_slice {
+    my ($slice, $slice_genes, $analysis, $output_biotype) = @_;
+
+    # Create a new GeneBuilder Runnable
+    my $runnable = Bio::EnsEMBL::Analysis::Runnable::GeneBuilder->new(
+        -query                    => $slice,
+        -analysis                 => $analysis,
+        -genes                    => $slice_genes,
+        -output_biotype           => $output_biotype // 'gbuild',
+        -max_transcripts_per_cluster => 100,
+        -min_short_intron_len     => 7,
+        -max_short_intron_len     => 15,
+        -blessed_biotypes         => {},
+        -skip_readthrough_check   => 1,
+        -max_exon_length          => 50000,
+        -coding_only              => 1,
+    );
+
+    # Run the GeneBuilder
+    $runnable->run();
+
+    # Return the collapsed genes for the slice
+    return $runnable->output();
+}
+
+
+

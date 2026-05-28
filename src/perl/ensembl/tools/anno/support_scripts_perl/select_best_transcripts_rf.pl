@@ -43,7 +43,9 @@ use FindBin;
 use lib "$FindBin::Bin/../conf";
 
 use LoggerConfig;
-use Utils qw(check_gtf_file setup_fasta set_slice create_analysis_object set_transcript set_exon set_translation set_canonical_transcript parse_region_details);
+use Utils qw(check_gtf_file  set_slice create_analysis_object set_transcript set_exon set_translation set_canonical_transcript parse_region_details write_to_gtf_file
+  build_gtf_record join_transcripts create_single_transcript_genes sort_features_by_slice run_gene_builder_for_slice
+  set_attributes);
 
 my ($host, $port, $user, $pass, $dbname, $dna_host, $dna_port, $dna_user, $dna_dbname);
 my $specify_strand;
@@ -98,7 +100,9 @@ $LoggerConfig::logger->info("$input_gtf_file\n$output_gtf_file\n$region_details\
 # Validate GTF file
 check_gtf_file($input_gtf_file);
 # Setup fasta
-setup_fasta($genome_file);
+if ($genome_file && -e $genome_file) {
+    setup_fasta(-FASTA => $genome_file);
+}
 
 my $analysis = create_analysis_object($analysis_name, $module_name);
 # Parse region details
@@ -106,7 +110,7 @@ my ($region_name, $region_start, $region_end) = parse_region_details($region_det
 my $slice = set_slice($region_name, $region_start, $region_end, 1);
 
 # Process GTF file and get transcripts in the slice
-my $transcripts = process_gtf_file($input_gtf_file, $region_name, $slice, $specify_strand, $slice), $analysis;
+my $transcripts = process_gtf_file($input_gtf_file, $region_name, $slice, $specify_strand, $analysis);
 
 #my $transcripts_by_slice = sort_transcripts_by_slice($transcripts);
 #foreach my $slice_name (keys %$transcripts_by_slice) {
@@ -184,15 +188,9 @@ if ($set_canonical) {
     set_canonical_transcript($_) foreach @$genes_to_write;
 }
 
-write_to_gtf_file($genes_to_write,$output_gtf_file,$analysis_name,$final_biotype);
+write_to_gtf_file($genes_to_write,$output_gtf_file,$analysis_name,1,$final_biotype);
 
 exit;
-
-
-
-=head1 METHODS
-
-
 
 
 
@@ -202,7 +200,7 @@ Read GTF file.
 
 =cut
 sub process_gtf_file {
-    my ($input_gtf_file, $region_name, $region_start, $region_end, $specify_strand, $slice, $analysis) = @_;
+    my ($input_gtf_file, $region_name, $slice, $specify_strand, $analysis) = @_;
     my %strand_conversion = ('+' => '1', '-' => '-1', '.' => undef, '?' => undef);
     #say "Reading in GTF";
     $LoggerConfig::logger->info("Reading in GTF");
@@ -273,26 +271,33 @@ sub process_gtf_file {
     $LoggerConfig::logger->info("Finished reading GTF");
 }
 
-=head2 set_attributes
+# =head2 set_attributes
 
-Set attribute dictionary
+# Set attribute dictionary
 
-=cut
-sub set_attributes {
-    my ($attribute_string) = @_;
-    my $attribute_pairs = {};
+# =cut
+# sub set_attributes {
+#     my ($attribute_string) = @_;
+#     my $attribute_pairs = {};
 
-    my @attribute_array = split(";",$attribute_string);
-    foreach my $attribute (@attribute_array) {
-        my @pairs = split(" ",$attribute);
-        if(scalar(@pairs) == 2) {
-        $pairs[1] =~ s/\"//g;
-        $attribute_pairs->{$pairs[0]} = $pairs[1];
-        }
-    }
+#     my @attribute_array = split(";",$attribute_string);
+#     foreach my $attribute (@attribute_array) {
+#         my @pairs = split(" ",$attribute);
+#         if(scalar(@pairs) == 2) {
+#         $pairs[1] =~ s/\"//g;
+#         $attribute_pairs->{$pairs[0]} = $pairs[1];
+#         }
+#     }
+
+#     return($attribute_pairs);
+# }
+
+
+
 
     return($attribute_pairs);
 }
+
 
 =head2 remove_overlapping_exons
 
@@ -385,27 +390,7 @@ sub adjust_transcript_ends {
     return $transcripts_to_extend;
 }
 
-=head2 create_single_transcript_genes
 
-Create one gene per transcript.
-
-=cut
-
-sub create_single_transcript_genes {
-    my ($transcripts) = @_;
-    # Creates single transcript genes for use with things like genebuilder
-    my $single_transcript_genes = [];
-    foreach my $transcript (@$transcripts) {
-        my $gene = Bio::EnsEMBL::Gene->new();
-        $gene->stable_id($transcript->stable_id());
-        $gene->biotype($transcript->biotype);
-        $gene->slice($transcript->slice());
-        $gene->analysis($analysis);
-        $gene->add_Transcript($transcript);
-        push(@$single_transcript_genes,$gene);
-    }
-    return($single_transcript_genes);
-}
 
 =head2 process_clusters_for_joining
 
@@ -1616,43 +1601,14 @@ sub build_final_geneset {
     my $genes = $good_genes_by_slice->{$slice_name};
     my $slice = ${$genes}[0]->slice();
     my $biotype = ${$genes}[0]->biotype();
-    my $runnable = Bio::EnsEMBL::Analysis::Runnable::GeneBuilder->new(
-                        -query => $slice,
-                        -analysis => $analysis,
-                        -genes => $genes,
-                        -output_biotype => $biotype,
-                        -max_transcripts_per_cluster => 100,
-                        -min_short_intron_len => 7,
-                        -max_short_intron_len => 15,
-                        -blessed_biotypes => {},
-                        -skip_readthrough_check => 1,
-                        -max_exon_length => 50000,
-                        -coding_only => 1,
-                    );
-    $runnable->run;
+    my $slice_genes = run_gene_builder_for_slice($slice, $genes, $analysis, $biotype);
+
     push(@$final_genes,@{$runnable->output});
     }
     return $final_genes;
 }
 
-=head2 sort_features_by_slice
 
-    Group features by slice name
-
-=cut
-
-sub sort_features_by_slice {
-    my ($features) = @_;
-
-    # Create a hash to store features grouped by slice name
-    my $features_by_slice = {};
-
-    # Group features by slice name 
-    #//= operator to initialize the array reference only if it doesn't already exist for a given slice name.
-    push @{$features_by_slice->{$_->slice->name} //= []}, $_ for @$features;
-
-    return $features_by_slice;
-}
 
 =head2 prep_genes_for_writing
 
@@ -1695,98 +1651,99 @@ sub prep_genes_for_writing {
     return $genes_to_write;
 }
 
-=head2 write_to_gtf_file
 
-    Write geneset into gtf, transcript sequences in cdna file and protein sequences in protein files.
+# =head2 write_to_gtf_file
 
-=cut
+#     Write geneset into gtf, transcript sequences in cdna file and protein sequences in protein files.
 
-sub write_to_gtf_file {
-    my ($genes_to_write, $output_gtf_file, $analysis_name, $final_biotype) = @_;
+# =cut
 
-    # Prepare additional output files for transcript and protein 
-    my $output_transcript_seq_file = "$output_gtf_file.cdna";
-    my $output_transcript_prot_file = "$output_gtf_file.prot";
+# sub write_to_gtf_file {
+#     my ($genes_to_write, $output_gtf_file, $analysis_name, $final_biotype) = @_;
 
-    # Open output files
-    open(my $out_gtf, ">", $output_gtf_file);
-    open(my $out_cdna, ">", $output_transcript_seq_file);
-    open(my $out_prot, ">", $output_transcript_prot_file);
+#     # Prepare additional output files for transcript and protein 
+#     my $output_transcript_seq_file = "$output_gtf_file.cdna";
+#     my $output_transcript_prot_file = "$output_gtf_file.prot";
 
-    my $gene_count = 1;
-    my $transcript_count = 1;
+#     # Open output files
+#     open(my $out_gtf, ">", $output_gtf_file);
+#     open(my $out_cdna, ">", $output_transcript_seq_file);
+#     open(my $out_prot, ">", $output_transcript_prot_file);
 
-    # Iterate through each gene and its transcripts
-    foreach my $gene (@$genes_to_write) {
-        my $gene_id = "${analysis_name}_${gene_count}";
-        my $transcripts = $gene->get_all_Transcripts();
+#     my $gene_count = 1;
+#     my $transcript_count = 1;
 
-        foreach my $transcript (@$transcripts) {
-            my $transcript_id = "${analysis_name}_${transcript_count}";
-            my $exons = $transcript->get_all_Exons();
-            my $translation = $transcript->translation();
+#     # Iterate through each gene and its transcripts
+#     foreach my $gene (@$genes_to_write) {
+#         my $gene_id = "${analysis_name}_${gene_count}";
+#         my $transcripts = $gene->get_all_Transcripts();
 
-            # Build and print GTF record
-            my $gtf_record = build_gtf_record($transcript, $exons, $analysis_name, $gene_id, $transcript_id, $translation, $final_biotype);
-            say $out_gtf join("\n", @$gtf_record);
+#         foreach my $transcript (@$transcripts) {
+#             my $transcript_id = "${analysis_name}_${transcript_count}";
+#             my $exons = $transcript->get_all_Exons();
+#             my $translation = $transcript->translation();
 
-            # Print transcript sequence
-            say $out_cdna ">${transcript_id}\n" . $transcript->seq->seq();
+#             # Build and print GTF record
+#             my $gtf_record = build_gtf_record($transcript, $exons, $analysis_name, $gene_id, $transcript_id, $translation, $final_biotype);
+#             say $out_gtf join("\n", @$gtf_record);
 
-            # Print protein sequence if available
-            say $out_prot ">${transcript_id}\n" . ($translation ? $translation->seq() : "");
+#             # Print transcript sequence
+#             say $out_cdna ">${transcript_id}\n" . $transcript->seq->seq();
 
-            $transcript_count++;
-        }
+#             # Print protein sequence if available
+#             say $out_prot ">${transcript_id}\n" . ($translation ? $translation->seq() : "");
 
-        $gene_count++;
-    }
+#             $transcript_count++;
+#         }
 
-    # Close output files
-    close $out_gtf;
-    close $out_cdna;
-    close $out_prot;
-}
+#         $gene_count++;
+#     }
 
-=head2 build_gtf_record
+#     # Close output files
+#     close $out_gtf;
+#     close $out_cdna;
+#     close $out_prot;
+# }
 
-    Define transcript and exon records for the GTF file
+# =head2 build_gtf_record
 
-=cut
+#     Define transcript and exon records for the GTF file
 
-sub build_gtf_record {
-    my ($transcript, $exons, $analysis_name, $gene_id, $transcript_id, $translation, $final_biotype) = @_;
+# =cut
 
-    my $record = [];
-    my $strand = ($transcript->strand() == -1) ? "-" : "+";
+# sub build_gtf_record {
+#     my ($transcript, $exons, $analysis_name, $gene_id, $transcript_id, $translation, $final_biotype) = @_;
 
-    # Build attributes for the transcript
-    my $transcript_attribs = qq{gene_id "${gene_id}"; transcript_id "${transcript_id}"; biotype "${final_biotype}";};
-    if ($translation) {
-        # Encode translation information
-        my $start_exon = $translation->start_Exon();
-        my $end_exon = $translation->end_Exon();
-        my $translation_coords = qq{ translation_coords "${start_exon->start()}:${start_exon->end()}:${translation->start()}:${end_exon->start()}:${end_exon->end()}:${translation->end()}";};
-        $transcript_attribs .= $translation_coords;
-    }
+#     my $record = [];
+#     my $strand = ($transcript->strand() == -1) ? "-" : "+";
 
-    # Construct GTF line for the transcript
-    my @transcript_cols = ($transcript->slice->seq_region_name(), $analysis_name, 'transcript', $transcript->start(), $transcript->end(), '.', $strand, '.', $transcript_attribs);
-    my $transcript_line = join("\t", @transcript_cols);
-    push(@$record, $transcript_line);
+#     # Build attributes for the transcript
+#     my $transcript_attribs = qq{gene_id "${gene_id}"; transcript_id "${transcript_id}"; biotype "${final_biotype}";};
+#     if ($translation) {
+#         # Encode translation information
+#         my $start_exon = $translation->start_Exon();
+#         my $end_exon = $translation->end_Exon();
+#         my $translation_coords = qq{ translation_coords "${start_exon->start()}:${start_exon->end()}:${translation->start()}:${end_exon->start()}:${end_exon->end()}:${translation->end()}";};
+#         $transcript_attribs .= $translation_coords;
+#     }
 
-    # Build attributes for exons
-    my $exon_attribs_generic = qq{gene_id "${gene_id}"; transcript_id "${transcript_id}";};
-    my $exon_rank = 1;
+#     # Construct GTF line for the transcript
+#     my @transcript_cols = ($transcript->slice->seq_region_name(), $analysis_name, 'transcript', $transcript->start(), $transcript->end(), '.', $strand, '.', $transcript_attribs);
+#     my $transcript_line = join("\t", @transcript_cols);
+#     push(@$record, $transcript_line);
 
-    # Construct GTF lines for each exon
-    foreach my $exon (@$exons) {
-        my $exon_attribs = qq{${exon_attribs_generic} exon_number "${exon_rank}";};
-        my @exon_cols = ($transcript->slice->seq_region_name(), $analysis_name, 'exon', $exon->start(), $exon->end(), '.', $strand, '.', $exon_attribs);
-        my $exon_line = join("\t", @exon_cols);
-        push(@$record, $exon_line);
-        $exon_rank++;
-    }
+#     # Build attributes for exons
+#     my $exon_attribs_generic = qq{gene_id "${gene_id}"; transcript_id "${transcript_id}";};
+#     my $exon_rank = 1;
 
-    return $record;
-}
+#     # Construct GTF lines for each exon
+#     foreach my $exon (@$exons) {
+#         my $exon_attribs = qq{${exon_attribs_generic} exon_number "${exon_rank}";};
+#         my @exon_cols = ($transcript->slice->seq_region_name(), $analysis_name, 'exon', $exon->start(), $exon->end(), '.', $strand, '.', $exon_attribs);
+#         my $exon_line = join("\t", @exon_cols);
+#         push(@$record, $exon_line);
+#         $exon_rank++;
+#     }
+
+#     return $record;
+# }
