@@ -245,6 +245,33 @@ foreach my $slice_name (keys(%{$transcripts_by_slice})) {
     $joined_transcripts = $sorted_transcripts;
   }
 
+  say "Filtering out 1-codon transcripts at the very start";
+  say "Number of transcripts before filtering: " . scalar(@$joined_transcripts);
+
+  my $filtered_transcripts = [];
+  foreach my $transcript (@$joined_transcripts) {
+      my $translation = $transcript->translation;
+      my $tr_id = $transcript->stable_id // 'no_id';
+
+      # Skip transcripts without translation
+      unless ($translation) {
+          push @$filtered_transcripts, $transcript;
+          next;
+      }
+
+      my $aa_len = $translation->length;
+      if ($aa_len <= 1) {
+          say "Removing 1-codon transcript early: $tr_id length=".($aa_len*3)."bp (${aa_len}aa) start=".$transcript->start." end=".$transcript->end;
+          next;
+      }
+
+      push @$filtered_transcripts, $transcript;
+  }
+
+  $joined_transcripts = $filtered_transcripts;
+  say "Remaining transcripts after early 1-codon filtering: ".scalar(@$joined_transcripts);
+
+
 
   say "Computing translations";
   foreach my $transcript (@$joined_transcripts) {
@@ -263,6 +290,27 @@ foreach my $slice_name (keys(%{$transcripts_by_slice})) {
       compute_translation($transcript);
     }
   }
+# SECOND 1-codon filter: after translations are up to date
+my $post_translation_filtered = [];
+foreach my $transcript (@$joined_transcripts) {
+  my $translation = $transcript->translation;
+  my $tr_id = $transcript->stable_id // 'no_id';
+
+  # Keep non-coding transcripts (no translation)
+  unless ($translation) {
+    push @$post_translation_filtered, $transcript;
+    next;
+  }
+
+  my $aa_len = $translation->length;
+  if ($aa_len <= 1) {
+    say "Removing 1-codon transcript after recomputing translations: $tr_id length=".($aa_len*3)."bp (${aa_len}aa) start=".$transcript->start." end=".$transcript->end;
+    next;
+  }
+
+  push @$post_translation_filtered, $transcript;
+}
+$joined_transcripts = $post_translation_filtered;
 
 
   my $cleaned_transcripts;
