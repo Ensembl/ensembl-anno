@@ -113,16 +113,22 @@ dependencies = [ # Optional
 # Similar to `dependencies` above, these must be valid existing
 # projects.
 [project.optional-dependencies] # Optional
+cicd = [
+    "black",
+    "coverage",
+    "mypy",
+    "pylint",
+    "pytest",
+]
 dev = [
     "black",
+    "coverage",
     "ipython",
     "mock",
     "mypy",
     "pylint",
     "pytest",
     "sphinx",
-    
-    "unittest"
 ]
 doc = [
     "mock",
