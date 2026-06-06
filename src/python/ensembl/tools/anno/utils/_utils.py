@@ -43,22 +43,12 @@ def create_dir(input_dir: Path, dir_name: str | None) -> Path:
         str Path to the created directory
     """
     if dir_name:
-        target_dir = Path(input_dir) / str(dir_name)
+        target_dir = (Path(input_dir) / str(dir_name)).resolve()
     else:
-        target_dir = input_dir
+        target_dir = Path(input_dir).resolve()
 
-    if os.path.exists(target_dir):
-        logger.warning("Directory already exists, will not create again")
-        return target_dir
-
-    logger.info("Attempting to create target dir: %s", target_dir)
-
-    try:
-        os.mkdir(target_dir)
-    except OSError:
-        logger.error("Creation of the dir failed, path used: %s", target_dir)
-    else:
-        logger.info("Successfully created the dir on the following path: %s", target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("Directory created: %s", target_dir)
     return target_dir
 
 
