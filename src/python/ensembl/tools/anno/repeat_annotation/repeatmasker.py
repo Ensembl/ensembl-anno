@@ -79,7 +79,7 @@ def run_repeatmasker(  # pylint:disable=too-many-arguments, too-many-positional-
     # Use default path if user didn't supply one
     repeatmasker_bin = repeatmasker_bin or Path("RepeatMasker")
 
-    check_exe(repeatmasker_bin)
+    #check_exe(repeatmasker_bin)
     repeatmasker_dir = create_dir(output_dir, "repeatmasker_output")
 
     output_file = repeatmasker_dir / "annotation.gtf"
