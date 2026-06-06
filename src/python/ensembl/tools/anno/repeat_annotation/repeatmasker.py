@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-    RepeatMasker is a program that screens DNA sequences for interspersed
-    repeats and low complexity DNA sequences.
-    Smit, AFA, Hubley, R & Green, P. RepeatMasker Open-4.0
+RepeatMasker is a program that screens DNA sequences for interspersed
+repeats and low complexity DNA sequences.
+Smit, AFA, Hubley, R & Green, P. RepeatMasker Open-4.0
 """
 
 __all__ = ["run_repeatmasker"]
@@ -40,10 +40,11 @@ from src.python.ensembl.tools.anno.utils._utils import (
     slice_output_to_gtf,
     get_sequence,
 )
-logger = logging.getLogger('__name__')
+
+logger = logging.getLogger("__name__")
 
 
-def run_repeatmasker(
+def run_repeatmasker(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     genome_file: PathLike,
     output_dir: Path,
     repeatmasker_bin: Path = Path("RepeatMasker"),
@@ -52,9 +53,9 @@ def run_repeatmasker(
     species: str = "",
     num_threads: int = 1,
 ) -> None:
-
     """
-    Executes RepeatMasker on the genome slices and stores the final annotation.gtf in repeatmasker_output
+    Executes RepeatMasker on the genome slices and stores the
+    final annotation.gtf in repeatmasker_output
 
         :param genome_file: Genome file path.
         :type genome_file: PathLike
@@ -70,7 +71,7 @@ def run_repeatmasker(
         :type species: str
         :param num_threads: Number of threads.
         :type num_threads: int, default 1
-        
+
         :return: None
         :rtype: None
     """
@@ -91,10 +92,10 @@ def run_repeatmasker(
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
     slice_ids_per_region = get_slice_id(
         seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
-    )
+    )  # pylint:disable=line-too-long
     repeatmasker_cmd = [
         str(repeatmasker_bin),
-        "-nolow",#does not display simple repeats or low_complexity DNA in the annotation
+        "-nolow",  # does not display simple repeats or low_complexity DNA in the annotation
         "-engine",
         repeatmasker_engine,
         "-dir",
@@ -106,7 +107,7 @@ def run_repeatmasker(
         repeatmasker_cmd.extend(["-species", species])
     else:
         repeatmasker_cmd.extend(["-lib", library])
-    logger.info("Running RepeatMasker %s",repeatmasker_cmd)
+    logger.info("Running RepeatMasker %s", repeatmasker_cmd)
     pool = multiprocessing.Pool(num_threads)  # pylint: disable=consider-using-with
     for slice_id in slice_ids_per_region:
         pool.apply_async(
@@ -123,6 +124,7 @@ def run_repeatmasker(
     slice_output_to_gtf(repeatmasker_dir, "repeat_id", "repeatmask", True, ".rm.gtf")
     for gtf_file in repeatmasker_dir.glob("*.rm.gtf"):
         gtf_file.unlink()
+
 
 def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     repeatmasker_cmd: List[str],
@@ -147,9 +149,7 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = get_sequence(
-        region_name, int(start), int(end), 1, genome_file, repeatmasker_dir
-    )
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, repeatmasker_dir)
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_file = repeatmasker_dir / f"{slice_file_name}.fa"
     with open(region_file, "w+", encoding="utf8") as region_fasta_out:
@@ -189,9 +189,10 @@ def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
         region_results_file_path : GTF file with results per region.
         region_name : Coordinates of genomic slice.
     """
-    with open(output_file, "r", encoding="utf8") as repeatmasker_in, open(
-        region_results_file, "w+", encoding="utf8"
-    ) as repeatmasker_out:
+    with (
+        open(output_file, "r", encoding="utf8") as repeatmasker_in,
+        open(region_results_file, "w+", encoding="utf8") as repeatmasker_out,
+    ):
         repeat_count = 1
         for line in repeatmasker_in:
             result_match = re.search(r"^\s*\d+\s+", line)
@@ -223,6 +224,7 @@ def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
                 )
                 repeatmasker_out.write(gtf_line)
                 repeat_count += 1
+
 
 def parse_args():
     """Parse command line arguments."""
@@ -257,6 +259,7 @@ def parse_args():
     )
     return parser.parse_args()
 
+
 def main():
     """RepeatMasker's entry-point."""
     args = parse_args()
@@ -279,6 +282,7 @@ def main():
         args.species,
         args.num_threads,
     )
+
 
 if __name__ == "__main__":
     main()

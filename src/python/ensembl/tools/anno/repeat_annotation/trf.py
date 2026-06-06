@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-    Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
-    Benson G. Tandem repeats finder: a program to analyze DNA sequences.
-    Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
+Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
+Benson G. Tandem repeats finder: a program to analyze DNA sequences.
+Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
 """
 __all__ = ["run_trf"]
 
@@ -45,7 +45,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_trf(
+def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     genome_file: PathLike,
     output_dir: Path,
     num_threads: int = 1,
@@ -82,7 +82,7 @@ def run_trf(
             :type minscore: int, default 40
             :param maxperiod: Maximum period size to report.
             :type maxperiod: int, default 500
-                    
+
             :return: None
             :rtype: None
     """
@@ -103,11 +103,10 @@ def run_trf(
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
     slice_ids_per_region = get_slice_id(
         seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
-    )
+    )  # pylint:disable=line-too-long
     trf_output_extension = (
-        f".{match_score}.{mismatch_score}.{delta}."
-        f"{pm}.{pi}.{minscore}.{maxperiod}.dat"
-    )
+        f".{match_score}.{mismatch_score}.{delta}." f"{pm}.{pi}.{minscore}.{maxperiod}.dat"
+    )  # pylint:disable=line-too-long
     trf_cmd = [
         trf_bin,
         None,
@@ -122,7 +121,7 @@ def run_trf(
         "-h",
     ]
     logger.info("Running TRF")
-    pool = multiprocessing.Pool(num_threads)#pylint:disable=consider-using-with
+    pool = multiprocessing.Pool(num_threads)  # pylint:disable=consider-using-with
     for slice_id in slice_ids_per_region:
         pool.apply_async(
             _multiprocess_trf,
@@ -146,7 +145,7 @@ def _multiprocess_trf(
     slice_id: List[str],
     trf_dir: Path,
     trf_output_extension: Path,
-    genome_file:Path,
+    genome_file: Path,
 ) -> None:
     """
     Run TRF on multiprocess on genomic slices
@@ -178,13 +177,13 @@ def _multiprocess_trf(
         trf_cmd[1] = str(slice_file)
         logger.info("trf_cmd: %s", trf_cmd)
         # with open(trf_output_file_path, "w+") as trf_out:
-        subprocess.run(trf_cmd, cwd=trf_dir / tmpdirname)#pylint:disable=subprocess-run-check
+        subprocess.run(trf_cmd, cwd=trf_dir / tmpdirname)  # pylint:disable=subprocess-run-check
         _create_trf_gtf(output_file, region_results, region_name)
         slice_file.unlink()
         output_file.unlink()
 
 
-def _create_trf_gtf(
+def _create_trf_gtf(  # pylint:disable=too-many-locals, too-many-branches
     output_file: Path,
     region_results: Path,
     region_name: str,
@@ -209,9 +208,10 @@ def _create_trf_gtf(
        region_results : GTF file with results per region.
        region_name : Coordinates of genomic slice.
     """
-    with open(output_file, "r", encoding="utf8") as trf_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as trf_out:
+    with (
+        open(output_file, "r", encoding="utf8") as trf_in,
+        open(region_results, "w+", encoding="utf8") as trf_out,
+    ):
         repeat_count = 1
         for line in trf_in:
             result_match = re.search(r"^\d+", line)
@@ -227,10 +227,7 @@ def _create_trf_gtf(
                 score = float(results[7])
                 repeat_consensus = results[13]
                 if (  # pylint: disable=too-many-boolean-expressions
-                    score < 50
-                    and percent_matches >= 80
-                    and copy_number > 2
-                    and period < 10
+                    score < 50 and percent_matches >= 80 and copy_number > 2 and period < 10
                 ) or (copy_number >= 2 and percent_matches >= 70 and score >= 50):
                     gtf_line = (
                         f"{region_name}\tTRF\trepeat\t{start}\t{end}\t.\t+\t.\t"
@@ -239,6 +236,7 @@ def _create_trf_gtf(
                     )
                     trf_out.write(gtf_line)
                     repeat_count += 1
+
 
 def parse_args():
     """Parse command line arguments."""
@@ -251,10 +249,13 @@ def parse_args():
     parser.add_argument("--delta", type=int, default=7, help="Indel penalty")
     parser.add_argument("--pm", type=int, default=80, help="Match probability")
     parser.add_argument("--pi", type=int, default=10, help="Indel probability")
-    parser.add_argument("--minscore", type=int, default=40, help="Minimum alignment score to report")
+    parser.add_argument(
+        "--minscore", type=int, default=40, help="Minimum alignment score to report"
+    )  # pylint:disable=line-too-long
     parser.add_argument("--maxperiod", type=int, default=500, help="Maximum period size to report")
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
     return parser.parse_args()
+
 
 def main():
     """TRF's entry-point."""
@@ -282,6 +283,7 @@ def main():
         args.minscore,
         args.maxperiod,
     )
+
 
 if __name__ == "__main__":
     main()

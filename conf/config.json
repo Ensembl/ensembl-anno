@@ -1,12 +1,12 @@
 {
     "augustus": {
-        "software" : "/hps/nobackup2/production/ensembl/jma/src/Augustus/bin/augustus",
-        "bam2hints_path" : "/homes/fergal/bin/bam2hints",
-        "bam2wig_path" : "/homes/fergal/bin/bam2wig",
-        "wig2hints_path" : "/homes/fergal/bin/wig2hints"
+        "software" : "/Augustus/bin/augustus",
+        "bam2hints_path" : "/bin/bam2hints",
+        "bam2wig_path" : "/bin/bam2wig",
+        "wig2hints_path" : "/bin/wig2hints"
     },
     "bedtools": {
-      "software" : "bedtools"
+        "software" : "bedtools"
     },
     "cmsearch": {
         "software": "cmsearch",

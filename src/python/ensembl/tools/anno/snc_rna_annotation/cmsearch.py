@@ -54,12 +54,16 @@ from src.python.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_cmsearch(
+def run_cmsearch(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments, line-too-long
     genome_file: PathLike,
     output_dir: Path,
     rfam_accession_file: Path,
-    rfam_cm_db: Path = Path("/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm"),
-    rfam_seeds_file: Path = Path("/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed"),
+    rfam_cm_db: Path = Path(
+        "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.cm"
+    ),  # pylint: disable=line-too-long
+    rfam_seeds_file: Path = Path(
+        "/hps/nobackup/flicek/ensembl/genebuild/blastdb/ncrna/Rfam_14.0/Rfam.seed"
+    ),  # pylint: disable=line-too-long
     cmsearch_bin: Path = Path("cmsearch"),
     rnafold_bin: Path = Path("RNAfold"),
     num_threads: int = 1,
@@ -99,14 +103,14 @@ def run_cmsearch(
         logger.info("No gtf file, go on with the analysis")
 
     rfam_selected_models_file = rfam_dir / "rfam_models.cm"
-    with open(rfam_accession_file) as rfam_accessions_in:
+    with open(rfam_accession_file, encoding="utf-8") as rfam_accessions_in:
         rfam_accessions = rfam_accessions_in.read().splitlines()
 
-    with open(rfam_cm_db, "r") as rfam_cm_in:
+    with open(rfam_cm_db, "r", encoding="utf-8") as rfam_cm_in:
         rfam_data = rfam_cm_in.read()
 
     rfam_models = rfam_data.split("//\n")  # get a chunck containing a model
-    with open(rfam_selected_models_file, "w+") as rfam_cm_out:
+    with open(rfam_selected_models_file, "w+", encoding="utf-8") as rfam_cm_out:
         for model in rfam_models:
             # The Rfam.cm file has INFERNAL and HMMR models, both are needed at this point
             # Later we just want the INFERNAL ones for looking at thresholds
@@ -167,11 +171,11 @@ def run_cmsearch(
         logger.info("Final annotation.gtf transcripts: %d", transcripts)
     else:
         logger.error("Rfam annotation.gtf was not created")
-    #for gtf_file in rfam_dir.glob("*.rfam.gtf"):
+    # for gtf_file in rfam_dir.glob("*.rfam.gtf"):
     #    gtf_file.unlink()
 
 
-def _handle_failed_jobs(
+def _handle_failed_jobs(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     rfam_dir: Path,
     cmsearch_cmd: List,
     genome_file: PathLike,
@@ -196,9 +200,12 @@ def _handle_failed_jobs(
     # Get the available system memory and CPU cores
     available_memory = psutil.virtual_memory().available
     # psutil.cpu_count(logical=False): number of physical CPU cores.
-    # psutil.cpu_count(logical=True): total number of logical CPU cores (physical cores and virtual cores)
-    # For computationally intensive tasks, using physical cores might be more appropriate,
-    # while for tasks that can benefit from parallelism, using logical cores might be beneficial.
+    # psutil.cpu_count(logical=True): total number of logical
+    # CPU cores (physical cores and virtual cores)
+    # For computationally intensive tasks, using physical cores
+    # might be more appropriate,
+    # while for tasks that can benefit from parallelism, using
+    # logical cores might be beneficial.
     available_cores = psutil.cpu_count(logical=False)
 
     # Calculate the optimal memory per core and the number of cores to use
@@ -278,7 +285,7 @@ def _extract_rfam_metrics(rfam_selected_models: PathLike) -> Dict[str, Dict[str,
     Returns:
         parsed_cm_data: Rfam metrics.
     """
-    with open(rfam_selected_models, "r") as rfam_cm_in:
+    with open(rfam_selected_models, "r", encoding="utf-8") as rfam_cm_in:
         rfam_models = rfam_cm_in.read().split("//\n")
         parsed_cm_data: Dict[str, Dict[str, Any]] = {}
         for model in rfam_models:
@@ -305,7 +312,7 @@ def _extract_rfam_metrics(rfam_selected_models: PathLike) -> Dict[str, Dict[str,
     return parsed_cm_data
 
 
-def _multiprocess_cmsearch(
+def _multiprocess_cmsearch(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     cmsearch_cmd: List[str],
     slice_id: List[str],
     genome_file: Path,
@@ -369,19 +376,20 @@ def _multiprocess_cmsearch(
             end,
         )
         logger.error("Return value: %s", return_value)
-        with open(exception_results, "w+") as exception_out:
+        with open(exception_results, "w+", encoding="utf-8") as exception_out:
             exception_out.write(f"{region_name} {start} {end}\n")
         # Clean up intermediates on failure
         try:
             region_tblout.unlink(missing_ok=True)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             pass
         try:
             slice_file.unlink(missing_ok=True)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             pass
-        # Do NOT unlink region_results here (it likely doesn't exist yet, and on success we keep .rfam.gtf until merge)
-        raise ex  # Re-raise the exception to allow caller to handle it further if needed
+        # Do NOT unlink region_results here (it likely doesn't
+        # exist yet, and on success we keep .rfam.gtf until merge)
+        raise ex
 
     initial_table_results = _parse_rfam_tblout(region_tblout, region_name)
     unique_table_results = _remove_rfam_overlap(initial_table_results)
@@ -396,33 +404,43 @@ def _multiprocess_cmsearch(
         rfam_dir,
         rnafold_bin,
     )
-    
+
     # Clean up slice intermediates that are no longer needed
     try:
         region_tblout.unlink(missing_ok=True)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
     try:
         slice_file.unlink(missing_ok=True)
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
-    # Keep region_results (.rfam.gtf) for slice_output_to_gtf. It will be deleted later in run_cmsearch.
+    # Keep region_results (.rfam.gtf) for slice_output_to_gtf.
+    # It will be deleted later in run_cmsearch.
 
 
 def _parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, Any]]:
     """Parse cmsearch output
-    col 0 Target Name : This is the name of the target sequence or sequence region that matched the query.
-    col 2 Query name : This is the name of the query sequence or model that was used for the search.
-    col 3 Accession : This usually refers to a unique identifier for the target sequence.
-    col 5 Query Start : The position where the match starts on the query sequence.
-    col 6 Query End : The position where the match ends on the query sequence.
-    col 7 Target Start : The position where the match starts on the target sequence.
-    col 8 Target End : The position where the match ends on the target sequence.
-    col 9 Strand : Indicates the orientation of the match on the target sequence.
+    col 0 Target Name : This is the name of the target sequence or sequence
+    region that matched the query.
+    col 2 Query name : This is the name of the query sequence or model that
+    was used for the search.
+    col 3 Accession : This usually refers to a unique identifier for the
+    target sequence.
+    col 5 Query Start : The position where the match starts on the query
+    sequence.
+    col 6 Query End : The position where the match ends on the query
+    sequence.
+    col 7 Target Start : The position where the match starts on the
+    target sequence.
+    col 8 Target End : The position where the match ends on the target
+    sequence.
+    col 9 Strand : Indicates the orientation of the match on the target
+    sequence.
             It could be + for the forward strand or - for the reverse strand.
-    col 14 Hit Score : The score assigned to this match. Higher scores generally indicate better matches.
-    col 15 E-value : This is a statistical measure of the number of hits one can expect to see
-            when searching a database of a particular size.
+    col 14 Hit Score : The score assigned to this match. Higher scores
+    generally indicate better matches.
+    col 15 E-value : This is a statistical measure of the number of hits
+    one can expect to see when searching a database of a particular size.
 
     Args:
         region_tblout : Cmsearch output for the region name.
@@ -432,7 +450,7 @@ def _parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, 
         Formatted cmsearch output
     """
 
-    with open(region_tblout, "r") as rfam_tbl_in:
+    with open(region_tblout, "r", encoding="utf-8") as rfam_tbl_in:
         rfam_tbl_data = rfam_tbl_in.read()
 
     results = []
@@ -445,18 +463,22 @@ def _parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, 
         hit = line.split()
         if len(hit) < 16:
             continue
-        results.append({
-            "accession": hit[3],
-            "start": hit[7],
-            "end": hit[8],
-            "strand": 1 if hit[9] == "+" else -1,
-            "query_name": hit[2],
-            "score": hit[14],
-        })
+        results.append(
+            {
+                "accession": hit[3],
+                "start": hit[7],
+                "end": hit[8],
+                "strand": 1 if hit[9] == "+" else -1,
+                "query_name": hit[2],
+                "score": hit[14],
+            }
+        )
     return results
 
 
-def _remove_rfam_overlap(parsed_tbl_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _remove_rfam_overlap(  # pylint: disable=too-many-locals, too-many-branches
+    parsed_tbl_data: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """
     Remove Rfam mdoels overlapping and with a lower score.
 
@@ -538,7 +560,7 @@ def _filter_rfam_results(
 # my $score_size_ratio = $result->{'score'} / $mapping_length;
 
 
-def _create_rfam_gtf(
+def _create_rfam_gtf(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     filtered_results: List[Dict[str, Any]],
     cm_models: Dict[str, Dict[str, Any]],
     seed_descriptions: Dict[str, Dict[str, Any]],
@@ -578,13 +600,13 @@ def _create_rfam_gtf(
         r"^RNaseP": "RNase_P_RNA",
         r"^RNase_M": "RNase_MRP_RNA",
     }
-    with open(region_results, "w+") as rfam_gtf_out:
+    with open(region_results, "w+", encoding="utf-8") as rfam_gtf_out:
         gene_counter = 1
         for structure in filtered_results:
             query = structure["query_name"]
             accession = structure["accession"]
             if query in cm_models:
-                model = cm_models[query] # pylint: disable=unused-variable
+                model = cm_models[query]  # pylint: disable=unused-variable
                 description = seed_descriptions.get(accession, {})
                 rfam_type = description.get("type", "misc_RNA")
                 domain = structure["query_name"]
@@ -672,7 +694,9 @@ def _create_rfam_gtf(
                 gene_counter += 1
 
 
-def check_rnafold_structure(seq: str, rfam_dir: Path, rnafold_bin: Path = Path("RNAfold")) -> Union[float, None]:
+def check_rnafold_structure(
+    seq: str, rfam_dir: Path, rnafold_bin: Path = Path("RNAfold")
+) -> Union[float, None]:
     """RNAfold reads RNA sequences, calculates their minimum free energy (mfe)
        structure and prints the mfe structure in bracket notation and its free energy.
 
@@ -707,16 +731,23 @@ def check_rnafold_structure(seq: str, rfam_dir: Path, rnafold_bin: Path = Path("
         if rna_in_file_path:
             try:
                 Path(rna_in_file_path).unlink()
-            except Exception as cleanup_err:
-                logger.warning("Failed to remove RNAfold temp file %s: %s", rna_in_file_path, cleanup_err)
+            except Exception as cleanup_err:  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "Failed to remove RNAfold temp \
+                    file %s: %s",
+                    rna_in_file_path,
+                    cleanup_err,
+                )
         logger.info("FREE ENERGY %s", free_energy_score)
     return free_energy_score
 
 
-
-# this function is useful for the DnaAlignFeature and it should help when we load into the ensembl db
-# NOTE some of the code above and the code commented out here is to do with creating
-# a DAF. As we don't have a python concept of this I'm leaving it out for the moment
+# this function is useful for the DnaAlignFeature and it should
+# help when we load into the ensembl db
+# NOTE some of the code above and the code commented out here is
+# to do with creating
+# a DAF. As we don't have a python concept of this I'm leaving it
+# out for the moment
 # but the code below is a reference
 #    my $daf = Bio::EnsEMBL::DnaDnaAlignFeature->new(
 #      -slice          => $self->queries,

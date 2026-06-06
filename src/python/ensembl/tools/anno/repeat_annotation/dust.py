@@ -63,7 +63,7 @@ def run_dust(
         :type dust_bin: Path, default dustmasker
         :param num_threads: Number of threads.
         :type num_threads: int, default 1
-                
+
         :return: None
         :rtype: None
     """
@@ -82,7 +82,9 @@ def run_dust(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
+    slice_ids_per_region = get_slice_id(
+        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
+    )  # pylint:disable=line-too-long
     dust_cmd = [dust_bin, "-in"]
     pool = multiprocessing.Pool(num_threads)  # pylint: disable=consider-using-with
     for slice_id in slice_ids_per_region:
@@ -153,9 +155,10 @@ def _create_dust_gtf(
         region_results : GTF file with the results per region.
         region_name :Coordinates of genomic slice.
     """
-    with open(output_file, "r", encoding="utf8") as dust_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as dust_out:
+    with (
+        open(output_file, "r", encoding="utf8") as dust_in,
+        open(region_results, "w+", encoding="utf8") as dust_out,
+    ):
         repeat_count = 1
         for line in dust_in:
             result_match = re.search(r"(\d+)\ - (\d+)", line)
@@ -163,12 +166,11 @@ def _create_dust_gtf(
                 start = int(result_match.group(1)) + 1
                 end = int(result_match.group(2)) + 1
                 gtf_line = (
-                    f"{region_name}\tDust\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'
+                    f"{region_name}\tDust\trepeat\t{start}\t"
+                    f'{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'  # pylint:disable=line-too-long
                 )
                 dust_out.write(gtf_line)
                 repeat_count += 1
-
-
 
 
 def parse_args():
@@ -181,10 +183,9 @@ def parse_args():
         default="dustmasker",
         help="Dust executable path",
     )
-    parser.add_argument(
-        "--num_threads", type=int, default=1, help="Number of threads"
-    )
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
     return parser.parse_args()
+
 
 def main():
     """Dust's entry-point."""
@@ -205,6 +206,7 @@ def main():
         args.dust_bin,
         args.num_threads,
     )
+
 
 if __name__ == "__main__":
     main()

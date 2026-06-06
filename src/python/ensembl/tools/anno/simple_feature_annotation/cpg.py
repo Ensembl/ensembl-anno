@@ -28,7 +28,6 @@ from os import PathLike
 from pathlib import Path
 import re
 import subprocess
-from tempfile import TemporaryDirectory
 from typing import List, Union
 
 from src.python.ensembl.tools.anno.utils._utils import (
@@ -44,7 +43,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_cpg(
+def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     genome_file: PathLike,
     output_dir: Path,
     cpg_bin: Path = Path("cpg_lh"),
@@ -88,7 +87,7 @@ def run_cpg(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
+    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)# pylint:disable=line-too-long
     logger.info("Running CpG")
     pool = multiprocessing.Pool(int(num_threads))  # pylint:disable=consider-using-with
     for slice_id in slice_ids_per_region:
@@ -112,7 +111,7 @@ def run_cpg(
         gtf_file.unlink()
 
 
-def _multiprocess_cpg(
+def _multiprocess_cpg(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-positional-arguments
     cpg_bin: Path,
     slice_id: List[str],
     genome_file: Path,
@@ -162,7 +161,7 @@ def _multiprocess_cpg(
     output_file.unlink()
 
 
-def _create_cpg_gtf(
+def _create_cpg_gtf(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-positional-arguments
     output_file: Path,
     region_results: Path,
     region_name: str,
@@ -182,9 +181,10 @@ def _create_cpg_gtf(
         cpg_min_gc_content : Min GC frequency percentage
         cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
     """
-    with open(output_file, "r", encoding="utf8") as cpg_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as cpg_out:
+    with (
+        open(output_file, "r", encoding="utf8") as cpg_in,
+        open(region_results, "w+", encoding="utf8") as cpg_out,
+    ):
         feature_count = 1
         for line in cpg_in:
             result_match = re.search(r"^" + region_name, line)
@@ -220,7 +220,9 @@ def parse_args():
     parser.add_argument("--output_dir", required=True, help="Output directory path")
     parser.add_argument("--cpg_bin", default="cpg_lh", help="CpG executable path")
     parser.add_argument("--cpg_min_length", type=int, default=400, help="Min length of CpG islands")
-    parser.add_argument("--cpg_min_gc_content", type=int, default=50, help="Min GC frequency percentage")
+    parser.add_argument(
+        "--cpg_min_gc_content", type=int, default=50, help="Min GC frequency percentage"
+    )  # pylint:disable=line-too-long
     parser.add_argument(
         "--cpg_min_oe",
         type=float,

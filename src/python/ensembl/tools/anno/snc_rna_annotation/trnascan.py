@@ -33,7 +33,6 @@ from typing import List
 
 from src.python.ensembl.tools.anno.utils._utils import (
     check_exe,
-    check_file,
     create_dir,
     check_gtf_content,
     get_seq_region_length,
@@ -117,7 +116,7 @@ def run_trnascan(
         gtf_file.unlink()
 
 
-def _multiprocess_trnascan(
+def _multiprocess_trnascan(  # pylint: disable=too-many-locals
     trnascan_cmd: List[str],
     slice_id: List[str],
     genome_file: Path,
@@ -216,9 +215,10 @@ def _create_trnascan_gtf(region_results: Path, filter_output_file: Path, region_
     col13: Features - special gene features that may include gene set categorization,
     number of introns, possible pseudogenes, possible truncation, or base-pair mismatches
     """
-    with open(filter_output_file, "r", encoding="utf8") as trna_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as trna_out:
+    with (
+        open(filter_output_file, "r", encoding="utf8") as trna_in,
+        open(region_results, "w+", encoding="utf8") as trna_out,
+    ):
         gene_counter = 1
         for line in trna_in:
             result_match = re.search(r"^" + region_name, line)
@@ -254,7 +254,7 @@ def parse_args():
     parser.add_argument("--trnascan_bin", default="tRNAscan-SE", help="tRNAscan-SE executable path")
     parser.add_argument(
         "--trnascan_filter",
-        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter",  # pylint:disable=line-too-long
         help="tRNAscan-SE filter path",
     )
     parser.add_argument("--output_dir", required=True, help="Output directory path")

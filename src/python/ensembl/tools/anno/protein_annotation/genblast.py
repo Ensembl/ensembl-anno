@@ -48,13 +48,13 @@ from src.python.ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
-    split_protein_file
+    split_protein_file,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def run_genblast(#pylint:disable=dangerous-default-value
+def run_genblast(  # pylint:disable=dangerous-default-value, too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-branches
     masked_genome: Path,
     output_dir: Path,
     protein_dataset: Path,
@@ -64,12 +64,12 @@ def run_genblast(#pylint:disable=dangerous-default-value
     convert2blastmask_bin: Path = Path("convert2blastmask"),
     makeblastdb_bin: Path = Path("makeblastdb"),
     num_threads: int = 1,
-    protein_set: str = ["uniprot"],
+    protein_set: str = "uniprot",
 ) -> None:
     """
-    
+
     Executes GenBlast on genomic slices
-    
+
             :param masked_genome: Masked genome file path.
             :type masked_genome: Path
             :param output_dir: Working directory path.
@@ -79,7 +79,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
             :param genblast_timeout_secs: Time for timeout (sec).
             :type genblast_timeout_secs: int, default 10800
             :param max_intron_length: Maximum intron length.
-            :type max_intron_length: int 
+            :type max_intron_length: int
             :param genblast_bin: Software path.
             :type genblast_bin: Path, default genblast
             :param convert2blastmask_bin: Software path.
@@ -89,13 +89,13 @@ def run_genblast(#pylint:disable=dangerous-default-value
             :param genblast_timeout: seconds
             :type genblast_timeout: int, default 1
             :param num_threads: int, number of threads.
-            :type num_threads: int, default 1 
-            :param protein_set: Source 
+            :type num_threads: int, default 1
+            :param protein_set: Source
             :type str: ["uniprot", "orthodb"]
-            
+
             :return: None
             :rtype: None
-            
+
     """
     # Use default path if user didn't supply one
     genblast_bin = genblast_bin or Path("genblast")
@@ -112,7 +112,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
         genblast_dir = create_dir(output_dir, "uniprot_output")
     elif protein_set == "orthodb":
         genblast_dir = create_dir(output_dir, "orthodb_output")
-    output_file = genblast_dir / "annotation.gtf"
+    output_file = genblast_dir / "annotation.gtf"  # pylint: disable=possibly-used-before-assignment
     if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
@@ -134,9 +134,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
     else:
         _run_convert2blastmask(convert2blastmask_bin, masked_genome, asnb_file)
     _run_makeblastdb(makeblastdb_bin, masked_genome, asnb_file)
-    batched_protein_files = split_protein_file(
-        protein_dataset, genblast_dir, num_threads
-    )
+    batched_protein_files = split_protein_file(protein_dataset, genblast_dir, num_threads)
     pool = multiprocessing.Pool(num_threads)  # pylint:disable=consider-using-with
     for batched_protein_file in batched_protein_files:
         pool.apply_async(
@@ -147,7 +145,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
                 genblast_bin,
                 genblast_timeout_secs,
                 max_intron_length,
-                genblast_dir
+                genblast_dir,
             ),
         )
     pool.close()
@@ -158,7 +156,7 @@ def run_genblast(#pylint:disable=dangerous-default-value
     logger.info("Completed running GenBlast")
 
 
-def _multiprocess_genblast(
+def _multiprocess_genblast(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-branches
     protein_file: Path,
     masked_genome: Path,
     genblast_bin: Path,
@@ -258,8 +256,10 @@ def _multiprocess_genblast(
     # https://alexandra-zaharia.github.io/posts/kill-subprocess
     # -and-its-children-on-timeout-python/
     try:
-        p = subprocess.Popen(# pylint:disable=consider-using-with
-            genblast_cmd, start_new_session=True, cwd=str(genblast_dir),
+        p = subprocess.Popen(  # pylint:disable=consider-using-with
+            genblast_cmd,
+            start_new_session=True,
+            cwd=str(genblast_dir),
         )
         p.wait(timeout=genblast_timeout)
         # temporary check
@@ -267,9 +267,7 @@ def _multiprocess_genblast(
 
     except subprocess.TimeoutExpired:
         logger.error("Timeout reached for file: %s \n", protein_file)
-        subprocess.run(# pylint:disable=subprocess-run-check
-            ["touch", (Path(f"{protein_file}.except"))]
-        )
+        subprocess.run(["touch", (Path(f"{protein_file}.except"))])  # pylint:disable=subprocess-run-check
         os.killpg(os.getpgid(p.pid), signal.SIGTERM)
 
 
@@ -296,9 +294,8 @@ def _generate_genblast_gtf(genblast_dir: Path) -> None:
             ):
                 path.unlink()
 
-def _run_convert2blastmask(
-    convert2blastmask_bin: Path, masked_genome: Path, asnb_file: Path
-) -> None:
+
+def _run_convert2blastmask(convert2blastmask_bin: Path, masked_genome: Path, asnb_file: Path) -> None:#pylint:disable=line-too-long
     """
     Convert masking information in lower-case masked FASTA input to file
     formats suitable for makeblastdb.
@@ -393,9 +390,7 @@ def _set_genblast_attributes(attributes: str, feature_type: str) -> str:
         assert match
         exon_rank = match.group(1)
         name = match.group(2)
-        converted_attributes = (
-            f'gene_id "{name}"; transcript_id "{name}"; exon_number "{exon_rank}";'
-        )
+        converted_attributes = f'gene_id "{name}"; transcript_id "{name}"; exon_number "{exon_rank}";'  # pylint:disable=line-too-long
 
     return converted_attributes
 
@@ -403,17 +398,15 @@ def _set_genblast_attributes(attributes: str, feature_type: str) -> str:
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Genblast arguments")
-    parser.add_argument(
-        "--masked_genome_file", required=True, help="Masked genome file path"
-    )
+    parser.add_argument("--masked_genome_file", required=True, help="Masked genome file path")
     parser.add_argument("--output_dir", required=True, help="Output directory path")
     parser.add_argument("--protein_file", required=True, help="Path for the protein dataset")
     parser.add_argument(
         "--genblast_timeout_secs", type=int, default=10800, help="Genblast timeout period"
-    )
+    )  # pylint:disable=line-too-long
     parser.add_argument(
         "--max_intron_length", type=int, required=True, help="Maximum intron length"
-    )
+    )  # pylint:disable=line-too-long
     parser.add_argument(
         "--genblast_bin",
         default="genblast",
@@ -437,6 +430,7 @@ def parse_args():
         help="Protein set [uniprot, orthodb]",
     )
     return parser.parse_args()
+
 
 def main():
     """Genblast's entry-point."""
@@ -463,6 +457,7 @@ def main():
         args.num_threads,
         args.protein_set,
     )
+
 
 if __name__ == "__main__":
     main()

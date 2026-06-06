@@ -13,11 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Minimap2 is a pairwise sequence alignment algorithm designed for efficiently comparing nucleotide sequences.
-The algorithm uses a versatile indexing strategy to quickly find approximate matches between sequences, 
-allowing it to efficiently align long sequences against reference genomes or other sequences.
+Minimap2 is a pairwise sequence alignment algorithm designed for
+efficiently comparing nucleotide sequences.
+The algorithm uses a versatile indexing strategy to quickly find
+approximate matches between sequences,
+allowing it to efficiently align long sequences against reference
+genomes or other sequences.
 
-Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics, 34(18), 3094-3100.
+Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences.
+Bioinformatics, 34(18), 3094-3100.
 """
 
 __all__ = ["run_minimap2"]
@@ -36,7 +40,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
 )
 
 
-def run_minimap2(
+def run_minimap2(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     output_dir: Path,
     long_read_fastq_dir: Path,
     genome_file: Path,
@@ -135,16 +139,16 @@ def run_minimap2(
                 ]
             )
             logging.info("Creating bed file from SAM")
-            subprocess.run(
+            subprocess.run(  # pylint:disable=subprocess-run-check
                 [paftools_bin, "splice2bed", sam_file], stdout=bed_file_out
-            )  # pylint:disable=subprocess-run-check
+            )
 
     _bed_to_gtf(minimap2_dir)
 
     logging.info("Completed running minimap2")
 
 
-def _bed_to_gtf(output_dir: Path) -> None:
+def _bed_to_gtf(output_dir: Path) -> None:  # pylint:disable = too-many-locals
     """
     Convert bed file into gtf file
     Args:
@@ -224,7 +228,7 @@ def parse_args():
     parser.add_argument("--genome_file", required=True, help="Genome file path")
     parser.add_argument("--minimap2_bin", default="minimap2", help="Minimap2 software path")
     parser.add_argument("--paftools_bin", default="paftools.js", help="Paftools js path")
-    parser.add_argument("--max_intron_length", type=int, default=100000, help="The maximum intron length.")
+    parser.add_argument("--max_intron_length", type=int, default=100000, help="The maximum intron length.")#pylint:disable=line-too-long
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
     return parser.parse_args()
 

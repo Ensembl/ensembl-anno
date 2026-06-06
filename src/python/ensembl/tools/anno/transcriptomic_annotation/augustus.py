@@ -1,3 +1,4 @@
+# pylint: skip-file
 # start gene g1 #pylint: disable=line-too-long
 # 1       AUGUSTUS        gene    1       33908   1       +       .       g1
 # 1       AUGUSTUS        transcript      1       33908   .       +       .       g1.t1
@@ -76,11 +77,7 @@ def augustus_output_to_gtf(augustus_output_dir, augustus_genome_dir):
                 values[3] = str(int(values[3]) + (start_offset - 1))
                 values[4] = str(int(values[4]) + (start_offset - 1))
                 values[8] = (
-                    'gene_id "aug'
-                    + str(record_count)
-                    + '"; transcript_id "aug'
-                    + str(record_count)
-                    + '";'
+                    'gene_id "aug' + str(record_count) + '"; transcript_id "aug' + str(record_count) + '";'
                 )
                 if values[2] == "exon":
                     values[8] = values[8] + ' exon_number "' + str(exon_number) + '";'
@@ -195,9 +192,7 @@ def generate_hints(
     pool.join()
 
 
-def multiprocess_augustus_hints(
-    bam2hints_path, bam2wig_path, wig2hints_path, bam_file, augustus_hints_dir
-):
+def multiprocess_augustus_hints(bam2hints_path, bam2wig_path, wig2hints_path, bam_file, augustus_hints_dir):
     bam_file_name = os.path.basename(bam_file)
     logger.info("Processing " + bam_file_name + " for Augustus hints")
 
@@ -241,17 +236,13 @@ def multiprocess_augustus_id(cmd, slice_id, genome_file, hints_file, output_dir)
 
     region_fasta_file_name = region + ".rs" + str(start) + ".re" + str(end) + ".fa"
     region_fasta_file_path = os.path.join(output_dir, region_fasta_file_name)
-    region_augustus_file_path = os.path.join(
-        output_dir, (region_fasta_file_name + ".aug")
-    )
+    region_augustus_file_path = os.path.join(output_dir, (region_fasta_file_name + ".aug"))
 
     region_fasta_out = open(region_fasta_file_path, "w+")
     region_fasta_out.write(">" + region + "\n" + seq + "\n")
     region_fasta_out.close()
 
-    region_hints_file = create_slice_hints_file(
-        region, start, end, hints_file, region_fasta_file_path
-    )
+    region_hints_file = create_slice_hints_file(region, start, end, hints_file, region_fasta_file_path)
 
     aug_out = open(region_augustus_file_path, "w+")
 
@@ -296,11 +287,7 @@ def create_slice_hints_file(region, start, end, hints_file, region_fasta_file_pa
         hint_region_start = int(hint_line_values[3])
         hint_region_end = int(hint_line_values[4])
 
-        if (
-            hint_region == region
-            and hint_region_start >= start
-            and hint_region_end <= end
-        ):
+        if hint_region == region and hint_region_start >= start and hint_region_end <= end:
             hint_line_values[3] = str(int(hint_line_values[3]) - (start - 1))
             hint_line_values[4] = str(int(hint_line_values[4]) - (start - 1))
             hints_out.write("\t".join(hint_line_values))

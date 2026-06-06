@@ -45,13 +45,13 @@ from src.python.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger("__name__")
 
 
-def run_eponine(
+def run_eponine(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     genome_file: PathLike,
     output_dir: Path,
     num_threads: int = 1,
     java_bin: Path = Path("java"),
     eponine_bin: Path = Path(
-        "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar"
+        "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar"  # pylint:disable=line-too-long
     ),
     eponine_threshold: float = 0.999,
 ) -> None:
@@ -72,7 +72,9 @@ def run_eponine(
         :rtype: None
     """
     # Use default path if user didn't supply one
-    eponine_bin = eponine_bin or Path("/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar")
+    eponine_bin = eponine_bin or Path(
+        "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar"  # pylint:disable=line-too-long
+    )
     java_bin = java_bin or Path("java")
 
     check_file(eponine_bin)
@@ -87,7 +89,9 @@ def run_eponine(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
+    slice_ids_per_region = get_slice_id(
+        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
+    )  # pylint:disable=line-too-long
 
     eponine_cmd = [
         str(java_bin),
@@ -168,9 +172,10 @@ def _create_eponine_gtf(
         region_results: GTF file with the results per region.
         region_name: Coordinates of genomic slice.
     """
-    with open(output_file, "r", encoding="utf8") as eponine_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as eponine_out:
+    with (
+        open(output_file, "r", encoding="utf8") as eponine_in,
+        open(region_results, "w+", encoding="utf8") as eponine_out,
+    ):
         feature_count = 1
         for line in eponine_in:
             result_match = re.search(r"^" + region_name, line)
@@ -194,6 +199,7 @@ def _create_eponine_gtf(
                 eponine_out.write(gtf_line)
                 feature_count += 1
 
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Eponine's arguments")
@@ -203,10 +209,12 @@ def parse_args():
     parser.add_argument("--java_bin", default="java", help="Java executable path")
     parser.add_argument(
         "--eponine_bin",
-        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar",#pylint:disable=line-too-long
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar",  # pylint:disable=line-too-long
         help="Eponine executable path",
     )
-    parser.add_argument("--eponine_threashold", type=float, default=0.999, help="Eponine threashold")
+    parser.add_argument(
+        "--eponine_threashold", type=float, default=0.999, help="Eponine threashold"
+    )  # pylint:disable=line-too-long
     return parser.parse_args()
 
 

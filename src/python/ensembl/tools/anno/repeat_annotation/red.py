@@ -107,7 +107,7 @@ def run_red(
                 ],
                 check=True,
             )
-    except:#pylint:disable=bare-except
+    except:  # pylint:disable=bare-except
         logger.error(
             "Could not find the genome file in the Red genome dir or sym link \
             to the original file. Path expected:\n%s",
@@ -125,9 +125,10 @@ def _create_red_gtf(repeat_coords_file: Path, output_file: Path):
         repeat_coords_file: Coordinates for repeats.
         output_file : GTF file with the final results.
     """
-    with open(repeat_coords_file, "r", encoding="utf8") as red_in, open(
-        output_file, "w+", encoding="utf8"
-    ) as red_out:
+    with (
+        open(repeat_coords_file, "r", encoding="utf8") as red_in,
+        open(output_file, "w+", encoding="utf8") as red_out,
+    ):
         for repeat_id, line in enumerate(red_in, start=1):
             result_match = re.search(r"^\>(.+)\:(\d+)\-(\d+)", line)
             if result_match:
@@ -136,7 +137,7 @@ def _create_red_gtf(repeat_coords_file: Path, output_file: Path):
                 start = int(result_match.group(2)) + 1
                 end = int(result_match.group(3)) + 1
                 gtf_line = (
-                    f"{region_name}\tRed\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'
+                    f"{region_name}\tRed\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'#pylint:disable=line-too-long
                 )
                 red_out.write(gtf_line)
 

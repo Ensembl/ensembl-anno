@@ -1,3 +1,4 @@
+# pylint:disable=line-too-long, too-many-locals, too-many-branches, too-many-arguments, too-many-statements
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -42,7 +43,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
 )
 
 
-def run_star(  # pylint:disable=too-many-branches
+def run_star(  # pylint:disable=too-many-branches, too-many-arguments, too-many-locals, too-many-positional-arguments
     genome_file: Path,
     output_dir: Path,
     short_read_fastq_dir: Path,
@@ -62,7 +63,7 @@ def run_star(  # pylint:disable=too-many-branches
 ) -> None:
     """
     Run STAR alignment on list of short read data.
-    
+
         :param genome_file: Genome file path.
         :type genome_file: Path
         :param output_dir: Working directory path.
@@ -104,12 +105,17 @@ def run_star(  # pylint:disable=too-many-branches
     samtools_bin = samtools_bin or Path("samtools")
     trim_galore_bin = trim_galore_bin or Path("trim_galore")
 
-    
     check_exe(star_bin)
     # If trimming has been enabled then switch the path for
     # short_read_fastq_dir from the original location to the trimmed fastq dir
     if trim_fastq:
-        run_trimming(output_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads, trim_galore_bin)
+        run_trimming(
+            output_dir,
+            short_read_fastq_dir,
+            delete_pre_trim_fastq,
+            num_threads,
+            trim_galore_bin,
+        )
         short_read_fastq_dir = output_dir / "trim_galore_output"
 
     #  if not os.path.exists(subsample_script_path):
@@ -158,7 +164,8 @@ def run_star(  # pylint:disable=too-many-branches
             paired_fastq_file_list = paired_fastq_file_list_sub
         # Get the list of the new subsampled files
         # fastq_file_list = [
-        #    path for file_type in file_types for path in Path(short_read_fastq_dir).rglob(file_type)
+        #    path for file_type in file_types \
+        # for path in Path(short_read_fastq_dir).rglob(file_type)
         # ]
     # I don't think is needed
     # fastq_file_list = check_for_fastq_subsamples(fastq_file_list)
@@ -199,6 +206,7 @@ def run_star(  # pylint:disable=too-many-branches
     for paired_files in paired_fastq_file_list:
         first_file_name = paired_files[0].name  # Get the name of the first file
         match = re.search(r"(.+)_\d+\.(fastq|fq)", first_file_name)  # Search for pattern
+        first_part_of_name = ""
         if match:
             first_part_of_name = match.group(1)
         # logger.info(fastq_file_path)
@@ -316,7 +324,7 @@ https://github.com/lh3/seqtk
 """
 
 
-def subsample_transcriptomic_data(
+def subsample_transcriptomic_data(  # pylint:disable=too-many-positional-arguments
     fastq_file_list: List[Path],
     subsample_read_limit: int = 100000000,
     subsample_percentage: float = 0.25,
@@ -372,7 +380,8 @@ def subsample_transcriptomic_data(
         fastq_file_1, fastq_file_2 = fastq_file_list
         if Path(f"{fastq_file_1}.sub").exists() and Path(f"{fastq_file_2}.sub").exists():
             logging.info(
-                "Found an existing .sub files on the fastq path for both members of the pair, will use \
+                "Found an existing .sub files on the fastq path \
+                for both members of the pair, will use \
                 those instead of subsampling again. Files: %s.sub,%s.sub",
                 fastq_file_1,
                 fastq_file_2,
@@ -387,11 +396,14 @@ def subsample_transcriptomic_data(
                 sampling_via_read_limit_percentage,
                 num_threads,
             )
-        subsampled_fastq_files = [Path(f"{fastq_file_1}.sub"), Path(f"{fastq_file_2}.sub")]
+        subsampled_fastq_files = [
+            Path(f"{fastq_file_1}.sub"),
+            Path(f"{fastq_file_2}.sub"),
+        ]
     return subsampled_fastq_files
 
 
-def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches
+def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches, too-many-positional-arguments
     fastq_files: List[Path],
     subsample_read_limit: int = 100000000,
     subsample_percentage: float = 0.25,
@@ -420,7 +432,10 @@ def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches
 
     if len(fastq_files) == 2:
         fastq_file_1, fastq_file_2 = fastq_files
-        output_file_1, output_file_2 = [Path(f"{fastq_file_1}.sub"), Path(f"{fastq_file_2}.sub")]
+        output_file_1, output_file_2 = [
+            Path(f"{fastq_file_1}.sub"),
+            Path(f"{fastq_file_2}.sub"),
+        ]
     elif len(fastq_files) == 1:
         fastq_file_1 = fastq_files[0]
         output_file_1 = Path(f"{fastq_file_1}.sub")
@@ -432,7 +447,12 @@ def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches
         num_lines = sum(1 for line in gzip.open(fastq_file_1))  # pylint:disable=consider-using-with
     else:
         compressed = False
-        num_lines = sum(1 for line in open(fastq_file_1))  # pylint:disable=consider-using-with
+        num_lines = sum(
+            1
+            for line in open( # pylint:disable=consider-using-with,unspecified-encoding
+                fastq_file_1, encoding="utf-8"
+            )
+        )
 
     range_limit = int(num_lines / 4)
     sampling_size = 0
@@ -452,7 +472,7 @@ def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches
         )
         return
 
-    rand_list = random.sample(range(0, range_limit-1), sampling_size)
+    rand_list = random.sample(range(0, range_limit - 1), sampling_size)
     random_indices = [idx * 4 for idx in rand_list]
     logging.info("Processing paired files in parallel")
     if num_threads >= 2:
@@ -496,10 +516,11 @@ def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches
 
 
 def _subsample_fastq_subset(
-    fastq_file: Path, output_file: Path, random_indices: dict, compressed: bool
+    fastq_file: Path, output_file: Path, random_indices: list[int], compressed: bool
 ) -> None:
     """
-    Selecting specific sets of four lines from an input FastQ file and writing them to an output file.
+    Selecting specific sets of four lines from an input FastQ \
+    file and writing them to an output file.
     Args:
         fastq_file : Path for the fastq file.
         output_file : Path for the output file.
@@ -508,19 +529,19 @@ def _subsample_fastq_subset(
     """
     line_index = 0
     read_block = []
-    with gzip.open(fastq_file, "rt") if compressed else open(fastq_file) as file_in, open(
-                    output_file, "w+"
-                        ) as file_out:
+    with gzip.open(fastq_file, "rt") if compressed else open(fastq_file, encoding="utf-8") as file_in, open(
+        output_file, "w+", encoding="utf-8"
+    ) as file_out:
         for line in file_in:
             read_block.append(line)
             if len(read_block) == 4:
                 if line_index in random_indices:
-                  file_out.writelines(read_block)
+                    file_out.writelines(read_block)
                 read_block = []
                 line_index += 4
-        #lines = [file_in.readline() for _ in range(4)]
-    """   
-       while lines[3]:
+        # lines = [file_in.readline() for _ in range(4)]
+    """
+    while lines[3]:
                 #lines = [file_in.readline() for _ in range(4)]
                 # Break if the end of the file is reached
                 if len(lines) < 4 :  # No more lines to read
@@ -541,6 +562,7 @@ def _subsample_fastq_subset(
             line_index += 4
             lines = [file_in.readline() for _ in range(4)]
     """
+
 
 def run_trimming(
     output_dir: Path,
@@ -634,16 +656,19 @@ def multiprocess_trim_galore(trim_galore_cmd: List, fastq_paired_files: List[Pat
     elif len(fastq_paired_files) == 1:
         trim_galore_cmd.append(fastq_paired_files)
 
-    logging.info("Running Trim Galore with the following command: %s", {" ".join(trim_galore_cmd)})
+    logging.info(
+        "Running Trim Galore with the following command: %s",
+        {" ".join(trim_galore_cmd)},
+    )
     subprocess.run(trim_galore_cmd, check=True)
 
 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="STAR's arguments")
-    parser.add_argument("--genome_file",  help="Genome file path")
-    parser.add_argument("--output_dir",  help="Output directory path")
-    parser.add_argument("--short_read_fastq_dir",  help="Short read directory path")
+    parser.add_argument("--genome_file", help="Genome file path")
+    parser.add_argument("--output_dir", help="Output directory path")
+    parser.add_argument("--short_read_fastq_dir", help="Short read directory path")
     parser.add_argument(
         "--delete_pre_trim_fastq",
         action="store_true",
@@ -651,18 +676,31 @@ def parse_args():
         help="Delete the original fastq files after trimming",
     )
     parser.add_argument(
-        "--trim_fastq", action="store_true", default=False, help="Trim the short read files using Trim Galore"
+        "--trim_fastq",
+        action="store_true",
+        default=False,
+        help="Trim the short read files using Trim Galore",
     )
     parser.add_argument(
-        "--max_reads_per_sample", type=int, default=0, help="The maximum number of reads to use per sample"
+        "--max_reads_per_sample",
+        type=int,
+        default=0,
+        help="The maximum number of reads to use per sample",
     )
     parser.add_argument(
-        "--max_intron_length", type=int, default=100000, help="The maximum intron size for alignments"
+        "--max_intron_length",
+        type=int,
+        default=100000,
+        help="The maximum intron size for alignments",
     )
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
     parser.add_argument("--star_bin", default="STAR", help="Star software path")
     parser.add_argument("--samtools_bin", default="samtools", help="Samtools software path")
-    parser.add_argument("--trim_galore_bin", default="trim_galore", help="Trim Galore software path")
+    parser.add_argument(
+        "--trim_galore_bin",
+        default="trim_galore",
+        help="Trim Galore software path",
+    )
     parser.add_argument(
         "--subsample_read_limit",
         type=int,

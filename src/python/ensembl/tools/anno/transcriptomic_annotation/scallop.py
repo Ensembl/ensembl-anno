@@ -1,3 +1,4 @@
+# pylint: disable=line-too-long
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -14,17 +15,18 @@
 # limitations under the License.
 
 """
-Scallop is a high-performance tool designed for the accurate and efficient quantification 
-of transcriptome assembly. 
-It's capable of handling large-scale transcriptomic data while providing precise estimates 
+Scallop is a high-performance tool designed for the accurate and efficient quantification
+of transcriptome assembly.
+It's capable of handling large-scale transcriptomic data while providing precise estimates
 of transcript abundances.
-Scallop's algorithmic approach allows it to efficiently reconstruct transcript structures 
-and quantify their expression levels, making it a valuable resource for studying gene 
+Scallop's algorithmic approach allows it to efficiently reconstruct transcript structures
+and quantify their expression levels, making it a valuable resource for studying gene
 expression and transcriptome analysis.
 
-Shao M, Kingsford C. Accurate assembly of transcripts through phase-preserving graph 
+Shao M, Kingsford C. Accurate assembly of transcripts through phase-preserving graph
 decomposition. Nat Biotechnol.
-2017 Dec;35(12):1167-1169. doi: 10.1038/nbt.4020. Epub 2017 Nov 13. PMID: 29131147; PMCID: PMC5722698.
+2017 Dec;35(12):1167-1169. doi: 10.1038/nbt.4020. Epub 2017 Nov 13. PMID: 29131147;
+PMCID: PMC5722698.
 """
 
 __all__ = ["run_scallop"]
@@ -35,6 +37,7 @@ import logging.config
 from pathlib import Path
 import re
 import subprocess
+from typing import Any
 
 from src.python.ensembl.tools.anno.utils._utils import (
     check_exe,
@@ -97,7 +100,7 @@ def run_scallop(
             else:
                 logging.info("Running Scallop on: %s", sorted_bam_file.name)
                 try:
-                    scallop_cmd = [
+                    scallop_cmd: list[Any] = [
                         scallop_bin,
                         "-i",
                         sorted_bam_file,
