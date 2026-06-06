@@ -30,7 +30,7 @@ import re
 import subprocess
 from typing import List, Union
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -87,7 +87,9 @@ def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)# pylint:disable=line-too-long
+    slice_ids_per_region = get_slice_id(
+        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
+    )  # pylint:disable=line-too-long
     logger.info("Running CpG")
     pool = multiprocessing.Pool(int(num_threads))  # pylint:disable=consider-using-with
     for slice_id in slice_ids_per_region:

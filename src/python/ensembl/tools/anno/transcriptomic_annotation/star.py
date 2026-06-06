@@ -35,7 +35,7 @@ import shutil
 import subprocess
 from typing import Dict, List
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -449,7 +449,7 @@ def _subsample_paired_fastq_files(  # pylint:disable=too-many-branches, too-many
         compressed = False
         num_lines = sum(
             1
-            for line in open( # pylint:disable=consider-using-with,unspecified-encoding
+            for line in open(  # pylint:disable=consider-using-with,unspecified-encoding
                 fastq_file_1, encoding="utf-8"
             )
         )
@@ -529,9 +529,10 @@ def _subsample_fastq_subset(
     """
     line_index = 0
     read_block = []
-    with gzip.open(fastq_file, "rt") if compressed else open(fastq_file, encoding="utf-8") as file_in, open(
-        output_file, "w+", encoding="utf-8"
-    ) as file_out:
+    with (
+        gzip.open(fastq_file, "rt") if compressed else open(fastq_file, encoding="utf-8") as file_in,
+        open(output_file, "w+", encoding="utf-8") as file_out,
+    ):
         for line in file_in:
             read_block.append(line)
             if len(read_block) == 4:

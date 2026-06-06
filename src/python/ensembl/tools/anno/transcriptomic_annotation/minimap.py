@@ -33,7 +33,7 @@ from pathlib import Path
 import subprocess
 from typing import List
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -228,7 +228,9 @@ def parse_args():
     parser.add_argument("--genome_file", required=True, help="Genome file path")
     parser.add_argument("--minimap2_bin", default="minimap2", help="Minimap2 software path")
     parser.add_argument("--paftools_bin", default="paftools.js", help="Paftools js path")
-    parser.add_argument("--max_intron_length", type=int, default=100000, help="The maximum intron length.")#pylint:disable=line-too-long
+    parser.add_argument(
+        "--max_intron_length", type=int, default=100000, help="The maximum intron length."
+    )  # pylint:disable=line-too-long
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
     return parser.parse_args()
 

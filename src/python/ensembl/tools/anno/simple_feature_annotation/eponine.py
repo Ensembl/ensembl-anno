@@ -31,7 +31,7 @@ import re
 import subprocess
 from typing import List
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     check_file,
     create_dir,

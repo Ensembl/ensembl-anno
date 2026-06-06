@@ -995,7 +995,7 @@ def update_gtf_genes(
 
             match = re.search(r'; biotype "([^"]+)";', transcript_line)
             if match:
-                biotype = match.group(1)#pylint: disable=possibly-used-before-assignment
+                biotype = match.group(1)  # pylint: disable=possibly-used-before-assignment
             if biotype in ("busco", "protein"):
                 transcript_line = re.sub(
                     '; biotype "' + biotype + '";',

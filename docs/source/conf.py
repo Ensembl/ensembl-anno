@@ -29,8 +29,8 @@ sys.path.insert(0, os.path.abspath("../../src/python"))
 print(sys.executable)
 
 # -- Project information -----------------------------------------------------
-project = 'ensembl-anno'
-author = 'ensembl@dev.org'
+project = "ensembl-anno"
+author = "ensembl@dev.org"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -44,7 +44,7 @@ release = "0.1"
 copyright_owner = "EMBL-European Bioinformatics Institute"
 copyright_dates = "[2016-%d]" % datetime.datetime.now().year
 copyright = copyright_dates + " " + copyright_owner
-html_baseurl = 'https://ensembl.github.io/ensembl-anno/'
+html_baseurl = "https://ensembl.github.io/ensembl-anno/"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -64,7 +64,6 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
-    
 ]
 # Set napoleon_use_param to True to format parameters as in the docstring
 napoleon_use_param = True
@@ -79,9 +78,9 @@ autodoc_default_options = {
     "exclude-members": "__weakref__",
 }
 suppress_warnings = [
-    'docstring',
-    'ref.citation',       # Example: Suppress warnings about citations
-    'image.nonlocal_uri', # Example: Suppress warnings about non-local images
+    "docstring",
+    "ref.citation",  # Example: Suppress warnings about citations
+    "image.nonlocal_uri",  # Example: Suppress warnings about non-local images
     # Add other warnings to suppress as needed
 ]
 # Add any paths that contain templates here, relative to this directory.

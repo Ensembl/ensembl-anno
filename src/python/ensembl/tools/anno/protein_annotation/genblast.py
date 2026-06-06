@@ -44,7 +44,7 @@ import signal
 import subprocess
 import argparse
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -295,7 +295,9 @@ def _generate_genblast_gtf(genblast_dir: Path) -> None:
                 path.unlink()
 
 
-def _run_convert2blastmask(convert2blastmask_bin: Path, masked_genome: Path, asnb_file: Path) -> None:#pylint:disable=line-too-long
+def _run_convert2blastmask(
+    convert2blastmask_bin: Path, masked_genome: Path, asnb_file: Path
+) -> None:  # pylint:disable=line-too-long
     """
     Convert masking information in lower-case masked FASTA input to file
     formats suitable for makeblastdb.

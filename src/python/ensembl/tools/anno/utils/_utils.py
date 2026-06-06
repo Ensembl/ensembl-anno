@@ -587,7 +587,9 @@ def check_transcriptomic_output(main_output_dir: Path) -> None:
             transcriptomic_dir,
         )
     if total_lines == 0:
-        raise OSError("Transcriptomic mode was enabled, but all transcriptomic annotation files are empty.")# pylint:disable=line-too-long
+        raise OSError(
+            "Transcriptomic mode was enabled, but all transcriptomic annotation files are empty."
+        )  # pylint:disable=line-too-long
 
     if total_lines <= min_lines:
         raise OSError(

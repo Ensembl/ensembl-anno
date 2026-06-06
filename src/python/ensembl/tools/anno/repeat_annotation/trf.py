@@ -32,7 +32,7 @@ import tempfile
 from typing import List
 
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -90,7 +90,7 @@ def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     # Use default path if user didn't supply one
     trf_bin = trf_bin or Path("trf")
 
-    #check_exe(trf_bin)
+    # check_exe(trf_bin)
     trf_dir = create_dir(output_dir, "trf_output")
     os.chdir(str(trf_dir))
     output_file = trf_dir / "annotation.gtf"

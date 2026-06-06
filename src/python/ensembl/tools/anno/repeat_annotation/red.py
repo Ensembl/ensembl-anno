@@ -29,7 +29,7 @@ import re
 import subprocess
 
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
 )
@@ -58,7 +58,7 @@ def run_red(
     # Use default path if user didn't supply one
     red_bin = red_bin or Path("Red")
 
-    #check_exe(red_bin)
+    # check_exe(red_bin)
     red_dir = create_dir(output_dir, "red_output")
     red_mask_dir = create_dir(red_dir, "mask_output")
     red_repeat_dir = create_dir(red_dir, "repeat_output")
@@ -137,7 +137,8 @@ def _create_red_gtf(repeat_coords_file: Path, output_file: Path):
                 start = int(result_match.group(2)) + 1
                 end = int(result_match.group(3)) + 1
                 gtf_line = (
-                    f"{region_name}\tRed\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'#pylint:disable=line-too-long
+                    f"{region_name}\tRed\trepeat\t{start}\t"
+                    f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'  # pylint:disable=line-too-long
                 )
                 red_out.write(gtf_line)
 

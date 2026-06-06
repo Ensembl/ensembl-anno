@@ -34,7 +34,7 @@ from typing import List
 import argparse
 
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -71,7 +71,7 @@ def run_dust(
     # Use default path if user didn't supply one
     dust_bin = dust_bin or Path("dustmasker")
 
-    #check_exe(dust_bin)
+    # check_exe(dust_bin)
     dust_dir = create_dir(output_dir, "dust_output")
     os.chdir(str(dust_dir))
     output_file = dust_dir / "annotation.gtf"
