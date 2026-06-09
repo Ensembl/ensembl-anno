@@ -269,6 +269,8 @@ def select_isoforms(
     same_gene_ovlp_thresh = scfg.same_gene_overlap_threshold
 
     def is_same_gene(m1, m2):
+        if m1["chrom"] != m2["chrom"] or m1["strand"] != m2["strand"]:
+            return False
         if m1["intron_chain"] != "single-exon" and m2["intron_chain"] != "single-exon":
             i1 = set(m1["intron_chain"].split(","))
             i2 = set(m2["intron_chain"].split(","))
