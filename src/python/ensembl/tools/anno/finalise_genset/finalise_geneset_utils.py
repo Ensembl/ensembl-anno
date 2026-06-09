@@ -12,6 +12,33 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import glob
+import multiprocessing
+import os
+from pathlib import Path
+import re
+import subprocess
+import logging
+import logging.config
+import json
+from typing import Any, Dict
+
+from src.python.ensembl.tools.anno.utils._utils import (
+    check_file,
+    create_dir,
+    check_gtf_content,
+    get_seq_region_lengths,
+    split_protein_file,
+)
+
+def load_json(path: str | Path) -> Dict[str, Any]:
+    path = Path(path)
+    with path.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+# Use same config path layout as monolithic script
+config = load_json(Path(os.environ["ENSCODE"]) / "ensembl-anno" / "conf" /"config.json")
+
 
 def run_finalise_geneset(
     main_script_dir,
@@ -24,35 +51,35 @@ def run_finalise_geneset(
 ):
 
     if validation_type is None:
-        logger.info("Setting validation type to relaxed")
+        logging.info("Setting validation type to relaxed")
     else:
-        logger.info("Setting validation type to " + validation_type)
+        logging.info("Setting validation type to " + validation_type)
 
-    final_annotation_dir = utils.create_dir(main_output_dir, "annotation_output")
-    region_annotation_dir = utils.create_dir(final_annotation_dir, "initial_region_gtfs")
-    final_region_annotation_dir = utils.create_dir(
+    final_annotation_dir = create_dir(main_output_dir, "annotation_output")
+    region_annotation_dir = create_dir(final_annotation_dir, "initial_region_gtfs")
+    final_region_annotation_dir = create_dir(
         final_annotation_dir, "final_region_gtfs"
     )
-    utr_region_annotation_dir = utils.create_dir(final_annotation_dir, "utr_region_gtfs")
-    validation_dir = utils.create_dir(final_annotation_dir, "cds_validation")
-    seq_region_lengths = utils.get_seq_region_lengths(genome_file, 0)
+    utr_region_annotation_dir = create_dir(final_annotation_dir, "utr_region_gtfs")
+    validation_dir = create_dir(final_annotation_dir, "cds_validation")
+    seq_region_lengths = get_seq_region_lengths(genome_file, 0)
 
-    logger.info("Skip analysis if the gtf file already exists")
+    logging.info("Skip analysis if the gtf file already exists")
     output_file = os.path.join(final_annotation_dir, "annotation.gtf")
     if os.path.exists(output_file):
-        logger.info("final_annotation_dir exists")
-        transcript_count = utils.check_gtf_content(output_file, "transcript")
+        logging.info("final_annotation_dir exists")
+        transcript_count = check_gtf_content(output_file, "transcript")
         if transcript_count > 0:
-            logger.info("Final gtf file exists")
+            logging.info("Final gtf file exists")
             return
     else:
-        logger.info("No gtf file, go on with the analysis")
+        logging.info("No gtf file, go on with the analysis")
     # This used to be a list of output dirs and a loop which was neat,
     # I'm coverting to a list of conditions as
     # it's more straightforward with the renaming
     # and having to merge scallop and stringtie
     protein_annotation_raw = os.path.join(
-        main_output_dir, "genblast_output", "annotation.gtf"
+        main_output_dir, "uniprot_output", "annotation.gtf"
     )
     minimap2_annotation_raw = os.path.join(
         main_output_dir, "minimap2_output", "annotation.gtf"
@@ -63,7 +90,7 @@ def run_finalise_geneset(
     scallop_annotation_raw = os.path.join(
         main_output_dir, "scallop_output", "annotation.gtf"
     )
-    busco_annotation_raw = os.path.join(main_output_dir, "busco_output", "annotation.gtf")
+    busco_annotation_raw = os.path.join(main_output_dir, "orthodb_output", "annotation.gtf")
 
     transcript_selector_script = os.path.join(
         main_script_dir, "support_scripts_perl", "select_best_transcripts.pl"
@@ -92,7 +119,7 @@ def run_finalise_geneset(
     ]:
 
         if not os.path.exists(transcriptomic_file):
-            logger.info(
+            logging.info(
                 "No annotation.gtf file found in " + transcriptomic_file + ", skipping"
             )
             continue
@@ -151,7 +178,7 @@ def run_finalise_geneset(
         )
 
         if os.path.exists(transcriptomic_annotation_raw):
-            logger.info("Finalising transcriptomic data for: " + seq_region_name)
+            logging.info("Finalising transcriptomic data for: " + seq_region_name)
             transcriptomic_annotation_select = re.sub(
                 "_raw.gtf", "_sel.gtf", transcriptomic_annotation_raw
             )
@@ -172,7 +199,7 @@ def run_finalise_geneset(
             pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
 
         if os.path.exists(busco_annotation_raw):
-            logger.info("Finalising BUSCO data for: " + seq_region_name)
+            logging.info("Finalising BUSCO data for: " + seq_region_name)
             busco_annotation_select = re.sub("_raw.gtf", "_sel.gtf", busco_annotation_raw)
             cmd = generic_select_cmd.copy()
             cmd.extend(
@@ -191,7 +218,7 @@ def run_finalise_geneset(
             pool.apply_async(multiprocess_finalise_geneset, args=(cmd,))
 
         if os.path.exists(protein_annotation_raw):
-            logger.info("Finalising protein data for: " + seq_region_name)
+            logging.info("Finalising protein data for: " + seq_region_name)
             protein_annotation_select = re.sub(
                 "_raw.gtf", "_sel.gtf", protein_annotation_raw
             )
@@ -303,7 +330,7 @@ def run_finalise_geneset(
     cleaned_initial_gtf_file = os.path.join(final_annotation_dir, ("cleaned_pre_utr.gtf"))
     cleaned_utr_gtf_file = os.path.join(final_annotation_dir, ("annotation.gtf"))
 
-    logger.info("Cleaning initial set")
+    logging.info("Cleaning initial set")
     cleaning_cmd = [
         "perl",
         clean_geneset_script,
@@ -314,7 +341,7 @@ def run_finalise_geneset(
         "-output_gtf_file",
         cleaned_initial_gtf_file,
     ]
-    logger.info(" ".join(cleaning_cmd))
+    logging.info(" ".join(cleaning_cmd))
     subprocess.run(cleaning_cmd)
 
     # Clean UTRs
@@ -364,7 +391,7 @@ def run_finalise_geneset(
         ]
     )
 
-    logger.info("Dumping transcript and translation sequences")
+    logging.info("Dumping transcript and translation sequences")
     dumping_cmd = [
         "perl",
         gtf_to_seq_script,
@@ -373,10 +400,10 @@ def run_finalise_geneset(
         "-gtf_file",
         cleaned_utr_gtf_file,
     ]
-    logger.info(" ".join(dumping_cmd))
+    logging.info(" ".join(dumping_cmd))
     subprocess.run(dumping_cmd)
 
-    logger.info("Finished creating gene set")
+    logging.info("Finished creating gene set")
 
 
 def validate_coding_transcripts(
@@ -389,7 +416,7 @@ def validate_coding_transcripts(
     num_threads,
 ):
 
-    logger.info("Running CDS validation with RNAsamba and CPC2")
+    logging.info("Running CDS validation with RNAsamba and CPC2")
     rnasamba_weights = config["rnasamba"]["weights"]
     rnasamba_output_path = os.path.join(validation_dir, "rnasamba.tsv.txt")
     cpc2_output_path = os.path.join(validation_dir, "cpc2.tsv")
@@ -406,7 +433,7 @@ def validate_coding_transcripts(
         cdna_file,
         rnasamba_weights,
     ]
-    logger.info(" ".join(rnasamba_cmd))
+    logging.info(" ".join(rnasamba_cmd))
     subprocess.run(rnasamba_cmd)
     cpc2_volume = validation_dir + "/:/app:rw"
     cpc2_cmd = [
@@ -423,17 +450,17 @@ def validate_coding_transcripts(
         "-o",
         cpc2_output_path,
     ]
-    logger.info(" ".join(cpc2_cmd))
+    logging.info(" ".join(cpc2_cmd))
     subprocess.run(cpc2_cmd)
     cpc2_output_path = cpc2_output_path + ".txt"
 
     check_file(rnasamba_output_path)
     check_file(cpc2_output_path)
 
-    logger.info("diamond validation")
+    logging.info("diamond validation")
     diamond_results = None
     if diamond_validation_db is not None:
-        diamond_output_dir = utils.create_dir(validation_dir, "diamond_output")
+        diamond_output_dir = create_dir(validation_dir, "diamond_output")
         diamond_validation(
             diamond_validation_db,
             amino_acid_file,
@@ -442,11 +469,11 @@ def validate_coding_transcripts(
         )
         diamond_results = read_diamond_results(diamond_output_dir)
 
-    logger.info("read results")
+    logging.info("read results")
     rnasamba_results = read_rnasamba_results(rnasamba_output_path)
     cpc2_results = read_cpc2_results(cpc2_output_path)
     combined_results = combine_results(rnasamba_results, cpc2_results, diamond_results)
-    logger.info("read gtf genes")
+    logging.info("read gtf genes")
     parsed_gtf_genes = read_gtf_genes(gtf_file)
     updated_gtf_lines = update_gtf_genes(
         parsed_gtf_genes, combined_results, validation_type
@@ -484,7 +511,7 @@ def multiprocess_diamond(
     batch_num = os.path.splitext(batched_protein_file)[0]
     batch_dir = os.path.dirname(batched_protein_file)
     diamond_output_file = batched_protein_file + ".dmdout"
-    logger.info("Running diamond on " + batched_protein_file + ":")
+    logging.info("Running diamond on " + batched_protein_file + ":")
 
     diamond_cmd = [
         "diamond",
@@ -497,7 +524,7 @@ def multiprocess_diamond(
         diamond_output_file,
     ]
 
-    logger.info(" ".join(diamond_cmd))
+    logging.info(" ".join(diamond_cmd))
     subprocess.run(diamond_cmd)
     subprocess.run(["mv", diamond_output_file, diamond_output_dir])
 def read_rnasamba_results(file_path):
@@ -661,7 +688,7 @@ def merge_finalise_output_files(
     cdna_out = open(merged_cdna_file, "w+")
     amino_acid_out = open(merged_amino_acid_file, "w+")
     for gtf_file in gtf_files:
-        logger.info("GTF file: " + gtf_file)
+        logging.info("GTF file: " + gtf_file)
         cdna_seq_index = {}
         amino_acid_seq_index = {}
         cdna_file = gtf_file + ".cdna"
@@ -733,3 +760,218 @@ def multiprocess_finalise_geneset(cmd):
     print(" ".join(cmd))
     subprocess.run(cmd)
 
+
+def multiprocess_generic(cmd):
+    print(" ".join(cmd))
+    subprocess.run(cmd)
+
+def fasta_to_dict(fasta_list):
+
+    index = {}
+    it = iter(fasta_list)
+    for header in it:
+        match = re.search(r">(.+)\n$", header)
+        header = match.group(1)
+        seq = next(it)
+        index[header] = seq
+    return index
+
+def update_gtf_genes(parsed_gtf_genes, combined_results, validation_type):
+
+    output_lines = []
+
+    for gene_id in parsed_gtf_genes.keys():
+        transcript_ids = parsed_gtf_genes[gene_id].keys()
+        for transcript_id in transcript_ids:
+            transcript_line = parsed_gtf_genes[gene_id][transcript_id]["transcript"]
+            single_cds_exon_transcript = 0
+            translation_match = re.search(
+                r'; translation_coords "([^"]+)";', transcript_line
+            )
+            if translation_match:
+                translation_coords = translation_match.group(1)
+                translation_coords_list = translation_coords.split(":")
+                # If the start exon coords of both exons are the same,
+                # then it's the same exon and thus a single exon cds
+                if translation_coords_list[0] == translation_coords_list[3]:
+                    single_cds_exon_transcript = 1
+
+            exon_lines = parsed_gtf_genes[gene_id][transcript_id]["exons"]
+            validation_results = combined_results[transcript_id]
+            rnasamba_coding_probability = float(validation_results[0])
+            rnasamba_coding_potential = validation_results[1]
+            cpc2_coding_probability = float(validation_results[2])
+            cpc2_coding_potential = validation_results[3]
+            transcript_length = int(validation_results[4])
+            peptide_length = int(validation_results[5])
+            diamond_e_value = None
+            if len(validation_results) == 7:
+                diamond_e_value = validation_results[6]
+
+            avg_coding_probability = (
+                rnasamba_coding_probability + cpc2_coding_probability
+            ) / 2
+            max_coding_probability = max(
+                rnasamba_coding_probability, cpc2_coding_probability
+            )
+
+            match = re.search(r'; biotype "([^"]+)";', transcript_line)
+            biotype = match.group(1)
+            if biotype == "busco" or biotype == "protein":
+                transcript_line = re.sub(
+                    '; biotype "' + biotype + '";',
+                    '; biotype "protein_coding";',
+                    transcript_line,
+                )
+                output_lines.append(transcript_line)
+                output_lines.extend(exon_lines)
+                continue
+
+            min_single_exon_pep_length = 100
+            min_multi_exon_pep_length = 75
+            min_single_source_probability = 0.8
+            min_single_exon_probability = 0.9
+
+            # Note that the below looks at validating things
+            # under different levels of strictness
+            # There are a few different continue statements,
+            # where transcripts will be skipped resulting
+            # in a smaller post validation file. It mainly
+            # removes single coding exon genes with no real
+            # support or for multi-exon lncRNAs that are less than 200bp long
+            if single_cds_exon_transcript == 1 and validation_type == "relaxed":
+                if diamond_e_value is not None:
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    rnasamba_coding_potential == "coding"
+                    and cpc2_coding_potential == "coding"
+                    and peptide_length >= min_single_exon_pep_length
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    (
+                        rnasamba_coding_potential == "coding"
+                        or cpc2_coding_potential == "coding"
+                    )
+                    and peptide_length >= min_single_exon_pep_length
+                    and max_coding_probability >= min_single_source_probability
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                else:
+                    continue
+            elif single_cds_exon_transcript == 1 and validation_type == "moderate":
+                if (
+                    diamond_e_value is not None
+                    and peptide_length >= min_single_exon_pep_length
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    (
+                        rnasamba_coding_potential == "coding"
+                        and cpc2_coding_potential == "coding"
+                    )
+                    and peptide_length >= min_single_exon_pep_length
+                    and avg_coding_probability >= min_single_exon_probability
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                else:
+                    continue
+            else:
+                if diamond_e_value is not None:
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    rnasamba_coding_potential == "coding"
+                    and cpc2_coding_potential == "coding"
+                    and peptide_length >= min_multi_exon_pep_length
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif (
+                    (
+                        rnasamba_coding_potential == "coding"
+                        or cpc2_coding_potential == "coding"
+                    )
+                    and peptide_length >= min_multi_exon_pep_length
+                    and max_coding_probability >= min_single_source_probability
+                ):
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                elif transcript_length >= 200:
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "lncRNA";',
+                        transcript_line,
+                    )
+                    transcript_line = re.sub(
+                        ' translation_coords "[^"]+";', "", transcript_line
+                    )
+                else:
+                    continue
+
+            output_lines.append(transcript_line)
+            output_lines.extend(exon_lines)
+
+    return output_lines
+
+def read_gtf_genes(gtf_file):
+
+    gtf_genes = {}
+    gtf_in = open(gtf_file)
+    line = gtf_in.readline()
+    while line:
+        eles = line.split("\t")
+        if not len(eles) == 9:
+            line = gtf_in.readline()
+            continue
+
+        match = re.search(r'gene_id "([^"]+)".+transcript_id "([^"]+)"', line)
+
+        if not match:
+            line = gtf_in.readline()
+            continue
+
+        gene_id = match.group(1)
+        transcript_id = match.group(2)
+        feature_type = eles[2]
+        if gene_id not in gtf_genes:
+            gtf_genes[gene_id] = {}
+        if feature_type == "transcript":
+            gtf_genes[gene_id][transcript_id] = {}
+            gtf_genes[gene_id][transcript_id]["transcript"] = line
+            gtf_genes[gene_id][transcript_id]["exons"] = []
+        elif feature_type == "exon":
+            gtf_genes[gene_id][transcript_id]["exons"].append(line)
+        line = gtf_in.readline()
+    gtf_in.close()
+
+    return gtf_genes

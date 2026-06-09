@@ -10,6 +10,9 @@ env/*
 venv/*
 # packaging
 *_build*
+!.github/actions/
+!.github/actions/python_build/
+!.github/actions/python_build/**
 eggs/
 .eggs*
 *.egg-info*
@@ -19,3 +22,5 @@ downloads/
 .cache
 .pytest_cache
 
+#IDEA
+.vscode/
