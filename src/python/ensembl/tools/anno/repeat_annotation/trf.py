@@ -122,6 +122,7 @@ def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     ]
     logger.info("Running TRF")
     pool = multiprocessing.Pool(num_threads)  # pylint:disable=consider-using-with
+    logger.info("sono quiii")
     for slice_id in slice_ids_per_region:
         pool.apply_async(
             _multiprocess_trf,
@@ -165,13 +166,17 @@ def _multiprocess_trf(
     )
     seq = get_sequence(region_name, int(start), int(end), 1, genome_file, trf_dir)
     slice_name = f"{region_name}.rs{start}.re{end}"
+    logger.info("slice_file %s",slice_name)
     with tempfile.TemporaryDirectory(dir=trf_dir) as tmpdirname:
-        slice_file = trf_dir / tmpdirname / f"{slice_name}.fa"
+        tmpdir = Path(tmpdirname)
+        slice_file = tmpdir / f"{slice_name}.fa"
+        logger.info("slice FILE %s",tmpdir)
+        #slice_file = trf_dir / tmpdirname / f"{slice_name}.fa"
         with open(slice_file, "w+", encoding="utf8") as region_out:
             region_out.write(f">{region_name}\n{seq}\n")
         region_results = trf_dir / f"{slice_name}.trf.gtf"
         # TRF writes to the current dir, so swtich to the output dir for it
-        # os.chdir(str(trf_output_dir))
+        #os.chdir(str(trf_dir))
         output_file = Path(f"{slice_file}{trf_output_extension}")
         trf_cmd = trf_cmd.copy()
         trf_cmd[1] = str(slice_file)
@@ -234,6 +239,7 @@ def _create_trf_gtf(  # pylint:disable=too-many-locals, too-many-branches
                         f'repeat_id "{repeat_count}"; score "{score}"; '
                         f'repeat_consensus "{repeat_consensus}";\n'
                     )
+                    logger.info(gtf_line)
                     trf_out.write(gtf_line)
                     repeat_count += 1
 
@@ -243,7 +249,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="TRF's arguments")
     parser.add_argument("--genome_file", required=True, help="Genome file path")
     parser.add_argument("--output_dir", required=True, help="Output directory path")
-    parser.add_argument("--trf_bin", default="trf", help="TRF executable path")
+    parser.add_argument("--trf_bin", default="/opt/linuxbrew/bin/trf", help="TRF executable path")
     parser.add_argument("--match_score", type=int, default=2, help="Matching weight")
     parser.add_argument("--mismatch_score", type=int, default=5, help="Mismatching penalty")
     parser.add_argument("--delta", type=int, default=7, help="Indel penalty")

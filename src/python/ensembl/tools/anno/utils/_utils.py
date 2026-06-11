@@ -327,7 +327,12 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                             "Feature type not recognised, will skip. Feature type: %s",
                             values[2],
                         )
+import re
 
+def safe_filename(text: str) -> str:
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text)
+    text = re.sub(r"_+", "_", text)
+    return text.strip("_.")
 
 def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     seq_region: str,
@@ -360,13 +365,79 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
         "get_sequence %s",
         f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}",  # pylint:disable=line-too-long
     )
+    seq_region = safe_filename(seq_region)
+    bed_file = Path(output_dir) / f"{seq_region}.{start}.{end}.1.bed"
+    try:
+        bed_file.write_text(f"{seq_region}\t{start}\t{end}\n", encoding="utf-8")
+
+        bedtools_command = [
+            "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+            "getfasta",
+            "-fi",
+            str(fasta_file),
+            "-bed",
+            str(bed_file),
+        ]
+        logger.info("BED file path: %s", bed_file)
+        logger.info("BED exists: %s", bed_file.exists())
+        logger.info("BED size: %s", bed_file.stat().st_size)
+        result = subprocess.run(
+            bedtools_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+
+        if result.stderr:
+            logger.info("bedtools stderr: %s", result.stderr.strip())
+
+        lines = result.stdout.splitlines()
+        if len(lines) < 2:
+            raise RuntimeError(f"bedtools did not return a sequence for {seq_region}:{start}-{end}")
+
+        sequence = lines[1].strip()
+        if strand != 1:
+            sequence = reverse_complement(sequence)
+
+        logger.info("sequence %s", sequence)
+        return sequence
+    except Exception as e:
+        logger.exception(
+        "Failed get_sequence region=%s start=%s end=%s fasta=%s bed=%s",
+        seq_region,
+        start,
+        end,
+        fasta_file,
+        bed_file,
+        )
+
+        if bed_file.exists():
+            logger.error("BED content:\n%s", bed_file.read_text())
+
+        raise
+
+    finally:
+        if bed_file.exists():
+            bed_file.unlink()
+    """
+    help_res = subprocess.run(
+                ["/opt/linuxbrew/bin/bedtools", "getfasta", "-h"],
+                    capture_output=True,
+                        text=True,
+                        )
+    logger.info("bedtools getfasta help returncode=%s", help_res.returncode)
+    logger.info("bedtools getfasta help stdout=%s", help_res.stdout)
+    logger.info("bedtools getfasta help stderr=%s", help_res.stderr)
+    
+
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=str(output_dir)
     ) as bed_temp_file:  # pylint:disable=line-too-long
         bed_temp_file.writelines(f"{seq_region}\t{start}\t{end}")
         bed_temp_file.close()
     bedtools_command = [
-        "bedtools",
+        "/opt/linuxbrew/bin/bedtools",
         "getfasta",
         "-fi",
         str(fasta_file),
@@ -387,10 +458,10 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
                 sequence = line.rstrip()
             else:
                 sequence = reverse_complement(line.rstrip())
-
+    logging.info("sequence %s",sequence)
     os.remove(bed_temp_file.name)
     return sequence  # pylint:disable=possibly-used-before-assignment
-
+    """
 
 def reverse_complement(sequence: str) -> str:
     """
