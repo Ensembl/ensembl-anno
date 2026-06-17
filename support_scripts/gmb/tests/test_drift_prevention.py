@@ -1,4 +1,3 @@
-
 from gmb.pipeline.config import UtrConfig, ValidationConfig
 from gmb.pipeline.gff3_validate import trim_utrs, validate_transcript
 
@@ -56,8 +55,8 @@ def test_compute_percentile_guardrails():
     """Test computation of effective guardrail limits from locus candidate set."""
     import pandas as pd
 
-    from gmb.pipeline.config import PipelineConfig
     from gmb.pipeline.builder import compute_percentile_guardrails
+    from gmb.pipeline.config import PipelineConfig
 
     cfg = PipelineConfig()
     cfg.validation.max_exon_len_mode = "percentile"

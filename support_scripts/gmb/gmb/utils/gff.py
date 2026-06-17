@@ -64,15 +64,11 @@ def parse_gff3_hierarchy(
                 }
             elif feat == "exon":
                 parent = attrs.get("Parent", "")
-                exons_by_parent[parent].append(
-                    (start - 1, end)
-                )
+                exons_by_parent[parent].append((start - 1, end))
             elif feat == "CDS":
                 parent = attrs.get("Parent", "")
                 frame_val = frame if frame != "." else "0"
-                cds_by_parent[parent].append(
-                    (start - 1, end, int(frame_val))
-                )
+                cds_by_parent[parent].append((start - 1, end, int(frame_val)))
 
     for tid, tx in transcripts.items():
         tx["exons"] = sorted(exons_by_parent.get(tid, []))

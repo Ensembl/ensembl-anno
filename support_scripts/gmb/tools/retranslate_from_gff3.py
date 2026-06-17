@@ -7,6 +7,7 @@ Usage:
         --genome z_tritici/zymoseptoria_tritici.fa \
         --out   output_fixed/prot.fa
 """
+
 from __future__ import annotations
 
 import argparse
@@ -56,7 +57,7 @@ def parse_gff3(gff3_path: str):
             parts = line.rstrip("\n").split("\t")
             if len(parts) < 9:
                 continue
-            chrom, source, feat, start_s, end_s, score, strand, phase, attrs = parts
+            chrom, _source, feat, start_s, end_s, _score, strand, _phase, attrs = parts
             start_1 = int(start_s)
             end_1 = int(end_s)
             # Convert to 0-based half-open

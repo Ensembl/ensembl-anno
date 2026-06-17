@@ -15,6 +15,7 @@ Usage:
         --old-prot output_full/prot.fa \
         --out      output_fixed/prot_fixed.fa
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,8 +26,8 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from gmb.pipeline.annotate_cds_utrs import reverse_complement, translate
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def load_genome(path: str) -> dict[str, str]:
     seq: dict[str, str] = {}
@@ -129,12 +130,13 @@ def is_helixer(evidence: str) -> bool:
 
 # ── main ─────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--gff3",     required=True)
-    ap.add_argument("--genome",   required=True)
+    ap.add_argument("--gff3", required=True)
+    ap.add_argument("--genome", required=True)
     ap.add_argument("--old-prot", required=True)
-    ap.add_argument("--out",      required=True)
+    ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
     print("Loading genome…", file=sys.stderr)
@@ -164,9 +166,9 @@ def main() -> None:
                 continue
 
             evidence = meta["evidence"]
-            chrom    = meta["chrom"]
-            strand   = meta["strand"]
-            gene_id  = meta["gene_id"]
+            chrom = meta["chrom"]
+            strand = meta["strand"]
+            gene_id = meta["gene_id"]
 
             if not is_helixer(evidence):
                 # Keep original protein unchanged
@@ -183,8 +185,8 @@ def main() -> None:
             if chrom not in genome:
                 continue
             chrom_seq = genome[chrom]
-            cds_nuc   = build_cds_seq(intervals, strand, chrom_seq)
-            protein   = translate(cds_nuc)
+            cds_nuc = build_cds_seq(intervals, strand, chrom_seq)
+            protein = translate(cds_nuc)
             if protein.endswith("*"):
                 protein = protein[:-1]
 

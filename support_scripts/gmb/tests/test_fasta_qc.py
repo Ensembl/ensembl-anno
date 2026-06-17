@@ -7,8 +7,9 @@ Covers:
   C3 - fasta_qc module checks
 """
 
-import os
 import json
+import os
+
 import pytest
 
 from gmb.pipeline.annotate_cds_utrs import reverse_complement, translate
@@ -20,7 +21,6 @@ from gmb.pipeline.fasta_qc import (
     run_sequence_checks,
     validate_fasta,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: tiny genome + GFF for C1
@@ -63,49 +63,25 @@ def _write_gff3(tmp_path, include_nocds=True, extra_ghost_tid=None):
 
     # Gene plus (+ strand, multi-exon with CDS)
     lines.append("chr1\tGMB\tgene\t51\t350\t.\t+\t.\tID=GENE_001")
-    lines.append(
-        "chr1\tGMB\tmRNA\t51\t350\t.\t+\t.\tID=GENE_001.t1;Parent=GENE_001"
-    )
-    lines.append(
-        "chr1\tGMB\texon\t51\t120\t.\t+\t.\tID=GENE_001.t1.exon1;Parent=GENE_001.t1"
-    )
-    lines.append(
-        "chr1\tGMB\texon\t201\t350\t.\t+\t.\tID=GENE_001.t1.exon2;Parent=GENE_001.t1"
-    )
-    lines.append(
-        "chr1\tGMB\tCDS\t61\t120\t.\t+\t0\tID=GENE_001.t1.cds1;Parent=GENE_001.t1"
-    )
-    lines.append(
-        "chr1\tGMB\tCDS\t201\t330\t.\t+\t0\tID=GENE_001.t1.cds2;Parent=GENE_001.t1"
-    )
+    lines.append("chr1\tGMB\tmRNA\t51\t350\t.\t+\t.\tID=GENE_001.t1;Parent=GENE_001")
+    lines.append("chr1\tGMB\texon\t51\t120\t.\t+\t.\tID=GENE_001.t1.exon1;Parent=GENE_001.t1")
+    lines.append("chr1\tGMB\texon\t201\t350\t.\t+\t.\tID=GENE_001.t1.exon2;Parent=GENE_001.t1")
+    lines.append("chr1\tGMB\tCDS\t61\t120\t.\t+\t0\tID=GENE_001.t1.cds1;Parent=GENE_001.t1")
+    lines.append("chr1\tGMB\tCDS\t201\t330\t.\t+\t0\tID=GENE_001.t1.cds2;Parent=GENE_001.t1")
 
     # Gene minus (- strand, multi-exon with CDS)
     lines.append("chr1\tGMB\tgene\t371\t490\t.\t-\t.\tID=GENE_002")
-    lines.append(
-        "chr1\tGMB\tmRNA\t371\t490\t.\t-\t.\tID=GENE_002.t1;Parent=GENE_002"
-    )
-    lines.append(
-        "chr1\tGMB\texon\t371\t430\t.\t-\t.\tID=GENE_002.t1.exon1;Parent=GENE_002.t1"
-    )
-    lines.append(
-        "chr1\tGMB\texon\t441\t490\t.\t-\t.\tID=GENE_002.t1.exon2;Parent=GENE_002.t1"
-    )
-    lines.append(
-        "chr1\tGMB\tCDS\t371\t430\t.\t-\t0\tID=GENE_002.t1.cds1;Parent=GENE_002.t1"
-    )
-    lines.append(
-        "chr1\tGMB\tCDS\t441\t480\t.\t-\t0\tID=GENE_002.t1.cds2;Parent=GENE_002.t1"
-    )
+    lines.append("chr1\tGMB\tmRNA\t371\t490\t.\t-\t.\tID=GENE_002.t1;Parent=GENE_002")
+    lines.append("chr1\tGMB\texon\t371\t430\t.\t-\t.\tID=GENE_002.t1.exon1;Parent=GENE_002.t1")
+    lines.append("chr1\tGMB\texon\t441\t490\t.\t-\t.\tID=GENE_002.t1.exon2;Parent=GENE_002.t1")
+    lines.append("chr1\tGMB\tCDS\t371\t430\t.\t-\t0\tID=GENE_002.t1.cds1;Parent=GENE_002.t1")
+    lines.append("chr1\tGMB\tCDS\t441\t480\t.\t-\t0\tID=GENE_002.t1.cds2;Parent=GENE_002.t1")
 
     # Gene without CDS (exon only)
     if include_nocds:
         lines.append("chr1\tGMB\tgene\t1\t30\t.\t+\t.\tID=GENE_003")
-        lines.append(
-            "chr1\tGMB\tmRNA\t1\t30\t.\t+\t.\tID=GENE_003.t1;Parent=GENE_003"
-        )
-        lines.append(
-            "chr1\tGMB\texon\t1\t30\t.\t+\t.\tID=GENE_003.t1.exon1;Parent=GENE_003.t1"
-        )
+        lines.append("chr1\tGMB\tmRNA\t1\t30\t.\t+\t.\tID=GENE_003.t1;Parent=GENE_003")
+        lines.append("chr1\tGMB\texon\t1\t30\t.\t+\t.\tID=GENE_003.t1.exon1;Parent=GENE_003.t1")
 
     gff_path = tmp_path / "consensus.gff3"
     gff_path.write_text("\n".join(lines) + "\n")
@@ -181,6 +157,7 @@ def _reconstruct_cdna_nocds():
 # ---------------------------------------------------------------------------
 # C1: Minimal FASTA export integrity test
 # ---------------------------------------------------------------------------
+
 
 class TestFastaExportIntegrity:
     """C1: Verify FASTA QC passes for correct outputs."""
@@ -295,6 +272,7 @@ class TestFastaExportIntegrity:
 # C2: Regression test for ghost proteins (the bug we found)
 # ---------------------------------------------------------------------------
 
+
 class TestGhostProteinRegression:
     """C2: FASTA records for transcripts dropped by post-processing must be detected."""
 
@@ -386,6 +364,7 @@ class TestGhostProteinRegression:
 # ---------------------------------------------------------------------------
 # C3: fasta_qc module unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestFastaQcHelpers:
     def test_parse_fasta_ids(self, tmp_path):

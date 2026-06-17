@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 from collections import Counter
 
@@ -27,7 +26,6 @@ from gmb.utils.fasta import (
     parse_fasta_ids,
     parse_fasta_records,
 )
-from gmb.utils.gff import parse_gff3_hierarchy
 
 # Keep local load_genome as a thin wrapper for backwards compat
 load_genome = _load_genome
