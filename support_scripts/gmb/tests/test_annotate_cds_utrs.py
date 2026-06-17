@@ -372,12 +372,12 @@ class TestAnnotateTranscript:
         # The ORF prediction may not exactly match Helixer boundaries
         # (Helixer uses neural network, we use longest-ORF), but it should
         # be close. Check that the predicted CDS is within a small tolerance.
-        assert (
-            abs(predicted_cds[0] - expected_cds[0]) <= 30
-        ), f"CDS start off by {abs(predicted_cds[0] - expected_cds[0])}bp"
-        assert (
-            abs(predicted_cds[1] - expected_cds[1]) <= 30
-        ), f"CDS end off by {abs(predicted_cds[1] - expected_cds[1])}bp"
+        assert abs(predicted_cds[0] - expected_cds[0]) <= 30, (
+            f"CDS start off by {abs(predicted_cds[0] - expected_cds[0])}bp"
+        )
+        assert abs(predicted_cds[1] - expected_cds[1]) <= 30, (
+            f"CDS end off by {abs(predicted_cds[1] - expected_cds[1])}bp"
+        )
 
     def test_protein_starts_with_m(self, genome):
         """Predicted protein should start with M (ATG start)."""
@@ -390,9 +390,9 @@ class TestAnnotateTranscript:
         )
         result = annotate_transcript(exon_df, tx["chrom"], tx["strand"], genome, cds_df=None)
         if result["protein"] and not result["is_partial_5"]:
-            assert (
-                result["protein"][0] == "M"
-            ), f"Protein should start with M, got {result['protein'][:5]}"
+            assert result["protein"][0] == "M", (
+                f"Protein should start with M, got {result['protein'][:5]}"
+            )
 
     def test_utr_segmentation(self, genome):
         """UTR + CDS should cover entire exon span."""
@@ -676,8 +676,8 @@ def test_compute_utr_end_support():
     """Test utr end support logic."""
     import pandas as pd
 
-    from gmb.pipeline.config import PipelineConfig
     from gmb.pipeline.builder import compute_utr_end_support
+    from gmb.pipeline.config import PipelineConfig
 
     cfg = PipelineConfig()
     cfg.utr.require_end_support = True
@@ -767,10 +767,10 @@ class TestCdsTranslationMultiExon:
 
     _PADDING = "AAAAAAAAAA"  # 10 bp
     # Exon low [10:16]
-    _EXON1_PLUS = "ATGCCC"   # → codons ATG-CCC (M-P)
+    _EXON1_PLUS = "ATGCCC"  # → codons ATG-CCC (M-P)
     _EXON1_MINUS = "TTACCC"  # RC = GGGTAA (provides stop + 3' tail of - mRNA)
     # Exon high [50:56]
-    _EXON2_PLUS = "GGGTAA"   # → codons GGG-TAA (G-stop)
+    _EXON2_PLUS = "GGGTAA"  # → codons GGG-TAA (G-stop)
     _EXON2_MINUS = "GGGCAT"  # RC = ATGCCC (provides ATG + M-P of - mRNA)
 
     _GAP = "N" * 34  # fills [16:50]
@@ -789,13 +789,11 @@ class TestCdsTranslationMultiExon:
 
     @staticmethod
     def _cds_df(intervals):
-        return pd.DataFrame({"Start": [s for s, e in intervals],
-                             "End":   [e for s, e in intervals]})
+        return pd.DataFrame({"Start": [s for s, e in intervals], "End": [e for s, e in intervals]})
 
     @staticmethod
     def _exon_df(intervals):
-        return pd.DataFrame({"Start": [s for s, e in intervals],
-                             "End":   [e for s, e in intervals]})
+        return pd.DataFrame({"Start": [s for s, e in intervals], "End": [e for s, e in intervals]})
 
     # ── plus strand ──────────────────────────────────────────────────────────
 
@@ -803,7 +801,7 @@ class TestCdsTranslationMultiExon:
         """+ strand multi-exon CDS: two exons → known peptide MPG, no internal stops."""
         genome = self._make_genome(self._EXON1_PLUS, self._EXON2_PLUS)
         exon_df = self._exon_df([(10, 16), (50, 56)])
-        cds_df  = self._cds_df([(10, 16), (50, 56)])
+        cds_df = self._cds_df([(10, 16), (50, 56)])
 
         result = annotate_transcript(exon_df, "chr1", "+", genome, cds_df=cds_df)
 
@@ -816,7 +814,7 @@ class TestCdsTranslationMultiExon:
         """+ strand: CDS total length must be multiple of 3 (frame preserved across exons)."""
         genome = self._make_genome(self._EXON1_PLUS, self._EXON2_PLUS)
         exon_df = self._exon_df([(10, 16), (50, 56)])
-        cds_df  = self._cds_df([(10, 16), (50, 56)])
+        cds_df = self._cds_df([(10, 16), (50, 56)])
 
         result = annotate_transcript(exon_df, "chr1", "+", genome, cds_df=cds_df)
 
@@ -838,7 +836,7 @@ class TestCdsTranslationMultiExon:
         genome = self._make_genome(self._EXON1_MINUS, self._EXON2_MINUS)
         # Exon intervals: low [10,16), high [50,56)  — sorted ascending in GFF3
         exon_df = self._exon_df([(10, 16), (50, 56)])
-        cds_df  = self._cds_df([(10, 16), (50, 56)])
+        cds_df = self._cds_df([(10, 16), (50, 56)])
 
         result = annotate_transcript(exon_df, "chr1", "-", genome, cds_df=cds_df)
 
@@ -855,7 +853,7 @@ class TestCdsTranslationMultiExon:
         """- strand: CDS total length must be multiple of 3 across exon boundary."""
         genome = self._make_genome(self._EXON1_MINUS, self._EXON2_MINUS)
         exon_df = self._exon_df([(10, 16), (50, 56)])
-        cds_df  = self._cds_df([(10, 16), (50, 56)])
+        cds_df = self._cds_df([(10, 16), (50, 56)])
 
         result = annotate_transcript(exon_df, "chr1", "-", genome, cds_df=cds_df)
 
@@ -873,7 +871,7 @@ class TestCdsTranslationMultiExon:
         gm = self._make_genome(self._EXON1_MINUS, self._EXON2_MINUS)
 
         exon_df = self._exon_df([(10, 16), (50, 56)])
-        cds_df  = self._cds_df([(10, 16), (50, 56)])
+        cds_df = self._cds_df([(10, 16), (50, 56)])
 
         rp = annotate_transcript(exon_df, "chr1", "+", gp, cds_df=cds_df)
         rm = annotate_transcript(exon_df, "chr1", "-", gm, cds_df=cds_df)
@@ -902,25 +900,25 @@ class TestCdsTranslationMultiExon:
         # mRNA = ATGCCC + GGGTTT + CCCTAA = ATG-CCC-GGG-TTT-CCC-TAA → MPGFP(stop)
         # [10:16] = "TTAGGG"
 
-        seq = ("A" * 10       # [0:10]  padding
-               + "TTAGGG"     # [10:16] exon1_low  (RC=CCCTAA → 3' mRNA end)
-               + "N" * 34     # [16:50] gap
-               + "AAACCC"     # [50:56] exon2_mid  (RC=GGGTTT → middle of mRNA)
-               + "N" * 34     # [56:90] gap
-               + "GGGCAT"     # [90:96] exon3_high (RC=ATGCCC → 5' mRNA start)
-               + "A" * 10)    # padding
+        seq = (
+            "A" * 10  # [0:10]  padding
+            + "TTAGGG"  # [10:16] exon1_low  (RC=CCCTAA → 3' mRNA end)
+            + "N" * 34  # [16:50] gap
+            + "AAACCC"  # [50:56] exon2_mid  (RC=GGGTTT → middle of mRNA)
+            + "N" * 34  # [56:90] gap
+            + "GGGCAT"  # [90:96] exon3_high (RC=ATGCCC → 5' mRNA start)
+            + "A" * 10
+        )  # padding
 
         genome = {"chr1": seq}
         exon_df = self._exon_df([(10, 16), (50, 56), (90, 96)])
-        cds_df  = self._cds_df([(10, 16), (50, 56), (90, 96)])
+        cds_df = self._cds_df([(10, 16), (50, 56), (90, 96)])
 
         result = annotate_transcript(exon_df, "chr1", "-", genome, cds_df=cds_df)
 
         protein = result["protein"]
         assert protein is not None, "Should produce a protein"
-        assert "*" not in protein, (
-            f"Internal stop in 3-exon - strand protein: {protein!r}"
-        )
+        assert "*" not in protein, f"Internal stop in 3-exon - strand protein: {protein!r}"
         assert protein[0] == "M", f"Protein should start with Met, got: {protein!r}"
         assert protein == "MPGFP", f"Expected MPGFP, got: {protein!r}"
 

@@ -14,10 +14,6 @@ from gmb.pipeline.evidence_filter import (
     filter_helixer_models,
     filter_protein_evidence,
 )
-    filter_chimeras,
-    filter_helixer_models,
-    filter_protein_evidence,
-)
 
 
 @pytest.fixture
