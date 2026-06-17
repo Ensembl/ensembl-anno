@@ -52,8 +52,8 @@ from gmb.pipeline.scoring import select_isoforms
 from gmb.pipeline.subset_utils import (
     add_subset_args,
     build_mapping,
-    remap_genome_seqnames,
     remap_df_seqnames,
+    remap_genome_seqnames,
     resolve_subset_regions,
     subset_df_by_regions,
     write_subset_manifest,
@@ -606,7 +606,7 @@ def main() -> None:
 
             for i, model in enumerate(gene_models):
                 tid = model["id"]
-                new_tid = f"{gene_id}.t{i+1}"
+                new_tid = f"{gene_id}.t{i + 1}"
                 ann = annotations.get(tid)
 
                 # Use annotation exons (same ones used for ORF/CDS mapping) as source of truth
@@ -708,7 +708,7 @@ def main() -> None:
                             "Score": ".",
                             "Strand": gene_strand,
                             "Frame": ".",
-                            "ID": f"{new_tid}.exon{j+1}",
+                            "ID": f"{new_tid}.exon{j + 1}",
                             "Parent": new_tid,
                         }
                     )
@@ -725,7 +725,7 @@ def main() -> None:
                                 "Score": ".",
                                 "Strand": gene_strand,
                                 "Frame": ".",
-                                "ID": f"{new_tid}.cds{j+1}",
+                                "ID": f"{new_tid}.cds{j + 1}",
                                 "Parent": new_tid,
                             }
                         )
@@ -740,7 +740,7 @@ def main() -> None:
                                 "Score": ".",
                                 "Strand": gene_strand,
                                 "Frame": ".",
-                                "ID": f"{new_tid}.5utr{j+1}",
+                                "ID": f"{new_tid}.5utr{j + 1}",
                                 "Parent": new_tid,
                             }
                         )
@@ -755,7 +755,7 @@ def main() -> None:
                                 "Score": ".",
                                 "Strand": gene_strand,
                                 "Frame": ".",
-                                "ID": f"{new_tid}.3utr{j+1}",
+                                "ID": f"{new_tid}.3utr{j + 1}",
                                 "Parent": new_tid,
                             }
                         )
@@ -824,9 +824,7 @@ def main() -> None:
     # Reconcile FASTA with post-processed GFF rows.
     # validate_and_fix_gff3 / dedup_genes may have dropped transcripts after
     # FASTA entries were collected, so filter to surviving mRNA IDs only.
-    surviving_tids = {
-        r["ID"] for r in selected_gff_rows if r.get("Feature") == "mRNA"
-    }
+    surviving_tids = {r["ID"] for r in selected_gff_rows if r.get("Feature") == "mRNA"}
     selected_cdna_fa = [
         rec for rec in selected_cdna_fa if rec.split("\n", 1)[0].lstrip(">") in surviving_tids
     ]

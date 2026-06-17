@@ -30,7 +30,7 @@ def _get_intron_chain(exon_df: pd.DataFrame) -> str:
         return "single-exon"
     ends = exon_df["End"].tolist()
     starts = exon_df["Start"].tolist()
-    return ",".join(f"{ends[i]}-{starts[i+1]}" for i in range(len(starts) - 1))
+    return ",".join(f"{ends[i]}-{starts[i + 1]}" for i in range(len(starts) - 1))
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +220,9 @@ def select_isoforms(
             continue
 
         # Apply configured gating logic
-        if s["protein_support"] or ("Helixer" in s["sources"] and scfg.keep_helixer_without_support):
+        if s["protein_support"] or (
+            "Helixer" in s["sources"] and scfg.keep_helixer_without_support
+        ):
             keep = True
         elif len(s["sources"]) > 1:
             if scfg.require_protein_support_for_single_source and not s["protein_support"]:
@@ -230,7 +232,9 @@ def select_isoforms(
                 keep = True
             else:
                 keep = True
-        elif ("StringTie" in s["sources"] and s["rep"]["exon_count"] > 1) or ("Scallop" in s["sources"] and s["rep"]["exon_count"] > 1):
+        elif ("StringTie" in s["sources"] and s["rep"]["exon_count"] > 1) or (
+            "Scallop" in s["sources"] and s["rep"]["exon_count"] > 1
+        ):
             if not scfg.require_protein_support_for_single_source:
                 keep = True
         elif (
@@ -245,9 +249,7 @@ def select_isoforms(
         # Exception: keep_helixer_without_support takes precedence — a Helixer
         # single-exon gene should not be silently dropped by this gate when the
         # operator has explicitly opted in to keeping Helixer without support.
-        helixer_protected = (
-            "Helixer" in s["sources"] and scfg.keep_helixer_without_support
-        )
+        helixer_protected = "Helixer" in s["sources"] and scfg.keep_helixer_without_support
         if (
             keep
             and scfg.require_support_for_single_exon

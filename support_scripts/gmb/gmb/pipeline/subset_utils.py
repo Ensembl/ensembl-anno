@@ -165,9 +165,9 @@ def remap_df_seqnames(df, mapping, label=""):
 
     if label:
         unmapped = sorted(x for x in unique_before if x not in mapping)
-        print(f"  {label} seqnames remapped: {num_before} unique -> " f"{num_after} unique")
+        print(f"  {label} seqnames remapped: {num_before} unique -> {num_after} unique")
         if unmapped:
-            print(f"  Warning: {label} has unmapped seqnames: " f"{', '.join(unmapped)}")
+            print(f"  Warning: {label} has unmapped seqnames: {', '.join(unmapped)}")
     return df
 
 
@@ -377,7 +377,7 @@ def add_subset_args(parser):
     grp.add_argument(
         "--seqname",
         default=None,
-        help="Single contig/chromosome to subset to " "(after seqname remapping)",
+        help="Single contig/chromosome to subset to (after seqname remapping)",
     )
     grp.add_argument("--region", default=None, help="Region to subset to (seqname:start-end)")
     grp.add_argument(
@@ -392,10 +392,10 @@ def add_subset_args(parser):
         "--sample-bp",
         type=int,
         default=0,
-        help="Expand sampled loci by this many bp " "(default: 0)",
+        help="Expand sampled loci by this many bp (default: 0)",
     )
     grp.add_argument(
-        "--seed", type=int, default=1, help="Random seed for reproducible sampling " "(default: 1)"
+        "--seed", type=int, default=1, help="Random seed for reproducible sampling (default: 1)"
     )
     grp.add_argument(
         "--sample-strategy",
@@ -414,7 +414,7 @@ def add_subset_args(parser):
         grp.add_argument(
             "--seqname-map",
             default=None,
-            help="Custom TSV/CSV seqname mapping " "(from_seqname, to_seqname)",
+            help="Custom TSV/CSV seqname mapping (from_seqname, to_seqname)",
         )
 
 
@@ -448,7 +448,7 @@ def resolve_subset_regions(args, loci_df=None) -> Optional[List[Region]]:
     sample_n = getattr(args, "sample_loci", None)
     if sample_n is not None:
         if loci_df is None or loci_df.empty:
-            print("  Warning: --sample-loci specified but no loci available " "for sampling")
+            print("  Warning: --sample-loci specified but no loci available for sampling")
             return regions if regions else None
 
         sampled = sample_loci(
@@ -459,10 +459,7 @@ def resolve_subset_regions(args, loci_df=None) -> Optional[List[Region]]:
             window_bp=getattr(args, "sample_bp", 0),
         )
         regions.extend(sampled)
-        print(
-            f"  Sampled {len(sampled)} loci (seed={args.seed}, "
-            f"strategy={args.sample_strategy})"
-        )
+        print(f"  Sampled {len(sampled)} loci (seed={args.seed}, strategy={args.sample_strategy})")
 
     return regions if regions else None
 

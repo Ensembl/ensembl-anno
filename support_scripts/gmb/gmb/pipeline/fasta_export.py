@@ -128,7 +128,7 @@ def export_fasta(
                     header = (
                         f">{tid} gene={gene_id} "
                         f"evidence={evidence} "
-                        f"loc={chrom}:{exons[0][0]+1}-{exons[-1][1]}"
+                        f"loc={chrom}:{exons[0][0] + 1}-{exons[-1][1]}"
                         f"({strand})"
                     )
                     cdna_fh.write(f"{header}\n")
@@ -177,9 +177,7 @@ def export_fasta(
 
                     # Write CDS FASTA
                     if cds_fh:
-                        cds_header = (
-                            f">{tid} gene={gene_id} " f"cds_len={len(cds_nuc)}" f"{orf_status}"
-                        )
+                        cds_header = f">{tid} gene={gene_id} cds_len={len(cds_nuc)}{orf_status}"
                         cds_fh.write(f"{cds_header}\n")
                         _write_seq(cds_fh, cds_nuc)
 
@@ -187,9 +185,7 @@ def export_fasta(
                     if prot_fh and protein:
                         if not ecfg.include_partial and (is_partial_5 or is_partial_3):
                             continue
-                        prot_header = (
-                            f">{tid} gene={gene_id} " f"aa_len={len(protein)}" f"{orf_status}"
-                        )
+                        prot_header = f">{tid} gene={gene_id} aa_len={len(protein)}{orf_status}"
                         prot_fh.write(f"{prot_header}\n")
                         _write_seq(prot_fh, protein)
 
@@ -219,4 +215,5 @@ def _write_seq(fh: IO[str], seq: str, line_width: int = 80) -> None:
     Delegates to :func:`gmb.utils.fasta.write_seq`.
     """
     from gmb.utils.fasta import write_seq
+
     write_seq(fh, seq, line_width)

@@ -496,7 +496,7 @@ def split_mega_transcripts(
 
             if was_multi_contig:
                 drop_reasons.append(
-                    (tid, f"multi_contig_strand_split " f"(split into {len(segments)} segments)")
+                    (tid, f"multi_contig_strand_split (split into {len(segments)} segments)")
                 )
 
     # --- Log drop/split reasons ---
@@ -600,6 +600,6 @@ def filter_helixer_models(
     n_after = filtered_exons["transcript_id"].nunique()
     removed = n_input - n_after
     if removed > 0:
-        print(f"    Helixer filter: {n_input} → {n_after} transcripts " f"({removed} removed)")
+        print(f"    Helixer filter: {n_input} → {n_after} transcripts ({removed} removed)")
 
     return filtered_exons, filtered_cds

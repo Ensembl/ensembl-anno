@@ -517,7 +517,7 @@ def _make_orf_label(protein, is_partial_5, is_partial_3):
         parts.append("STOP")
     else:
         parts.append("partial3")
-    return f'ORF:{aa_len}aa {"|".join(parts)}'
+    return f"ORF:{aa_len}aa {'|'.join(parts)}"
 
 
 # ---------------------------------------------------------------------------
@@ -761,7 +761,7 @@ def write_augmented_gff3(input_gff3, annotations, output_path):
                     "Score": ".",
                     "Strand": strand,
                     "Frame": ".",
-                    "ID": f"{tid}.cds{i+1}",
+                    "ID": f"{tid}.cds{i + 1}",
                     "Parent": tid,
                 }
             )
@@ -776,7 +776,7 @@ def write_augmented_gff3(input_gff3, annotations, output_path):
                     "Score": ".",
                     "Strand": strand,
                     "Frame": ".",
-                    "ID": f"{tid}.5utr{i+1}",
+                    "ID": f"{tid}.5utr{i + 1}",
                     "Parent": tid,
                 }
             )
@@ -791,7 +791,7 @@ def write_augmented_gff3(input_gff3, annotations, output_path):
                     "Score": ".",
                     "Strand": strand,
                     "Frame": ".",
-                    "ID": f"{tid}.3utr{i+1}",
+                    "ID": f"{tid}.3utr{i + 1}",
                     "Parent": tid,
                 }
             )
@@ -854,7 +854,7 @@ def main():
         cds_df = None
 
     print(
-        f'  {exon_df["transcript_id"].nunique()} transcripts, '
+        f"  {exon_df['transcript_id'].nunique()} transcripts, "
         f"{len(cds_df) if cds_df is not None else 0} existing CDS features"
     )
 

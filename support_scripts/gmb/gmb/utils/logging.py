@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import IO
 
-
 _LOG_FILE_HANDLE: IO[str] | None = None
 _ORIGINAL_STDOUT = sys.stdout
 _ORIGINAL_STDERR = sys.stderr
@@ -70,7 +69,9 @@ def restore_stdio() -> None:
     _LOG_FILE_HANDLE = None
 
 
-def resolve_log_file(output_dir: str, log_file: str | None, no_log_file: bool = False) -> str | None:
+def resolve_log_file(
+    output_dir: str, log_file: str | None, no_log_file: bool = False
+) -> str | None:
     """Return the effective log-file path for a pipeline run."""
     if no_log_file:
         return None
