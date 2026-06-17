@@ -171,6 +171,38 @@ def remap_df_seqnames(df, mapping, label=""):
     return df
 
 
+def remap_genome_seqnames(genome: dict, mapping: dict, label="Genome") -> dict:
+    """Remap FASTA record names using the same seqname mapping as evidence.
+
+    Evidence rows and genome FASTA records must use the same seqname namespace
+    before ORF/cDNA annotation.  If an assembly report maps GenBank accessions
+    to chromosome names, applying it only to evidence leaves annotations unable
+    to find sequence by chromosome name.
+    """
+    if not genome or not mapping:
+        return genome
+
+    remapped = {}
+    collisions = []
+    for seqname, seq in genome.items():
+        new_seqname = mapping.get(seqname, seqname)
+        if new_seqname in remapped and remapped[new_seqname] != seq:
+            collisions.append((seqname, new_seqname))
+            continue
+        remapped[new_seqname] = seq
+
+    if label:
+        print(f"  {label} seqnames remapped: {len(genome)} unique -> {len(remapped)} unique")
+    if collisions:
+        preview = ", ".join(f"{old}->{new}" for old, new in collisions[:10])
+        raise ValueError(
+            f"{label} seqname mapping is not one-to-one; multiple FASTA records map to "
+            f"the same target name ({preview}). Use a genome FASTA whose headers already "
+            "match the evidence, or a seqname map that preserves unique sequence records."
+        )
+    return remapped
+
+
 # ---------------------------------------------------------------------------
 # Subsetting
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ from gmb.pipeline.subset_utils import (
     load_regions_file,
     parse_region,
     remap_df_seqnames,
+    remap_genome_seqnames,
     sample_loci,
     subset_df_by_regions,
 )
@@ -84,6 +85,27 @@ class TestRemapDfSeqnames:
         df = pd.DataFrame()
         result = remap_df_seqnames(df, {"chr1": "1"})
         assert result.empty
+
+
+class TestRemapGenomeSeqnames:
+    def test_basic_remap(self):
+        genome = {"AM270988.1": "ACGT", "AM270989.1": "TGCA"}
+        mapping = {"AM270988.1": "I", "AM270989.1": "II"}
+        result = remap_genome_seqnames(genome, mapping, label="test")
+        assert result == {"I": "ACGT", "II": "TGCA"}
+
+    def test_unmapped_preserved(self):
+        genome = {"AM270988.1": "ACGT", "unplaced": "NNNN"}
+        mapping = {"AM270988.1": "I"}
+        result = remap_genome_seqnames(genome, mapping)
+        assert result["I"] == "ACGT"
+        assert result["unplaced"] == "NNNN"
+
+    def test_conflicting_duplicate_target_raises(self):
+        genome = {"AM270988.1": "ACGT", "AM270993.2": "TGCA"}
+        mapping = {"AM270988.1": "I", "AM270993.2": "I"}
+        with pytest.raises(ValueError, match="not one-to-one"):
+            remap_genome_seqnames(genome, mapping)
 
 
 class TestSubsetDfByRegions:

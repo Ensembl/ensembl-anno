@@ -184,6 +184,9 @@ class TestIntegration:
         assert os.path.exists(os.path.join(output_dir, "prot.fa"))
         assert os.path.exists(os.path.join(output_dir, "summary.json"))
         assert os.path.exists(os.path.join(output_dir, "summary.tsv"))
+        assert os.path.exists(os.path.join(output_dir, "gmb.log"))
+        with open(os.path.join(output_dir, "gmb.log")) as f:
+            assert "Loading genome" in f.read()
 
     def test_gff3_has_genes(self, tmp_path):
         """GFF3 should contain gene features."""

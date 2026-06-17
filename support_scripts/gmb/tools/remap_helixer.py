@@ -15,6 +15,7 @@ def main():
     args = parse_args()
 
     mapping = {}
+    assigned_to_genbank = {}
     print(f"Parsing mapping from {args.assembly_report}...")
     with open(args.assembly_report) as f:
         for line in f:
@@ -32,6 +33,24 @@ def main():
                 assigned = parts[2]
                 if assigned != "na":
                     mapping[genbank] = assigned
+                    assigned_to_genbank.setdefault(assigned, []).append(genbank)
+
+    collisions = {
+        assigned: genbanks
+        for assigned, genbanks in assigned_to_genbank.items()
+        if len(genbanks) > 1
+    }
+    if collisions:
+        examples = ", ".join(
+            f"{assigned}<-{','.join(genbanks[:3])}"
+            for assigned, genbanks in list(collisions.items())[:5]
+        )
+        raise SystemExit(
+            "Assembly report mapping is not one-to-one; simple seqname remapping "
+            "would collapse multiple sequence records without coordinate offsets "
+            f"({examples}). Use accession seqnames end-to-end, or build true "
+            "pseudomolecules and transform coordinates."
+        )
 
     print(f"Loaded {len(mapping)} mappings: {mapping}")
 

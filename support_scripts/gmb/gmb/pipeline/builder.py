@@ -52,11 +52,13 @@ from gmb.pipeline.scoring import select_isoforms
 from gmb.pipeline.subset_utils import (
     add_subset_args,
     build_mapping,
+    remap_genome_seqnames,
     remap_df_seqnames,
     resolve_subset_regions,
     subset_df_by_regions,
     write_subset_manifest,
 )
+from gmb.utils.logging import resolve_log_file, setup_logging
 
 
 def compute_percentile_guardrails(
@@ -298,6 +300,15 @@ def parse_args():
     parser.add_output_args.add_argument("--output-dir", required=True, help="Output directory")
     parser.add_output_args.add_argument("--gene-prefix", default="GENE", help="Prefix for new IDs")
     parser.add_output_args.add_argument(
+        "--log-file",
+        help="Pipeline log path. Defaults to <output-dir>/gmb.log",
+    )
+    parser.add_output_args.add_argument(
+        "--no-log-file",
+        action="store_true",
+        help="Disable default file logging",
+    )
+    parser.add_output_args.add_argument(
         "--validate-fasta",
         action="store_true",
         help="Run FASTA QC checks at end of pipeline",
@@ -384,14 +395,19 @@ def main() -> None:
     validation, deduplication, and writes final GFF3 / FASTA outputs.
     """
     args = parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    log_file = resolve_log_file(args.output_dir, args.log_file, args.no_log_file)
+    setup_logging(log_file=log_file, capture_stdio=log_file is not None)
+    if log_file:
+        print(f"Logging to {log_file}")
+
     config = load_config(args.config, args.preset)
 
     if args.check_deps:
         check_dependencies(config.protein_validation)
         print("Dependency check passed.")
         sys.exit(0)
-
-    os.makedirs(args.output_dir, exist_ok=True)
 
     print("Loading genome...")
     genome_dict = load_genome(args.genome)
@@ -416,6 +432,17 @@ def main() -> None:
     )
     if mapping:
         print("Applying seqname mapping to evidence...")
+        try:
+            genome_dict = remap_genome_seqnames(genome_dict, mapping)
+        except ValueError as exc:
+            sys.exit(
+                f"ERROR: {exc}\n\n"
+                "This usually means --assembly-report was used for an assembly where "
+                "multiple sequence records are assigned to the same chromosome label. "
+                "Do not use that assembly report as a simple seqname map for GMB build. "
+                "Use accession seqnames end-to-end, or provide a true pseudomolecule "
+                "FASTA/GFF set with transformed coordinates."
+            )
         scallop_exons = remap_df_seqnames(scallop_exons, mapping, "Scallop")
         scallop_cds = remap_df_seqnames(scallop_cds, mapping)
         stringtie_exons = remap_df_seqnames(stringtie_exons, mapping, "StringTie")
