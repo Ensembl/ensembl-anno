@@ -109,9 +109,9 @@ def run_genblast(#pylint:disable=dangerous-default-value
 
         raise ValueError("protein_set must be either 'uniprot' or 'orthodb'")
     if protein_set == "uniprot":
-        genblast_dir = create_dir(output_dir, "uniprot_output")
+        genblast_dir = create_dir(output_dir, "genblast_output/uniprot_output")
     elif protein_set == "orthodb":
-        genblast_dir = create_dir(output_dir, "orthodb_output")
+        genblast_dir = create_dir(output_dir, "genblast_output/orthodb_output")
     output_file = genblast_dir / "annotation.gtf"
     if output_file.exists():
         transcript_count = check_gtf_content(output_file, "transcript")
