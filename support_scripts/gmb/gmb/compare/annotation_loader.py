@@ -474,8 +474,9 @@ def select_transcripts(
     Modes:
       - all: keep everything (default)
       - canonical: keep Ensembl canonical transcript (tag=Ensembl_canonical),
-                   falling back to longest CDS transcript
-      - longest_cds: keep the transcript with the longest total CDS per gene
+                   falling back to longest CDS transcript, then longest transcript
+      - longest_cds: keep the transcript with the longest total CDS per gene,
+                     falling back to longest transcript when no CDS
 
     Returns filtered (genes, mrna, exons, cds).
     """
@@ -497,6 +498,16 @@ def select_transcripts(
     else:
         cds_lengths = pd.Series(dtype="int64")
 
+    # Precompute total exon span per transcript for longest-transcript fallback
+    if not exons.empty:
+        tx_spans = (
+            exons.assign(_len=exons["End"] - exons["Start"])
+            .groupby("transcript_id")["_len"]
+            .sum()
+        )
+    else:
+        tx_spans = pd.Series(dtype="int64")
+
     for gene_id, gene_mrna in mrna.groupby("gene_id"):
         if mode == "canonical":
             canonical = gene_mrna[gene_mrna["tags"].str.contains("Ensembl_canonical", na=False)]
@@ -504,7 +515,7 @@ def select_transcripts(
                 selected_tids.add(canonical.iloc[0]["transcript_id"])
                 continue
 
-        # longest_cds (also fallback for canonical mode)
+        # Tier 1: longest CDS transcript
         gene_tids = gene_mrna["transcript_id"].unique()
         best_tid = None
         best_cds_len = -1
@@ -513,8 +524,20 @@ def select_transcripts(
             if total_cds > best_cds_len:
                 best_cds_len = total_cds
                 best_tid = tid
+
+        # Tier 2: longest transcript by exon span (when no CDS found)
+        if best_cds_len <= 0:
+            best_span = -1
+            for tid in gene_tids:
+                span = tx_spans.get(tid, 0)
+                if span > best_span:
+                    best_span = span
+                    best_tid = tid
+
+        # Tier 3: first transcript (should never be reached)
         if best_tid is None:
             best_tid = gene_mrna.iloc[0]["transcript_id"]
+
         selected_tids.add(best_tid)
 
     mrna = mrna[mrna["transcript_id"].isin(selected_tids)].copy()
