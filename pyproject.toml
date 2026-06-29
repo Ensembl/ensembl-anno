@@ -141,7 +141,7 @@ package-dir = {"" = "src/python"}
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = ["setuptools", "setuptools-scm", "wheel"]
-#requires = ["setuptools"]
+
 
 
 [tool.setuptools.packages.find]
@@ -179,8 +179,3 @@ disable = [
     "wildcard-import"
 ]
 
-#[tool.coverage.run]
-#branch = true
-#source = [
-#    "src/python/ensembl/tools/anno",
-#    ]
