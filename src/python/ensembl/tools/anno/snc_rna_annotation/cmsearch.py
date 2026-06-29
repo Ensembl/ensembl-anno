@@ -67,6 +67,7 @@ def run_cmsearch(  # pylint: disable=too-many-arguments, too-many-locals, too-ma
     cmsearch_bin: Path = Path("cmsearch"),
     rnafold_bin: Path = Path("RNAfold"),
     num_threads: int = 1,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
 ) -> None:
     """
     Search CM(s) against a Rfam database
@@ -84,6 +85,8 @@ def run_cmsearch(  # pylint: disable=too-many-arguments, too-many-locals, too-ma
         :type cmsearch_bin: Path
         :param rnafold_bin: RNAfold software path.
         :type rnafold_bin: Path
+        :param bedtools_bin: Bedtools software path.
+        :type bedtools_bin: str
         :param num_threads: Number of threads.
         :type num_threads: int
 
@@ -151,6 +154,7 @@ def run_cmsearch(  # pylint: disable=too-many-arguments, too-many-locals, too-ma
                 cm_models,
                 seed_descriptions,
                 rnafold_bin,
+                bedtools_bin,
             ),
         )
     pool.close()
@@ -163,6 +167,8 @@ def run_cmsearch(  # pylint: disable=too-many-arguments, too-many-locals, too-ma
         rfam_selected_models_file,
         cm_models,
         seed_descriptions,
+        rnafold_bin,
+        bedtools_bin,
     )
     slice_output_to_gtf(output_dir=rfam_dir, unique_ids=True, file_extension=".rfam.gtf")
     final_gtf = rfam_dir / "annotation.gtf"
@@ -183,6 +189,7 @@ def _handle_failed_jobs(  # pylint: disable=too-many-arguments, too-many-locals,
     cm_models: Dict[str, Dict[str, Any]],
     seed_descriptions: Dict[str, Dict[str, Any]],
     rnafold_bin: Path = Path("RNAfold"),
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """Retry Rfam failed jobs using available cores and memory
 
@@ -232,6 +239,7 @@ def _handle_failed_jobs(  # pylint: disable=too-many-arguments, too-many-locals,
                     seed_descriptions,
                     memory_per_core,
                     rnafold_bin,
+                    bedtools_bin,
                 ),
             )
     pool.close()
@@ -321,6 +329,7 @@ def _multiprocess_cmsearch(  # pylint: disable=too-many-arguments, too-many-loca
     cm_models: Dict[str, Dict[str, Any]],
     seed_descriptions: Dict[str, Dict[str, Any]],
     rnafold_bin: Path = Path("RNAfold"),
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """Run cmsearch on multiprocess on genomic slices
     Args:
@@ -340,7 +349,7 @@ def _multiprocess_cmsearch(  # pylint: disable=too-many-arguments, too-many-loca
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, rfam_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, rfam_dir, bedtools_bin)
     if not seq:
         logger.warning("Empty sequence for slice %s:%s-%s", region_name, start, end)
         return
@@ -569,6 +578,7 @@ def _create_rfam_gtf(  # pylint: disable=too-many-arguments, too-many-locals, to
     genome_file: Path,
     rfam_dir: Path,
     rnafold_bin: Path = Path("RNAfold"),
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """Convert RFam output per single region in gtf format
 
@@ -648,6 +658,7 @@ def _create_rfam_gtf(  # pylint: disable=too-many-arguments, too-many-locals, to
                     int(rnafold_strand),
                     genome_file,
                     rfam_dir,
+                    bedtools_bin,
                 )
                 valid_structure = check_rnafold_structure(rna_seq, rfam_dir, rnafold_bin)
 
@@ -844,6 +855,7 @@ def parse_args():
         default=1,
         help="Number of threads",
     )
+    parser.add_argument("bedtools_bin", type=str, help="bedtools software path")
     return parser.parse_args()
 
 
@@ -868,6 +880,7 @@ def main():
         args.cmsearch_bin,
         args.rnafold_bin,
         args.num_threads,
+        args.bedtools_bin,
     )
 
 

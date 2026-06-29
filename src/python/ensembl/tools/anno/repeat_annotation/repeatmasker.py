@@ -52,6 +52,7 @@ def run_repeatmasker(  # pylint:disable=too-many-arguments, too-many-positional-
     repeatmasker_engine: str = "rmblast",
     species: str = "",
     num_threads: int = 1,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Executes RepeatMasker on the genome slices and stores the
@@ -71,6 +72,8 @@ def run_repeatmasker(  # pylint:disable=too-many-arguments, too-many-positional-
         :type species: str
         :param num_threads: Number of threads.
         :type num_threads: int, default 1
+        :param bedtools_bin: Bedtools executable path.
+        :type bedtools_bin: str, default "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools"#pylint:disable=line-too-long
 
         :return: None
         :rtype: None
@@ -79,7 +82,7 @@ def run_repeatmasker(  # pylint:disable=too-many-arguments, too-many-positional-
     # Use default path if user didn't supply one
     repeatmasker_bin = repeatmasker_bin or Path("RepeatMasker")
 
-    # check_exe(repeatmasker_bin)
+    check_exe(repeatmasker_bin)
     repeatmasker_dir = create_dir(output_dir, "repeatmasker_output")
 
     output_file = repeatmasker_dir / "annotation.gtf"
@@ -117,6 +120,7 @@ def run_repeatmasker(  # pylint:disable=too-many-arguments, too-many-positional-
                 slice_id,
                 genome_file,
                 repeatmasker_dir,
+                bedtools_bin,
             ),
         )
     pool.close()
@@ -131,6 +135,7 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     slice_id: List[str],
     genome_file: Path,
     repeatmasker_dir: Path,
+    bedtools_bin: str,
 ) -> None:
     """
     Run Repeatmasker on genomic slice
@@ -140,6 +145,7 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         slice_id: Slice ID to run RepeatMasker on.
         genome_file : Genome file path.
         repeatmasker_dir : RepeatMasker output directory path.
+        bedtools_bin : Bedtools executable path.
     """
 
     region_name, start, end = slice_id
@@ -149,7 +155,9 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, repeatmasker_dir)
+    seq = get_sequence(
+        region_name, int(start), int(end), 1, genome_file, repeatmasker_dir, bedtools_bin
+    )  # pylint:disable=line-too-long
     slice_file_name = f"{region_name}.rs{start}.re{end}"
     region_file = repeatmasker_dir / f"{slice_file_name}.fa"
     with open(region_file, "w+", encoding="utf8") as region_fasta_out:
@@ -257,6 +265,11 @@ def parse_args():
         default=1,
         help="Number of threads",
     )
+    parser.add_argument(
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
 
 
@@ -281,6 +294,7 @@ def main():
         args.repeatmasker_engine,
         args.species,
         args.num_threads,
+        args.bedtools_bin,
     )
 
 

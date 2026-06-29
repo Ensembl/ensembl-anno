@@ -43,7 +43,7 @@ from ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments
+def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-branches
     genome_file: PathLike,
     output_dir: Path,
     cpg_bin: Path = Path("cpg_lh"),
@@ -51,6 +51,7 @@ def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     cpg_min_gc_content: int = 50,
     cpg_min_oe: float = 0.6,
     num_threads: int = 1,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Run CpG islands on genomic slices
@@ -69,6 +70,8 @@ def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments
         :type cpg_min_oe: float
         :param num_threads: int, number of threads.
         :type num_threads: int
+        :param bedtools_bin: Bedtools executable path.
+        :type bedtools_bin: str
 
         :return: None
         :rtype: None
@@ -103,6 +106,7 @@ def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments
                 cpg_min_length,
                 cpg_min_gc_content,
                 cpg_min_oe,
+                bedtools_bin,
             ),
         )
 
@@ -121,6 +125,7 @@ def _multiprocess_cpg(  # pylint:disable=too-many-arguments, too-many-locals, to
     cpg_min_length: int = 400,
     cpg_min_gc_content: int = 50,
     cpg_min_oe: float = 0.6,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Annotation of CpG islands on multiprocess on genomic slices
@@ -132,6 +137,7 @@ def _multiprocess_cpg(  # pylint:disable=too-many-arguments, too-many-locals, to
         cpg_min_length : Min length of CpG islands
         cpg_min_gc_content : Min GC frequency percentage
         cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
+        bedtools_bin: Bedtools executable path.
     """
     region_name, start, end = slice_id
     logger.info(
@@ -140,7 +146,7 @@ def _multiprocess_cpg(  # pylint:disable=too-many-arguments, too-many-locals, to
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, cpg_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, cpg_dir, bedtools_bin)
     slice_name = f"{region_name}.rs{start}.re{end}"
     # with TemporaryDirectory(dir=cpg_dir) as tmpdirname:
     slice_file = cpg_dir / f"{slice_name}.fa"
@@ -232,6 +238,11 @@ def parse_args():
         help="Min ratio of the observed to expected number of CpG (CpGo/e)",
     )
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
 
 
@@ -256,6 +267,7 @@ def main():
         args.cpg_min_gc_content,
         args.cpg_min_oe,
         args.num_threads,
+        args.bedtools_bin,
     )
 
 

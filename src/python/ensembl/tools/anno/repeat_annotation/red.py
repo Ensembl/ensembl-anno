@@ -58,7 +58,7 @@ def run_red(
     # Use default path if user didn't supply one
     red_bin = red_bin or Path("Red")
 
-    # check_exe(red_bin)
+    check_exe(red_bin)
     red_dir = create_dir(output_dir, "red_output")
     red_mask_dir = create_dir(red_dir, "mask_output")
     red_repeat_dir = create_dir(red_dir, "repeat_output")

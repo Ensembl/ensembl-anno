@@ -172,7 +172,7 @@ def _prlimit_command(prlimit_bin, command_list, virtual_memory_limit) -> list:
 
     prlimit arguments:
     -v, --as[=limits]
-           Address space limit.
+    Address space limit.
     """
     return [str(prlimit_bin), f"-v{virtual_memory_limit}"] + command_list
 

@@ -52,6 +52,7 @@ def run_dust(
     output_dir: Path,
     dust_bin: Path = Path("dustmasker"),
     num_threads: int = 1,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Run Dust on genomic slices with mutiprocessing
@@ -63,6 +64,8 @@ def run_dust(
         :type dust_bin: Path, default dustmasker
         :param num_threads: Number of threads.
         :type num_threads: int, default 1
+        :param bedtools_bin: Bedtools executable path.
+        :type bedtools_bin: str, default "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools"#pylint:disable=line-too-long
 
         :return: None
         :rtype: None
@@ -71,7 +74,7 @@ def run_dust(
     # Use default path if user didn't supply one
     dust_bin = dust_bin or Path("dustmasker")
 
-    # check_exe(dust_bin)
+    check_exe(dust_bin)
     dust_dir = create_dir(output_dir, "dust_output")
     os.chdir(str(dust_dir))
     output_file = dust_dir / "annotation.gtf"
@@ -95,6 +98,7 @@ def run_dust(
                 slice_id,
                 dust_dir,
                 genome_file,
+                bedtools_bin,
             ),
         )
     pool.close()
@@ -109,6 +113,7 @@ def _multiprocess_dust(  # pylint: disable=too-many-locals
     slice_id: List[str],
     dust_dir: Path,
     genome_file: Path,
+    bedtools_bin: str,
 ) -> None:
     """
     Run Dust on multiprocess on genomic slices
@@ -125,7 +130,7 @@ def _multiprocess_dust(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, dust_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, dust_dir, bedtools_bin)
     slice_name = f"{region_name}.rs{start}.re{end}"
     with tempfile.TemporaryDirectory(dir=dust_dir) as tmpdirname:
         slice_file = dust_dir / tmpdirname / f"{slice_name}.fa"
@@ -184,6 +189,11 @@ def parse_args():
         help="Dust executable path",
     )
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
 
 
@@ -205,6 +215,7 @@ def main():
         args.output_dir,
         args.dust_bin,
         args.num_threads,
+        args.bedtools_bin,
     )
 
 

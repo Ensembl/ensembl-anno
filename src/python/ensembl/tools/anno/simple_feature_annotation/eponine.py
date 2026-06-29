@@ -45,7 +45,7 @@ from ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger("__name__")
 
 
-def run_eponine(  # pylint:disable=too-many-arguments, too-many-positional-arguments
+def run_eponine(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     genome_file: PathLike,
     output_dir: Path,
     num_threads: int = 1,
@@ -54,6 +54,7 @@ def run_eponine(  # pylint:disable=too-many-arguments, too-many-positional-argum
         "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar"  # pylint:disable=line-too-long
     ),
     eponine_threshold: float = 0.999,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Run Eponine on genomic slices
@@ -67,15 +68,14 @@ def run_eponine(  # pylint:disable=too-many-arguments, too-many-positional-argum
         :param eponine_bin: Path
         :param num_threads: Number of threads.
         :param num_threads: int, default 1
+        :param eponine_threshold: Eponine threashold.
+        :param eponine_threshold: float, default 0.999
+        :param bedtools_bin: Bedtools executable path.
+        :param bedtools_bin: str, default "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools"# pylint:disable=line-too-long
 
         :return: None
         :rtype: None
     """
-    # Use default path if user didn't supply one
-    eponine_bin = eponine_bin or Path(
-        "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/opt/eponine/libexec/eponine-scan.jar"  # pylint:disable=line-too-long
-    )
-    java_bin = java_bin or Path("java")
 
     check_file(eponine_bin)
     check_exe(java_bin)
@@ -106,12 +106,7 @@ def run_eponine(  # pylint:disable=too-many-arguments, too-many-positional-argum
     for slice_id in slice_ids_per_region:
         pool.apply_async(
             _multiprocess_eponine,
-            args=(
-                eponine_cmd,
-                slice_id,
-                eponine_dir,
-                Path(genome_file),
-            ),
+            args=(eponine_cmd, slice_id, eponine_dir, Path(genome_file), bedtools_bin),
         )
     pool.close()
     pool.join()
@@ -125,6 +120,7 @@ def _multiprocess_eponine(
     slice_id: List[str],
     eponine_dir: Path,
     genome_file: Path,
+    bedtools_bin: str,
 ) -> None:
     """
     Run Eponine on multiprocess on genomic slices
@@ -133,6 +129,7 @@ def _multiprocess_eponine(
         slice_id: List of slice IDs.
         eponine_dir : Eponine output directory path.
         genome_file : Genome file.
+        bedtools_bin: Bedtools executable path.
     """
     region_name, start, end = slice_id
     logger.info(
@@ -141,7 +138,7 @@ def _multiprocess_eponine(
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, eponine_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, eponine_dir, bedtools_bin)
     slice_name = f"{region_name}.rs{start}.re{end}"
     # with tempfile.TemporaryDirectory(dir=eponine_dir) as tmpdirname:
     slice_file = eponine_dir / f"{slice_name}.fa"
@@ -215,6 +212,11 @@ def parse_args():
     parser.add_argument(
         "--eponine_threashold", type=float, default=0.999, help="Eponine threashold"
     )  # pylint:disable=line-too-long
+    parser.add_argument(
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
 
 
@@ -238,6 +240,7 @@ def main():
         Path(args.java_bin),
         Path(args.eponine_bin),
         args.eponine_threashold,
+        args.bedtools_bin,
     )
 
 

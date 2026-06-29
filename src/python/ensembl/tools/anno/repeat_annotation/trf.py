@@ -57,6 +57,7 @@ def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     pi: int = 10,
     minscore: int = 40,
     maxperiod: int = 500,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Executes TRF on genomic slices
@@ -82,6 +83,8 @@ def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments
             :type minscore: int, default 40
             :param maxperiod: Maximum period size to report.
             :type maxperiod: int, default 500
+            :param bedtools_path: Bedtools executable path.
+            :type bedtools_path: str, default "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools"#pylint:disable=line-too-long
 
             :return: None
             :rtype: None
@@ -90,7 +93,7 @@ def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     # Use default path if user didn't supply one
     trf_bin = trf_bin or Path("trf")
 
-    # check_exe(trf_bin)
+    check_exe(trf_bin)
     trf_dir = create_dir(output_dir, "trf_output")
     os.chdir(str(trf_dir))
     output_file = trf_dir / "annotation.gtf"
@@ -126,13 +129,7 @@ def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments
     for slice_id in slice_ids_per_region:
         pool.apply_async(
             _multiprocess_trf,
-            args=(
-                trf_cmd,
-                slice_id,
-                trf_dir,
-                trf_output_extension,
-                genome_file,
-            ),
+            args=(trf_cmd, slice_id, trf_dir, trf_output_extension, genome_file, bedtools_bin),
         )
     pool.close()
     pool.join()
@@ -141,12 +138,13 @@ def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments
         gtf_file.unlink()
 
 
-def _multiprocess_trf(
+def _multiprocess_trf(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     trf_cmd: List[str],
     slice_id: List[str],
     trf_dir: Path,
     trf_output_extension: Path,
     genome_file: Path,
+    bedtools_bin: str,
 ) -> None:
     """
     Run TRF on multiprocess on genomic slices
@@ -164,19 +162,19 @@ def _multiprocess_trf(
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, trf_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, trf_dir, bedtools_bin)
     slice_name = f"{region_name}.rs{start}.re{end}"
-    logger.info("slice_file %s",slice_name)
+    logger.info("slice_file %s", slice_name)
     with tempfile.TemporaryDirectory(dir=trf_dir) as tmpdirname:
         tmpdir = Path(tmpdirname)
         slice_file = tmpdir / f"{slice_name}.fa"
-        logger.info("slice FILE %s",tmpdir)
-        #slice_file = trf_dir / tmpdirname / f"{slice_name}.fa"
+        logger.info("slice FILE %s", tmpdir)
+        # slice_file = trf_dir / tmpdirname / f"{slice_name}.fa"
         with open(slice_file, "w+", encoding="utf8") as region_out:
             region_out.write(f">{region_name}\n{seq}\n")
         region_results = trf_dir / f"{slice_name}.trf.gtf"
         # TRF writes to the current dir, so swtich to the output dir for it
-        #os.chdir(str(trf_dir))
+        # os.chdir(str(trf_dir))
         output_file = Path(f"{slice_file}{trf_output_extension}")
         trf_cmd = trf_cmd.copy()
         trf_cmd[1] = str(slice_file)
@@ -260,6 +258,11 @@ def parse_args():
     )  # pylint:disable=line-too-long
     parser.add_argument("--maxperiod", type=int, default=500, help="Maximum period size to report")
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
 
 
@@ -288,6 +291,7 @@ def main():
         args.pi,
         args.minscore,
         args.maxperiod,
+        args.bedtools_bin,
     )
 
 

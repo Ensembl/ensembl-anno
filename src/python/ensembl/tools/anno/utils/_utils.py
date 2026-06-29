@@ -1,4 +1,4 @@
-# pylint: disable=missing-module-docstring
+# pylint: disable=missing-module-docstring, pointless-string-statement
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -327,12 +327,16 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                             "Feature type not recognised, will skip. Feature type: %s",
                             values[2],
                         )
-import re
+
 
 def safe_filename(text: str) -> str:
+    """Make a string safe for use as a filename by \
+        replacing non-alphanumeric characters with \
+        underscores and collapsing multiple underscores."""
     text = re.sub(r"[^A-Za-z0-9._-]+", "_", text)
     text = re.sub(r"_+", "_", text)
     return text.strip("_.")
+
 
 def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     seq_region: str,
@@ -341,6 +345,7 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
     strand: int,
     fasta_file: Path,
     output_dir: Path,
+    bedtools_bin: str,  # pylint: disable=too-many-arguments,too-many-positional-arguments
 ) -> str:
     """
     Creates a tempfile and writes the bed info to it based
@@ -365,13 +370,14 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
         "get_sequence %s",
         f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}",  # pylint:disable=line-too-long
     )
-    #seq_region = safe_filename(seq_region)
+    # seq_region = safe_filename(seq_region)
+    """
     bed_file = Path(output_dir) / f"{seq_region}.{start}.{end}.1.bed"
     try:
         bed_file.write_text(f"{seq_region}\t{start}\t{end}\n", encoding="utf-8")
 
         bedtools_command = [
-            "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+            bedtools_path,
             "getfasta",
             "-fi",
             str(fasta_file),
@@ -402,14 +408,14 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
 
         logger.info("sequence %s", sequence)
         return sequence
-    except Exception as e:
+    except Exception as e: # pylint:disable=unused-variable
         logger.exception(
-        "Failed get_sequence region=%s start=%s end=%s fasta=%s bed=%s",
-        seq_region,
-        start,
-        end,
-        fasta_file,
-        bed_file,
+            "Failed get_sequence region=%s start=%s end=%s fasta=%s bed=%s",
+            seq_region,
+            start,
+            end,
+            fasta_file,
+            bed_file,
         )
 
         if bed_file.exists():
@@ -421,15 +427,13 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
         if bed_file.exists():
             bed_file.unlink()
     """
+
     help_res = subprocess.run(
-                ["/opt/linuxbrew/bin/bedtools", "getfasta", "-h"],
-                    capture_output=True,
-                        text=True,
-                        )
+        [bedtools_bin, "getfasta", "-h"], capture_output=True, text=True, check=True
+    )
     logger.info("bedtools getfasta help returncode=%s", help_res.returncode)
     logger.info("bedtools getfasta help stdout=%s", help_res.stdout)
     logger.info("bedtools getfasta help stderr=%s", help_res.stderr)
-    
 
     with tempfile.NamedTemporaryFile(
         mode="w+t", delete=False, dir=str(output_dir)
@@ -437,7 +441,7 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
         bed_temp_file.writelines(f"{seq_region}\t{start}\t{end}")
         bed_temp_file.close()
     bedtools_command = [
-        "/opt/linuxbrew/bin/bedtools",
+        bedtools_bin,  # "/opt/linuxbrew/bin/bedtools",
         "getfasta",
         "-fi",
         str(fasta_file),
@@ -458,10 +462,10 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
                 sequence = line.rstrip()
             else:
                 sequence = reverse_complement(line.rstrip())
-    logging.info("sequence %s",sequence)
+            logging.info("sequence %s", sequence)
     os.remove(bed_temp_file.name)
     return sequence  # pylint:disable=possibly-used-before-assignment
-    """
+
 
 def reverse_complement(sequence: str) -> str:
     """
