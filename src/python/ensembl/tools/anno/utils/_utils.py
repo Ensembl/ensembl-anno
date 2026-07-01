@@ -371,13 +371,13 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
         f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}",  # pylint:disable=line-too-long
     )
     # seq_region = safe_filename(seq_region)
-    """
+    
     bed_file = Path(output_dir) / f"{seq_region}.{start}.{end}.1.bed"
     try:
         bed_file.write_text(f"{seq_region}\t{start}\t{end}\n", encoding="utf-8")
 
         bedtools_command = [
-            bedtools_path,
+            bedtools_bin,
             "getfasta",
             "-fi",
             str(fasta_file),
@@ -465,7 +465,7 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
             logging.info("sequence %s", sequence)
     os.remove(bed_temp_file.name)
     return sequence  # pylint:disable=possibly-used-before-assignment
-
+    """
 
 def reverse_complement(sequence: str) -> str:
     """
