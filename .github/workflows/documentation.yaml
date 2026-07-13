@@ -11,16 +11,16 @@ permissions:
   id-token: write
 
 concurrency:
-group: pages
-cancel-in-progress: true
-  environment:
-  name: github-pages
-  url: ${{ steps.deployment.outputs.page_url }}
+  group: pages
+  cancel-in-progress: true
+  
 
 jobs:
   docs:
     runs-on: ubuntu-latest
-
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
