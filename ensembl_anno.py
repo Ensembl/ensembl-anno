@@ -733,6 +733,7 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
             genome_file=genome_file,
             output_dir=work_dir,
             rfam_accession_file=rfam_accessions_file,
+            num_threads=num_threads,
         )
 
     if analysis_flags["run_trnascan"]:
