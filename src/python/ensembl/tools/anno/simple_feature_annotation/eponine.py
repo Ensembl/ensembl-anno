@@ -77,7 +77,7 @@ def run_eponine(  # pylint:disable=too-many-arguments, too-many-positional-argum
         :rtype: None
     """
 
-    check_file(eponine_bin)
+    check_file(Path(eponine_bin))
     check_exe(java_bin)
     eponine_dir = create_dir(output_dir, "eponine_output")
     # os.chdir(str(eponine_dir))
