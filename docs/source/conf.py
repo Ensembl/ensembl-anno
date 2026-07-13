@@ -129,8 +129,8 @@ html_theme_options = {
 
 html_theme_options = {
     "logo": {
-        "image_light": "_static/ensembl_anno_logo.png",
-        "image_dark": "_static/ensembl_anno_logo.png",
+        "image_light": "_static/ebang.png",
+        "image_dark": "_static/ebang.png",
         "text": "Ensembl Anno",
     },
 }

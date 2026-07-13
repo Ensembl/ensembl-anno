@@ -15,9 +15,10 @@
 """
 tRNAscan-SE identifies 99-100% of transfer RNA genes in DNA sequence while
 giving less than one false positive per 15 gigabases.
-Lowe TM, Eddy SR: tRNAscan-SE: a program for improved detection of transfer
-RNA genes in genomic sequence.
-Nucleic Acids Res. 1997, 25(5):955-64. [PMID: 9023104]
+References
+----------
+:cite:`trnascan`
+
 """
 __all__ = ["run_trnascan"]
 

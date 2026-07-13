@@ -14,8 +14,9 @@
 # limitations under the License.
 """
 Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
-Benson G. Tandem repeats finder: a program to analyze DNA sequences.
-Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
+References
+----------
+:cite:`trf`
 """
 __all__ = ["run_trf"]
 

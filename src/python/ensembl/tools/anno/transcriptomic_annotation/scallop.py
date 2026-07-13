@@ -23,10 +23,9 @@ Scallop's algorithmic approach allows it to efficiently reconstruct transcript s
 and quantify their expression levels, making it a valuable resource for studying gene
 expression and transcriptome analysis.
 
-Shao M, Kingsford C. Accurate assembly of transcripts through phase-preserving graph
-decomposition. Nat Biotechnol.
-2017 Dec;35(12):1167-1169. doi: 10.1038/nbt.4020. Epub 2017 Nov 13. PMID: 29131147;
-PMCID: PMC5722698.
+References
+----------
+:cite:`scallop`
 """
 
 __all__ = ["run_scallop"]

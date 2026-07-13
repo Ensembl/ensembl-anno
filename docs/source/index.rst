@@ -1,9 +1,6 @@
 
 ---
 
-# docs/index.rst
-
-```rst
 Ensembl Anno
 ============
 

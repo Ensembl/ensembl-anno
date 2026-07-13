@@ -15,9 +15,9 @@
 """
 Eponine is a probabilistic method for detecting transcription start sites (TSS)
 in mammalian genomic sequence, with good specificity and excellent positional accuracy.
-Down TA, Hubbard TJ. Computational detection and location of transcription start sites
-in mammalian genomic DNA. Genome Res. 2002 Mar;12(3):458-61. doi: 10.1101/gr.216102.
-PMID: 11875034; PMCID: PMC155284.
+References
+----------
+:cite:`eponine`
 """
 __all__ = ["run_eponine"]
 

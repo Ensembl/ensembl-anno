@@ -27,9 +27,9 @@ valuable insights into the evolutionary relationships and functional conservatio
 of genes in different organisms.
 
 
-She, R., Chu, J.S., Uyar, B., Wang, J., Wang, K., and Chen, N. (2011).
-GenBlastA: enabling BLAST to identify homologous gene sequences.
-Genome Res., 21(5): 936-949.
+References
+----------
+:cite:`genblast`
 """
 __all__ = ["run_genblast"]
 

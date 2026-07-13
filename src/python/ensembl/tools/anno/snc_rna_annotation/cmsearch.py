@@ -23,8 +23,9 @@ across species, essential to identify and study them.
 Covariance models (CMs) can represent conserved RNA secondary structures as well as conserved
 sequence patterns. This makes them well-suited for detecting sncRNAs in sequence databases.
 
-Nawrocki, E. P., Kolbe, D. L., & Eddy, S. R. (2009). Infernal 1.0: inference of RNA alignments.
-Bioinformatics, 25(10), 1335-1337.
+References
+----------
+:cite:`infernal`
 """
 __all__ = ["run_cmsearch"]
 
