@@ -92,7 +92,7 @@ def run_red(
             sym_link_genome_cmd,
         )
         # subprocess.run(["ln", "-s", genome_file, red_genome_dir])
-        red_genome_file.symlink_to(genome_file)#.resolve()
+        red_genome_file.symlink_to(genome_file)  # .resolve()
     try:
         if red_genome_file.exists():
             logger.info("Running Red")
