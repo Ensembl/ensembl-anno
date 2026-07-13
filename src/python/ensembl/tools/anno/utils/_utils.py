@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import errno
-import io
 import logging
 import os
 from os import PathLike
@@ -24,7 +23,6 @@ import random
 import re
 import subprocess
 import shutil
-import tempfile
 from typing import Dict, List
 
 logger = logging.getLogger("__name__." + __name__)
