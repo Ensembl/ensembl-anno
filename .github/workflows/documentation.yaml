@@ -59,10 +59,7 @@ jobs:
         with:
           path: docs/build/html
 
-      #- name: Deploy to GitHub Pages
-      #  id: deployment
-      #  if: github.event_name == 'push' && github.ref == 'refs/heads/feature/github_actions'
-      #  uses: actions/deploy-pages@v4
+
       - name: Publish documentation
         if: github.event_name == 'push' && github.ref == 'refs/heads/feature/github_actions'
         uses: peaceiris/actions-gh-pages@v4
