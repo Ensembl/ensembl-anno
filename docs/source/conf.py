@@ -51,7 +51,7 @@ source_suffix = {
     ".md": "markdown",
 }
 
-html_logo = "_static/images/ensembl_anno_logo.png"
+html_logo = "_static/ensembl_anno_logo.png"
 
 extensions = [
     "myst_parser",
@@ -82,7 +82,6 @@ nitpick_ignore_regex = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "pathlib": ("https://docs.python.org/3", None),
 }
 
 # Defining autodoc functionality
