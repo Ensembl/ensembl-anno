@@ -537,7 +537,7 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     num_threads = args.num_threads
     # masked_genome_file = genome_file  # This will be updated later if Red is run
     red_path = optional_path(args.red_path) or config["red"]["software"]
-    geneblast_path = optional_path(args.genblast_path) or  config["genblast"]["software"]
+    geneblast_path = optional_path(args.genblast_path) or config["genblast"]["software"]
     convert2blastmask_path = (
         optional_path(args.convert2blastmask_path) or config["convert2blastmask"]["software"]
     )
