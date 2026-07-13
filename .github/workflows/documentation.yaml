@@ -59,7 +59,15 @@ jobs:
         with:
           path: docs/build/html
 
-      - name: Deploy to GitHub Pages
-        id: deployment
+      #- name: Deploy to GitHub Pages
+      #  id: deployment
+      #  if: github.event_name == 'push' && github.ref == 'refs/heads/feature/github_actions'
+      #  uses: actions/deploy-pages@v4
+      - name: Publish documentation
         if: github.event_name == 'push' && github.ref == 'refs/heads/feature/github_actions'
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: docs/build/html
+          force_orphan: true  
