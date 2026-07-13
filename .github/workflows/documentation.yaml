@@ -6,7 +6,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+group: pages
+cancel-in-progress: true
+  environment:
+  name: github-pages
+  url: ${{ steps.deployment.outputs.page_url }}
 
 jobs:
   docs:
@@ -15,6 +24,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,7 +46,7 @@ jobs:
             --separate \
             -o docs/source/api/generated \
             src/python/ensembl/tools/anno
-
+      
       - name: Build HTML documentation
         run: |
           sphinx-build \
@@ -49,11 +61,12 @@ jobs:
             docs/source \
             docs/build/linkcheck
 
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/github_actions'
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: docs/build/html
-          force_orphan: true
+          path: docs/build/html
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/github_actions'
+        uses: actions/deploy-pages@v4
