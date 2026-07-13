@@ -16,8 +16,9 @@
 DustMasker is a program that identifies and masks out low complexity
 parts of a genome using a new and improved DUST algorithm.
 
-Morgulis A, Gertz EM, Schaffer AA, Agarwala R. A Fast and Symmetric
-DUST Implementation to Mask Low-Complexity DNA Sequences.
+References
+----------
+:cite:`dust`
 """
 __all__ = ["run_dust"]
 

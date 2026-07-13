@@ -15,9 +15,10 @@
 """
 Red is the first repeat-detection tool capable of labeling its training data
 and training itself automatically on an entire genome.
-Girgis, H.Z. Red: an intelligent, rapid, accurate tool for detecting repeats
-de-novo on the genomic scale. BMC Bioinformatics 16, 227 (2015).
-https://doi.org/10.1186/s12859-015-0654-5
+
+References
+----------
+:cite:`red`
 """
 __all__ = ["run_red"]
 
@@ -91,7 +92,7 @@ def run_red(
             sym_link_genome_cmd,
         )
         # subprocess.run(["ln", "-s", genome_file, red_genome_dir])
-        red_genome_file.symlink_to(genome_file)
+        red_genome_file.symlink_to(genome_file)#.resolve()
     try:
         if red_genome_file.exists():
             logger.info("Running Red")

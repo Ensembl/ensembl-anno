@@ -371,7 +371,6 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
         f"{seq_region}\t{start}\t{end}\t{strand}\t{fasta_file}\t{output_dir}",  # pylint:disable=line-too-long
     )
     # seq_region = safe_filename(seq_region)
-    
     bed_file = Path(output_dir) / f"{seq_region}.{start}.{end}.1.bed"
     try:
         bed_file.write_text(f"{seq_region}\t{start}\t{end}\n", encoding="utf-8")
@@ -408,7 +407,7 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
 
         logger.info("sequence %s", sequence)
         return sequence
-    except Exception as e: # pylint:disable=unused-variable
+    except Exception as e:  # pylint:disable=unused-variable
         logger.exception(
             "Failed get_sequence region=%s start=%s end=%s fasta=%s bed=%s",
             seq_region,
@@ -466,6 +465,7 @@ def get_sequence(  # pylint: disable=too-many-arguments,too-many-positional-argu
     os.remove(bed_temp_file.name)
     return sequence  # pylint:disable=possibly-used-before-assignment
     """
+
 
 def reverse_complement(sequence: str) -> str:
     """

@@ -15,7 +15,10 @@
 """
 RepeatMasker is a program that screens DNA sequences for interspersed
 repeats and low complexity DNA sequences.
-Smit, AFA, Hubley, R & Green, P. RepeatMasker Open-4.0
+
+References
+----------
+:cite:`repeatmasker`
 """
 
 __all__ = ["run_repeatmasker"]

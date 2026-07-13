@@ -20,8 +20,9 @@ approximate matches between sequences,
 allowing it to efficiently align long sequences against reference
 genomes or other sequences.
 
-Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences.
-Bioinformatics, 34(18), 3094-3100.
+References
+----------
+:cite:`minimap2`
 """
 
 __all__ = ["run_minimap2"]
