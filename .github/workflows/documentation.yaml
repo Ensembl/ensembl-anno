@@ -23,13 +23,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -37,16 +37,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[docs]"
-
-      - name: Generate API documentation
+      - name: Generate analysis documentation
         run: |
-          sphinx-apidoc \
-            --force \
-            --module-first \
-            --separate \
-            -o docs/source/api/generated \
-            src/python/ensembl/tools/anno
-      
+            python docs/generate_analysis_rst.py
       - name: Build HTML documentation
         run: |
           sphinx-build \

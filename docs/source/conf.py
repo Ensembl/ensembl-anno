@@ -51,7 +51,7 @@ source_suffix = {
     ".md": "markdown",
 }
 
-html_logo = "_static/ensembl_anno_logo.png"
+html_logo = "_static/ebang.png"
 
 extensions = [
     "myst_parser",
@@ -64,7 +64,9 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinxcontrib.bibtex",
 ]
+bibtex_bibfiles = ["references.bib"]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 highlight_language = "bash"

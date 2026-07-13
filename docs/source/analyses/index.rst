@@ -41,7 +41,7 @@ Transcriptomic annotation
    star
    stringtie
    scallop
-   minimap2
+   minimap
 
 Protein annotation
 ------------------
@@ -51,10 +51,3 @@ Protein annotation
 
    genblast
 
-Gene set construction
----------------------
-
-.. toctree::
-   :maxdepth: 1
-
-   finalisation
