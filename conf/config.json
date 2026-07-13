@@ -49,6 +49,9 @@
         "software" : "minimap2",
         "paftools_path" : "paftools.js"
     },
+    "paftools" : {
+      "software" : "paftools.js"
+    },
     "red": {
         "software": "Red"
     },
@@ -60,8 +63,17 @@
         "software": "RepeatMasker",
         "engine" : "rmblast"
     },
+    "samtools" : {
+      "software" : "samtools"
+    },
     "star": {
         "software": "STAR"
+    },
+    "stringtie": {
+      "software": "stringtie"
+    },
+    "scallop": {
+      "software": "scallop"
     },
     "trf": {
         "software": "trf",
