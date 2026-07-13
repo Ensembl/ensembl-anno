@@ -15,77 +15,33 @@
 # pyproject.toml -- Ensembl Anno project configuration
 
 [project]
-# This is the name of your project. The first time you publish this
-# package, this name will be registered for you. It will determine how
-# users can install this project, e.g.:
-#
-# $ pip install sampleproject
-#
-# And where it will live on PyPI: https://pypi.org/project/sampleproject/
-#
-# There are some restrictions on what makes a valid project name
-# specification here:
-# https://packaging.python.org/specifications/core-metadata/#name
-name = "ensembl-anno"  # Required
+name = "ensembl-anno" 
 
 # Versions should comply with PEP 440:
-version = "0.1"  # Required
+version = "0.1.0"  # Required
 
 description = "Ensembl Anno - pipeline to provide genome annotation"
 
-# This is an optional longer description of your project that represents
-# the body of text which users will see when they visit PyPI.
-#
-readme = "README.md" 
-
-# Specify which Python versions the project support; 'pip install' will check this
-# and refuse to install the project if the version does not match. See
-# https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
 requires-python = ">=3.10"
-
-# This is either text indicating the license for the distribution, or a file
-# that contains the license
-# https://packaging.python.org/en/latest/specifications/core-metadata/#license
-license = {file = "LICENSE"}
-
-# This field adds keywords for your project which will appear on the
-# project page. What does your project relate to?
-#
-keywords = ["ensembl", 
-"annotation", 
-"genetics",
-"bioinformatics",
-"setuptools"]  
-
 authors = [
-        { name = "Ensembl", email = "dev@ensembl.org" } 
+    {name = "Ensembl", email = "dev@ensembl.org"},
 ]
-
 maintainers = [
-        { name = "Ensembl", email = "dev@ensembl.org" } 
+    {name = "Ensembl", email = "dev@ensembl.org"},
+]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Bio-Informatics"
 ]
 
 
-
-# This field lists other packages that your project depends on to run.
-# Any package you put here will be installed by pip when your project is
-# installed, so they must be valid existing projects.
-#
-# For an analysis of this field vs pip's requirements files see:
-# https://packaging.python.org/discussions/install-requires-vs-requirements/
-dependencies = [ # Optional
-
+dependencies = [ 
     "psutil",
 ]
 
-# List additional groups of dependencies here (e.g. development
-# dependencies). Users will be able to install these using the "extras"
-# syntax, for example:
-#
-#   $ pip install sampleproject[dev]
-#
-# Similar to `dependencies` above, these must be valid existing
-# projects.
+
 [project.optional-dependencies] # Optional
 cicd = [
     "black",
@@ -104,9 +60,12 @@ dev = [
     "pytest",
     "sphinx",
 ]
-doc = [
+docs = [
     "mock",
-    "sphinx",
+    "sphinx>=7",
+    "pydata-sphinx-theme",
+    "myst-parser",
+    "sphinxcontrib-bibtex",
 ]
 
 [project.urls]  
@@ -152,12 +111,7 @@ where = ["src/python"]
 line-length = 110
 
 
-####TOADD#####
-#[tool.pytest.ini_options]
-# CITest project is on hold and it needs to be updated before resuming its unit tests
-#addopts = "-v --tb=native --server=mysql://ensadmin:$ENSADMIN_PSW@mysql-ens-compara-prod-1:4485/ --ignore=src/python/tests/test_citest.py"
-#testpaths = ["src/python/tests"]
-#
+
 [tool.mypy]
 #mypy_path = "src/python"
 explicit_package_bases = true

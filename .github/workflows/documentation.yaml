@@ -1,33 +1,59 @@
-name: Docs
-on: [push, pull_request, workflow_dispatch]
+name: Documentation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
 permissions:
-    contents: write
+  contents: write
+
 jobs:
   docs:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.8
+          python-version: "3.11"
 
-      - name: Install Dependencies
+      - name: Install package and documentation dependencies
         run: |
-          pip install -e.
-          pip install sphinx sphinx_rtd_theme
+          python -m pip install --upgrade pip
+          pip install -e ".[docs]"
 
-      - name: Sphinx Build
+      - name: Generate API documentation
         run: |
-          sphinx-build -b html docs/source docs/build
-          sphinx-build docs/source  -b linkcheck -d docs/build/doctrees docs/build/html
+          sphinx-apidoc \
+            --force \
+            --module-first \
+            --separate \
+            -o docs/source/api/generated \
+            src/python/ensembl/tools/anno
+
+      - name: Build HTML documentation
+        run: |
+          sphinx-build \
+            -b html \
+            docs/source \
+            docs/build/html
+
+      - name: Check links
+        run: |
+          sphinx-build \
+            -b linkcheck \
+            docs/source \
+            docs/build/linkcheck
+
       - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/github_actions'
         uses: peaceiris/actions-gh-pages@v3
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev/python_repo' }}
         with:
-          publish_branch: gh-pages
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build
+          publish_branch: gh-pages
+          publish_dir: docs/build/html
           force_orphan: true

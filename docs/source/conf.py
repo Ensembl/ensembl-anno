@@ -23,104 +23,130 @@
 import os
 import sys
 import datetime
+from importlib.metadata import version as pkg_version
 
 sys.path.insert(0, os.path.abspath("../../src/python"))
 
-print(sys.executable)
 
 # -- Project information -----------------------------------------------------
 project = "ensembl-anno"
 author = "ensembl@dev.org"
-
-# The version info for the project you're documenting, acts as replacement for
-# |version| and |release|, also used in various other places throughout the
-# built documents.
-#
-# The short X.Y version.
-version = "0.1"
-# The full version, including alpha/beta/rc tags.
-release = "0.1"
-
 copyright_owner = "EMBL-European Bioinformatics Institute"
 copyright_dates = "[2016-%d]" % datetime.datetime.now().year
 copyright = copyright_dates + " " + copyright_owner
 html_baseurl = "https://ensembl.github.io/ensembl-anno/"
 
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
+try:
+    release = pkg_version("ensembl-anno")
+except Exception:
+    release = "development"
 
-source_suffix = {".rst": "restructuredtext"}
+version = ".".join(release.split(".")[:2])
 
 # The master toctree document.
 master_doc = "index"
 
-extensions = [
-    "sphinx.ext.napoleon",
-    "sphinx.ext.duration",
-    "sphinx.ext.doctest",
-    "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
-    "sphinx.ext.viewcode",
-]
-# Set napoleon_use_param to True to format parameters as in the docstring
-napoleon_use_param = True
-
-# A list of ignored prefixes for module index sorting.
-modindex_common_prefix = []
-
-# Defining autodoc functionality
-autodoc_default_options = {
-    "member-order": "alphabetical",
-    "undoc-members": False,
-    "exclude-members": "__weakref__",
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
 }
-suppress_warnings = [
-    "docstring",
-    "ref.citation",  # Example: Suppress warnings about citations
-    "image.nonlocal_uri",  # Example: Suppress warnings about non-local images
-    # Add other warnings to suppress as needed
+
+html_logo = "_static/images/ensembl_anno_logo.png"
+
+extensions = [
+    "myst_parser",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.doctest",
+    "sphinx.ext.duration",
+    "sphinx.ext.githubpages",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
 ]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
+highlight_language = "bash"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+nitpicky = True
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
-# html_theme = 'alabaster'
-html_theme = "agogo"
-html_theme_options = {
-    "bodyfont": "Garamond, Arial, serif",
-    "headerfont": "Arial, Helvetica, serif",
-    "headerlinkcolor": "#33d6ff",
-    "pagewidth": "70em",
-    "documentwidth": "50em",
-    "rightsidebar": True,
-    "bgcolor": "#009999",
-    "headerbg": "#009999",
-    "footerbg": "#e6fff9",
-    "linkcolor": "green",
+nitpick_ignore_regex = [
+    ("py:class", r"pathlib\..*"),
+]
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "pathlib": ("https://docs.python.org/3", None),
 }
 
+# Defining autodoc functionality
+
+autodoc_default_options = {
+    "members": True,
+    "member-order": "bysource",
+    "undoc-members": False,
+    "show-inheritance": True,
+    "special-members": "__init__, __call__",
+}
+
+autodoc_typehints = "description"
+autodoc_typehints_format = "short"
+
+autosectionlabel_prefix_document = True
+autosummary_generate = True  # Turn on sphinx.ext.autosummary
+
+# Set napoleon_use_param to True to format parameters as in the docstring
+napoleon_use_param = True
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+autosummary_imported_members = False
+
+
+# -- Options for HTML output -------------------------------------------------
+
+html_theme = "pydata_sphinx_theme"
+
+html_theme_options = {
+    "navigation_depth": 3,
+    "show_nav_level": 2,
+    "show_toc_level": 2,
+    "navbar_align": "left",
+    "secondary_sidebar_items": [
+        "page-toc",
+        "edit-this-page",
+    ],
+}
+
+html_theme_options = {
+    "logo": {
+        "image_light": "_static/ensembl_anno_logo.png",
+        "image_dark": "_static/ensembl_anno_logo.png",
+        "text": "Ensembl Anno",
+    },
+}
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = []
+html_static_path = ["_static"]
+
+html_css_files = [
+    "custom.css",
+]
 
 
-# One entry per manual page. List of tuples
-# (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "ensembl-anno", "Ensembl Anno Base Library Documentation", [author], 1)]
+suppress_warnings = [
+    "docstring",
+    "ref.citation",  # Example: Suppress warnings about citations
+    "image.nonlocal_uri",  # Example: Suppress warnings about non-local images
+    # Add other warnings to suppress as needed
+]
+
 
 # -- Options for LaTeX output ---------------------------------------------
 
