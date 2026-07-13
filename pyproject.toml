@@ -44,7 +44,7 @@ dependencies = [
 
 [project.optional-dependencies] # Optional
 cicd = [
-    "black",
+    "black==25.11.0",
     "coverage",
     "mypy",
     "pylint",
