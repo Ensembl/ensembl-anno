@@ -9,6 +9,16 @@ Supports:
 The loader auto-detects format from file content, parses into a normalised
 internal representation, and returns genes/transcripts/exons/CDS DataFrames
 with consistent columns ready for comparison.
+
+Cross-chromosome ID collisions: some tools (notably Tiberius) restart gene
+numbering ("g1", "g2", ...) independently on every chromosome instead of
+emitting genome-wide unique IDs. The loader detects gene_id/transcript_id
+values that occur on more than one seqid and namespaces them internally
+(e.g. "1:g1" vs "2:g1") so distinct per-chromosome genes/transcripts are
+never collapsed together. Original IDs are preserved in the
+original_gene_id/original_transcript_id columns. This is a no-op for
+inputs (e.g. standard Ensembl GFF3/GTF) whose IDs are already
+genome-wide unique. See `_namespace_duplicate_ids`.
 """
 
 from __future__ import annotations
@@ -16,6 +26,7 @@ from __future__ import annotations
 import gzip
 import re
 import warnings
+from collections import defaultdict
 from typing import Optional
 
 import pandas as pd
@@ -309,6 +320,90 @@ def _normalise_rows(rows: list[dict], fmt: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Cross-chromosome ID collision handling
+# ---------------------------------------------------------------------------
+#
+# Some gene predictors restart gene/transcript numbering per sequence rather
+# than emitting genome-wide unique IDs. Tiberius is the motivating case: its
+# GTF output uses "g1", "g2", ... / "g1.t1", "g2.t1", ... independently on
+# every chromosome, so gene_id "g1" on chromosome 1 is a completely different
+# gene from gene_id "g1" on chromosome 2. Left alone, this collides in every
+# downstream step that keys off gene_id/transcript_id (locus classification,
+# transcript grouping, canonical-transcript selection), silently merging
+# unrelated features from different chromosomes.
+#
+# This is generic (keyed on "does this ID appear on >1 seqname", not on any
+# Tiberius-specific signature), so it is a no-op for normal Ensembl/GFF3/GTF
+# inputs where gene_id/transcript_id are already genome-wide unique.
+
+
+def _namespace_duplicate_ids(rows: list[dict], source_label: str = "") -> list[dict]:
+    """Rewrite gene_id/transcript_id (and dependent ID/Parent) so that IDs
+    which are reused across more than one seqname become unique internally.
+
+    Runs after `_normalise_rows`, so gene_id/transcript_id are already filled
+    in for every feature. IDs that only ever appear on a single seqname are
+    left untouched. Renamed IDs are namespaced as "{seqname}:{original_id}";
+    the pre-rename value is preserved in `original_gene_id` /
+    `original_transcript_id` on every row. The file on disk is never
+    modified.
+    """
+    if not rows:
+        return rows
+
+    gene_id_seqnames: dict[str, set] = defaultdict(set)
+    tx_id_seqnames: dict[str, set] = defaultdict(set)
+    for r in rows:
+        if r["gene_id"]:
+            gene_id_seqnames[r["gene_id"]].add(r["seqname"])
+        if r["transcript_id"]:
+            tx_id_seqnames[r["transcript_id"]].add(r["seqname"])
+
+    dup_gene_ids = {gid for gid, seqs in gene_id_seqnames.items() if len(seqs) > 1}
+    dup_tx_ids = {tid for tid, seqs in tx_id_seqnames.items() if len(seqs) > 1}
+
+    for r in rows:
+        r["original_gene_id"] = r["gene_id"]
+        r["original_transcript_id"] = r["transcript_id"]
+
+    if not dup_gene_ids and not dup_tx_ids:
+        return rows
+
+    label = f" in {source_label}" if source_label else ""
+    print(
+        f"  Detected gene_id/transcript_id values reused across multiple "
+        f"seqids{label} ({len(dup_gene_ids)} gene_id, {len(dup_tx_ids)} "
+        f"transcript_id) — namespacing by seqid to keep per-chromosome "
+        f"features distinct (original IDs kept in original_gene_id / "
+        f"original_transcript_id)."
+    )
+
+    for r in rows:
+        seqname = r["seqname"]
+        old_gid = r["gene_id"]
+        old_tid = r["transcript_id"]
+
+        new_gid = f"{seqname}:{old_gid}" if old_gid in dup_gene_ids else old_gid
+        new_tid = f"{seqname}:{old_tid}" if old_tid in dup_tx_ids else old_tid
+
+        if new_gid != old_gid:
+            r["gene_id"] = new_gid
+            if r["feature"] == "gene" and r["ID"] == old_gid:
+                r["ID"] = new_gid
+            if r["feature"] == "mRNA" and r["Parent"] == old_gid:
+                r["Parent"] = new_gid
+
+        if new_tid != old_tid:
+            r["transcript_id"] = new_tid
+            if r["feature"] == "mRNA" and r["ID"] == old_tid:
+                r["ID"] = new_tid
+            if r["feature"] in ("exon", "CDS") and r["Parent"] == old_tid:
+                r["Parent"] = new_tid
+
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # DataFrame construction
 # ---------------------------------------------------------------------------
 
@@ -326,6 +421,7 @@ def _rows_to_dataframes(
             "Chromosome", "Start", "End", "Strand", "Feature",
             "gene_id", "transcript_id", "ID", "Parent", "Source_label",
             "gene_biotype", "transcript_biotype", "tags",
+            "original_gene_id", "original_transcript_id",
         ])
         return empty.copy(), empty.copy(), empty.copy(), empty.copy()
 
@@ -350,7 +446,8 @@ def _rows_to_dataframes(
 
     keep_cols = ["Chromosome", "Start", "End", "Strand", "Feature",
                  "gene_id", "transcript_id", "ID", "Parent", "Source_label",
-                 "gene_biotype", "transcript_biotype", "tags"]
+                 "gene_biotype", "transcript_biotype", "tags",
+                 "original_gene_id", "original_transcript_id"]
     for c in keep_cols:
         if c not in df.columns:
             df[c] = ""
@@ -400,6 +497,7 @@ def load_annotation(
 
     rows = _parse_annotation_lines(path, fmt, source_label)
     rows = _normalise_rows(rows, fmt)
+    rows = _namespace_duplicate_ids(rows, source_label)
     genes, mrna, exons, cds = _rows_to_dataframes(rows, source_label)
 
     n_genes = len(genes)
