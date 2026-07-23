@@ -2,19 +2,25 @@
 """
 Compare Annotations
 ===================
-Locus-level comparison of consensus annotation against a reference
-(GenBank community annotation). Produces:
+Locus-level comparison of a query annotation against a reference annotation.
+Supports multiple input formats:
+  - Ensembl GFF3 (ID=gene:...; Parent=transcript:...)
+  - Helixer GFF3 (standard ID=/Parent=)
+  - ANNEVO GFF3 (standard ID=/Parent=, confidence scores in CDS)
+  - Tiberius hybrid (gene/transcript with bare attrs, exon/CDS with GTF-style)
+
+Produces:
   - comparison_summary.json / .tsv
   - comparison_details.tsv (one row per gene with classification)
   - Representative locus plots per category (in qc/ subdirectory)
 
 Usage:
     python compare_annotations.py \
-        --consensus consensus_genes.gff3 \
-        --reference GCA_002759435.3_Cand_auris_B8441_V3_genomic.gff.gz \
+        --reference Homo_sapiens.GRCh38.115.gff3.gz \
+        --query helixer.gff3 \
+        [--reference-fasta Homo_sapiens.GRCh38.dna.toplevel.fa.gz] \
         [--assembly-report assembly_report.txt] \
         [--seqname-map custom_mapping.tsv] \
-        --genome candida_auris_softmasked_toplevel.fa \
         --output-dir validation/ \
         [--evidence-gtfs scallop.gtf stringtie.gtf orthodb.gtf uniprot.gtf] \
         [--helixer helixer_remapped.gff3] \
@@ -40,6 +46,14 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pyranges as pr
 
+from gmb.compare.annotation_loader import (
+    apply_evaluation_mode,
+    filter_by_biotype,
+    generate_filter_audit,
+    load_annotation,
+    select_transcripts,
+    validate_against_fasta,
+)
 from gmb.pipeline.annotate_cds_utrs import (
     load_genome,
     reverse_complement,
@@ -62,88 +76,26 @@ from gmb.pipeline.subset_utils import (
 
 
 # ---------------------------------------------------------------------------
-# Data loading
+# Data loading — delegates to annotation_loader for format-agnostic parsing
 # ---------------------------------------------------------------------------
 
 
 def load_gff(path, source_label="Reference"):
-    """Load GFF3 (optionally gzipped), return exon and CDS DataFrames."""
-    print(f"  Loading {source_label} from {path}...")
+    """Load annotation file, return (exons, cds, genes) DataFrames.
 
-    if path.endswith(".gz"):
-        # Decompress to temp, load
-        import tempfile
-
-        tmp = tempfile.NamedTemporaryFile(suffix=".gff3", delete=False)
-        with gzip.open(path, "rt") as gz_in:
-            tmp.write(gz_in.read().encode())
-        tmp.close()
-        try:
-            gr = pr.read_gff3(tmp.name)
-        finally:
-            os.unlink(tmp.name)
-    elif path.endswith(".gff3") or path.endswith(".gff"):
-        gr = pr.read_gff3(path)
-    elif path.endswith(".gtf"):
-        gr = pr.read_gtf(path)
-    else:
-        gr = pr.read_gff3(path)
-
-    df = gr.df
-    df["Source_label"] = source_label
-
-    # Normalise transcript_id
-    if "transcript_id" not in df.columns:
-        df["transcript_id"] = pd.NA
-
-    m_mask = df["Feature"].isin(["mRNA", "transcript"])
-    e_mask = df["Feature"].isin(["exon", "CDS"])
-
-    if "ID" in df.columns:
-        df.loc[m_mask, "transcript_id"] = df.loc[m_mask, "transcript_id"].fillna(
-            df.loc[m_mask, "ID"]
-        )
-    if "Parent" in df.columns:
-        df.loc[e_mask, "transcript_id"] = df.loc[e_mask, "transcript_id"].fillna(
-            df.loc[e_mask, "Parent"]
-        )
-
-    # Cascade any remaining
-    if "Parent" in df.columns:
-        df["transcript_id"] = df["transcript_id"].fillna(df["Parent"])
-    if "ID" in df.columns:
-        df["transcript_id"] = df["transcript_id"].fillna(df["ID"])
-    if "gene_id" in df.columns:
-        df["transcript_id"] = df["transcript_id"].fillna(df["gene_id"])
-
-    df["transcript_id"] = df["transcript_id"].fillna("unknown")
-
-    # For GenBank GFF: gene_id from ID attribute on gene rows
-    if "gene_id" not in df.columns:
-        df["gene_id"] = df.get("ID", df["transcript_id"])
-
-    exons = df[df["Feature"] == "exon"].copy()
-    cds = df[df["Feature"] == "CDS"].copy()
-    genes = df[df["Feature"] == "gene"].copy()
-
+    Delegates to the unified annotation_loader for format detection and parsing.
+    Preserved for backward compatibility with evidence track loading.
+    """
+    genes, _mrna, exons, cds = load_annotation(path, source_label)
     return exons, cds, genes
 
 
 def load_consensus_genes(gff3_path):
-    """Load consensus GFF3 and extract gene-level + exon-level data."""
-    df = pr.read_gff3(gff3_path).df
+    """Load annotation and extract gene/exon/CDS/mRNA data.
 
-    if "transcript_id" not in df.columns:
-        if "Parent" in df.columns:
-            df["transcript_id"] = df["Parent"]
-        elif "ID" in df.columns:
-            df["transcript_id"] = df["ID"]
-
-    genes = df[df["Feature"] == "gene"].copy()
-    exons = df[df["Feature"] == "exon"].copy()
-    cds = df[df["Feature"] == "CDS"].copy()
-    mrna = df[df["Feature"] == "mRNA"].copy()
-
+    Delegates to the unified annotation_loader for format detection and parsing.
+    """
+    genes, mrna, exons, cds = load_annotation(gff3_path, "Consensus")
     return genes, exons, cds, mrna
 
 
@@ -627,7 +579,58 @@ def classify_locus_pairs(
 # ---------------------------------------------------------------------------
 
 
-def write_summary(ref_results, cons_results, output_dir):
+def _stratified_counts(ref_results, ref_exons_df=None):
+    """Compute stratified breakdowns of reference classification.
+
+    Returns dict with keys: single_exon, multi_exon, cds_containing, non_cds.
+    Each value is a Counter of classification labels.
+    """
+    strata = {
+        "single_exon": Counter(),
+        "multi_exon": Counter(),
+        "cds_containing": Counter(),
+        "non_cds": Counter(),
+    }
+
+    for r in ref_results:
+        cls = r["classification"]
+        n_tids = len(r.get("tids", []))
+        has_cds = r.get("classification_cds", "") not in ("No_CDS", "Missed", "")
+
+        # Exon count: use number of transcripts as proxy for complexity
+        if n_tids <= 1:
+            strata["single_exon"][cls] += 1
+        else:
+            strata["multi_exon"][cls] += 1
+
+        if has_cds or r.get("cds_overlap", 0) > 0:
+            strata["cds_containing"][cls] += 1
+        else:
+            strata["non_cds"][cls] += 1
+
+    return strata
+
+
+def _locus_detection_rate(ref_results):
+    """Gene locus detection: any overlap on same strand counts as detected."""
+    detected = sum(
+        1 for r in ref_results
+        if r["classification"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")
+    )
+    total = len(ref_results)
+    return detected, total, round(detected / total, 4) if total > 0 else 0.0
+
+
+def _intron_chain_recovery_rate(ref_results):
+    """Fraction of matched ref genes where intron chain was fully recovered."""
+    matched = [r for r in ref_results if r["classification"] != "Missed" and r["classification"] != "Strand_Mismatch"]
+    if not matched:
+        return 0, 0, 0.0
+    recovered = sum(1 for r in matched if r.get("intron_chain_match", False))
+    return recovered, len(matched), round(recovered / len(matched), 4)
+
+
+def write_summary(ref_results, cons_results, output_dir, filter_info=None):
     """Write summary and detailed comparison files."""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -645,6 +648,17 @@ def write_summary(ref_results, cons_results, output_dir):
         for r in ref_results
         if r["classification_cds"] == "Exact_Match" and r["classification"] != "Exact_Match"
     )
+
+    # Locus-level and intron chain metrics
+    locus_detected, locus_total, locus_rate = _locus_detection_rate(ref_results)
+    ic_recovered, ic_matched, ic_rate = _intron_chain_recovery_rate(ref_results)
+
+    # CDS intron chain recovery
+    cds_ic_matched = [r for r in ref_results if r["classification_cds"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")]
+    cds_ic_recovered = sum(1 for r in cds_ic_matched if r.get("cds_intron_chain_match", False))
+
+    # Stratified
+    strata = _stratified_counts(ref_results)
 
     summary = {
         "total_reference_genes": len(ref_results),
@@ -665,6 +679,8 @@ def write_summary(ref_results, cons_results, output_dir):
             ),
             "missed_count": ref_class_counts.get("Missed", 0),
             "strand_mismatch_count": ref_class_counts.get("Strand_Mismatch", 0),
+            "locus_detected_count": locus_detected,
+            "locus_detection_rate": locus_rate,
         },
         "sensitivity_cds": {
             "cds_exact_match_count": sum(
@@ -678,6 +694,13 @@ def write_summary(ref_results, cons_results, output_dir):
             ),
             "cds_missed_count": sum(1 for r in ref_results if r["classification_cds"] == "Missed"),
             "cds_exact_but_exon_differs": cds_exact_but_exon_differs,
+            "cds_intron_chain_recovered": cds_ic_recovered,
+            "cds_intron_chain_matched": len(cds_ic_matched),
+        },
+        "intron_chain": {
+            "exon_intron_chain_recovered": ic_recovered,
+            "exon_intron_chain_matched": ic_matched,
+            "exon_intron_chain_rate": ic_rate,
         },
         "specificity": {
             "novel_consensus_count": cons_class_counts.get("Novel", 0),
@@ -686,7 +709,11 @@ def write_summary(ref_results, cons_results, output_dir):
             - cons_class_counts.get("Novel", 0)
             - cons_class_counts.get("Strand_Mismatch", 0),
         },
+        "stratified": {k: dict(v) for k, v in strata.items()},
     }
+
+    if filter_info:
+        summary["filter_info"] = filter_info
 
     # Compute rates
     total_ref = len(ref_results)
@@ -700,6 +727,16 @@ def write_summary(ref_results, cons_results, output_dir):
         summary["sensitivity"]["missed_rate"] = round(
             ref_class_counts.get("Missed", 0) / total_ref, 4
         )
+
+        # CDS rates
+        cds_total = summary["sensitivity_cds"]["cds_any_match_count"] + summary["sensitivity_cds"]["cds_missed_count"]
+        if cds_total > 0:
+            summary["sensitivity_cds"]["cds_exact_match_rate"] = round(
+                summary["sensitivity_cds"]["cds_exact_match_count"] / total_ref, 4
+            )
+            summary["sensitivity_cds"]["cds_any_match_rate"] = round(
+                summary["sensitivity_cds"]["cds_any_match_count"] / total_ref, 4
+            )
 
     # JSON
     json_path = os.path.join(output_dir, "comparison_summary.json")
@@ -802,7 +839,9 @@ def write_summary(ref_results, cons_results, output_dir):
 
 TRACK_COLORS = {
     "GenBank": "#D9534F",
+    "Reference": "#D9534F",
     "Consensus": "#337AB7",
+    "Query": "#337AB7",
     "Scallop": "#5CB85C",
     "StringTie": "#F0AD4E",
     "Helixer": "#9B59B6",
@@ -1050,11 +1089,18 @@ def extract_genbank_proteins(ref_exons, ref_cds, genome, output_path, mapping=No
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compare consensus annotation against a reference "
-        "(GenBank community annotation)"
+        description="Compare a query annotation against a reference annotation. "
+        "Supports Ensembl GFF3, Helixer GFF3, ANNEVO GFF3, and Tiberius hybrid formats."
     )
-    parser.add_argument("--consensus", required=True, help="Consensus GFF3")
-    parser.add_argument("--reference", required=True, help="Reference GFF3 (can be .gz)")
+    parser.add_argument("--reference", required=True, help="Reference annotation (GFF3/GTF, can be .gz)")
+    query_group = parser.add_mutually_exclusive_group(required=True)
+    query_group.add_argument("--query", help="Query annotation to compare against reference")
+    query_group.add_argument("--consensus", help="(deprecated, use --query) Consensus annotation")
+    parser.add_argument(
+        "--reference-fasta",
+        default=None,
+        help="Reference FASTA for coordinate validation (also used for protein extraction)",
+    )
     parser.add_argument(
         "--assembly-report", default=None, help="NCBI assembly report for seqname remapping"
     )
@@ -1063,8 +1109,46 @@ def main():
         default=None,
         help="Custom TSV/CSV mapping for seqnames (from_seqname, to_seqname)",
     )
-    parser.add_argument("--genome", default=None, help="Genome FASTA (for protein extraction)")
+    parser.add_argument(
+        "--genome",
+        default=None,
+        help="(deprecated, use --reference-fasta) Genome FASTA for protein extraction",
+    )
     parser.add_argument("--output-dir", default="validation", help="Output directory")
+    parser.add_argument(
+        "--query-format",
+        choices=["auto", "gff3", "gtf", "tiberius"],
+        default="auto",
+        help="Format hint for query annotation (default: auto-detect)",
+    )
+    parser.add_argument(
+        "--reference-format",
+        choices=["auto", "gff3", "gtf", "tiberius"],
+        default="auto",
+        help="Format hint for reference annotation (default: auto-detect)",
+    )
+    parser.add_argument(
+        "--evaluation-mode",
+        choices=["all", "protein_coding", "cds_only", "canonical"],
+        default="all",
+        help="Preset evaluation mode for reference filtering (default: all)",
+    )
+    parser.add_argument(
+        "--reference-gene-biotypes",
+        default=None,
+        help="Comma-separated gene biotypes to keep in reference (e.g. protein_coding)",
+    )
+    parser.add_argument(
+        "--reference-transcript-biotypes",
+        default=None,
+        help="Comma-separated transcript biotypes to keep in reference (e.g. protein_coding)",
+    )
+    parser.add_argument(
+        "--reference-transcript-selection",
+        choices=["all", "longest_cds", "canonical"],
+        default="all",
+        help="Transcript selection mode for reference (default: all)",
+    )
     parser.add_argument("--scallop", default=None, help="Scallop GTF")
     parser.add_argument("--stringtie", default=None, help="StringTie GTF")
     parser.add_argument("--helixer", default=None, help="Helixer GFF3")
@@ -1097,6 +1181,11 @@ def main():
     add_subset_args(parser)
     args = parser.parse_args()
 
+    # Resolve --consensus -> --query backward compat
+    query_path = args.query or args.consensus
+    # Resolve --genome -> --reference-fasta backward compat
+    fasta_path = args.reference_fasta or args.genome
+
     os.makedirs(args.output_dir, exist_ok=True)
 
     # --- Load mappings ---
@@ -1107,26 +1196,88 @@ def main():
 
     # --- Load reference ---
     print("Loading reference annotation...")
-    ref_exons, ref_cds, ref_genes = load_gff(args.reference, "GenBank")
+    ref_genes, _ref_mrna, ref_exons, ref_cds = load_annotation(
+        args.reference, "Reference", format_hint=args.reference_format
+    )
     if mapping:
         ref_exons = remap_df_seqnames(ref_exons, mapping)
         ref_cds = remap_df_seqnames(ref_cds, mapping)
         ref_genes = remap_df_seqnames(ref_genes, mapping, label="Reference")
-    print(
-        f"  Reference: {ref_genes.shape[0]} genes, "
-        f"{ref_exons['transcript_id'].nunique()} transcripts"
-    )
 
-    # --- Load consensus ---
-    print("Loading consensus annotation...")
-    cons_genes, cons_exons, cons_cds, cons_mrna = load_consensus_genes(args.consensus)
+    # --- Load query ---
+    print("Loading query annotation...")
+    cons_genes, cons_mrna, cons_exons, cons_cds = load_annotation(
+        query_path, "Query", format_hint=args.query_format
+    )
     if mapping:
         cons_exons = remap_df_seqnames(cons_exons, mapping)
         cons_cds = remap_df_seqnames(cons_cds, mapping)
-        cons_genes = remap_df_seqnames(cons_genes, mapping, label="Consensus")
-    print(
-        f"  Consensus: {cons_genes.shape[0]} genes, "
-        f"{cons_exons['transcript_id'].nunique()} transcripts"
+        cons_genes = remap_df_seqnames(cons_genes, mapping, label="Query")
+
+    # --- FASTA validation ---
+    if fasta_path:
+        print("Validating coordinates against FASTA...")
+        ref_diag = validate_against_fasta(ref_genes, ref_exons, ref_cds, fasta_path, "Reference")
+        query_diag = validate_against_fasta(cons_genes, cons_exons, cons_cds, fasta_path, "Query")
+        all_diag = ref_diag + query_diag
+        if all_diag:
+            print(f"  WARNING: {len(all_diag)} validation issue(s) detected.")
+            for d in all_diag:
+                print(f"    {d}")
+        else:
+            print("  All coordinates validated successfully.")
+
+    # --- Reference filtering ---
+    pre_filter_ref_genes = len(ref_genes)
+    pre_filter_ref_tx = _ref_mrna["transcript_id"].nunique() if not _ref_mrna.empty else 0
+
+    # Evaluation mode preset
+    if args.evaluation_mode != "all":
+        print(f"Applying evaluation mode: {args.evaluation_mode}")
+        ref_genes, _ref_mrna, ref_exons, ref_cds = apply_evaluation_mode(
+            args.evaluation_mode, ref_genes, _ref_mrna, ref_exons, ref_cds
+        )
+
+    # Explicit biotype filtering (overrides/stacks with evaluation mode)
+    gene_biotypes = None
+    tx_biotypes = None
+    if args.reference_gene_biotypes:
+        gene_biotypes = [b.strip() for b in args.reference_gene_biotypes.split(",")]
+    if args.reference_transcript_biotypes:
+        tx_biotypes = [b.strip() for b in args.reference_transcript_biotypes.split(",")]
+    if gene_biotypes or tx_biotypes:
+        print(f"Filtering reference by biotype: genes={gene_biotypes}, transcripts={tx_biotypes}")
+        ref_genes, _ref_mrna, ref_exons, ref_cds = filter_by_biotype(
+            ref_genes, _ref_mrna, ref_exons, ref_cds,
+            gene_biotypes=gene_biotypes, transcript_biotypes=tx_biotypes,
+        )
+
+    # Transcript selection
+    if args.reference_transcript_selection != "all":
+        print(f"Selecting transcripts: {args.reference_transcript_selection}")
+        ref_genes, _ref_mrna, ref_exons, ref_cds = select_transcripts(
+            ref_genes, _ref_mrna, ref_exons, ref_cds,
+            mode=args.reference_transcript_selection,
+        )
+
+    post_filter_ref_genes = len(ref_genes)
+    post_filter_ref_tx = _ref_mrna["transcript_id"].nunique() if not _ref_mrna.empty else 0
+    if post_filter_ref_genes != pre_filter_ref_genes:
+        print(f"  Reference after filtering: {post_filter_ref_genes} genes "
+              f"({pre_filter_ref_genes - post_filter_ref_genes} removed), "
+              f"{post_filter_ref_tx} transcripts "
+              f"({pre_filter_ref_tx - post_filter_ref_tx} removed)")
+
+    # --- Generate filter audit ---
+    generate_filter_audit(
+        ref_genes, _ref_mrna, ref_exons, ref_cds,
+        output_dir=args.output_dir,
+        evaluation_mode=args.evaluation_mode,
+        transcript_selection=args.reference_transcript_selection,
+        gene_biotypes_filter=args.reference_gene_biotypes,
+        transcript_biotypes_filter=args.reference_transcript_biotypes,
+        pre_filter_genes=pre_filter_ref_genes,
+        pre_filter_transcripts=pre_filter_ref_tx,
     )
 
     # --- Classify ---
@@ -1235,11 +1386,39 @@ def main():
 
     # --- Summary ---
     print("Writing summary...")
-    summary = write_summary(ref_results, cons_results, args.output_dir)
+    filter_info = {
+        "evaluation_mode": args.evaluation_mode,
+        "transcript_selection": args.reference_transcript_selection,
+        "pre_filter_genes": pre_filter_ref_genes,
+        "pre_filter_transcripts": pre_filter_ref_tx,
+        "post_filter_genes": post_filter_ref_genes,
+        "post_filter_transcripts": post_filter_ref_tx,
+    }
+    if args.reference_gene_biotypes:
+        filter_info["gene_biotypes"] = args.reference_gene_biotypes
+    if args.reference_transcript_biotypes:
+        filter_info["transcript_biotypes"] = args.reference_transcript_biotypes
+
+    # Sampling note
+    sample_loci = getattr(args, "sample_loci", None)
+    sample_seed = getattr(args, "seed", None)
+    sample_source = getattr(args, "sample_from", "union")
+    if sample_loci:
+        filter_info["sampling"] = {
+            "method": f"sampled {sample_loci} loci from {sample_source} (post-filter ref + query)",
+            "n_loci": sample_loci,
+            "seed": sample_seed,
+            "source": sample_source,
+            "note": "Loci are sampled AFTER biotype/transcript filtering. "
+                    "Changing evaluation mode or transcript selection resamples different loci. "
+                    "Percentages across modes are not directly comparable due to different sample composition.",
+        }
+
+    summary = write_summary(ref_results, cons_results, args.output_dir, filter_info=filter_info)
     # Include subset info in summary
     if subset_regions:
         summary["subset_regions"] = [str(r) for r in subset_regions]
-        summary["subset_seed"] = getattr(args, "seed", 1)
+        summary["subset_seed"] = sample_seed
         # Re-write the JSON with subset info
         json_path = os.path.join(args.output_dir, "comparison_summary.json")
         with open(json_path, "w") as fh:
@@ -1249,35 +1428,73 @@ def main():
     print("\n" + "=" * 60)
     print("COMPARISON SUMMARY")
     print("=" * 60)
-    print(f"Reference genes:  {summary['total_reference_genes']}")
-    print(f"Consensus genes:  {summary['total_consensus_genes']}")
+    print(f"Evaluation mode:          {args.evaluation_mode}")
+    print(f"Transcript selection:     {args.reference_transcript_selection}")
+    if pre_filter_ref_genes != post_filter_ref_genes:
+        print(f"Reference (pre-filter):   {pre_filter_ref_genes} genes, {pre_filter_ref_tx} transcripts")
+    print(f"Reference (post-filter):  {post_filter_ref_genes} genes, {post_filter_ref_tx} transcripts")
+    if sample_loci:
+        print(f"Sampling:                 {sample_loci} loci from {sample_source} (seed={sample_seed})")
+        print(f"  NOTE: loci sampled AFTER filtering; changing mode resamples different loci")
+    print(f"Reference genes (sample): {summary['total_reference_genes']}")
+    print(f"Query genes (sample):     {summary['total_consensus_genes']}")
     print()
+
+    total_ref = summary["total_reference_genes"]
+    sens = summary["sensitivity"]
+    sens_cds = summary["sensitivity_cds"]
+    ic = summary.get("intron_chain", {})
+
+    print("--- 1. Locus Recovery ---")
+    print(f"  Locus detection rate:       {sens.get('locus_detection_rate', 0):.1%}  ({sens.get('locus_detected_count', 0)}/{total_ref})")
+    print(f"  Missed rate:                {sens.get('missed_rate', 0):.1%}  ({sens.get('missed_count', 0)}/{total_ref})")
+    print(f"  Strand mismatch:            {sens.get('strand_mismatch_count', 0)}/{total_ref}")
+    print()
+
+    print("--- 2. CDS Accuracy ---")
+    print(f"  CDS exact match:            {sens_cds.get('cds_exact_match_count', 0)}" +
+          (f"  ({sens_cds.get('cds_exact_match_rate', 0):.1%})" if "cds_exact_match_rate" in sens_cds else ""))
+    print(f"  CDS any match:              {sens_cds.get('cds_any_match_count', 0)}" +
+          (f"  ({sens_cds.get('cds_any_match_rate', 0):.1%})" if "cds_any_match_rate" in sens_cds else ""))
+    print(f"  CDS exact, UTR differs:     {sens_cds.get('cds_exact_but_exon_differs', 0)}")
+    print()
+
+    print("--- 3. Splice/Intron-Chain Recovery ---")
+    print(f"  Intron chain recovered:     {ic.get('exon_intron_chain_recovered', 0)}/{ic.get('exon_intron_chain_matched', 0)}  ({ic.get('exon_intron_chain_rate', 0):.1%})")
+    cds_ic_rec = sens_cds.get("cds_intron_chain_recovered", 0)
+    cds_ic_mat = sens_cds.get("cds_intron_chain_matched", 0)
+    cds_ic_rate = cds_ic_rec / cds_ic_mat if cds_ic_mat > 0 else 0
+    print(f"  CDS intron chain recovered: {cds_ic_rec}/{cds_ic_mat}  ({cds_ic_rate:.1%})")
+    print()
+
+    print("--- 4. Exact Transcript Structure ---")
+    print(f"  Exact match rate:           {sens.get('exact_match_rate', 0):.1%}  ({sens.get('exact_match_count', 0)}/{total_ref})")
+    print(f"  Any match rate:             {sens.get('any_match_rate', 0):.1%}")
+    print()
+
     print("Reference gene classification:")
-    for cls, cnt in sorted(summary["reference_classification"].items()):
-        pct = cnt / summary["total_reference_genes"] * 100
-        print(f"  {cls:25s}  {cnt:5d}  ({pct:.1f}%)")
-    print()
-    print("Consensus gene classification:")
-    for cls, cnt in sorted(summary["consensus_classification"].items()):
-        pct = cnt / summary["total_consensus_genes"] * 100
+    for cls in ["Exact_Match", "Structural_Mismatch", "Partial_Match", "Missed", "Strand_Mismatch"]:
+        cnt = summary["reference_classification"].get(cls, 0)
+        pct = cnt / total_ref * 100 if total_ref > 0 else 0
         print(f"  {cls:25s}  {cnt:5d}  ({pct:.1f}%)")
     print()
 
-    sens = summary["sensitivity"]
-    print(f"Sensitivity (exact match):  {sens.get('exact_match_rate', 0):.1%}")
-    print(f"Sensitivity (any match):    {sens.get('any_match_rate', 0):.1%}")
-    print(f"Missed reference genes:     {sens.get('missed_count', 0)}")
-    print(
-        f"Novel consensus genes:      " f"{summary['specificity'].get('novel_consensus_count', 0)}"
-    )
+    print("Query gene classification:")
+    for cls in ["Exact_Match", "Structural_Mismatch", "Partial_Match", "Matched", "Novel", "Strand_Mismatch"]:
+        cnt = summary["consensus_classification"].get(cls, 0)
+        if cnt == 0:
+            continue
+        pct = cnt / summary["total_consensus_genes"] * 100 if summary["total_consensus_genes"] > 0 else 0
+        print(f"  {cls:25s}  {cnt:5d}  ({pct:.1f}%)")
+    print(f"\nNovel query genes:          {summary['specificity'].get('novel_consensus_count', 0)}")
 
     # --- Evidence tracks for plotting ---
     print("\nLoading evidence tracks for visualisation...")
     evidence_tracks = {}
 
-    # Always include ref and consensus
-    evidence_tracks["GenBank"] = (ref_exons, ref_cds)
-    evidence_tracks["Consensus"] = (cons_exons, cons_cds)
+    # Always include ref and query
+    evidence_tracks["Reference"] = (ref_exons, ref_cds)
+    evidence_tracks["Query"] = (cons_exons, cons_cds)
 
     # Optional evidence tracks
     if args.scallop and os.path.exists(args.scallop):
@@ -1319,9 +1536,9 @@ def main():
     )
 
     # --- Optionally extract ref proteins for BUSCO ---
-    if args.extract_ref_proteins and args.genome:
+    if args.extract_ref_proteins and fasta_path:
         print("Extracting reference proteins for BUSCO comparison...")
-        genome = load_genome(args.genome)
+        genome = load_genome(fasta_path)
         ref_prot_path = os.path.join(args.output_dir, "reference_proteins.fa")
         extract_genbank_proteins(ref_exons, ref_cds, genome, ref_prot_path)
 
