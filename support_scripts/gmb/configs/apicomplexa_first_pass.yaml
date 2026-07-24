@@ -1,0 +1,117 @@
+# Apicomplexa first-pass GMB config -- Plasmodium falciparum GCA_000002765.3
+#
+# This is a DELTA file. It is loaded via `load_config(path, preset="fungi")`,
+# so it is merged on top of fungi_default.yaml (dicts deep-merge, lists
+# replace entirely, unknown keys raise an error). Only keys that should
+# differ from the fungal preset are listed below; everything else falls
+# through to fungi_default.yaml unchanged. Do not edit fungi_default.yaml.
+#
+# Every number below is grounded in stats computed directly from this
+# genome's own reference annotation
+# (Plasmodium_falciparum.GCA000002765v3.63.gff3.gz) and a Tiberius-only
+# baseline comparison, not general "Apicomplexa lore" -- see the run report
+# for the exact numbers and how they were derived.
+#
+# Parameters considered but deliberately left UNCHANGED from fungi_default.yaml:
+#
+#   orf.min_codons (33): real P. falciparum CDS lengths are long (mean 762aa,
+#     median 462aa); only 1 of 5,389 reference CDS is shorter than 33 codons.
+#     This threshold is already a near-non-filter for this genome, so raising
+#     it would risk cutting real short genes for no measured benefit, and
+#     lowering it is unnecessary.
+#
+#   transcriptomic_filter.allow_single_exon (true): ~45.6% of real reference
+#     genes are genuinely single-exon (verified directly from the reference
+#     GFF's own exon counts -- NOT from the compare tool's stratified-by-
+#     transcript-count breakdown, which was found to be measuring isoform
+#     count rather than exon count and has been fixed separately; see report).
+#     Single-exon genes are too common here to filter by default.
+#
+#   scoring.keep_helixer_without_support (true): Tiberius is the only ab
+#     initio backbone available (no Helixer model exists for this genome).
+#     P. falciparum gene expression is strongly life-cycle-stage-specific, so
+#     some genuine genes may have zero transcriptomic support in a given
+#     evidence set. Turning this off risks losing real backbone-only loci.
+#
+#   protein_filter.min_alignment_coverage / min_percent_identity: inert for
+#     this genome's GenBlast/OrthoDB GTFs as supplied -- both were generated
+#     via genBlastG and carry only a raw numeric Score field (GTF column 6),
+#     not Coverage/Identity attributes, so these two thresholds never fire
+#     either way for this input. Left as-is rather than removed, since they
+#     become active again for evidence that does carry those attributes.
+
+protein_filter:
+  # genBlastG's own score is not a calibrated BLAST/DIAMOND bitscore (observed
+  # range in this data includes negative values, e.g. -22.23, alongside
+  # legitimate hits like 706.5). The fungal default of 50 was tuned against
+  # true DIAMOND bitscores. Loosened here as a conservative first pass;
+  # P. falciparum's AT-rich-genome amino-acid composition bias also
+  # depresses cross-species alignment scores for true orthologs. Revisit
+  # once the compare step shows whether GenBlast/OrthoDB evidence is being
+  # over- or under-filtered.
+  min_bitscore: 30.0
+
+transcriptomic_filter:
+  # Real reference transcript spans reach 32,487bp (p99=14,717bp,
+  # p99.9=26,920bp). The fungal default of 20,000bp sits between p99 and
+  # p99.9 and would clip a real (if uncommon) tail of large multi-exon genes.
+  max_transcript_length: 35000
+  # Real intron lengths max out at 2,425bp (p50=141bp, p99=736bp,
+  # p99.9=1,192bp) in this genome -- much shorter than the fungal default's
+  # 3,000bp ceiling implies. Tightened to give better chimera detection while
+  # keeping headroom above the observed biological maximum.
+  max_intron_length: 2500
+
+transcript_splitting:
+  # Kept in sync with the tightened max_intron_length above (mirrors
+  # fungi_default.yaml's own split_gap_bp == max_intron_length convention).
+  split_gap_bp: 2500
+
+scoring:
+  weights:
+    # Reduced from the fungal 3.1: in the Tiberius-only baseline comparison,
+    # Tiberius alone got the *exact* structure right for only 1.5% of
+    # multi-exon reference genes (45/2,949) vs 16.4% for single-exon genes
+    # (388/2,369) -- multi-exon splice placement is Tiberius's clear weak
+    # point here. The backbone should not dominate over multi-source-
+    # supported alternatives as strongly as in the fungal preset.
+    helixer: 2.6
+    # Not exercised in this first pass (see report: minimap2_annotation.gtf
+    # excluded due to file scale/uncollapsed reads), but set here for when
+    # collapsed long-read consensus models are supplied. Weighted above
+    # Scallop/StringTie because long reads span full introns directly rather
+    # than relying on short-read splice-junction inference.
+    minimap2: 1.3
+  # Raised from 0.5: rewards loci where the Tiberius backbone agrees with
+  # independent transcriptomic evidence -- exactly the situation that
+  # corrects Tiberius's multi-exon structural errors (see helixer weight
+  # note above).
+  multi_source_bonus: 1.2
+
+protein_validation:
+  # DIAMOND (2.1.24) and Psauron (1.0.8) binaries are both present and
+  # functional, but no DIAMOND protein database is available locally for
+  # this genome: fungi_default.yaml points to an EBI-cluster-only path
+  # (/hps/nobackup/.../uniprot_euk.fa.dmnd) that does not exist here, and no
+  # bundled apicomplexa .dmnd ships in this checkout. Left enabled this
+  # would hard-fail the whole pipeline at --check-deps. Disabled explicitly
+  # rather than silently broken -- see report for what a database would
+  # need to be pointed at to re-enable this stage.
+  enabled: false
+
+utr:
+  # Real 5'UTR lengths: p50=497bp, p90=1,344bp, p95=1,777bp, p99=2,633bp.
+  # The fungal default of 2,000bp sits between p95 and p99 and would trim a
+  # meaningful tail of genuine long 5'UTRs (P. falciparum is known for long
+  # UTRs relative to many eukaryotes).
+  max_5p_bp: 3000
+  # Raised in proportion to max_5p_bp above. 3'UTRs did not need loosening
+  # (real p99=1,506bp, already comfortably under the fungal 3,000bp cap) but
+  # the combined total cap must grow to match the 5' change.
+  max_total_bp: 6000
+
+qc:
+  # GenBlast evidence in this run is a protein-to-genome alignment (like
+  # OrthoDB/UniProt), not a transcript assembly -- ORF inference should be
+  # skipped for it the same way it already is for OrthoDB/UniProt.
+  skip_orf_inference_tracks: ["OrthoDB", "UniProt", "GenBlast"]

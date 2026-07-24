@@ -28,6 +28,7 @@ dev = [
 gmb-build = "gmb.cli.build:main"
 gmb-compare = "gmb.cli.compare:main"
 gmb-visualize = "gmb.cli.visualize:main"
+gmb-longread-consensus = "gmb.cli.longread_consensus:main"
 
 [tool.setuptools.packages.find]
 include = ["gmb*"]

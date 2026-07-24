@@ -114,6 +114,11 @@ def load_seqname_map(path: str) -> dict:
             parts = line.split("\t")
             if len(parts) < 2:
                 parts = line.split(",")
+            if len(parts) < 2:
+                # Fall back to arbitrary whitespace (e.g. space-padded/aligned
+                # files that aren't actually tab- or comma-delimited despite
+                # the .tsv name).
+                parts = line.split()
 
             if len(parts) >= 2:
                 from_id = parts[0].strip()

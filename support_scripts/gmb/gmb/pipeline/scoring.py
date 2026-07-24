@@ -67,14 +67,17 @@ def score_model(
     # Base evidence weight
     sources = set(model.get("combined_evidence", model["source"]).split(","))
     weights = scfg.weights
+    backbone_lower = scfg.backbone_label.strip().lower()
     for s in sources:
         s_lower = s.strip().lower()
-        if s_lower == "helixer":
+        if s_lower == backbone_lower:
             score += weights.helixer
         elif s_lower == "scallop":
             score += weights.scallop
         elif s_lower == "stringtie":
             score += weights.stringtie
+        elif s_lower == "minimap2":
+            score += weights.minimap2
         else:
             score += 1.0  # unknown source gets base weight
 
@@ -221,7 +224,7 @@ def select_isoforms(
 
         # Apply configured gating logic
         if s["protein_support"] or (
-            "Helixer" in s["sources"] and scfg.keep_helixer_without_support
+            scfg.backbone_label in s["sources"] and scfg.keep_helixer_without_support
         ):
             keep = True
         elif len(s["sources"]) > 1:
@@ -246,10 +249,13 @@ def select_isoforms(
             keep = True
 
         # Single-exon models require protein support when configured.
-        # Exception: keep_helixer_without_support takes precedence — a Helixer
-        # single-exon gene should not be silently dropped by this gate when the
-        # operator has explicitly opted in to keeping Helixer without support.
-        helixer_protected = "Helixer" in s["sources"] and scfg.keep_helixer_without_support
+        # Exception: keep_helixer_without_support takes precedence — an ab
+        # initio backbone (scfg.backbone_label) single-exon gene should not be
+        # silently dropped by this gate when the operator has explicitly opted
+        # in to keeping the backbone without support.
+        helixer_protected = (
+            scfg.backbone_label in s["sources"] and scfg.keep_helixer_without_support
+        )
         if (
             keep
             and scfg.require_support_for_single_exon

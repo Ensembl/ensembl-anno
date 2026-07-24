@@ -76,6 +76,7 @@ class ScoringWeights:
     helixer: float = 2.0
     scallop: float = 1.0
     stringtie: float = 1.0
+    minimap2: float = 1.0
 
 
 @dataclass
@@ -92,6 +93,11 @@ class ScoringConfig:
     min_cds_bp: int = 150
     require_support_for_single_exon: bool = True
     same_gene_overlap_threshold: float = 0.15
+    # Source label of the ab initio backbone track actually loaded (set
+    # automatically by the CLI based on --helixer vs --tiberius). Determines
+    # which string in `weights` and `keep_helixer_without_support` applies —
+    # not necessarily "Helixer".
+    backbone_label: str = "Helixer"
 
 
 @dataclass

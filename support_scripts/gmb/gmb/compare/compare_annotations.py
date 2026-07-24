@@ -39,6 +39,7 @@ import csv
 import gzip
 import json
 import os
+import sys
 from collections import Counter, defaultdict
 
 import matplotlib.patches as patches
@@ -592,13 +593,29 @@ def _stratified_counts(ref_results, ref_exons_df=None):
         "non_cds": Counter(),
     }
 
+    # Real per-transcript exon counts, when available. A gene is multi-exon
+    # if any of its transcripts has >1 exon — genuine intron content, not
+    # alternative-splicing isoform count (genes with a single isoform are
+    # not necessarily single-exon, and vice versa).
+    tx_exon_count = None
+    if ref_exons_df is not None and not ref_exons_df.empty:
+        tx_exon_count = ref_exons_df.groupby("transcript_id").size()
+
     for r in ref_results:
         cls = r["classification"]
-        n_tids = len(r.get("tids", []))
+        tids = r.get("tids", [])
         has_cds = r.get("classification_cds", "") not in ("No_CDS", "Missed", "")
 
-        # Exon count: use number of transcripts as proxy for complexity
-        if n_tids <= 1:
+        if tx_exon_count is not None and tids:
+            max_exons = max((tx_exon_count.get(tid, 1) for tid in tids), default=1)
+            is_single_exon = max_exons <= 1
+        else:
+            # Fallback when exon data isn't available: transcript-isoform
+            # count is a poor proxy (conflates AS complexity with intron
+            # content) but better than nothing.
+            is_single_exon = len(tids) <= 1
+
+        if is_single_exon:
             strata["single_exon"][cls] += 1
         else:
             strata["multi_exon"][cls] += 1
@@ -630,7 +647,7 @@ def _intron_chain_recovery_rate(ref_results):
     return recovered, len(matched), round(recovered / len(matched), 4)
 
 
-def write_summary(ref_results, cons_results, output_dir, filter_info=None):
+def write_summary(ref_results, cons_results, output_dir, filter_info=None, ref_exons_df=None):
     """Write summary and detailed comparison files."""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -658,7 +675,7 @@ def write_summary(ref_results, cons_results, output_dir, filter_info=None):
     cds_ic_recovered = sum(1 for r in cds_ic_matched if r.get("cds_intron_chain_match", False))
 
     # Stratified
-    strata = _stratified_counts(ref_results)
+    strata = _stratified_counts(ref_results, ref_exons_df=ref_exons_df)
 
     summary = {
         "total_reference_genes": len(ref_results),
@@ -705,7 +722,7 @@ def write_summary(ref_results, cons_results, output_dir, filter_info=None):
         "specificity": {
             "novel_consensus_count": cons_class_counts.get("Novel", 0),
             "matched_consensus_count": cons_class_counts.get("Matched", 0)
-            + sum(1 for c in cons_class_counts.values())
+            + sum(cons_class_counts.values())
             - cons_class_counts.get("Novel", 0)
             - cons_class_counts.get("Strand_Mismatch", 0),
         },
@@ -844,9 +861,12 @@ TRACK_COLORS = {
     "Query": "#337AB7",
     "Scallop": "#5CB85C",
     "StringTie": "#F0AD4E",
+    "Minimap2": "#E67E22",
     "Helixer": "#9B59B6",
+    "Tiberius": "#16A085",
     "OrthoDB": "#999999",
     "UniProt": "#888888",
+    "GenBlast": "#7F8C8D",
 }
 
 CDS_HEIGHT = 0.4
@@ -988,6 +1008,57 @@ def plot_comparison_locus(
     plt.close()
 
 
+def _write_qc_index_html(qc_dir, rows):
+    """Write a small HTML index linking each QC plot to its locus metadata.
+
+    `rows` is a list of dicts with keys: filename, category, gene_id,
+    matched_id, chrom, start, end. This mirrors the fields written per-locus
+    to comparison_details.tsv so a reader can cross-reference a plot with its
+    row there (matched on gene_id).
+    """
+    by_category = defaultdict(list)
+    for row in rows:
+        by_category[row["category"]].append(row)
+
+    html = [
+        "<!doctype html><html><head><meta charset='utf-8'>",
+        "<title>GMB comparison QC index</title>",
+        "<style>",
+        "body{font-family:sans-serif;margin:2em;}",
+        "table{border-collapse:collapse;margin-bottom:2em;}",
+        "td,th{border:1px solid #ccc;padding:6px 10px;text-align:left;font-size:0.9em;}",
+        "img{max-width:480px;display:block;}",
+        "h2{margin-top:2em;}",
+        "</style></head><body>",
+        "<h1>GMB comparison QC index</h1>",
+        "<p>Each row's gene_id/matched_id can be cross-referenced against "
+        "comparison_details.tsv for the full per-locus record.</p>",
+    ]
+    for category in sorted(by_category):
+        html.append(f"<h2>{category} ({len(by_category[category])})</h2>")
+        html.append(
+            "<table><tr><th>Plot</th><th>Reference gene_id</th>"
+            "<th>Matched query id</th><th>Locus</th></tr>"
+        )
+        for row in by_category[category]:
+            html.append(
+                "<tr><td><a href='{f}'><img src='{f}'></a></td>"
+                "<td>{gid}</td><td>{mid}</td><td>{chrom}:{start}-{end}</td></tr>".format(
+                    f=row["filename"],
+                    gid=row["gene_id"],
+                    mid=row.get("matched_id", "") or "-",
+                    chrom=row["chrom"],
+                    start=row["start"],
+                    end=row["end"],
+                )
+            )
+        html.append("</table>")
+    html.append("</body></html>")
+
+    with open(os.path.join(qc_dir, "index.html"), "w") as fh:
+        fh.write("\n".join(html))
+
+
 def generate_comparison_plots(
     ref_results, cons_results, evidence_tracks, output_dir, plots_per_category=3
 ):
@@ -1006,6 +1077,7 @@ def generate_comparison_plots(
             by_class["Novel"].append(r)
 
     plot_count = 0
+    index_rows = []
     for category, entries in by_class.items():
         # Sort by chromosome + position for reproducibility
         entries.sort(key=lambda e: (e["chrom"], e["start"]))
@@ -1026,8 +1098,20 @@ def generate_comparison_plots(
                 filepath,
             )
             plot_count += 1
+            index_rows.append(
+                {
+                    "filename": filename,
+                    "category": category,
+                    "gene_id": entry["gene_id"],
+                    "matched_id": entry.get("matched_id", ""),
+                    "chrom": entry["chrom"],
+                    "start": entry["start"],
+                    "end": entry["end"],
+                }
+            )
 
-    print(f"  Generated {plot_count} comparison plots in {qc_dir}/")
+    _write_qc_index_html(qc_dir, index_rows)
+    print(f"  Generated {plot_count} comparison plots in {qc_dir}/ (see index.html)")
 
 
 # ---------------------------------------------------------------------------
@@ -1151,9 +1235,18 @@ def main():
     )
     parser.add_argument("--scallop", default=None, help="Scallop GTF")
     parser.add_argument("--stringtie", default=None, help="StringTie GTF")
-    parser.add_argument("--helixer", default=None, help="Helixer GFF3")
+    parser.add_argument(
+        "--minimap2", default=None, help="Minimap2 long-read transcript alignments (GTF)"
+    )
+    parser.add_argument("--helixer", default=None, help="Helixer GFF3 (ab initio backbone)")
+    parser.add_argument(
+        "--tiberius",
+        default=None,
+        help="Tiberius GTF evidence track (ab initio backbone, alternative to --helixer)",
+    )
     parser.add_argument("--orthodb", default=None, help="OrthoDB GTF")
     parser.add_argument("--uniprot", default=None, help="UniProt GTF")
+    parser.add_argument("--genblast", default=None, help="GenBlast protein alignment GTF")
     parser.add_argument(
         "--plots-per-category",
         type=int,
@@ -1414,7 +1507,9 @@ def main():
                     "Percentages across modes are not directly comparable due to different sample composition.",
         }
 
-    summary = write_summary(ref_results, cons_results, args.output_dir, filter_info=filter_info)
+    summary = write_summary(
+        ref_results, cons_results, args.output_dir, filter_info=filter_info, ref_exons_df=ref_exons
+    )
     # Include subset info in summary
     if subset_regions:
         summary["subset_regions"] = [str(r) for r in subset_regions]
@@ -1492,11 +1587,28 @@ def main():
     print("\nLoading evidence tracks for visualisation...")
     evidence_tracks = {}
 
-    # Always include ref and query
+    # Fixed track order for QC plots/legends, independent of CLI flag order:
+    # Reference, Query (GMB consensus), ab initio backbone, short-read
+    # transcriptomic, long-read consensus, protein evidence.
     evidence_tracks["Reference"] = (ref_exons, ref_cds)
     evidence_tracks["Query"] = (cons_exons, cons_cds)
 
-    # Optional evidence tracks
+    if args.helixer and args.tiberius:
+        sys.exit("ERROR: pass only one ab initio backbone track: --helixer or --tiberius, not both.")
+    if args.helixer and os.path.exists(args.helixer):
+        hx_exons, hx_cds, _ = load_gff(args.helixer, "Helixer")
+        if mapping:
+            hx_exons = remap_df_seqnames(hx_exons, mapping)
+            if not hx_cds.empty:
+                hx_cds = remap_df_seqnames(hx_cds, mapping)
+        evidence_tracks["Helixer"] = (hx_exons, hx_cds)
+    if args.tiberius and os.path.exists(args.tiberius):
+        tb_exons, tb_cds, _ = load_gff(args.tiberius, "Tiberius")
+        if mapping:
+            tb_exons = remap_df_seqnames(tb_exons, mapping)
+            if not tb_cds.empty:
+                tb_cds = remap_df_seqnames(tb_cds, mapping)
+        evidence_tracks["Tiberius"] = (tb_exons, tb_cds)
     if args.scallop and os.path.exists(args.scallop):
         sc_exons, _, _ = load_gff(args.scallop, "Scallop")
         if mapping:
@@ -1507,13 +1619,11 @@ def main():
         if mapping:
             st_exons = remap_df_seqnames(st_exons, mapping)
         evidence_tracks["StringTie"] = (st_exons, pd.DataFrame())
-    if args.helixer and os.path.exists(args.helixer):
-        hx_exons, hx_cds, _ = load_gff(args.helixer, "Helixer")
+    if args.minimap2 and os.path.exists(args.minimap2):
+        mm_exons, _, _ = load_gff(args.minimap2, "Minimap2")
         if mapping:
-            hx_exons = remap_df_seqnames(hx_exons, mapping)
-            if not hx_cds.empty:
-                hx_cds = remap_df_seqnames(hx_cds, mapping)
-        evidence_tracks["Helixer"] = (hx_exons, hx_cds)
+            mm_exons = remap_df_seqnames(mm_exons, mapping)
+        evidence_tracks["Minimap2"] = (mm_exons, pd.DataFrame())
     if args.orthodb and os.path.exists(args.orthodb):
         od_exons, _, _ = load_gff(args.orthodb, "OrthoDB")
         if mapping:
@@ -1524,6 +1634,11 @@ def main():
         if mapping:
             up_exons = remap_df_seqnames(up_exons, mapping)
         evidence_tracks["UniProt"] = (up_exons, pd.DataFrame())
+    if args.genblast and os.path.exists(args.genblast):
+        gb_exons, _, _ = load_gff(args.genblast, "GenBlast")
+        if mapping:
+            gb_exons = remap_df_seqnames(gb_exons, mapping)
+        evidence_tracks["GenBlast"] = (gb_exons, pd.DataFrame())
 
     # --- Generate plots ---
     print("Generating comparison plots...")

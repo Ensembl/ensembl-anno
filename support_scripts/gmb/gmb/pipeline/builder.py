@@ -292,9 +292,20 @@ def parse_args():
     parser.add_input_args.add_argument("--genome", help="Genome FASTA")
     parser.add_input_args.add_argument("--scallop", help="Scallop GTF")
     parser.add_input_args.add_argument("--stringtie", help="StringTie GTF")
-    parser.add_input_args.add_argument("--helixer", help="Helixer GFF3")
+    parser.add_input_args.add_argument(
+        "--minimap2", help="Minimap2 long-read transcript alignments (GTF), optional"
+    )
+    parser.add_input_args.add_argument(
+        "--helixer", help="Helixer GFF3 (ab initio backbone)"
+    )
+    parser.add_input_args.add_argument(
+        "--tiberius",
+        help="Tiberius GTF (ab initio backbone, alternative to --helixer; "
+        "mutually exclusive with --helixer)",
+    )
     parser.add_input_args.add_argument("--orthodb", help="OrthoDB GTF")
     parser.add_input_args.add_argument("--uniprot", help="UniProt GTF")
+    parser.add_input_args.add_argument("--genblast", help="GenBlast protein alignment GTF")
 
     parser.add_output_args = parser.add_argument_group("Outputs")
     parser.add_output_args.add_argument("--output-dir", required=True, help="Output directory")
@@ -402,7 +413,20 @@ def main() -> None:
     if log_file:
         print(f"Logging to {log_file}")
 
+    if args.helixer and args.tiberius:
+        sys.exit(
+            "ERROR: pass only one ab initio backbone: --helixer or --tiberius, not both."
+        )
+    backbone_path, backbone_label = (
+        (args.tiberius, "Tiberius") if args.tiberius else (args.helixer, "Helixer")
+    )
+
     config = load_config(args.config, args.preset)
+    # Sync the scoring gate's backbone string to whichever ab initio track was
+    # actually loaded, so weighting/single-exon-without-support logic (which
+    # matches on this label) applies correctly regardless of --helixer vs
+    # --tiberius.
+    config.scoring.backbone_label = backbone_label
 
     if args.check_deps:
         check_dependencies(config.protein_validation)
@@ -415,13 +439,15 @@ def main() -> None:
     print("Loading transcriptomic evidence...")
     scallop_exons, scallop_cds = load_evidence(args.scallop, "Scallop")
     stringtie_exons, stringtie_cds = load_evidence(args.stringtie, "StringTie")
+    minimap2_exons, minimap2_cds = load_evidence(args.minimap2, "Minimap2")
 
     print("Loading ab initio evidence...")
-    helixer_exons, helixer_cds = load_evidence(args.helixer, "Helixer")
+    helixer_exons, helixer_cds = load_evidence(backbone_path, backbone_label)
 
     print("Loading protein evidence...")
     orthodb_exons, orthodb_cds = load_evidence(args.orthodb, "OrthoDB")
     uniprot_exons, uniprot_cds = load_evidence(args.uniprot, "UniProt")
+    genblast_exons, genblast_cds = load_evidence(args.genblast, "GenBlast")
 
     stats = {}
 
@@ -447,15 +473,23 @@ def main() -> None:
         scallop_cds = remap_df_seqnames(scallop_cds, mapping)
         stringtie_exons = remap_df_seqnames(stringtie_exons, mapping, "StringTie")
         stringtie_cds = remap_df_seqnames(stringtie_cds, mapping)
-        helixer_exons = remap_df_seqnames(helixer_exons, mapping, "Helixer")
+        minimap2_exons = remap_df_seqnames(minimap2_exons, mapping, "Minimap2")
+        minimap2_cds = remap_df_seqnames(minimap2_cds, mapping)
+        helixer_exons = remap_df_seqnames(helixer_exons, mapping, backbone_label)
         helixer_cds = remap_df_seqnames(helixer_cds, mapping)
         orthodb_exons = remap_df_seqnames(orthodb_exons, mapping, "OrthoDB")
         orthodb_cds = remap_df_seqnames(orthodb_cds, mapping)
         uniprot_exons = remap_df_seqnames(uniprot_exons, mapping, "UniProt")
         uniprot_cds = remap_df_seqnames(uniprot_cds, mapping)
+        genblast_exons = remap_df_seqnames(genblast_exons, mapping, "GenBlast")
+        genblast_cds = remap_df_seqnames(genblast_cds, mapping)
 
     print("Filtering Evidence...")
-    tx_frames = [df for df in [scallop_exons, stringtie_exons] if df is not None and not df.empty]
+    tx_frames = [
+        df
+        for df in [scallop_exons, stringtie_exons, minimap2_exons]
+        if df is not None and not df.empty
+    ]
     tx_exons = pd.concat(tx_frames, ignore_index=True) if tx_frames else pd.DataFrame()
     tx_exons_filtered = filter_chimeras(tx_exons, config, stats)
 
@@ -469,7 +503,11 @@ def main() -> None:
         stats,
     )
 
-    prot_frames = [df for df in [orthodb_exons, uniprot_exons] if df is not None and not df.empty]
+    prot_frames = [
+        df
+        for df in [orthodb_exons, uniprot_exons, genblast_exons]
+        if df is not None and not df.empty
+    ]
     prot_exons = pd.concat(prot_frames, ignore_index=True) if prot_frames else pd.DataFrame()
     prot_exons_filt = filter_protein_evidence(prot_exons, config, stats, tx_exons_filtered)
 
@@ -509,12 +547,12 @@ def main() -> None:
         h_cds_filt = subset_df_by_regions(h_cds_filt, subset_regions)
         prot_exons_filt = subset_df_by_regions(prot_exons_filt, subset_regions)
         # Also subset CDS tracks
-        for _name, _cds_var in [("scallop", scallop_cds), ("stringtie", stringtie_cds)]:
-            if _cds_var is not None and not _cds_var.empty:
-                if _name == "scallop":
-                    scallop_cds = subset_df_by_regions(_cds_var, subset_regions)
-                else:
-                    stringtie_cds = subset_df_by_regions(_cds_var, subset_regions)
+        if scallop_cds is not None and not scallop_cds.empty:
+            scallop_cds = subset_df_by_regions(scallop_cds, subset_regions)
+        if stringtie_cds is not None and not stringtie_cds.empty:
+            stringtie_cds = subset_df_by_regions(stringtie_cds, subset_regions)
+        if minimap2_cds is not None and not minimap2_cds.empty:
+            minimap2_cds = subset_df_by_regions(minimap2_cds, subset_regions)
         _n_after = {
             "transcriptomic": tx_exons_filtered["transcript_id"].nunique()
             if not tx_exons_filtered.empty
@@ -543,7 +581,7 @@ def main() -> None:
     candidate_exons = pd.concat(all_dfs, ignore_index=True)
 
     cds_dfs = []
-    for d in [scallop_cds, stringtie_cds, h_cds_filt]:
+    for d in [scallop_cds, stringtie_cds, minimap2_cds, h_cds_filt]:
         if d is not None and not d.empty:
             cds_dfs.append(d)
     candidate_cds = pd.concat(cds_dfs, ignore_index=True) if cds_dfs else None

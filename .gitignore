@@ -32,3 +32,4 @@ support_scripts/gmb/*_comparison*/
 support_scripts/gmb/output/
 support_scripts/gmb/comparison/
 
+.DS_Store
