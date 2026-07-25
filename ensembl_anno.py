@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=unused-variable, line-too-long
+# pylint: disable=unused-variable, line-too-long, too-many-lines
 """Wrapper script to run the Ensembl annotation pipeline.
 This script will run a series of analyses on a given genome and
 generate GTF files with the results. The analyses to run can be
@@ -28,6 +28,8 @@ from src.python.ensembl.tools.anno.transcriptomic_annotation import scallop
 from src.python.ensembl.tools.anno.transcriptomic_annotation import star
 from src.python.ensembl.tools.anno.transcriptomic_annotation import stringtie
 from src.python.ensembl.tools.anno.protein_annotation import genblast
+from src.python.ensembl.tools.anno.protein_annotation import miniprot
+
 import legacy_finalisation
 import legacy_load_to_ensembl_db
 
@@ -62,7 +64,8 @@ def configure_analysis_flags(  # pylint: disable=too-many-arguments, too-many-br
     run_simple_features=None,
     run_sncrnas=None,
     run_transcriptomic=None,
-    run_proteins=None,
+    run_proteins_genblast=None,
+    run_proteins_miniprot=None,
     run_masking=None,
     run_dust=None,
     run_trf=None,
@@ -75,13 +78,15 @@ def configure_analysis_flags(  # pylint: disable=too-many-arguments, too-many-br
     run_scallop=None,
     run_stringtie=None,
     run_minimap2=None,
-    run_genblast=None,
-    run_busco=None,
+    run_genblast_uniprot=None,
+    run_genblast_orthodb=None,
+    run_miniprot_uniprot=None,
+    run_miniprot_orthodb=None,
     rfam_accessions_file=None,
     short_read_fastq_dir=None,
     long_read_fastq_dir=None,
-    protein_file=None,
-    busco_protein_file=None,
+    uniprot_protein_file=None,
+    orthodb_protein_file=None,
     finalise_geneset=None,
 ):
     """
@@ -96,7 +101,7 @@ def configure_analysis_flags(  # pylint: disable=too-many-arguments, too-many-br
         run_simple_features = True if run_simple_features is None else run_simple_features
         run_sncrnas = True if run_sncrnas is None else run_sncrnas
         run_transcriptomic = True if run_transcriptomic is None else run_transcriptomic
-        run_proteins = True if run_proteins is None else run_proteins
+        run_proteins_genblast = True if run_proteins_genblast is None else run_proteins_genblast
         finalise_geneset = True if finalise_geneset is None else finalise_geneset
     else:
         finalise_geneset = False if finalise_geneset is None else finalise_geneset
@@ -104,7 +109,7 @@ def configure_analysis_flags(  # pylint: disable=too-many-arguments, too-many-br
         run_simple_features = False if run_simple_features is None else run_simple_features
         run_sncrnas = False if run_sncrnas is None else run_sncrnas
         run_transcriptomic = False if run_transcriptomic is None else run_transcriptomic
-        run_proteins = False if run_proteins is None else run_proteins
+        run_proteins_genblast = False if run_proteins_genblast is None else run_proteins_genblast
 
     # Repeats
     flags["run_masking"] = run_masking if run_masking is not None else run_repeats
@@ -137,12 +142,19 @@ def configure_analysis_flags(  # pylint: disable=too-many-arguments, too-many-br
     ) and long_read_fastq_dir is not None
 
     # Proteins
-    flags["run_genblast"] = (
-        run_genblast if run_genblast is not None else run_proteins
-    ) and protein_file is not None
-    flags["run_busco"] = (
-        run_busco if run_busco is not None else run_proteins
-    ) and busco_protein_file is not None
+    flags["run_genblast_uniprot"] = (
+        run_genblast_uniprot if run_genblast_uniprot is not None else run_proteins_genblast
+    ) and uniprot_protein_file is not None
+    flags["run_genblast_orthodb"] = (
+        run_genblast_orthodb if run_genblast_orthodb is not None else run_proteins_genblast
+    ) and orthodb_protein_file is not None
+
+    flags["run_miniprot_uniprot"] = (
+        run_miniprot_uniprot if run_miniprot_uniprot is not None else run_proteins_miniprot
+    ) and uniprot_protein_file is not None
+    flags["run_miniprot_orthodb"] = (
+        run_miniprot_orthodb if run_miniprot_orthodb is not None else run_proteins_miniprot
+    ) and orthodb_protein_file is not None
 
     # Finalisation
     flags["finalise_geneset"] = finalise_geneset if finalise_geneset is not None else finalise_geneset
@@ -195,6 +207,12 @@ def parse_args():  # pylint:disable=too-many-statements
             http://genome.sfu.ca/genblast/download.html",
     )
     parser.add_argument(
+        "--miniprot_path",
+        type=str,
+        help="Path to Miniprot executable. See \
+            https://github.com/soedinglab/miniprot",
+    )
+    parser.add_argument(
         "--convert2blastmask_path",
         type=str,
         help="Path to \
@@ -207,11 +225,32 @@ def parse_args():  # pylint:disable=too-many-statements
         executable",
     )
     parser.add_argument(
-        "--run_genblast",
+        "--run_genblast_uniprot",
         action="store_const",
         const=True,
         default=None,
         help="Run GenBlast to align protein sequences",
+    )
+    parser.add_argument(
+        "--run_genblast_orthodb",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Run GenBlast to align BUSCO (OrthoDB) protein sequences",
+    )
+    parser.add_argument(
+        "--run_miniprot_uniprot",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Run Miniprot to align uniprot protein sequences",
+    )
+    parser.add_argument(
+        "--run_miniprot_orthodb",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Run Miniprot to align OrthoDB protein sequences",
     )
     parser.add_argument(
         "--genblast_timeout",
@@ -221,23 +260,23 @@ def parse_args():  # pylint:disable=too-many-statements
         default=10800,
     )
     parser.add_argument(
-        "--run_busco",
+        "--run_genblast_orthodb",
         action="store_const",
         const=True,
         default=None,
         help="Run GenBlast to align BUSCO (OrthoDB) protein sequences",
     )
     parser.add_argument(
-        "--protein_file",
+        "--uniprot_protein_file",
         type=str,
         help="Path to a fasta file with \
         protein sequences",
     )
     parser.add_argument(
-        "--busco_protein_file",
+        "--orthodb_protein_file",
         type=str,
-        help="Path to a fasta file with BUSCO \
-            (OrthoDB) protein sequences",
+        help="Path to a fasta file with OrthoDB \
+            protein sequences",
     )
     parser.add_argument(
         "--rfam_accessions_file",
@@ -460,11 +499,18 @@ def parse_args():  # pylint:disable=too-many-statements
             long_read_fastq_dir are provided)",
     )
     parser.add_argument(
-        "--run_proteins",
+        "--run_proteins_genblast",
         action="store_const",
         const=True,
         default=None,
-        help="Run GenBlast if protein_file and/or busco_protein_file",
+        help="Run GenBlast if uniprot_protein_file and/or orthodb_protein_file",
+    )
+    parser.add_argument(
+        "--run_proteins_miniprot",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Run Miniprot if uniprot_protein_file and/or orthodb_protein_file",
     )
     parser.add_argument(
         "--diamond_validation_db",
@@ -538,13 +584,14 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     # masked_genome_file = genome_file  # This will be updated later if Red is run
     red_path = optional_path(args.red_path) or config["red"]["software"]
     geneblast_path = optional_path(args.genblast_path) or config["genblast"]["software"]
+    miniprot_path = optional_path(args.miniprot_path) or config["miniprot"]["software"]
     convert2blastmask_path = (
         optional_path(args.convert2blastmask_path) or config["convert2blastmask"]["software"]
     )
     makeblastdb_path = optional_path(args.makeblastdb_path) or config["makeblastdb"]["software"]
     genblast_timeout = args.genblast_timeout
-    protein_file = optional_path(args.protein_file)
-    busco_protein_file = optional_path(args.busco_protein_file)
+    uniprot_protein_file = optional_path(args.uniprot_protein_file)
+    orthodb_protein_file = optional_path(args.orthodb_protein_file)
     rfam_accessions_file = optional_path(args.rfam_accessions_file)
     star_path = optional_path(args.star_path) or config["star"]["software"]
     short_read_fastq_dir = optional_path(args.short_read_fastq_dir)
@@ -624,7 +671,8 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
         run_simple_features=args.run_simple_features,
         run_sncrnas=args.run_sncrnas,
         run_transcriptomic=args.run_transcriptomic,
-        run_proteins=args.run_proteins,
+        run_proteins_genblast=args.run_proteins_genblast,
+        run_proteins_miniprot=args.run_proteins_miniprot,
         run_masking=args.run_masking,
         run_dust=args.run_dust,
         run_trf=args.run_trf,
@@ -637,13 +685,15 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
         run_scallop=args.run_scallop,
         run_stringtie=args.run_stringtie,
         run_minimap2=args.run_minimap2,
-        run_genblast=args.run_genblast,
-        run_busco=args.run_busco,
+        run_genblast_uniprot=args.run_genblast_uniprot,
+        run_genblast_orthodb=args.run_genblast_orthodb,
+        run_miniprot_uniprot=args.run_miniprot_uniprot,
+        run_miniprot_orthodb=args.run_miniprot_orthodb,
         rfam_accessions_file=args.rfam_accessions_file,
         short_read_fastq_dir=args.short_read_fastq_dir,
         long_read_fastq_dir=long_read_fastq_dir,
-        protein_file=args.protein_file,
-        busco_protein_file=args.busco_protein_file,
+        uniprot_protein_file=args.uniprot_protein_file,
+        orthodb_protein_file=args.orthodb_protein_file,
         finalise_geneset=args.finalise_geneset,
     )
 
@@ -761,9 +811,14 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
         star.run_trimming(work_dir, short_read_fastq_dir, delete_pre_trim_fastq, num_threads)
 
     if analysis_flags["run_star"]:
-        if star_path is None or short_read_fastq_dir is None:
+        if (
+            star_path is None
+            or short_read_fastq_dir is None
+            or samtools_path is None
+            or trim_galore_path is None
+        ):
             raise ValueError(
-                "--star_path and --short_read_fastq_dir are required when STAR analysis is enabled"
+                "--star_path and --short_read_fastq_dir --samtools_path and --trim_galore_path are required when STAR analysis is enabled"
             )
         logger.info("Running Star")
         logger.info("run_star genome file %s", genome_file)
@@ -817,20 +872,20 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     #################################
     # Protein analyses
     #################################
-    if analysis_flags["run_genblast"]:
-        if geneblast_path is None or convert2blastmask_path is None or protein_file is None:
+    if analysis_flags["run_genblast_uniprot"]:
+        if geneblast_path is None or convert2blastmask_path is None or uniprot_protein_file is None:
             raise ValueError(
                 "--geneblast_path and --convert2blastmask_path are required when GenBlast analysis is enabled"
             )
 
         logger.info("Running GenBlast")
-        logger.info("run_genblast genome file %s", masked_genome_file)
+        logger.info("run_genblast_uniprot genome file %s", masked_genome_file)
         genblast.run_genblast(
             genblast_bin=geneblast_path,
             convert2blastmask_bin=convert2blastmask_path,
             makeblastdb_bin=makeblastdb_path,
             output_dir=work_dir,
-            protein_dataset=protein_file,
+            protein_dataset=uniprot_protein_file,
             masked_genome=masked_genome_file,
             max_intron_length=max_intron_length,
             num_threads=num_threads,
@@ -840,19 +895,19 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
 
     # Run GenBlast on OrthoDB or other set, gives higher priority when creating the
     # final genes in cases where transcriptomic data are missing or fragmented
-    if analysis_flags["run_busco"]:
-        if geneblast_path is None or convert2blastmask_path is None or busco_protein_file is None:
+    if analysis_flags["run_genblast_orthodb"]:
+        if geneblast_path is None or convert2blastmask_path is None or orthodb_protein_file is None:
             raise ValueError(
                 "--geneblast_path and --convert2blastmask_path are required when GenBlast analysis is enabled"
             )
         logger.info("Running GenBlast on OrthoDB or FungiDB proteins")
-        logger.info("run_busco genome file %s", masked_genome_file)
+        logger.info("run_genblast_orthodb genome file %s", masked_genome_file)
         genblast.run_genblast(
             genblast_bin=geneblast_path,
             convert2blastmask_bin=convert2blastmask_path,
             makeblastdb_bin=makeblastdb_path,
             output_dir=work_dir,
-            protein_dataset=busco_protein_file,
+            protein_dataset=orthodb_protein_file,
             masked_genome=Path(masked_genome_file),
             max_intron_length=max_intron_length,
             num_threads=num_threads,
@@ -860,6 +915,32 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
             protein_set="orthodb",
         )
 
+    if analysis_flags["run_miniprot_uniprot"]:
+        if miniprot_path is None or uniprot_protein_file is None:
+            raise ValueError("--miniprot_path is required when Miniprot analysis is enabled")
+        logger.info("Running Miniprot")
+        logger.info("run_miniprot_uniprot genome file %s", masked_genome_file)
+        miniprot.run_miniprot(
+            miniprot_bin=miniprot_path,
+            output_dir=work_dir,
+            protein_dataset=uniprot_protein_file,
+            masked_genome=masked_genome_file,
+            num_threads=num_threads,
+            protein_set="uniprot",
+        )
+    if analysis_flags["run_miniprot_orthodb"]:
+        if miniprot_path is None or orthodb_protein_file is None:
+            raise ValueError("--miniprot_path is required when Miniprot analysis is enabled")
+        logger.info("Running Miniprot on OrthoDB or FungiDB proteins")
+        logger.info("run_miniprot_orthodb genome file %s", masked_genome_file)
+        miniprot.run_miniprot(
+            miniprot_bin=miniprot_path,
+            output_dir=work_dir,
+            protein_dataset=orthodb_protein_file,
+            masked_genome=masked_genome_file,
+            num_threads=num_threads,
+            protein_set="orthodb",
+        )
     #################################
     # Finalisation not yet modularised
     #################################
