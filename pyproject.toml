@@ -39,6 +39,7 @@ classifiers = [
 
 dependencies = [ 
     "psutil",
+    "numpy"
 ]
 
 
