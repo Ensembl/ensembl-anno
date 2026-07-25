@@ -1,4 +1,5 @@
 """Generate RST files for each analysis module in the ensembl.tools.anno package."""
+
 from pathlib import Path
 import importlib
 
@@ -45,7 +46,7 @@ for package, group in GROUPS.items():
         try:
             mod = importlib.import_module(module_name)
             summary = (mod.__doc__ or "").strip().split("\n")[0]
-        except Exception:#pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except
             summary = ""
 
         title = name.replace("_", " ").title()

@@ -159,7 +159,7 @@ def generate_miniprot_gtf(miniprot_dir: str) -> None:
                 )
 
 
-def convert_miniprot_gff_to_gtf( # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+def convert_miniprot_gff_to_gtf(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
     input_file: Union[str, Path],
     output_file: Union[str, Path],
 ) -> None:

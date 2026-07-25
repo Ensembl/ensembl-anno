@@ -175,11 +175,11 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
     )
 
     genblast_uniprot_annotation_raw = main_output_dir / "genblast_uniprot_output" / "annotation.gtf"
-    
+
     genblast_orthodb_annotation_raw = main_output_dir / "genblast_orthodb_output" / "annotation.gtf"
-    
+
     miniprot_uniprot_annotation_raw = main_output_dir / "miniprot_uniprot_output" / "annotation.gtf"
-    
+
     miniprot_orthodb_annotation_raw = main_output_dir / "miniprot_orthodb_output" / "annotation.gtf"
 
     minimap2_annotation_raw = main_output_dir / "minimap2_output" / "annotation.gtf"
@@ -199,9 +199,9 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
     gtf_to_seq_script = main_script_dir / "support_scripts_perl" / "gtf_to_seq.pl"
 
     transcriptomic_annotation_raw = final_annotation_dir / "transcriptomic_raw.gtf"
-    
+
     busco_annotation_raw = final_annotation_dir / "busco_raw.gtf"
-    
+
     protein_annotation_raw = final_annotation_dir / "protein_raw.gtf"
 
     if not skip_if_exists(
@@ -233,10 +233,10 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
                     )
 
     if genblast_uniprot_annotation_raw.exists() or miniprot_uniprot_annotation_raw.exists():
-        #shutil.copy2(
+        # shutil.copy2(
         #    busco_annotation_raw,
         #    final_annotation_dir / "busco_raw.gtf",
-        #)
+        # )
         with busco_annotation_raw.open(
             "w",
             encoding="utf-8",
@@ -260,10 +260,10 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
                         out_handle,
                     )
     if genblast_orthodb_annotation_raw.exists() or miniprot_orthodb_annotation_raw.exists():
-        #shutil.copy2(
+        # shutil.copy2(
         #    protein_annotation_raw,
         #    final_annotation_dir / "busco_raw.gtf",
-        #)
+        # )
         with protein_annotation_raw.open(
             "w",
             encoding="utf-8",
@@ -285,9 +285,9 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
                     shutil.copyfileobj(
                         in_handle,
                         out_handle,
-                    )               
+                    )
 
-    #if protein_annotation_raw.exists():
+    # if protein_annotation_raw.exists():
     #    shutil.copy2(
     #        protein_annotation_raw,
     #        final_annotation_dir / "protein_raw.gtf",
@@ -434,7 +434,7 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
         annotation_raw,
         output_suffix,
         extra_args,
-        num_threads,# pylint: disable=redefined-argument-from-local
+        num_threads,  # pylint: disable=redefined-argument-from-local
     ) in biotype_configs:
         run_biotype(
             biotype_name=biotype_name,
