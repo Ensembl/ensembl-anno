@@ -554,7 +554,7 @@ def parse_args():  # pylint:disable=too-many-statements
         help="Specify logic name for repeatmasker analysis (default \
             repeatmask_repbase_human)",
     )
-    parser.add_argument("--trim_galore_path", default="", type=str, help="Path to trim_galore")
+    parser.add_argument("--trim_galore_path", type=str, help="Path to trim_galore")
     parser.add_argument(
         "--make_single_transcript_genes",
         action="store_const",
@@ -619,7 +619,7 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     repeatmasker_library = args.repeatmasker_library
     species = args.repeatmasker_species
     repeatmasker_analysis = args.repeatmasker_analysis
-    trim_galore_path = optional_path(args.trim_galore_path)
+    trim_galore_path = optional_path(args.trim_galore_path) or config["trimgalore"]["software"]
     run_repeatmasker = args.run_repeatmasker
     finalise_geneset = args.finalise_geneset
     make_single_transcript_genes = args.make_single_transcript_genes

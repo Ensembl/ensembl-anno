@@ -91,5 +91,8 @@
     "trnascan": {
         "software": "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/tRNAscan-SE",
         "filter_path" : "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
+    },
+    "trimgalore": {
+        "software": "trim_galore"
     }
 }    
