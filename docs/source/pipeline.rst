@@ -6,7 +6,7 @@ gene set finalisation.
 
 Pipeline overview
 
-::
+.. code-block:: text
 Genome
    │
    ▼
@@ -35,7 +35,7 @@ Transcriptomic evidence
 Protein evidence
    │
    ├── GenBlast
-   └── BUSCO proteins
+   └── Miniprot
    │
    ▼
 Gene set finalisation
