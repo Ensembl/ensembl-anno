@@ -50,4 +50,5 @@ Protein annotation
    :maxdepth: 1
 
    genblast
+   miniprot
 
