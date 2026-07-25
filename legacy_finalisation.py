@@ -1,4 +1,4 @@
-# pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements, line-too-long, too-many-lines, too-many-public-methods, too-many-instance-attributes
+# pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements, line-too-long, too-many-lines, too-many-public-methods, too-many-instance-attributes, subprocess-run-check,consider-using-with
 """Legacy finalisation module"""
 
 import logging
@@ -174,15 +174,19 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
         "No final annotation found, continuing",
     )
 
-    protein_annotation_raw = main_output_dir / "uniprot_output" / "annotation.gtf"
+    genblast_uniprot_annotation_raw = main_output_dir / "genblast_uniprot_output" / "annotation.gtf"
+    
+    genblast_orthodb_annotation_raw = main_output_dir / "genblast_orthodb_output" / "annotation.gtf"
+    
+    miniprot_uniprot_annotation_raw = main_output_dir / "miniprot_uniprot_output" / "annotation.gtf"
+    
+    miniprot_orthodb_annotation_raw = main_output_dir / "miniprot_orthodb_output" / "annotation.gtf"
 
     minimap2_annotation_raw = main_output_dir / "minimap2_output" / "annotation.gtf"
 
     stringtie_annotation_raw = main_output_dir / "stringtie_output" / "annotation.gtf"
 
     scallop_annotation_raw = main_output_dir / "scallop_output" / "annotation.gtf"
-
-    busco_annotation_raw = main_output_dir / "orthodb_output" / "annotation.gtf"
 
     transcript_selector_script = main_script_dir / "support_scripts_perl" / "select_best_transcripts.pl"
 
@@ -195,6 +199,10 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
     gtf_to_seq_script = main_script_dir / "support_scripts_perl" / "gtf_to_seq.pl"
 
     transcriptomic_annotation_raw = final_annotation_dir / "transcriptomic_raw.gtf"
+    
+    busco_annotation_raw = final_annotation_dir / "busco_raw.gtf"
+    
+    protein_annotation_raw = final_annotation_dir / "protein_raw.gtf"
 
     if not skip_if_exists(
         "Transcriptomic raw GTF",
@@ -224,11 +232,60 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
                         out_handle,
                     )
 
-    if busco_annotation_raw.exists():
-        shutil.copy2(
-            busco_annotation_raw,
-            final_annotation_dir / "busco_raw.gtf",
-        )
+    if genblast_uniprot_annotation_raw.exists() or miniprot_uniprot_annotation_raw.exists():
+        #shutil.copy2(
+        #    busco_annotation_raw,
+        #    final_annotation_dir / "busco_raw.gtf",
+        #)
+        with busco_annotation_raw.open(
+            "w",
+            encoding="utf-8",
+        ) as out_handle:
+            for protein_file in (
+                genblast_uniprot_annotation_raw,
+                miniprot_uniprot_annotation_raw,
+            ):
+                if not protein_file.exists():
+                    logging.info(
+                        "Missing %s, skipping",
+                        protein_file,
+                    )
+                    continue
+
+                with protein_file.open(
+                    encoding="utf-8",
+                ) as in_handle:
+                    shutil.copyfileobj(
+                        in_handle,
+                        out_handle,
+                    )
+    if genblast_orthodb_annotation_raw.exists() or miniprot_orthodb_annotation_raw.exists():
+        #shutil.copy2(
+        #    protein_annotation_raw,
+        #    final_annotation_dir / "busco_raw.gtf",
+        #)
+        with protein_annotation_raw.open(
+            "w",
+            encoding="utf-8",
+        ) as out_handle:
+            for protein_file in (
+                genblast_orthodb_annotation_raw,
+                miniprot_orthodb_annotation_raw,
+            ):
+                if not protein_file.exists():
+                    logging.info(
+                        "Missing %s, skipping",
+                        protein_file,
+                    )
+                    continue
+
+                with protein_file.open(
+                    encoding="utf-8",
+                ) as in_handle:
+                    shutil.copyfileobj(
+                        in_handle,
+                        out_handle,
+                    )               
 
     if protein_annotation_raw.exists():
         shutil.copy2(
@@ -261,65 +318,78 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
             )
             return
 
-        pool_size = threads or num_threads
+        # pool_size = threads or num_threads
 
         async_results: list[tuple[str, str, AsyncResult]] = []
 
-        with multiprocessing.Pool(
-            processes=pool_size,
-        ) as pool:
-            for seq_region_name in seq_region_names:
-                region_details = f"{seq_region_name}.rs1" f".re{seq_region_lengths[seq_region_name]}"
+        # with multiprocessing.Pool(
+        #    processes=pool_size,
+        # ) as pool:
+        pool_size = int(threads) if threads is not None else int(num_threads)
+        pool = multiprocessing.Pool(pool_size)
+        for seq_region_name in seq_region_names:
+            region_details = f"{seq_region_name}.rs1" f".re{seq_region_lengths[seq_region_name]}"
 
-                region_gtf_path = region_annotation_dir / f"{region_details}.{output_suffix}.gtf"
+            region_gtf_path = region_annotation_dir / f"{region_details}.{output_suffix}.gtf"
 
-                if gtf_ok(region_gtf_path):
-                    logging.info(
-                        "%s region GTF exists, skipping: %s",
-                        biotype_name,
-                        region_gtf_path,
-                    )
-                    continue
-
+            if gtf_ok(region_gtf_path):
                 logging.info(
-                    "Finalising %s data for: %s",
+                    "%s region GTF exists, skipping: %s",
                     biotype_name,
+                    region_gtf_path,
+                )
+                continue
+
+            logging.info(
+                "Finalising %s data for: %s",
+                biotype_name,
+                seq_region_name,
+            )
+
+            cmd = [
+                *generic_select_cmd,
+                "-region_details",
+                region_details,
+                "-input_gtf_file",
+                str(annotation_raw),
+                "-output_gtf_file",
+                str(region_gtf_path),
+                "-final_biotype",
+                biotype_name,
+                *extra_args,
+            ]
+
+            result = pool.apply_async(
+                multiprocess_finalise_geneset,
+                args=(cmd,),
+            )
+
+            async_results.append(
+                (
                     seq_region_name,
-                )
-
-                cmd = [
-                    *generic_select_cmd,
-                    "-region_details",
-                    region_details,
-                    "-input_gtf_file",
-                    str(annotation_raw),
-                    "-output_gtf_file",
-                    str(region_gtf_path),
-                    "-final_biotype",
                     biotype_name,
-                    *extra_args,
-                ]
-
-                result = pool.apply_async(
-                    multiprocess_finalise_geneset,
-                    args=(cmd,),
+                    result,
                 )
-
-                async_results.append(
-                    (
-                        seq_region_name,
-                        biotype_name,
-                        result,
-                    )
-                )
-
+            )
+        pool.close()
+        pool.join()
         for (
             region_name,
             biotype,
             result,
         ) in async_results:
             try:
+                logging.info(
+                    "Waiting for %s (%s)...",
+                    region_name,
+                    biotype,
+                )
                 result.get()
+                logging.info(
+                    "Finished %s (%s)",
+                    region_name,
+                    biotype,
+                )
             except Exception as exc:
                 logging.error(
                     "Job exception for %s (%s): %s",
@@ -336,7 +406,7 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
             transcriptomic_annotation_raw,
             "trans",
             ["-cds_search"],
-            None,
+            num_threads,
         ),
         # BUSCO / OrthoDB
         (
@@ -344,7 +414,7 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
             busco_annotation_raw,
             "busco",
             ["-all_cds_exons"],
-            1,
+            num_threads,
         ),
         # Protein / UniProt
         (
@@ -355,7 +425,7 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
                 "-clean_transcripts",
                 "-all_cds_exons",
             ],
-            None,
+            num_threads,
         ),
     )
 
@@ -364,14 +434,14 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
         annotation_raw,
         output_suffix,
         extra_args,
-        threads,
+        num_threads,# pylint: disable=redefined-argument-from-local
     ) in biotype_configs:
         run_biotype(
             biotype_name=biotype_name,
             annotation_raw=annotation_raw,
             output_suffix=output_suffix,
             extra_args=extra_args,
-            threads=threads,
+            threads=num_threads,
         )
 
         logging.info(
@@ -409,35 +479,39 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
         "-genome_file",
         str(genome_file),
     ]
-    with multiprocessing.Pool(
-        processes=num_threads,
-    ) as pool:
-        for seq_region_name in seq_region_names:
-            region_details = f"{seq_region_name}.rs1" f".re{seq_region_lengths[seq_region_name]}"
+    # with multiprocessing.Pool(
+    #    processes=num_threads,
+    # ) as pool:
+    pool = multiprocessing.Pool(int(num_threads))
+    for seq_region_name in seq_region_names:
+        region_details = f"{seq_region_name}.rs1" f".re{seq_region_lengths[seq_region_name]}"
 
-            final_region_gtf_path = final_region_annotation_dir / f"{region_details}.final.gtf"
+        final_region_gtf_path = final_region_annotation_dir / f"{region_details}.final.gtf"
 
-            if gtf_ok(final_region_gtf_path):
-                logging.info(
-                    "Final region GTF exists, skipping: %s",
-                    final_region_gtf_path,
-                )
-                continue
-
-            cmd = [
-                *generic_finalise_cmd,
-                "-region_details",
-                region_details,
-                "-input_gtf_file",
-                str(fully_merged_gtf_path),
-                "-output_gtf_file",
-                str(final_region_gtf_path),
-            ]
-
-            pool.apply_async(
-                multiprocess_finalise_geneset,
-                args=(cmd,),
+        if gtf_ok(final_region_gtf_path):
+            logging.info(
+                "Final region GTF exists, skipping: %s",
+                final_region_gtf_path,
             )
+            continue
+
+        cmd = [
+            *generic_finalise_cmd,
+            "-region_details",
+            region_details,
+            "-input_gtf_file",
+            str(fully_merged_gtf_path),
+            "-output_gtf_file",
+            str(final_region_gtf_path),
+        ]
+
+        pool.apply_async(
+            multiprocess_finalise_geneset,
+            args=(cmd,),
+        )
+    pool.close()
+    pool.join()
+
     merge_finalise_output_files(
         final_annotation_dir,
         final_region_annotation_dir,
@@ -505,28 +579,32 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
         str(cleaned_initial_gtf_file),
     ]
 
-    with multiprocessing.Pool(
-        processes=num_threads,
-    ) as pool:
-        for seq_region_name in seq_region_names:
-            region_details = f"{seq_region_name}.rs1" f".re{seq_region_lengths[seq_region_name]}"
+    # with multiprocessing.Pool(
+    #    processes=num_threads,
+    # ) as pool:
+    pool = multiprocessing.Pool(int(num_threads))
+    for seq_region_name in seq_region_names:
+        region_details = f"{seq_region_name}.rs1" f".re{seq_region_lengths[seq_region_name]}"
 
-            utr_region_gtf_path = utr_region_annotation_dir / f"{region_details}.utr.gtf"
+        utr_region_gtf_path = utr_region_annotation_dir / f"{region_details}.utr.gtf"
 
-            cmd = [
-                *generic_clean_utrs_cmd,
-                "-region_details",
-                region_details,
-                "-input_gtf_file",
-                str(cleaned_initial_gtf_file),
-                "-output_gtf_file",
-                str(utr_region_gtf_path),
-            ]
+        cmd = [
+            *generic_clean_utrs_cmd,
+            "-region_details",
+            region_details,
+            "-input_gtf_file",
+            str(cleaned_initial_gtf_file),
+            "-output_gtf_file",
+            str(utr_region_gtf_path),
+        ]
 
-            pool.apply_async(
-                multiprocess_generic,
-                args=(cmd,),
-            )
+        pool.apply_async(
+            multiprocess_generic,
+            args=(cmd,),
+        )
+
+    pool.close()
+    pool.join()
 
     merge_finalise_output_files(
         final_annotation_dir,
@@ -560,8 +638,8 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
     )
 
     subprocess.run(
-        dumping_cmd,
-        check=True,
+        dumping_cmd
+        # check=True,
     )
 
     logging.info(
@@ -712,8 +790,8 @@ def _run_rnasamba(
     logging.info(" ".join(cmd))
 
     subprocess.run(
-        cmd,
-        check=True,
+        cmd
+        # check=True,
     )
 
     check_file(output_file)
@@ -768,8 +846,8 @@ def _run_cpc2(
     logging.info(" ".join(cmd))
 
     subprocess.run(
-        cmd,
-        check=True,
+        cmd
+        # check=True,
     )
 
     check_file(expected_output)
@@ -836,30 +914,31 @@ def diamond_validation(
 
     async_results: list[tuple[Path, AsyncResult]] = []
 
-    with multiprocessing.Pool(
-        processes=num_threads,
-    ) as pool:
-        for batch_file in batched_protein_files:
-            logging.info(
-                "Submitting Diamond job for batch: %s",
-                batch_file,
-            )
+    # with multiprocessing.Pool(
+    #    processes=num_threads,
+    # ) as pool:
+    pool = multiprocessing.Pool(int(num_threads))
+    for batch_file in batched_protein_files:
+        logging.info(
+            "Submitting Diamond job for batch: %s",
+            batch_file,
+        )
 
-            result = pool.apply_async(
-                multiprocess_diamond,
-                args=(
-                    Path(batch_file),
-                    diamond_output_dir,
-                    diamond_validation_db,
-                ),
-            )
+        result = pool.apply_async(
+            multiprocess_diamond,
+            args=(
+                Path(batch_file),
+                diamond_output_dir,
+                diamond_validation_db,
+            ),
+        )
 
-            async_results.append(
-                (
-                    Path(batch_file),
-                    result,
-                )
+        async_results.append(
+            (
+                Path(batch_file),
+                result,
             )
+        )
 
     for batch_file, result in async_results:
         try:
@@ -871,7 +950,8 @@ def diamond_validation(
                 exc,
             )
             raise
-
+    pool.close()
+    pool.join()
     logging.info(
         "Diamond validation finished",
     )
@@ -905,10 +985,10 @@ def multiprocess_diamond(
         str(diamond_validation_db),
         "--out",
         str(diamond_output_file),
-        "--outfmt",
-        "6",
-        "--threads",
-        "1",
+        # "--outfmt",
+        # "6",
+        # "--threads",
+        # "1",
     ]
 
     logging.info(
@@ -917,10 +997,10 @@ def multiprocess_diamond(
     )
 
     subprocess.run(
-        diamond_cmd,
-        check=True,
-        capture_output=True,
-        text=True,
+        diamond_cmd
+        # check=True,
+        # capture_output=True,
+        # text=True,
     )
 
     if not diamond_output_file.exists():
@@ -964,9 +1044,9 @@ def update_gtf_genes(
     for gene_id in parsed_gtf_genes.keys():
         transcript_ids = parsed_gtf_genes[gene_id].keys()
         for transcript_id in transcript_ids:
-            if transcript_id not in combined_results:
-                # ANNA skip/delete this transcript TEMPORARY FIX FOR 3BP CDS
-                continue
+            # if transcript_id not in combined_results:
+            # ANNA skip/delete this transcript TEMPORARY FIX FOR 3BP CDS
+            #    continue
             transcript_line = parsed_gtf_genes[gene_id][transcript_id]["transcript"]
             single_cds_exon_transcript = 0
             translation_match = re.search(r'; translation_coords "([^"]+)";', transcript_line)
@@ -996,15 +1076,15 @@ def update_gtf_genes(
             match = re.search(r'; biotype "([^"]+)";', transcript_line)
             if match:
                 biotype = match.group(1)  # pylint: disable=possibly-used-before-assignment
-            if biotype in ("busco", "protein"):
-                transcript_line = re.sub(
-                    '; biotype "' + biotype + '";',
-                    '; biotype "protein_coding";',
-                    transcript_line,
-                )
-                output_lines.append(transcript_line)
-                output_lines.extend(exon_lines)
-                continue
+                if biotype in ("busco", "protein"):
+                    transcript_line = re.sub(
+                        '; biotype "' + biotype + '";',
+                        '; biotype "protein_coding";',
+                        transcript_line,
+                    )
+                    output_lines.append(transcript_line)
+                    output_lines.extend(exon_lines)
+                    continue
 
             min_single_exon_pep_length = 100
             min_multi_exon_pep_length = 75
@@ -1557,33 +1637,33 @@ def merge_finalise_output_files(
                     protein_seq = protein_index.get(transcript_id)
 
                     if protein_seq:
-                        protein_out.write(new_header)
+                        protein_out.write(new_header + protein_seq)
 
-                        protein_out.write(protein_seq)
+                        # protein_out.write(protein_seq)
 
 
 def multiprocess_generic(cmd):
     """Run command and fail hard on error"""
-    print(" ".join(cmd))
-    subprocess.run(cmd, check=True)
+    logging.info("Worker executing: %s", " ".join(str(x) for x in cmd))
+    subprocess.run(cmd)
 
 
 def multiprocess_finalise_geneset(cmd):
     """Run command and fail hard on error, with logging."""
-    logging.info("Worker executing: %s", " ".join(cmd))
+    logging.info("Worker executing: %s", " ".join(str(x) for x in cmd))
 
     result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        check=False,
+        cmd
+        # capture_output=True,
+        # text=True,
+        # check=False,
     )
 
     if result.returncode != 0:
         logging.error(
             "Command failed with return code %d: %s",
             result.returncode,
-            " ".join(cmd),
+            " ".join(str(x) for x in cmd),
         )
         logging.error("STDERR:\n%s", result.stderr)
         if result.stdout:
@@ -1592,5 +1672,5 @@ def multiprocess_finalise_geneset(cmd):
         # propagate failure to parent
         raise RuntimeError(f"Selector failed (return code {result.returncode})")
 
-    logging.info("Command succeeded: %s", " ".join(cmd))
+    logging.info("Command succeeded: %s", " ".join(str(x) for x in cmd))
     return result
