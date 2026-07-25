@@ -237,7 +237,7 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
         #    busco_annotation_raw,
         #    final_annotation_dir / "busco_raw.gtf",
         # )
-        with busco_annotation_raw.open(
+        with protein_annotation_raw.open(
             "w",
             encoding="utf-8",
         ) as out_handle:
@@ -264,7 +264,7 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
         #    protein_annotation_raw,
         #    final_annotation_dir / "busco_raw.gtf",
         # )
-        with protein_annotation_raw.open(
+        with busco_annotation_raw.open(
             "w",
             encoding="utf-8",
         ) as out_handle:
