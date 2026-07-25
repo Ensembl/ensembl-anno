@@ -287,11 +287,11 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
                         out_handle,
                     )               
 
-    if protein_annotation_raw.exists():
-        shutil.copy2(
-            protein_annotation_raw,
-            final_annotation_dir / "protein_raw.gtf",
-        )
+    #if protein_annotation_raw.exists():
+    #    shutil.copy2(
+    #        protein_annotation_raw,
+    #        final_annotation_dir / "protein_raw.gtf",
+    #    )
 
     generic_select_cmd = [
         "perl",
