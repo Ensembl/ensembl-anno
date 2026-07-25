@@ -260,13 +260,6 @@ def parse_args():  # pylint:disable=too-many-statements
         default=10800,
     )
     parser.add_argument(
-        "--run_genblast_orthodb",
-        action="store_const",
-        const=True,
-        default=None,
-        help="Run GenBlast to align BUSCO (OrthoDB) protein sequences",
-    )
-    parser.add_argument(
         "--uniprot_protein_file",
         type=str,
         help="Path to a fasta file with \
