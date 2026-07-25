@@ -554,7 +554,7 @@ def parse_args():  # pylint:disable=too-many-statements
         help="Specify logic name for repeatmasker analysis (default \
             repeatmask_repbase_human)",
     )
-    parser.add_argument("--trim_galore_path", type=str, help="Path to trim_galore")
+    parser.add_argument("--trim_galore_path", default="", type=str, help="Path to trim_galore")
     parser.add_argument(
         "--make_single_transcript_genes",
         action="store_const",
