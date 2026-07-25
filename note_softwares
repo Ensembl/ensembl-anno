@@ -60,6 +60,13 @@ GenBlast identifies homologous gene sequences in genomic databases. One of the k
 
 **Citation:** [She et al., "GenBlastA: enabling BLAST to identify homologous gene sequences"](https://pubmed.ncbi.nlm.nih.gov/18838612/)
 
+### MiniProt
+#
+MinProt is a lightweight and efficient protein annotation and homology search tool designed for rapid identification of protein-coding genes across genomes. It is particularly well suited for comparative genomics and large-scale genome annotation projects, enabling researchers to align known protein sequences to genomic assemblies with high speed and accuracy. MinProt is optimized for handling divergent sequences and fragmented assemblies, making it valuable for evolutionary studies and annotation of non-model organisms.
+
+**Citation:** [Heng Li, "Miniprot: mapping protein sequences to genomes with splice awareness"](https://academic.oup.com/bioinformatics/article/39/1/btad014/6989621)
+
+
 ### STAR
 
 STAR-Spliced Transcripts Alignment to a Reference is an ultrafast universal RNA-seq aligner for aligning RNA-seq data to a reference genome.
