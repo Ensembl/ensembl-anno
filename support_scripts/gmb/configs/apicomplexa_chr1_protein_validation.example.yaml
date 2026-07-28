@@ -1,4 +1,4 @@
-# Apicomplexa chr1 protein-validation config -- Plasmodium falciparum GCA_000002765.3
+# Apicomplexa chr1 protein-validation overlay -- Plasmodium falciparum GCA_000002765.3
 #
 # This is a LOCAL EXAMPLE, not a portable default: `diamond_db` below must be
 # set to a real path before use (see comment on that key) and is not tracked
@@ -6,50 +6,20 @@
 # editing it in place, or override protein_validation.diamond_db via your
 # own config.
 #
-# Purpose: enable and validate the existing DIAMOND/Psauron protein-
-# validation stage locally, scoped to chromosome/seqname 1 only, against a
-# DIAMOND database copied from the cluster to this machine.
+# This is a small OVERLAY, layered on top of apicomplexa_first_pass.yaml via
+# a repeated --config (gmb.pipeline.config.load_config() accepts either a
+# single path or an ordered list of paths, later ones winning per-key --
+# see gmb-build --help). It intentionally contains *only* the
+# protein_validation settings: do not duplicate apicomplexa_first_pass.yaml's
+# other tuning here, and do not edit fungi_default.yaml or
+# apicomplexa_first_pass.yaml for this. Run both layered together:
 #
-# Reproduces (not "extends" -- `load_config()` only accepts one override
-# path on top of fungi_default.yaml, so there is no live-inheritance
-# mechanism to point at apicomplexa_first_pass.yaml without a code change
-# outside this task's scope) all of that file's deltas, so behaviour on
-# chr1 with this config matches the established apicomplexa_first_pass.yaml
-# tuning -- see that file for the full empirical rationale behind each
-# value. The only substantive addition here is protein_validation.
-#
-# Do not edit fungi_default.yaml or apicomplexa_first_pass.yaml for this.
-#
-# Follow-up recommendation (not implemented here, out of scope for this
-# cleanup): add a layered/multi-file config-loading mode to
-# gmb.pipeline.config.load_config() (e.g. accept a list of override paths
-# applied in order) so this file could point at apicomplexa_first_pass.yaml
-# directly instead of duplicating its deltas.
+#   gmb-build \
+#       --config configs/apicomplexa_first_pass.yaml \
+#       --config configs/apicomplexa_chr1_protein_validation.example.yaml \
+#       --seqname 1 \
+#       ...
 
-protein_filter:
-  min_bitscore: 30.0
-
-transcriptomic_filter:
-  max_transcript_length: 35000
-  max_intron_length: 2500
-
-transcript_splitting:
-  split_gap_bp: 2500
-
-scoring:
-  weights:
-    helixer: 2.6
-    minimap2: 1.3
-  multi_source_bonus: 1.2
-
-qc:
-  skip_orf_inference_tracks: ["OrthoDB", "UniProt", "GenBlast"]
-
-utr:
-  max_5p_bp: 3000
-  max_total_bp: 6000
-
-# --- The actual point of this config: enable protein validation locally ---
 protein_validation:
   enabled: true
   # REQUIRED, machine-specific: point this at a local copy of the cluster's

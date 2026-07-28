@@ -7,13 +7,15 @@ never hard-coded in pipeline logic.
 
 Usage:
     from gmb.pipeline.config import load_config
-    cfg = load_config()                   # fungal defaults
-    cfg = load_config("my_config.yaml")   # custom overrides
+    cfg = load_config()                                  # fungal defaults
+    cfg = load_config("my_config.yaml")                  # custom overrides
+    cfg = load_config(["base.yaml", "overlay.yaml"])      # layered overrides
+                                                           # (overlay.yaml wins)
 """
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 import yaml
 
@@ -394,13 +396,26 @@ def _validate_dataclass(dc):
                 _validate_dataclass(val)
 
 
-def load_config(path: Optional[str] = None, preset: str = "fungi") -> PipelineConfig:
+def load_config(path: Optional[Union[str, list]] = None, preset: str = "fungi") -> PipelineConfig:
     """Load pipeline configuration.
 
     Parameters
     ----------
-    path : str or None
-        Path to a YAML config file.  If None, uses built-in defaults.
+    path : str, list of str, or None
+        One or more paths to YAML override files, applied in order on top
+        of the preset default -- each later file deep-merges its dicts
+        on top of the previous state and replaces (never concatenates)
+        any list-valued key it sets, so the last file to set a given key
+        always wins. A single string is accepted for backward
+        compatibility and is equivalent to a one-element list. `None`
+        (or an empty list) applies no override, matching pre-existing
+        behaviour with no `--config` supplied.
+
+        Missing files are silently skipped -- this matches the
+        pre-existing single-path behaviour (see
+        ``test_missing_file_returns_defaults``) rather than introducing
+        a new failure mode for the (already-existing) single-file case;
+        it applies uniformly to every path in the list.
     preset : str
         Preset name ('fungi' uses configs/fungi_default.yaml).
 
@@ -422,11 +437,16 @@ def load_config(path: Optional[str] = None, preset: str = "fungi") -> PipelineCo
         else:
             raise FileNotFoundError(f"Missing default config preset: {default_yaml}")
 
-    # User overrides
-    if path is not None and os.path.exists(path):
-        with open(path) as fh:
-            data = yaml.safe_load(fh) or {}
-        _update_dataclass(cfg, data)
+    # User overrides -- applied in order, so later paths win on any key
+    # they also set (see _update_dataclass's deep-merge/list-replace rules,
+    # which already give the right per-key semantics with no extra logic
+    # needed here: each file's dict just updates whatever it names).
+    paths = [path] if isinstance(path, str) else (path or [])
+    for override_path in paths:
+        if override_path is not None and os.path.exists(override_path):
+            with open(override_path) as fh:
+                data = yaml.safe_load(fh) or {}
+            _update_dataclass(cfg, data)
 
     _validate_dataclass(cfg)
     return cfg

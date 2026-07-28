@@ -597,7 +597,13 @@ def parse_args():
     parser.add_argument(
         "--protein-validation", default=None, help="Optional protein_validation.tsv"
     )
-    parser.add_argument("--config", default=None, help="YAML with a canonical_selection: section")
+    parser.add_argument(
+        "--config",
+        action="append",
+        default=None,
+        help="YAML with a canonical_selection: section. May be repeated to layer "
+        "several files in order (each later --config overrides earlier ones).",
+    )
     parser.add_argument("--preset", default="fungi")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument(

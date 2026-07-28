@@ -166,6 +166,26 @@ python -m gmb.cli.build \
     --seqname 1
 ```
 
+### Layering multiple `--config` files
+
+`--config` may be repeated; later files override earlier ones on any key they
+both set (dicts deep-merge, lists replace entirely -- same rules as a single
+override, applied once per file in order). This avoids duplicating a whole
+tuning file just to add one small overlay -- for example, the bundled
+Apicomplexa chr1 example only needs to add `protein_validation` settings on
+top of the already-established `apicomplexa_first_pass.yaml` tuning:
+
+```bash
+gmb-build \
+    --config configs/apicomplexa_first_pass.yaml \
+    --config configs/apicomplexa_chr1_protein_validation.example.yaml \
+    --seqname 1 \
+    ...
+```
+
+A single `--config path.yaml` continues to work exactly as before. Passing no
+`--config` at all uses `fungi_default.yaml` alone, as always.
+
 To verify that DIAMOND and Psauron are on `$PATH` before running -- this also prints the
 detected Psauron version and fails clearly if the installed binary is missing a flag GMB
 needs (capability detection, not a hard-coded version check):

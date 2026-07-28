@@ -283,7 +283,13 @@ def compute_utr_end_support(
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_setup_args = parser.add_argument_group("Setup")
-    parser.add_setup_args.add_argument("--config", help="Path to YAML config")
+    parser.add_setup_args.add_argument(
+        "--config",
+        action="append",
+        help="Path to a YAML config override. May be repeated to layer several "
+        "files in order (each later --config overrides earlier ones on the "
+        "same keys); a single --config continues to work exactly as before.",
+    )
     parser.add_setup_args.add_argument("--preset", default="fungi", help="Config preset")
     parser.add_setup_args.add_argument(
         "--check-deps", action="store_true", help="Check external tool dependencies and exit"

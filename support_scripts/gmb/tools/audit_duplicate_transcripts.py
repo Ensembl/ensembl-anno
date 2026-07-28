@@ -128,7 +128,12 @@ def main():
     parser.add_argument("--evidence-attribution", required=True)
     parser.add_argument("--protein-validation", default=None)
     parser.add_argument("--prot-fa", default=None, help="Default: prot.fa next to consensus.gff3")
-    parser.add_argument("--config", default=None)
+    parser.add_argument(
+        "--config",
+        action="append",
+        default=None,
+        help="Path to a YAML config override. May be repeated to layer several files.",
+    )
     parser.add_argument("--preset", default="fungi")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
