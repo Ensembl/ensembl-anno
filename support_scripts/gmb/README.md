@@ -22,7 +22,10 @@ Originally developed for eukaryotic genomes, the pipeline has been heavily optim
 ## Installation
 
 Requirements:
-*   Python 3.8+
+*   Python 3.9+ (raised from a previously-declared but never actually
+    supported 3.8+: the pinned dependency versions already require 3.9 --
+    `pip show pandas`/`numpy`/`biopython` each report `Requires-Python: >=3.9`
+    -- and CI (`.github/workflows/ci.yml`) has only ever tested 3.9 and 3.11)
 *   `pandas`
 *   `pyranges`
 *   `biopython`

@@ -6,7 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "gene-model-builder"
 version = "2.0.0"
 description = "Consensus gene model builder for eukaryotic genomes"
-requires-python = ">=3.8"
+# Genuinely the lowest supported version, not just the local dev version:
+# the pinned/resolvable dependency versions (pandas, numpy, biopython) all
+# declare Requires-Python >=3.9 already, and CI (.github/workflows/ci.yml)
+# has only ever tested 3.9 and 3.11 -- 3.8 was never actually exercised.
+# See the Python-support note in README.md for the full evidence trail.
+requires-python = ">=3.9"
 dependencies = [
     "pandas>=2.0,<3",
     "pyranges>=0.0.120,<=0.1.4",
@@ -39,7 +44,7 @@ include = ["gmb*"]
 # ---------------------------------------------------------------------------
 [tool.black]
 line-length = 99
-target-version = ["py38"]
+target-version = ["py39"]
 
 # ---------------------------------------------------------------------------
 # isort
@@ -56,7 +61,7 @@ known_first_party = [
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 99
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.lint]
 select = [

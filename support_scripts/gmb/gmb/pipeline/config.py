@@ -13,7 +13,7 @@ Usage:
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional
 
 import yaml
 
@@ -121,7 +121,7 @@ class ProteinValidationConfig:
 @dataclass
 class QcConfig:
     max_transcripts_per_track: int = 5
-    skip_orf_inference_tracks: List[str] = field(default_factory=lambda: ["OrthoDB", "UniProt"])
+    skip_orf_inference_tracks: list[str] = field(default_factory=lambda: ["OrthoDB", "UniProt"])
     parallel: bool = False
     workers: int = 4
 
@@ -157,7 +157,7 @@ class UtrConfig:
     # End support logic
     require_end_support: bool = True
     end_support_mode: str = "multisource_end_agreement"
-    end_support_sources: List[str] = field(default_factory=lambda: ["Scallop", "StringTie"])
+    end_support_sources: list[str] = field(default_factory=lambda: ["Scallop", "StringTie"])
     end_tolerance_bp: int = 50
     require_multisource_for_utr_5p: bool = True
     require_multisource_for_utr_3p: bool = True
@@ -233,7 +233,7 @@ class ExportConfig:
 
 @dataclass
 class ReportingConfig:
-    formats: List[str] = field(default_factory=lambda: ["json", "tsv"])
+    formats: list[str] = field(default_factory=lambda: ["json", "tsv"])
 
 
 @dataclass

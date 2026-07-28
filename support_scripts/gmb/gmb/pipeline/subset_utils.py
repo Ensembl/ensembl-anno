@@ -9,7 +9,7 @@ import csv
 import os
 import random
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 import pandas as pd
 
@@ -69,7 +69,7 @@ def parse_region(s: str) -> Region:
     return Region(s)
 
 
-def load_regions_file(path: str) -> List[Region]:
+def load_regions_file(path: str) -> list[Region]:
     """Load regions from a file, one per line.  # comments and blank lines ignored."""
     regions = []
     with open(path) as fh:
@@ -213,7 +213,7 @@ def remap_genome_seqnames(genome: dict, mapping: dict, label="Genome") -> dict:
 # ---------------------------------------------------------------------------
 
 
-def subset_df_by_regions(df, regions: List[Region]) -> pd.DataFrame:
+def subset_df_by_regions(df, regions: list[Region]) -> pd.DataFrame:
     """Keep rows whose (Chromosome, Start..End) overlaps at least one region.
 
     Works on any DataFrame with Chromosome, Start, End columns.
@@ -285,7 +285,7 @@ def sample_loci(
     strategy: str = "uniform_locus",
     seed: int = 1,
     window_bp: int = 0,
-) -> List[Region]:
+) -> list[Region]:
     """Reproducible locus sampling.
 
     Parameters
@@ -423,7 +423,7 @@ def add_subset_args(parser):
         )
 
 
-def resolve_subset_regions(args, loci_df=None) -> Optional[List[Region]]:
+def resolve_subset_regions(args, loci_df=None) -> Optional[list[Region]]:
     """Resolve CLI args → list of Regions (or None = full dataset).
 
     Parameters
@@ -469,7 +469,7 @@ def resolve_subset_regions(args, loci_df=None) -> Optional[List[Region]]:
     return regions if regions else None
 
 
-def write_subset_manifest(regions: List[Region], seed: int, output_path: str):
+def write_subset_manifest(regions: list[Region], seed: int, output_path: str):
     """Write subset_regions.tsv documenting the selected regions and seed."""
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w", newline="") as fh:

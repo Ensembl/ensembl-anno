@@ -35,7 +35,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Dict, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -335,7 +335,7 @@ def _compute_group_metrics(group: pd.DataFrame) -> dict:
 def compute_boundary_analysis(
     ref_details: pd.DataFrame,
     ref_genes: pd.DataFrame,
-    query_genes_by_tool: Dict[str, pd.DataFrame],
+    query_genes_by_tool: dict[str, pd.DataFrame],
 ) -> pd.DataFrame:
     """Compute transcript start/end boundary accuracy.
 
@@ -559,7 +559,7 @@ def compute_error_taxonomy(
 
 def compute_cross_ranking(
     all_strata: pd.DataFrame,
-    all_profiles: Dict[str, dict],
+    all_profiles: dict[str, dict],
 ) -> pd.DataFrame:
     """Rank tools per metric and per stratum.
 
@@ -634,7 +634,7 @@ def compute_cross_ranking(
 
 
 def run_analysis(
-    comparisons: Dict[str, str],
+    comparisons: dict[str, str],
     reference_gff: Optional[str] = None,
     evaluation_mode: str = "protein_coding",
     transcript_selection: str = "canonical",
