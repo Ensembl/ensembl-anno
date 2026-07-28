@@ -35,7 +35,9 @@ def test_fungi_default_equivalence():
         raw = yaml.safe_load(fh)
     assert "max_isoforms_per_locus" in raw["scoring"]
     assert cfg_yaml.scoring.max_isoforms_per_locus == raw["scoring"]["max_isoforms_per_locus"]
-    assert cfg_yaml.scoring.max_isoforms_per_locus != PipelineConfig().scoring.max_isoforms_per_locus
+    assert (
+        cfg_yaml.scoring.max_isoforms_per_locus != PipelineConfig().scoring.max_isoforms_per_locus
+    )
     # same_gene_overlap_threshold is explicit in the yaml (== Python default 0.15).
     assert cfg_yaml.scoring.same_gene_overlap_threshold == 0.15
     # protein_validation.enabled is intentionally overridden in fungi_default.yaml
