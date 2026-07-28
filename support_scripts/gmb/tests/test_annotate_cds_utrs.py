@@ -372,12 +372,12 @@ class TestAnnotateTranscript:
         # The ORF prediction may not exactly match Helixer boundaries
         # (Helixer uses neural network, we use longest-ORF), but it should
         # be close. Check that the predicted CDS is within a small tolerance.
-        assert abs(predicted_cds[0] - expected_cds[0]) <= 30, (
-            f"CDS start off by {abs(predicted_cds[0] - expected_cds[0])}bp"
-        )
-        assert abs(predicted_cds[1] - expected_cds[1]) <= 30, (
-            f"CDS end off by {abs(predicted_cds[1] - expected_cds[1])}bp"
-        )
+        assert (
+            abs(predicted_cds[0] - expected_cds[0]) <= 30
+        ), f"CDS start off by {abs(predicted_cds[0] - expected_cds[0])}bp"
+        assert (
+            abs(predicted_cds[1] - expected_cds[1]) <= 30
+        ), f"CDS end off by {abs(predicted_cds[1] - expected_cds[1])}bp"
 
     def test_protein_starts_with_m(self, genome):
         """Predicted protein should start with M (ATG start)."""
@@ -390,9 +390,9 @@ class TestAnnotateTranscript:
         )
         result = annotate_transcript(exon_df, tx["chrom"], tx["strand"], genome, cds_df=None)
         if result["protein"] and not result["is_partial_5"]:
-            assert result["protein"][0] == "M", (
-                f"Protein should start with M, got {result['protein'][:5]}"
-            )
+            assert (
+                result["protein"][0] == "M"
+            ), f"Protein should start with M, got {result['protein'][:5]}"
 
     def test_utr_segmentation(self, genome):
         """UTR + CDS should cover entire exon span."""
@@ -819,9 +819,9 @@ class TestCdsTranslationMultiExon:
         result = annotate_transcript(exon_df, "chr1", "+", genome, cds_df=cds_df)
 
         total_cds_bp = sum(e - s for s, e in result["cds"])
-        assert total_cds_bp % 3 == 0, (
-            f"CDS length {total_cds_bp} is not a multiple of 3 — reading frame broken"
-        )
+        assert (
+            total_cds_bp % 3 == 0
+        ), f"CDS length {total_cds_bp} is not a multiple of 3 — reading frame broken"
         assert result.get("frame_ok"), "frame_ok should be True"
 
     # ── minus strand ─────────────────────────────────────────────────────────
@@ -858,9 +858,9 @@ class TestCdsTranslationMultiExon:
         result = annotate_transcript(exon_df, "chr1", "-", genome, cds_df=cds_df)
 
         total_cds_bp = sum(e - s for s, e in result["cds"])
-        assert total_cds_bp % 3 == 0, (
-            f"CDS length {total_cds_bp} is not a multiple of 3 — reading frame broken"
-        )
+        assert (
+            total_cds_bp % 3 == 0
+        ), f"CDS length {total_cds_bp} is not a multiple of 3 — reading frame broken"
         assert result.get("frame_ok"), "frame_ok should be True"
 
     def test_plus_minus_symmetry(self):
@@ -876,9 +876,9 @@ class TestCdsTranslationMultiExon:
         rp = annotate_transcript(exon_df, "chr1", "+", gp, cds_df=cds_df)
         rm = annotate_transcript(exon_df, "chr1", "-", gm, cds_df=cds_df)
 
-        assert rp["protein"] == rm["protein"], (
-            f"Plus protein {rp['protein']!r} != minus protein {rm['protein']!r}"
-        )
+        assert (
+            rp["protein"] == rm["protein"]
+        ), f"Plus protein {rp['protein']!r} != minus protein {rm['protein']!r}"
 
     def test_minus_strand_three_exons_no_internal_stop(self):
         """- strand with three CDS exons must produce no internal stop codons.

@@ -17,4 +17,3 @@ def test_setup_logging_captures_stdout(tmp_path):
         restore_stdio()
 
     assert "captured progress line" in log_file.read_text()
-

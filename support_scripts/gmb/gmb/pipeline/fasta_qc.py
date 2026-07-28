@@ -19,13 +19,8 @@ import sys
 from collections import Counter
 
 from gmb.pipeline.annotate_cds_utrs import build_spliced_seq, reverse_complement, translate
-from gmb.utils.fasta import (
-    load_genome as _load_genome,
-)
-from gmb.utils.fasta import (
-    parse_fasta_ids,
-    parse_fasta_records,
-)
+from gmb.utils.fasta import load_genome as _load_genome
+from gmb.utils.fasta import parse_fasta_ids, parse_fasta_records
 
 # Keep local load_genome as a thin wrapper for backwards compat
 load_genome = _load_genome

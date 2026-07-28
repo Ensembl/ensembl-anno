@@ -210,9 +210,9 @@ class TestSameGeneOverlapThreshold:
         selected_ids = {m["id"] for g in genes for m in g}
 
         assert "tx1" in selected_ids, "TX model should be selected"
-        assert "hx1" not in selected_ids, (
-            "Helixer gene should be absorbed into the TX locus at threshold=0.15"
-        )
+        assert (
+            "hx1" not in selected_ids
+        ), "Helixer gene should be absorbed into the TX locus at threshold=0.15"
 
     def test_high_threshold_preserves_helixer(self):
         """At threshold=0.30 the same Helixer gene (overlap ratio 0.25) is
@@ -221,9 +221,9 @@ class TestSameGeneOverlapThreshold:
         selected_ids = {m["id"] for g in genes for m in g}
 
         assert "tx1" in selected_ids, "TX model should be selected"
-        assert "hx1" in selected_ids, (
-            "Helixer gene should survive as a separate locus at threshold=0.30"
-        )
+        assert (
+            "hx1" in selected_ids
+        ), "Helixer gene should survive as a separate locus at threshold=0.30"
         assert len(genes) == 2, (
             f"Expected 2 separate gene loci, got {len(genes)}: "
             f"{[m['id'] for g in genes for m in g]}"
