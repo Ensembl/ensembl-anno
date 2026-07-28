@@ -342,8 +342,8 @@ Key configurable areas:
 *   `orf.min_codons`: Minimum ORF length (default 33 for fungi).
 *   `protein_filter`: Thresholds for dropping fragmented or poorly supported protein alignments. **OrthoDB filters**: now configurable via `min_alignment_coverage`, `min_percent_identity`, and `min_bitscore` here.
 *   `transcriptomic_filter`: Thresholds for identifying artificially merged transcript models (e.g., max intron length).
-*   `helixer_filter`: Rules for filtering unreliable *ab initio* models.
-*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support/configurable thresholds for keeping Helixer models).
+*   `backbone_filter`: Rules for filtering unreliable *ab initio* backbone models (Helixer or Tiberius, whichever is loaded; legacy key `helixer_filter` still accepted with a deprecation warning).
+*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support/configurable thresholds for keeping the ab initio backbone -- `weights.backbone`, `keep_backbone_without_support`; legacy keys `weights.helixer`/`keep_helixer_without_support` still accepted with a deprecation warning).
 *   `protein_validation`: Enable a batch validation stage (`enabled: true`) that writes translated candidate models to a FASTA, runs DIAMOND and Psauron, and injects a derived `protein_coding_score` back into the candidate gating logic.
 *   `utr`: Thresholds and criteria for keeping or trimming Untranslated Regions. Features robust "end support" validation (`require_end_support: true`), allowing you to configure exactly which evidence assemblies must agree on a transcript's start/end coordinates (`end_support_sources`), with a distance tolerance (`end_tolerance_bp`). If the transcript edges lack multi-source agreement or protein validation (depending on `end_support_mode` policy), they can fallback to `drop_utr`, `hard_cap` to a hardcoded base definition, or `drop_transcript` fully based on `fallback_policy_when_unsupported`.
 

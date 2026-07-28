@@ -42,8 +42,8 @@ from gmb.pipeline.config import load_config
 from gmb.pipeline.dedup_genes import dedup_genes
 from gmb.pipeline.duplicate_transcript_collapse import collapse_exact_duplicate_transcripts
 from gmb.pipeline.evidence_filter import (
+    filter_backbone_models,
     filter_chimeras,
-    filter_helixer_models,
     filter_protein_evidence,
     split_mega_transcripts,
 )
@@ -499,7 +499,7 @@ def main() -> None:
     if config.transcript_splitting.split_enabled:
         tx_exons_filtered = split_mega_transcripts(tx_exons_filtered, config, stats)
 
-    h_exons_filt, h_cds_filt = filter_helixer_models(
+    h_exons_filt, h_cds_filt = filter_backbone_models(
         helixer_exons if helixer_exons is not None else pd.DataFrame(),
         helixer_cds if helixer_cds is not None else pd.DataFrame(),
         config,

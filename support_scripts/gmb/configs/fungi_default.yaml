@@ -32,14 +32,14 @@ transcript_splitting:
   split_on_large_exon_bp: 50000
   max_segments_per_transcript: 50
 
-helixer_filter:
+backbone_filter:
   min_cds_bp: 90
   max_exons: 50
   enabled: true
 
 scoring:
   weights:
-    helixer: 3.1
+    backbone: 3.1
     scallop: 1.0
     stringtie: 1.0
   protein_overlap_bonus: 2.0
@@ -60,7 +60,7 @@ scoring:
   max_isoforms_per_locus: 3
   min_alternate_score: 2.5
   fungal_single_exon_mode: true
-  keep_helixer_without_support: true
+  keep_backbone_without_support: true
   require_protein_support_for_single_source: true
   min_cds_bp: 150
   require_support_for_single_exon: true

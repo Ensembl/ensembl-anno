@@ -531,75 +531,92 @@ def split_mega_transcripts(
 
 
 # ---------------------------------------------------------------------------
-# Helixer model filtering
+# Ab initio backbone model filtering (Helixer or Tiberius -- whichever was
+# loaded as config.scoring.backbone_label; never Helixer-specific despite
+# the legacy function name still aliased below)
 # ---------------------------------------------------------------------------
 
 
-def filter_helixer_models(
-    helixer_df: pd.DataFrame,
-    helixer_cds: pd.DataFrame,
+def filter_backbone_models(
+    backbone_df: pd.DataFrame,
+    backbone_cds: pd.DataFrame,
     config: PipelineConfig,
     stats: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Filter implausible Helixer predictions.
+    """Filter implausible ab initio backbone predictions (Helixer or Tiberius).
 
     - Remove models with very short CDS (< min_cds_bp)
     - Flag models with extreme exon count
 
     Parameters
     ----------
-    helixer_df : pd.DataFrame
-        Exon-level Helixer rows.
-    helixer_cds : pd.DataFrame
-        CDS-level Helixer rows.
+    backbone_df : pd.DataFrame
+        Exon-level backbone rows.
+    backbone_cds : pd.DataFrame
+        CDS-level backbone rows.
     config : PipelineConfig
     stats : dict or None
+        Populated with ``helixer_short_cds_removed``/``helixer_extreme_
+        exon_flagged`` regardless of which backbone was actually filtered --
+        these are established summary.json field names, left unchanged
+        here to avoid an output-schema break (see the naming-debt note in
+        the project report).
 
     Returns
     -------
     tuple of (pd.DataFrame, pd.DataFrame)
         ``(filtered_exons, filtered_cds)``.
     """
-    if helixer_df.empty:
-        return helixer_df, helixer_cds
+    if backbone_df.empty:
+        return backbone_df, backbone_cds
 
-    hcfg = config.helixer_filter
+    bcfg = config.backbone_filter
     if stats is None:
         stats = {}
 
-    if not hcfg.enabled:
-        return helixer_df, helixer_cds
+    if not bcfg.enabled:
+        return backbone_df, backbone_cds
 
-    n_input = helixer_df["transcript_id"].nunique()
+    n_input = backbone_df["transcript_id"].nunique()
 
     remove_tids = set()
 
     # Check CDS length — use agg() for pandas 2.x / 3.0 compat
-    if helixer_cds is not None and not helixer_cds.empty:
-        cds_lengths = helixer_cds.groupby("transcript_id").agg(total_cds=("End", "sum")).copy()
+    if backbone_cds is not None and not backbone_cds.empty:
+        cds_lengths = backbone_cds.groupby("transcript_id").agg(total_cds=("End", "sum")).copy()
         # Compute actual CDS bp per transcript
         cds_lengths["total_cds"] = (
-            helixer_cds.groupby("transcript_id")["End"].sum()
-            - helixer_cds.groupby("transcript_id")["Start"].sum()
+            backbone_cds.groupby("transcript_id")["End"].sum()
+            - backbone_cds.groupby("transcript_id")["Start"].sum()
         )
-        short_cds = cds_lengths[cds_lengths["total_cds"] < hcfg.min_cds_bp].index
+        short_cds = cds_lengths[cds_lengths["total_cds"] < bcfg.min_cds_bp].index
         remove_tids.update(short_cds)
         stats["helixer_short_cds_removed"] = len(short_cds)
 
     # Check exon count
-    exon_counts = helixer_df.groupby("transcript_id").size()
-    extreme = exon_counts[exon_counts > hcfg.max_exons].index
+    exon_counts = backbone_df.groupby("transcript_id").size()
+    extreme = exon_counts[exon_counts > bcfg.max_exons].index
     stats["helixer_extreme_exon_flagged"] = len(extreme)
     # Flag but don't remove extreme exon models (they may be real)
 
-    filtered_exons = helixer_df[~helixer_df["transcript_id"].isin(remove_tids)].copy()
-    filtered_cds = helixer_cds
-    if helixer_cds is not None and not helixer_cds.empty:
-        filtered_cds = helixer_cds[~helixer_cds["transcript_id"].isin(remove_tids)].copy()
+    filtered_exons = backbone_df[~backbone_df["transcript_id"].isin(remove_tids)].copy()
+    filtered_cds = backbone_cds
+    if backbone_cds is not None and not backbone_cds.empty:
+        filtered_cds = backbone_cds[~backbone_cds["transcript_id"].isin(remove_tids)].copy()
 
     n_after = filtered_exons["transcript_id"].nunique()
     removed = n_input - n_after
     if removed > 0:
-        print(f"    Helixer filter: {n_input} → {n_after} transcripts ({removed} removed)")
+        print(
+            f"    {config.scoring.backbone_label} filter: {n_input} → {n_after} "
+            f"transcripts ({removed} removed)"
+        )
 
     return filtered_exons, filtered_cds
+
+
+# Deprecated alias for the pre-rename function name -- see
+# gmb.pipeline.config._DEPRECATED_KEY_ALIASES for the corresponding YAML
+# key/section aliases. Remove once no code plausibly still imports this
+# name directly.
+filter_helixer_models = filter_backbone_models

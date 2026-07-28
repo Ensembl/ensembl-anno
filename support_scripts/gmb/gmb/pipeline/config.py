@@ -14,6 +14,7 @@ Usage:
 """
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
@@ -67,15 +68,32 @@ class TranscriptSplittingConfig:
 
 
 @dataclass
-class HelixerFilterConfig:
+class BackboneFilterConfig:
+    """Plausibility filter for the ab initio backbone track (Helixer or
+    Tiberius, whichever was loaded -- see PipelineConfig.scoring.backbone_label).
+    Named generically since this section is never Helixer-specific despite
+    its legacy `helixer_filter` YAML key (still accepted, see
+    _DEPRECATED_KEY_ALIASES below).
+    """
+
     min_cds_bp: int = 90
     max_exons: int = 50
     enabled: bool = True
 
 
+# Deprecated alias for the pre-rename class name -- see _DEPRECATED_KEY_ALIASES
+# for the corresponding YAML key alias (helixer_filter -> backbone_filter).
+# Remove once no code/config plausibly still imports this name directly.
+HelixerFilterConfig = BackboneFilterConfig
+
+
 @dataclass
 class ScoringWeights:
-    helixer: float = 2.0
+    # backbone: weight for whichever ab initio backbone is actually loaded
+    # (Helixer or Tiberius -- matched against scoring.backbone_label, not a
+    # fixed source name). Legacy YAML key `helixer` is still accepted (see
+    # _DEPRECATED_KEY_ALIASES).
+    backbone: float = 2.0
     scallop: float = 1.0
     stringtie: float = 1.0
     minimap2: float = 1.0
@@ -90,14 +108,17 @@ class ScoringConfig:
     max_isoforms_per_locus: int = 2
     min_alternate_score: float = 3.0
     fungal_single_exon_mode: bool = True
-    keep_helixer_without_support: bool = True
+    # Legacy YAML key `keep_helixer_without_support` is still accepted (see
+    # _DEPRECATED_KEY_ALIASES) -- this has never been Helixer-specific: it
+    # protects whichever backbone (Helixer or Tiberius) is actually loaded.
+    keep_backbone_without_support: bool = True
     require_protein_support_for_single_source: bool = False
     min_cds_bp: int = 150
     require_support_for_single_exon: bool = True
     same_gene_overlap_threshold: float = 0.15
     # Source label of the ab initio backbone track actually loaded (set
     # automatically by the CLI based on --helixer vs --tiberius). Determines
-    # which string in `weights` and `keep_helixer_without_support` applies —
+    # which string in `weights` and `keep_backbone_without_support` applies —
     # not necessarily "Helixer".
     backbone_label: str = "Helixer"
 
@@ -200,7 +221,7 @@ class DuplicateTranscriptCollapseConfig:
     exon-level PyRanges clustering can split one transcript's own exons
     across separate clusters when no other evidence bridges the intron
     gap, and each fragment is independently re-admitted by the
-    keep_helixer_without_support single-exon exception). This section
+    keep_backbone_without_support single-exon exception). This section
     controls a stricter, *exact*-equality-only pass that runs after that,
     within each gene's assembled isoform set, so it only ever removes
     transcripts proven structurally and translationally identical -- never
@@ -342,7 +363,9 @@ class PipelineConfig:
     transcript_splitting: TranscriptSplittingConfig = field(
         default_factory=TranscriptSplittingConfig
     )
-    helixer_filter: HelixerFilterConfig = field(default_factory=HelixerFilterConfig)
+    # Legacy YAML section name `helixer_filter` is still accepted (see
+    # _DEPRECATED_KEY_ALIASES).
+    backbone_filter: BackboneFilterConfig = field(default_factory=BackboneFilterConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     protein_validation: ProteinValidationConfig = field(default_factory=ProteinValidationConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
@@ -361,6 +384,55 @@ class PipelineConfig:
 # Loaders
 # ---------------------------------------------------------------------------
 
+# Deprecated config-key aliases, scoped by the *containing* dataclass's type
+# name (so an old name is only ever remapped within the section it actually
+# belonged to). Each entry exists because a "generalise backbone naming"
+# pass renamed a Helixer-specific-sounding key to its accurate generic name
+# without breaking configs already using the old one. Remove an entry (and
+# its DeprecationWarning) once no config plausibly still sets the old key --
+# not before, and not silently.
+_DEPRECATED_KEY_ALIASES: dict = {
+    "PipelineConfig": {"helixer_filter": "backbone_filter"},
+    "ScoringConfig": {"keep_helixer_without_support": "keep_backbone_without_support"},
+    "ScoringWeights": {"helixer": "backbone"},
+}
+
+
+def _apply_deprecated_key_aliases(dc, d: dict, path_prefix: str) -> dict:
+    """Return `d` with any legacy keys (scoped to `dc`'s type) renamed to
+    their current name, each emitting one DeprecationWarning.
+
+    If both the legacy key and its current name are set in the same dict,
+    the current name always wins -- the legacy value is dropped (never
+    silently combined) with a warning explaining why.
+    """
+    aliases = _DEPRECATED_KEY_ALIASES.get(type(dc).__name__)
+    if not aliases or not any(old in d for old in aliases):
+        return d
+    resolved = dict(d)
+    for old_key, new_key in aliases.items():
+        if old_key not in resolved:
+            continue
+        old_val = resolved.pop(old_key)
+        if new_key in resolved:
+            warnings.warn(
+                f"Config key '{path_prefix}{old_key}' is deprecated and was "
+                f"ignored because '{path_prefix}{new_key}' was also set -- "
+                "the current key always takes precedence over the legacy one.",
+                DeprecationWarning,
+                stacklevel=5,
+            )
+        else:
+            warnings.warn(
+                f"Config key '{path_prefix}{old_key}' is deprecated; use "
+                f"'{path_prefix}{new_key}' instead. This alias will be "
+                "removed in a future release.",
+                DeprecationWarning,
+                stacklevel=5,
+            )
+            resolved[new_key] = old_val
+    return resolved
+
 
 def _update_dataclass(dc, d: dict, path_prefix: str = ""):
     """Recursively update a dataclass instance from a dict with strict merge rules.
@@ -369,10 +441,12 @@ def _update_dataclass(dc, d: dict, path_prefix: str = ""):
       - dict -> deep merge
       - list -> replace entirely
       - scalar -> override
-      - unknown keys -> raise ValueError
+      - unknown keys -> raise ValueError, unless a documented deprecated
+        alias exists for this dataclass (see _DEPRECATED_KEY_ALIASES)
     """
     if d is None:
         return dc
+    d = _apply_deprecated_key_aliases(dc, d, path_prefix)
     for key, val in d.items():
         if not hasattr(dc, key):
             raise ValueError(f"Unknown configuration key: '{path_prefix}{key}'")

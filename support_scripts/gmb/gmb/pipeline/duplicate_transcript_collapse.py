@@ -21,7 +21,7 @@ transcripts had byte-identical exon/CDS coordinates: 29510-34181,
    ``select_isoforms()`` calls, each seeing only one exon and therefore
    treating it as if it were a single-exon transcript.
 4. Each single-exon fragment independently qualifies to survive
-   ``scoring.py``'s single-exon gate via the ``keep_helixer_without_support``
+   ``scoring.py``'s single-exon gate via the ``keep_backbone_without_support``
    exception (the fragment's only source is the ab initio backbone), so
    *both* fragments become separate ``gene_models`` and get separate gene
    IDs/transcript IDs in ``builder.main()``'s output loop.

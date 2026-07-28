@@ -64,11 +64,11 @@ class TestYamlOverride:
     def test_override_nested(self, tmp_path):
         yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text(
-            "scoring:\n" "  max_isoforms_per_locus: 5\n" "  weights:\n" "    helixer: 3.0\n"
+            "scoring:\n" "  max_isoforms_per_locus: 5\n" "  weights:\n" "    backbone: 3.0\n"
         )
         cfg = load_config(str(yaml_file))
         assert cfg.scoring.max_isoforms_per_locus == 5
-        assert cfg.scoring.weights.helixer == 3.0
+        assert cfg.scoring.weights.backbone == 3.0
         assert cfg.scoring.weights.scallop == 1.0  # unchanged
 
     def test_override_list(self, tmp_path):
@@ -235,6 +235,121 @@ class TestLayeredConfig:
         assert cfg.transcriptomic_filter.max_transcript_length == 35000
         # From the overlay, layered on top:
         assert cfg.protein_validation.enabled is True
+
+
+class TestBackboneNamingAliases:
+    """scoring.keep_helixer_without_support/helixer_filter/weights.helixer
+    were renamed to their generic backbone_* equivalents (config.py's
+    _DEPRECATED_KEY_ALIASES). Legacy keys must keep working with one
+    DeprecationWarning each; the new key always wins if both are set.
+    """
+
+    def _write(self, tmp_path, name, text):
+        p = tmp_path / name
+        p.write_text(text)
+        return str(p)
+
+    def test_legacy_keep_helixer_without_support_still_works(self, tmp_path):
+        legacy = self._write(
+            tmp_path, "legacy.yaml", "scoring:\n  keep_helixer_without_support: false\n"
+        )
+        with pytest.warns(DeprecationWarning, match="keep_helixer_without_support"):
+            cfg = load_config(legacy)
+        assert cfg.scoring.keep_backbone_without_support is False
+
+    def test_new_keep_backbone_without_support_no_warning(self, tmp_path, recwarn):
+        new = self._write(
+            tmp_path, "new.yaml", "scoring:\n  keep_backbone_without_support: false\n"
+        )
+        cfg = load_config(new)
+        assert cfg.scoring.keep_backbone_without_support is False
+        assert not any(issubclass(w.category, DeprecationWarning) for w in recwarn.list)
+
+    def test_both_keep_helixer_and_backbone_new_wins_with_warning(self, tmp_path):
+        both = self._write(
+            tmp_path,
+            "both.yaml",
+            "scoring:\n"
+            "  keep_helixer_without_support: false\n"
+            "  keep_backbone_without_support: true\n",
+        )
+        with pytest.warns(DeprecationWarning, match="ignored because"):
+            cfg = load_config(both)
+        # New key wins; legacy value is not silently combined or averaged.
+        assert cfg.scoring.keep_backbone_without_support is True
+
+    def test_legacy_helixer_filter_section_still_works(self, tmp_path):
+        legacy = self._write(
+            tmp_path, "legacy.yaml", "helixer_filter:\n  min_cds_bp: 123\n  max_exons: 7\n"
+        )
+        with pytest.warns(DeprecationWarning, match="helixer_filter"):
+            cfg = load_config(legacy)
+        assert cfg.backbone_filter.min_cds_bp == 123
+        assert cfg.backbone_filter.max_exons == 7
+
+    def test_new_backbone_filter_section_no_warning(self, tmp_path, recwarn):
+        new = self._write(tmp_path, "new.yaml", "backbone_filter:\n  min_cds_bp: 123\n")
+        cfg = load_config(new)
+        assert cfg.backbone_filter.min_cds_bp == 123
+        assert not any(issubclass(w.category, DeprecationWarning) for w in recwarn.list)
+
+    def test_legacy_weights_helixer_still_works(self, tmp_path):
+        legacy = self._write(tmp_path, "legacy.yaml", "scoring:\n  weights:\n    helixer: 9.0\n")
+        with pytest.warns(DeprecationWarning, match="weights.helixer"):
+            cfg = load_config(legacy)
+        assert cfg.scoring.weights.backbone == 9.0
+
+    def test_legacy_and_new_keys_produce_identical_config(self, tmp_path):
+        legacy = self._write(
+            tmp_path,
+            "legacy.yaml",
+            "scoring:\n"
+            "  keep_helixer_without_support: false\n"
+            "  weights:\n"
+            "    helixer: 9.0\n"
+            "helixer_filter:\n"
+            "  min_cds_bp: 123\n",
+        )
+        new = self._write(
+            tmp_path,
+            "new.yaml",
+            "scoring:\n"
+            "  keep_backbone_without_support: false\n"
+            "  weights:\n"
+            "    backbone: 9.0\n"
+            "backbone_filter:\n"
+            "  min_cds_bp: 123\n",
+        )
+        cfg_legacy = load_config(legacy)
+        cfg_new = load_config(new)
+        assert (
+            cfg_legacy.scoring.keep_backbone_without_support
+            == cfg_new.scoring.keep_backbone_without_support
+        )
+        assert cfg_legacy.scoring.weights.backbone == cfg_new.scoring.weights.backbone
+        assert cfg_legacy.backbone_filter.min_cds_bp == cfg_new.backbone_filter.min_cds_bp
+
+    def test_backbone_label_independent_of_weight_field_rename(self, tmp_path):
+        # backbone_label (which evidence-source string the generic "backbone"
+        # weight/gate actually applies to for this run) is untouched by this
+        # rename -- it's set by the CLI from --helixer vs --tiberius, not by
+        # scoring.weights.backbone/keep_backbone_without_support themselves.
+        cfg_helixer = load_config()
+        cfg_helixer.scoring.backbone_label = "Helixer"
+        cfg_tiberius = load_config()
+        cfg_tiberius.scoring.backbone_label = "Tiberius"
+        assert cfg_helixer.scoring.weights.backbone == cfg_tiberius.scoring.weights.backbone
+        assert (
+            cfg_helixer.scoring.keep_backbone_without_support
+            == cfg_tiberius.scoring.keep_backbone_without_support
+        )
+
+    def test_tracked_configs_use_current_names_no_deprecation_warning(self, recwarn):
+        # The repo's own tracked configs should already be migrated -- if
+        # this starts warning, one of them regressed to a legacy key.
+        load_config()
+        load_config(os.path.join(_CONFIGS_DIR, "apicomplexa_first_pass.yaml"))
+        assert not any(issubclass(w.category, DeprecationWarning) for w in recwarn.list)
 
 
 class TestAllTrackedConfigsLoad:

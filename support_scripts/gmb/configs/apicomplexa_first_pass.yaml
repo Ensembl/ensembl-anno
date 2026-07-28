@@ -27,7 +27,7 @@
 #     count rather than exon count and has been fixed separately; see report).
 #     Single-exon genes are too common here to filter by default.
 #
-#   scoring.keep_helixer_without_support (true): Tiberius is the only ab
+#   scoring.keep_backbone_without_support (true): Tiberius is the only ab
 #     initio backbone available (no Helixer model exists for this genome).
 #     P. falciparum gene expression is strongly life-cycle-stage-specific, so
 #     some genuine genes may have zero transcriptomic support in a given
@@ -75,7 +75,7 @@ scoring:
     # (388/2,369) -- multi-exon splice placement is Tiberius's clear weak
     # point here. The backbone should not dominate over multi-source-
     # supported alternatives as strongly as in the fungal preset.
-    helixer: 2.6
+    backbone: 2.6
     # Not exercised in this first pass (see report: minimap2_annotation.gtf
     # excluded due to file scale/uncollapsed reads), but set here for when
     # collapsed long-read consensus models are supplied. Weighted above

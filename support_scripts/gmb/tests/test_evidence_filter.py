@@ -10,8 +10,8 @@ import pytest
 sys.path.insert(0, os.path.dirname(__file__))
 from gmb.pipeline.config import load_config
 from gmb.pipeline.evidence_filter import (
+    filter_backbone_models,
     filter_chimeras,
-    filter_helixer_models,
     filter_protein_evidence,
 )
 
@@ -208,7 +208,7 @@ class TestFilterHelixerModels:
             }
         )
         stats = {}
-        f_ex, f_cds = filter_helixer_models(exons, cds, config, stats=stats)
+        f_ex, f_cds = filter_backbone_models(exons, cds, config, stats=stats)
         assert f_ex.empty or "hx1" not in f_ex["transcript_id"].values
 
     def test_adequate_cds_kept(self, config):
@@ -233,7 +233,7 @@ class TestFilterHelixerModels:
                 "Source": ["Helixer"],
             }
         )
-        f_ex, f_cds = filter_helixer_models(exons, cds, config)
+        f_ex, f_cds = filter_backbone_models(exons, cds, config)
         assert "hx2" in f_ex["transcript_id"].values
 
 
