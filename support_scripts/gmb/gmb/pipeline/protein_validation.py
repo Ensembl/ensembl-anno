@@ -27,45 +27,60 @@ if TYPE_CHECKING:
 # Psauron capability detection
 # ---------------------------------------------------------------------------
 #
-# GMB constructs a psauron command using exactly five flags: -i, -o, -m, -p,
-# -c (see batch_score_proteins below). Rather than hard-coding behaviour to
-# a specific psauron release, this checks -- by parsing `psauron --help` --
-# that the installed binary actually exposes each of those flags, and fails
-# with a clear, actionable message if it does not, instead of either
-# crashing on an unrecognised-argument error deep inside a subprocess call
-# or (worse) silently misinterpreting a changed CLI.
+# GMB constructs a psauron command from up to five flags: -i, -o, -m, -p,
+# and (only when CPU mode is requested) -c. Rather than hard-coding
+# behaviour to a specific psauron release, this checks -- by parsing
+# `psauron --help` once -- that the installed binary actually exposes each
+# flag GMB is about to use, and fails with a clear, actionable message if it
+# does not, instead of either crashing on an unrecognised-argument error
+# deep inside a subprocess call or (worse) silently misinterpreting a
+# changed CLI.
 #
-# Investigated (2026-07) against the psauron GitHub repository
-# (salzberg-lab/PSAURON) release history, from the first public tag v1.0.0
-# (2024-07) through the latest at the time, v1.1.3 (2026-05): the CLI
-# accepted by GMB (-i/-o/-m/-p/-c) and the CSV output shape it depends on
-# (a `description,psauron_is_protein,in-frame_score` header, in -p/protein
-# mode) have been identical in every release across that entire span. There
-# is no evidence a `--model`/model-selection flag has ever existed in
-# psauron at any point -- the tool has always shipped exactly one embedded
-# TCN checkpoint, so a model-selection argument would not correspond to
-# anything the tool actually does. `-m` has always meant `--minimum-length`
-# (an amino-acid length filter), never a model selector. This capability
-# check exists as a safety net against a *future* release or a
-# non-standard/patched build changing that, not because such a change is
-# currently known to exist -- see the project report for the full
-# version-history investigation this is based on.
+# Psauron uses one bundled model checkpoint and exposes no model-selection
+# option: -m specifies minimum protein length, not a model. This has been
+# true across the tool's entire public release history (see the project
+# report for the version-history investigation), so GMB never needs a
+# version-specific code path -- only feature detection, as a safety net
+# against a future release or non-standard/patched build changing the CLI.
 _PSAURON_VERSION_RE = re.compile(r"PSAURON version (\S+)", re.IGNORECASE)
+
+# One dict per flag GMB may construct a command from: label for error
+# messages, and the detect_psauron_capabilities() key that reports it.
+_ALWAYS_REQUIRED_FLAGS = [
+    ("-i/--input-fasta", "has_input_flag"),
+    ("-o/--output-path", "has_output_flag"),
+    ("-m/--minimum-length", "has_minimum_length"),
+    ("-p/--protein", "has_protein_flag"),
+]
+_CPU_FLAG = ("-c/--use-cpu", "has_cpu_flag")
 
 
 def detect_psauron_capabilities(psauron_path: str) -> dict:
-    """Parse ``psauron --help`` to detect its version and flag availability.
+    """Run ``psauron --help`` once and detect its version and flag availability.
 
-    Returns a dict with ``version`` (str or None -- not parseable from
-    every conceivable build, handled as "unknown" by callers rather than
-    raising), ``help_text``, and one ``has_<flag>`` bool per flag GMB
-    actually uses (``has_input_flag``, ``has_output_flag``,
-    ``has_minimum_length``, ``has_protein_flag``, ``has_cpu_flag``).
+    Returns a dict with ``found`` (bool -- False only if the executable
+    itself could not be run), ``returncode`` (int or None if not found),
+    ``version`` (str or None -- not parseable from every conceivable build,
+    handled as "unknown" by callers rather than raising), ``help_text``,
+    and one ``has_<flag>`` bool per flag GMB can use (``has_input_flag``,
+    ``has_output_flag``, ``has_minimum_length``, ``has_protein_flag``,
+    ``has_cpu_flag``).
 
-    Never raises for a missing/unparseable version string or a missing
-    flag -- this is pure detection; callers (check_dependencies) decide
-    whether an absent flag is fatal.
+    Never raises for a missing binary, a non-zero exit, or an unparseable
+    version string -- this is pure detection; callers (check_dependencies)
+    decide what to do with the result.
     """
+    empty = {
+        "found": False,
+        "returncode": None,
+        "version": None,
+        "help_text": "",
+        "has_input_flag": False,
+        "has_output_flag": False,
+        "has_minimum_length": False,
+        "has_protein_flag": False,
+        "has_cpu_flag": False,
+    }
     try:
         result = subprocess.run(
             [psauron_path, "--help"],
@@ -74,24 +89,18 @@ def detect_psauron_capabilities(psauron_path: str) -> dict:
             text=True,
         )
     except FileNotFoundError:
-        return {
-            "version": None,
-            "help_text": "",
-            "has_input_flag": False,
-            "has_output_flag": False,
-            "has_minimum_length": False,
-            "has_protein_flag": False,
-            "has_cpu_flag": False,
-        }
+        return empty
 
     # psauron prints its version banner to stdout even when --help alone
     # triggers a non-zero exit in some builds -- check both streams rather
     # than assuming which one carries it.
     help_text = (result.stdout or "") + "\n" + (result.stderr or "")
-
     version_match = _PSAURON_VERSION_RE.search(help_text)
 
     return {
+        **empty,
+        "found": True,
+        "returncode": result.returncode,
         "version": version_match.group(1) if version_match else None,
         "help_text": help_text,
         "has_input_flag": bool(re.search(r"-i[,\s]|--input-fasta", help_text)),
@@ -127,31 +136,34 @@ def check_dependencies(val_cfg: ProteinValidationConfig) -> None:
         )
         sys.exit(1)
 
-    try:
-        subprocess.run(
-            [val_cfg.psauron_path, "--help"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-    except FileNotFoundError:
+    # Capability (not version-number) detection: run `psauron --help` once
+    # and verify the installed binary actually exposes the flags GMB is
+    # about to construct a command line from, rather than assuming any
+    # particular release. This replaces a separate existence-only check --
+    # a missing executable is just one more capability-detection outcome.
+    caps = detect_psauron_capabilities(val_cfg.psauron_path)
+    if not caps["found"]:
         print(
             f"ERROR: Protein validation enabled but psauron binary '{val_cfg.psauron_path}' not found in PATH.",
             file=sys.stderr,
         )
         sys.exit(1)
+    if caps["returncode"] != 0:
+        print(
+            f"ERROR: '{val_cfg.psauron_path} --help' exited with status "
+            f"{caps['returncode']} instead of 0. Cannot verify this psauron "
+            "installation's CLI is usable.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-    # Capability (not version-number) detection: verify the installed
-    # psauron actually exposes the flags GMB is about to construct a
-    # command line from, rather than assuming any particular release.
-    caps = detect_psauron_capabilities(val_cfg.psauron_path)
-    required_flags = [
-        ("-i/--input-fasta", "has_input_flag"),
-        ("-o/--output-path", "has_output_flag"),
-        ("-m/--minimum-length", "has_minimum_length"),
-        ("-p/--protein", "has_protein_flag"),
-        ("-c/--use-cpu", "has_cpu_flag"),
-    ]
+    # -c/--use-cpu is only ever added to the real invocation (see
+    # batch_score_proteins) when psauron_use_cpu is set, so it is only
+    # required here in that case.
+    required_flags = list(_ALWAYS_REQUIRED_FLAGS)
+    if val_cfg.psauron_use_cpu:
+        required_flags.append(_CPU_FLAG)
+
     missing = [label for label, key in required_flags if not caps[key]]
     if missing:
         print(
@@ -159,9 +171,9 @@ def check_dependencies(val_cfg: ProteinValidationConfig) -> None:
             f"(detected version: {caps['version'] or 'unknown, could not parse --help banner'}) "
             f"does not expose the flag(s) GMB requires: {', '.join(missing)}. "
             "This installed psauron's CLI differs from every publicly released "
-            "version investigated (v1.0.0 through v1.1.3) -- refusing to guess "
-            "at a compatible command line. See support_scripts/gmb docs for the "
-            "capability-detection rationale.",
+            "version investigated -- refusing to guess at a compatible command "
+            "line. See support_scripts/gmb docs for the capability-detection "
+            "rationale.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -322,20 +334,15 @@ def batch_score_proteins(
         # -----------------------------
         # Psauron
         # -----------------------------
-        # Real psauron 1.0.8 output (verified against the installed binary,
-        # not assumed): a CSV file whose first two non-empty lines are the
-        # invoked command and a "psauron score: <mean>" summary line, THEN a
-        # header row `description,psauron_is_protein,in-frame_score`,
-        # followed by one data row per input sequence. An earlier version of
-        # this code assumed a simple whitespace-separated `id score` format
-        # and split on whitespace with no header handling -- that silently
-        # matched zero real data rows (comma-separated, no whitespace), so
-        # every psauron score was always 0.0 regardless of the real result.
+        # Real psauron output: a CSV file whose first two non-empty lines
+        # are the invoked command and a "psauron score: <mean>" summary
+        # line, THEN a header row `description,psauron_is_protein,
+        # in-frame_score`, followed by one data row per input sequence.
         #
-        # psauron 1.0.8 also has no --model flag (checked via --help); the
-        # relevant flags are -m/--minimum-length (aa) and -p/--protein (the
-        # input here is always a protein FASTA, never spliced CDS, so -p is
-        # required for a correct score -- omitting it was a second bug).
+        # The input here is always a protein FASTA, never spliced CDS, so
+        # -p/--protein is required for a correct score; -m/--minimum-length
+        # sets the minimum protein length, not a model (psauron has no
+        # model-selection option -- see detect_psauron_capabilities above).
         psauron_out = os.path.join(td, "psauron.csv")
         cmd_p = [
             val_cfg.psauron_path,
@@ -357,42 +364,70 @@ def batch_score_proteins(
             print(f"Psauron extraction failed: {e.stderr}", file=sys.stderr)
             sys.exit(1)
 
+        # Fail loudly rather than silently returning 0.0 for every sequence
+        # at each of these steps -- an earlier version of this code matched
+        # zero real data rows (wrong delimiter, no header handling) and
+        # every psauron score was silently always 0.0 regardless of the
+        # real result. See detect_psauron_capabilities()/check_dependencies()
+        # for the corresponding pre-flight CLI-flag check.
+        if not os.path.exists(psauron_out):
+            sys.exit(
+                f"ERROR: psauron did not produce an output file at '{psauron_out}'. "
+                "Refusing to silently score every protein 0.0."
+            )
+        with open(psauron_out, newline="") as fh:
+            lines = fh.readlines()
+        # Locate the header row rather than assuming a fixed line count,
+        # since the number of preamble lines is not part of psauron's
+        # documented/stable output contract.
+        header_idx = next(
+            (i for i, line in enumerate(lines) if line.startswith("description,")), None
+        )
+        if header_idx is None:
+            sys.exit(
+                "ERROR: could not find a 'description,...' header row in psauron's "
+                f"output '{psauron_out}'. The installed psauron's CSV output format "
+                "differs from every version investigated -- refusing to silently "
+                "produce all-zero protein-validation scores."
+            )
+
+        reader = csv.DictReader(lines[header_idx:])
+        required_columns = ("description", "in-frame_score")
+        missing_columns = [c for c in required_columns if c not in (reader.fieldnames or [])]
+        if missing_columns:
+            sys.exit(
+                f"ERROR: psauron output CSV header is missing column(s) {missing_columns} "
+                f"(found: {reader.fieldnames}). The installed psauron's CSV output format "
+                "differs from every version investigated -- refusing to silently "
+                "produce all-zero protein-validation scores."
+            )
+
         psauron_scores = {}
-        if os.path.exists(psauron_out):
-            with open(psauron_out, newline="") as fh:
-                lines = fh.readlines()
-            # Locate the header row rather than assuming a fixed line
-            # count, since the number of preamble lines is not part of
-            # psauron's documented/stable output contract.
-            header_idx = None
-            for i, line in enumerate(lines):
-                if line.startswith("description,"):
-                    header_idx = i
-                    break
-            if header_idx is not None:
-                reader = csv.DictReader(lines[header_idx:])
-                if reader.fieldnames and "in-frame_score" not in reader.fieldnames:
-                    # Fail loudly rather than silently returning 0.0 for
-                    # every sequence -- this exact failure mode (a changed
-                    # column name matching nothing, no error, every score
-                    # quietly 0.0) was the original bug this module fixed.
-                    # See detect_psauron_capabilities()/check_dependencies()
-                    # for the corresponding pre-flight CLI-flag check.
-                    sys.exit(
-                        "ERROR: psauron output CSV header does not contain the "
-                        f"expected 'in-frame_score' column (found: {reader.fieldnames}). "
-                        "The installed psauron's CSV output format differs from every "
-                        "version investigated (v1.0.0-v1.1.3) -- refusing to silently "
-                        "produce all-zero protein-validation scores."
-                    )
-                for row in reader:
-                    qseqid = row.get("description")
-                    score_str = row.get("in-frame_score")
-                    if qseqid and score_str:
-                        try:
-                            psauron_scores[qseqid] = float(score_str)
-                        except ValueError:
-                            pass
+        malformed_rows = 0
+        for row in reader:
+            qseqid = row.get("description")
+            score_str = row.get("in-frame_score")
+            if not qseqid or not score_str:
+                malformed_rows += 1
+                continue
+            try:
+                psauron_scores[qseqid] = float(score_str)
+            except ValueError:
+                malformed_rows += 1
+        if malformed_rows:
+            print(
+                f"WARNING: {malformed_rows} psauron output row(s) were malformed "
+                "(missing description/score, or non-numeric score) and were skipped.",
+                file=sys.stderr,
+            )
+        submitted_sids = set(seq_to_id.values())
+        if not (psauron_scores.keys() & submitted_sids):
+            sys.exit(
+                f"ERROR: psauron produced no score rows matching any of the "
+                f"{len(submitted_sids)} submitted sequence ID(s) (got: "
+                f"{sorted(psauron_scores)[:5]}...). Refusing to silently score "
+                "every protein 0.0."
+            )
 
         # Calculate combined scores
         final_scores = {}

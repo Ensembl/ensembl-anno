@@ -10,7 +10,11 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
 from gmb.pipeline.config import load_config
-from gmb.pipeline.protein_validation import check_dependencies, detect_psauron_capabilities
+from gmb.pipeline.protein_validation import (
+    batch_score_proteins,
+    check_dependencies,
+    detect_psauron_capabilities,
+)
 
 
 @pytest.fixture
@@ -25,6 +29,20 @@ class TestValidationDependencies:
 
         with pytest.raises(SystemExit) as excinfo:
             check_dependencies(config.protein_validation)
+        assert excinfo.value.code == 1
+
+    def test_missing_psauron_throws_on_enabled(self, config):
+        config.protein_validation.enabled = True
+        config.protein_validation.psauron_path = "non_existent_psauron_bin"
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[0] == config.protein_validation.diamond_path:
+                return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"", stderr=b"")
+            raise FileNotFoundError()
+
+        with patch("subprocess.run", side_effect=_fake_run):
+            with pytest.raises(SystemExit) as excinfo:
+                check_dependencies(config.protein_validation)
         assert excinfo.value.code == 1
 
 
@@ -98,10 +116,32 @@ def _mock_help_result(text, returncode=0):
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=text, stderr="")
 
 
+def _caps(help_text, version, **flags):
+    """Build a detect_psauron_capabilities()-shaped dict for mocking."""
+    base = {
+        "found": True,
+        "returncode": 0,
+        "version": version,
+        "help_text": help_text,
+        "has_input_flag": True,
+        "has_output_flag": True,
+        "has_minimum_length": True,
+        "has_protein_flag": True,
+        "has_cpu_flag": True,
+    }
+    base.update(flags)
+    return base
+
+
 class TestPsauronCapabilityDetection:
     def test_current_local_version_detected_fully(self):
-        with patch("subprocess.run", return_value=_mock_help_result(_REAL_V1_0_8_HELP)):
+        with patch(
+            "subprocess.run", return_value=_mock_help_result(_REAL_V1_0_8_HELP)
+        ) as mock_run:
             caps = detect_psauron_capabilities("psauron")
+        assert mock_run.call_count == 1  # --help is invoked exactly once
+        assert caps["found"] is True
+        assert caps["returncode"] == 0
         assert caps["version"] == "1.0.8"
         assert caps["has_input_flag"]
         assert caps["has_output_flag"]
@@ -120,7 +160,8 @@ class TestPsauronCapabilityDetection:
 
     def test_hypothetical_future_version_missing_protein_flag_detected(self):
         with patch(
-            "subprocess.run", return_value=_mock_help_result(_HYPOTHETICAL_MISSING_PROTEIN_FLAG_HELP)
+            "subprocess.run",
+            return_value=_mock_help_result(_HYPOTHETICAL_MISSING_PROTEIN_FLAG_HELP),
         ):
             caps = detect_psauron_capabilities("psauron")
         assert caps["version"] == "2.0.0"
@@ -137,57 +178,198 @@ class TestPsauronCapabilityDetection:
     def test_missing_binary_returns_all_false_not_raise(self):
         with patch("subprocess.run", side_effect=FileNotFoundError()):
             caps = detect_psauron_capabilities("nonexistent-psauron-binary")
+        assert caps["found"] is False
+        assert caps["returncode"] is None
         assert caps["version"] is None
         assert all(
             caps[k] is False
-            for k in ("has_input_flag", "has_output_flag", "has_minimum_length", "has_protein_flag", "has_cpu_flag")
+            for k in (
+                "has_input_flag",
+                "has_output_flag",
+                "has_minimum_length",
+                "has_protein_flag",
+                "has_cpu_flag",
+            )
         )
 
-    def test_check_dependencies_fails_clearly_when_protein_flag_missing(self, config):
+    def test_nonzero_returncode_recorded_not_raised(self):
+        with patch(
+            "subprocess.run", return_value=_mock_help_result(_REAL_V1_0_8_HELP, returncode=2)
+        ):
+            caps = detect_psauron_capabilities("psauron")
+        assert caps["found"] is True
+        assert caps["returncode"] == 2
+
+
+class TestCheckDependenciesPsauron:
+    def test_help_invoked_exactly_once(self, config):
+        # check_dependencies must not probe psauron a second time on top of
+        # detect_psauron_capabilities()'s own --help call.
         config.protein_validation.enabled = True
+        config.protein_validation.diamond_db = __file__
         with (
-            patch("subprocess.run") as mock_run,
+            patch("subprocess.run") as mock_diamond_run,
             patch(
-                "gmb.pipeline.protein_validation.detect_psauron_capabilities"
+                "gmb.pipeline.protein_validation.detect_psauron_capabilities",
+                return_value=_caps(_REAL_V1_0_8_HELP, "1.0.8"),
             ) as mock_detect,
         ):
-            mock_run.return_value = _mock_help_result("PSAURON version 2.0.0\n")
-            mock_detect.return_value = {
-                "version": "2.0.0",
-                "help_text": _HYPOTHETICAL_MISSING_PROTEIN_FLAG_HELP,
-                "has_input_flag": True,
-                "has_output_flag": True,
-                "has_minimum_length": True,
-                "has_protein_flag": False,
-                "has_cpu_flag": True,
-            }
+            mock_diamond_run.return_value = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=b"", stderr=b""
+            )
+            check_dependencies(config.protein_validation)
+        assert mock_detect.call_count == 1
+
+    def test_fails_clearly_when_protein_flag_missing(self, config):
+        config.protein_validation.enabled = True
+        with (
+            patch("subprocess.run", return_value=_mock_help_result("PSAURON version 2.0.0\n")),
+            patch(
+                "gmb.pipeline.protein_validation.detect_psauron_capabilities",
+                return_value=_caps(
+                    _HYPOTHETICAL_MISSING_PROTEIN_FLAG_HELP, "2.0.0", has_protein_flag=False
+                ),
+            ),
+        ):
             with pytest.raises(SystemExit) as excinfo:
                 check_dependencies(config.protein_validation)
         assert excinfo.value.code == 1
 
-    def test_check_dependencies_passes_with_real_local_psauron_shape(self, config):
+    def test_fails_clearly_on_nonzero_help_returncode(self, config):
         config.protein_validation.enabled = True
         with (
-            patch("subprocess.run") as mock_run,
+            patch("subprocess.run", return_value=_mock_help_result(_REAL_V1_0_8_HELP)),
             patch(
-                "gmb.pipeline.protein_validation.detect_psauron_capabilities"
-            ) as mock_detect,
+                "gmb.pipeline.protein_validation.detect_psauron_capabilities",
+                return_value=_caps(_REAL_V1_0_8_HELP, "1.0.8", returncode=2),
+            ),
         ):
-            mock_run.return_value = _mock_help_result(_REAL_V1_0_8_HELP)
-            mock_detect.return_value = {
-                "version": "1.0.8",
-                "help_text": _REAL_V1_0_8_HELP,
-                "has_input_flag": True,
-                "has_output_flag": True,
-                "has_minimum_length": True,
-                "has_protein_flag": True,
-                "has_cpu_flag": True,
-            }
+            with pytest.raises(SystemExit) as excinfo:
+                check_dependencies(config.protein_validation)
+        assert excinfo.value.code == 1
+
+    def test_cpu_flag_only_required_when_cpu_mode_enabled(self, config):
+        # psauron_use_cpu defaults to False, so a psauron build that lacks
+        # -c/--use-cpu entirely must still pass -- GMB never constructs a
+        # -c argument in that case.
+        config.protein_validation.enabled = True
+        config.protein_validation.psauron_use_cpu = False
+        config.protein_validation.diamond_db = __file__
+        with (
+            patch("subprocess.run", return_value=_mock_help_result(_REAL_V1_0_8_HELP)),
+            patch(
+                "gmb.pipeline.protein_validation.detect_psauron_capabilities",
+                return_value=_caps(_REAL_V1_0_8_HELP, "1.0.8", has_cpu_flag=False),
+            ),
+        ):
+            check_dependencies(config.protein_validation)  # must not raise
+
+    def test_cpu_flag_required_when_cpu_mode_enabled(self, config):
+        config.protein_validation.enabled = True
+        config.protein_validation.psauron_use_cpu = True
+        config.protein_validation.diamond_db = __file__
+        with (
+            patch("subprocess.run", return_value=_mock_help_result(_REAL_V1_0_8_HELP)),
+            patch(
+                "gmb.pipeline.protein_validation.detect_psauron_capabilities",
+                return_value=_caps(_REAL_V1_0_8_HELP, "1.0.8", has_cpu_flag=False),
+            ),
+        ):
+            with pytest.raises(SystemExit) as excinfo:
+                check_dependencies(config.protein_validation)
+        assert excinfo.value.code == 1
+
+    def test_passes_with_real_local_psauron_shape(self, config):
+        config.protein_validation.enabled = True
+        with (
+            patch("subprocess.run", return_value=_mock_help_result(_REAL_V1_0_8_HELP)),
+            patch(
+                "gmb.pipeline.protein_validation.detect_psauron_capabilities",
+                return_value=_caps(_REAL_V1_0_8_HELP, "1.0.8"),
+            ),
+        ):
             # diamond_db check will still run after psauron capability check;
             # point it at a path guaranteed to exist so this test isolates
             # the psauron capability logic specifically.
             config.protein_validation.diamond_db = __file__
             check_dependencies(config.protein_validation)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# batch_score_proteins: hardened Psauron CSV output parsing
+#
+# These stub out DIAMOND/Psauron with a fake subprocess.run that writes a
+# controlled psauron.csv into the real temp dir batch_score_proteins()
+# creates, so each malformed-output scenario is exercised via the real
+# parsing code rather than a hand-rolled reimplementation of it.
+# ---------------------------------------------------------------------------
+
+_PSAURON_HEADER = "description,psauron_is_protein,in-frame_score\n"
+
+
+def _make_fake_run(psauron_csv_contents):
+    """subprocess.run stub: DIAMOND writes an empty hits file (no matches),
+    Psauron writes `psauron_csv_contents` (or nothing, if None) to -o.
+    """
+
+    def _fake_run(cmd, **kwargs):
+        if "-o" in cmd:
+            out_path = cmd[cmd.index("-o") + 1]
+            if cmd[0] != "diamond" and psauron_csv_contents is not None:
+                with open(out_path, "w") as fh:
+                    fh.write(psauron_csv_contents)
+            elif cmd[0] == "diamond":
+                open(out_path, "w").close()
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"", stderr=b"")
+
+    return _fake_run
+
+
+class TestBatchScoreProteinsCsvHardening:
+    def test_missing_output_file_fails_clearly(self, config):
+        config.protein_validation.enabled = True
+        with patch("subprocess.run", side_effect=_make_fake_run(None)):
+            with pytest.raises(SystemExit):
+                batch_score_proteins({"t1": "MSTAVLKQ"}, config)
+
+    def test_missing_header_fails_clearly(self, config):
+        config.protein_validation.enabled = True
+        bad_csv = "psauron -i foo -o bar\npsauron score: 0.5\nno,header,here\n"
+        with patch("subprocess.run", side_effect=_make_fake_run(bad_csv)):
+            with pytest.raises(SystemExit):
+                batch_score_proteins({"t1": "MSTAVLKQ"}, config)
+
+    def test_missing_expected_column_fails_clearly(self, config):
+        config.protein_validation.enabled = True
+        bad_csv = "psauron -i foo -o bar\npsauron score: 0.5\ndescription,psauron_is_protein,some_other_score\nseq_0,True,0.9\n"
+        with patch("subprocess.run", side_effect=_make_fake_run(bad_csv)):
+            with pytest.raises(SystemExit):
+                batch_score_proteins({"t1": "MSTAVLKQ"}, config)
+
+    def test_no_matching_rows_fails_clearly(self, config):
+        config.protein_validation.enabled = True
+        # Valid header/shape, but the one data row names a sequence ID that
+        # cannot correspond to anything GMB submitted.
+        csv_text = _PSAURON_HEADER + "totally_unrelated_id,True,0.9\n"
+        with patch("subprocess.run", side_effect=_make_fake_run(csv_text)):
+            with pytest.raises(SystemExit):
+                batch_score_proteins({"t1": "MSTAVLKQ"}, config)
+
+    def test_valid_output_scores_correctly(self, config):
+        config.protein_validation.enabled = True
+        csv_text = _PSAURON_HEADER + "seq_0,True,0.87\n"
+        with patch("subprocess.run", side_effect=_make_fake_run(csv_text)):
+            scores, details = batch_score_proteins({"t1": "MSTAVLKQ"}, config)
+        assert details["t1"]["psauron_score"] == pytest.approx(0.87)
+        assert scores["t1"] == pytest.approx(0.87 * config.protein_validation.psauron_weight)
+
+    def test_malformed_row_skipped_with_warning_others_still_scored(self, config, capsys):
+        config.protein_validation.enabled = True
+        csv_text = _PSAURON_HEADER + "seq_0,True,not_a_number\nseq_1,True,0.5\n"
+        with patch("subprocess.run", side_effect=_make_fake_run(csv_text)):
+            scores, details = batch_score_proteins({"t1": "MSTAVLKQ", "t2": "MSTAVLKQAA"}, config)
+        assert "malformed" in capsys.readouterr().err.lower()
+        assert details["t2"]["psauron_score"] == pytest.approx(0.5)
 
 
 if __name__ == "__main__":

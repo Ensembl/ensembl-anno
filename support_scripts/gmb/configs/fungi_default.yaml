@@ -58,7 +58,6 @@ protein_validation:
   diamond_path: "diamond"
   psauron_path: "psauron"
   diamond_db: "/hps/nobackup/flicek/ensembl/genebuild/blastdb/uniprot_euk_diamond/uniprot_euk.fa.dmnd"
-  psauron_model: "default"
   diamond_weight: 0.7
   psauron_weight: 0.3
   min_score: 0.7

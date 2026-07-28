@@ -106,11 +106,8 @@ class ProteinValidationConfig:
     diamond_path: str = "diamond"
     psauron_path: str = "psauron"
     diamond_db: str = "swissprot.dmnd"
-    # Kept for schema/backward-compat only: psauron 1.0.8 has no --model
-    # flag (there is only one TCN model), so this field is not wired into
-    # the actual psauron invocation. See psauron_min_length/psauron_use_cpu
-    # for the real tunable flags.
-    psauron_model: str = "default"
+    # Psauron uses one bundled model checkpoint and exposes no model-
+    # selection option; -m specifies minimum protein length, not a model.
     psauron_min_length: int = 5  # psauron -m/--minimum-length (aa), psauron's own default
     psauron_use_cpu: bool = False  # psauron -c/--use-cpu; False lets it auto-detect a GPU
     diamond_weight: float = 0.5
