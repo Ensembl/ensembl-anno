@@ -65,11 +65,24 @@ scoring:
   min_cds_bp: 150
   require_support_for_single_exon: true
 
+# Protein validation is disabled in this portable default: enabling it here
+# unconditionally required an EBI-only DIAMOND database path
+# (/hps/nobackup/flicek/...) that does not exist outside the EBI cluster --
+# including in GitHub Actions and any other contributor's machine -- so
+# every plain `gmb-build` invocation with no --config silently crashed at
+# --check-deps. See configs/ebi_protein_validation.example.yaml for the
+# real EBI path as a layered overlay (`gmb-build --config
+# configs/ebi_protein_validation.example.yaml ...`), and
+# configs/apicomplexa_chr1_protein_validation.example.yaml for the pattern
+# used to enable it against a locally-copied database. diamond_path/
+# psauron_path/diamond_weight/psauron_weight/min_score/policy below are
+# the tunable defaults that apply once protein_validation.enabled is
+# switched on by an overlay -- they are inert while enabled is false.
 protein_validation:
-  enabled: true
+  enabled: false
   diamond_path: "diamond"
   psauron_path: "psauron"
-  diamond_db: "/hps/nobackup/flicek/ensembl/genebuild/blastdb/uniprot_euk_diamond/uniprot_euk.fa.dmnd"
+  diamond_db: "swissprot.dmnd"
   diamond_weight: 0.7
   psauron_weight: 0.3
   min_score: 0.7
