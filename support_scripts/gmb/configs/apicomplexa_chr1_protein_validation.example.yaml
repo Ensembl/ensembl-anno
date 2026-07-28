@@ -1,5 +1,11 @@
 # Apicomplexa chr1 protein-validation config -- Plasmodium falciparum GCA_000002765.3
 #
+# This is a LOCAL EXAMPLE, not a portable default: `diamond_db` below must be
+# set to a real path before use (see comment on that key) and is not tracked
+# with a working value. Copy this file and fill in your own path rather than
+# editing it in place, or override protein_validation.diamond_db via your
+# own config.
+#
 # Purpose: enable and validate the existing DIAMOND/Psauron protein-
 # validation stage locally, scoped to chromosome/seqname 1 only, against a
 # DIAMOND database copied from the cluster to this machine.
@@ -13,6 +19,12 @@
 # value. The only substantive addition here is protein_validation.
 #
 # Do not edit fungi_default.yaml or apicomplexa_first_pass.yaml for this.
+#
+# Follow-up recommendation (not implemented here, out of scope for this
+# cleanup): add a layered/multi-file config-loading mode to
+# gmb.pipeline.config.load_config() (e.g. accept a list of override paths
+# applied in order) so this file could point at apicomplexa_first_pass.yaml
+# directly instead of duplicating its deltas.
 
 protein_filter:
   min_bitscore: 30.0
@@ -40,18 +52,13 @@ utr:
 # --- The actual point of this config: enable protein validation locally ---
 protein_validation:
   enabled: true
-  # Local copy of the cluster's uniprot_euk.fa.dmnd
-  # (/hps/nobackup/flicek/ensembl/genebuild/blastdb/uniprot_euk_diamond/).
-  # This is the one intentionally machine-specific path in this config; see
-  # the report for `diamond dbinfo` output confirming it is readable and
-  # not a rebuild target. Do not commit this .dmnd file (see .gitignore).
-  diamond_db: "/Users/leanne/Desktop/Everything/Code/ensembl_anno_apicomplexa/uniprot_euk.fa.dmnd"
-  # psauron 1.0.8 has no --model flag; psauron_model is kept for schema
-  # compatibility with fungi_default.yaml but is not used by the code path
-  # it used to control (see protein_validation.py and psauron_min_length/
-  # psauron_use_cpu below for the flags that actually exist in this
-  # version).
-  psauron_model: "default"
+  # REQUIRED, machine-specific: point this at a local copy of the cluster's
+  # uniprot_euk.fa.dmnd (site path:
+  # /hps/nobackup/flicek/ensembl/genebuild/blastdb/uniprot_euk_diamond/).
+  # Do not commit the .dmnd file itself (see .gitignore).
+  diamond_db: "/path/to/local/uniprot_euk.fa.dmnd"
+  # Psauron uses one bundled model and exposes no model-selection option;
+  # -m specifies minimum protein length (see psauron_min_length below).
   psauron_min_length: 5
   # No CUDA GPU on this machine; let psauron probe for one and fall back
   # rather than forcing CPU, since that matched local testing. Set to true

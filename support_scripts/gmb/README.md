@@ -145,8 +145,13 @@ custom config) to add:
 protein_validation:
   enabled: true
   diamond_db: swissprot.dmnd   # path relative to the gmb/ working directory
-  diamond_threads: 4
-  psauron_threshold: 0.5
+  diamond_weight: 0.7          # combined_score = diamond_weight*DIAMOND + psauron_weight*Psauron
+  psauron_weight: 0.3
+  min_score: 0.7
+  policy: penalize              # "drop" | "penalize" (also accepts "penalise")
+  psauron_min_length: 5         # psauron -m/--minimum-length (aa); NOT a model selector --
+                                 # psauron has one bundled model and no model-selection option
+  psauron_use_cpu: false        # psauron -c/--use-cpu; only needs to be true on GPU-less/headless hosts
 ```
 
 Then run:
@@ -158,14 +163,81 @@ python -m gmb.cli.build \
     --seqname 1
 ```
 
-To verify that DIAMOND and Psauron are on `$PATH` before running:
+To verify that DIAMOND and Psauron are on `$PATH` before running -- this also prints the
+detected Psauron version and fails clearly if the installed binary is missing a flag GMB
+needs (capability detection, not a hard-coded version check):
 
 ```bash
 python -m gmb.cli.build --check-deps
 ```
 
+Per-transcript DIAMOND/Psauron results (hit ID, coverage, bitscore, Psauron score, combined
+`protein_coding_score`) are written to `protein_validation.tsv` alongside the other outputs.
+
 > **CI note:** Protein validation is skipped in CI by default.  To run it locally, set
 > `RUN_EXTERNAL_TOOLS=1` before running pytest (see [Testing](#testing) below).
+
+---
+
+### Long-read consensus preprocessing (optional `--minimap2` evidence)
+
+Raw long-read (e.g. Minimap2) transcript alignments are typically far too large and noisy
+to feed into `gmb.cli.build` directly. `gmb.cli.longread_consensus` collapses them into a
+smaller, deduplicated consensus track first:
+
+```bash
+python -m gmb.cli.longread_consensus \
+    --input raw_minimap2.gtf \
+    --output-dir longread_consensus_out/ \
+    --seqname 1
+```
+
+This writes `minimap2_consensus.gtf` (source label `Minimap2Consensus`) that can then be
+passed to `gmb.cli.build --minimap2 longread_consensus_out/minimap2_consensus.gtf`. See the
+module docstring in `gmb/pipeline/longread_consensus.py` for the clustering/support-
+filtering rules applied.
+
+---
+
+### Duplicate transcript collapse (automatic, within `gmb.cli.build`)
+
+Because clustering happens at the exon level (see
+`gmb/pipeline/duplicate_transcript_collapse.py` for the full root-cause explanation), a
+single transcript occasionally gets reconstructed as two structurally-identical "isoforms"
+of one gene. GMB automatically collapses transcripts proven identical in exon/CDS
+coordinates, CDS phase, and translated protein sequence (never genuinely distinct
+isoforms) after gene-level deduplication, and writes a `collapsed_duplicate_transcripts.tsv`
+log whenever any collapse occurs. This is on by default
+(`duplicate_transcript_collapse.collapse_exact_duplicates: true`); see
+`DuplicateTranscriptCollapseConfig` in `gmb/pipeline/config.py` for the tunable rules.
+
+---
+
+### Canonical transcript selection (standalone, post-build)
+
+For genes with multiple surviving isoforms, `gmb.cli.canonical_selection` is a standalone,
+non-destructive reporting step that ranks isoforms and picks one representative canonical
+transcript per gene, reading a completed build's own output files (never mutating them):
+
+```bash
+python -m gmb.cli.canonical_selection \
+    --consensus-gff3 output/consensus.gff3 \
+    --evidence-attribution output/evidence_attribution.tsv \
+    --protein-validation output/protein_validation.tsv \
+    --output-dir output/canonical_selection/
+```
+
+Writes `canonical_transcripts.tsv`, `transcript_ranking.tsv`, and
+`canonical_selection_summary.json`. Selection uses a deterministic priority order (complete
+ORF, then protein-validation support, independent evidence-source count, GMB score, CDS
+length, transcript ID) -- see `_rank_key` in `gmb/pipeline/canonical_selection.py`. The
+reported `canonical_total_score` is the continuous weighted score for interpreting *how
+much better* the winner is, not what picked it.
+
+Optional protein-domain evidence (Pfam/InterPro, via `gmb/pipeline/domain_evidence.py`) can
+feed into canonical scoring but is **disabled by default and not yet biologically
+validated** -- it is plumbed through end-to-end (config → scorer → report) as a TBC
+placeholder for future work, and never penalises a transcript for having zero domain hits.
 
 ---
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for config module."""
 
+import glob
 import os
 import sys
 
@@ -8,6 +9,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
 from gmb.pipeline.config import PipelineConfig, load_config
+
+_CONFIGS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs")
 
 
 class TestDefaultConfig:
@@ -127,6 +130,30 @@ class TestPolicyAlias:
     def test_default_preset_uses_penalize(self):
         cfg = load_config()
         assert cfg.protein_validation.policy == "penalize"
+
+
+class TestAllTrackedConfigsLoad:
+    """Every tracked configs/*.yaml must load cleanly as a fungi-preset delta.
+
+    Catches the class of bug this is meant to prevent: a config key that was
+    renamed/removed in the dataclasses but left stale in a tracked YAML file
+    (load_config() raises ValueError on any unknown key), or a value that
+    fails a dataclass __post_init__ validator.
+    """
+
+    @pytest.mark.parametrize(
+        "yaml_path",
+        sorted(glob.glob(os.path.join(_CONFIGS_DIR, "*.yaml"))),
+        ids=lambda p: os.path.basename(p),
+    )
+    def test_config_loads(self, yaml_path):
+        if os.path.basename(yaml_path) == "fungi_default.yaml":
+            # This is the base preset itself, loaded automatically by every
+            # other case here -- exercised directly via load_config().
+            cfg = load_config()
+        else:
+            cfg = load_config(yaml_path)
+        assert isinstance(cfg, PipelineConfig)
 
 
 if __name__ == "__main__":
