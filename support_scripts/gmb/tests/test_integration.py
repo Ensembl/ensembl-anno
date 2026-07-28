@@ -144,7 +144,12 @@ class TestIntegration:
             "--gene-prefix",
             "TEST",
         ]
-        result = subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(__file__)))
+        result = subprocess.run(
+            _add_test_config(cmd),
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
 
         assert result.returncode == 0, (
             f"Pipeline failed:\nstdout:\n{result.stdout}\n" f"stderr:\n{result.stderr}"
@@ -177,7 +182,18 @@ class TestIntegration:
             "--gene-prefix",
             "TEST",
         ]
-        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(__file__)))
+        result = subprocess.run(
+            _add_test_config(cmd),
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
+        assert result.returncode == 0, (
+            f"Command failed with exit code {result.returncode}\n"
+            f"Command: {' '.join(cmd)}\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
 
         assert os.path.exists(os.path.join(output_dir, "consensus.gff3"))
         assert os.path.exists(os.path.join(output_dir, "cdna.fa"))
@@ -218,7 +234,15 @@ class TestIntegration:
         script_dir = os.path.dirname(__file__)
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.dirname(script_dir)
-        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env)
+        result = subprocess.run(
+            _add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env
+        )
+        assert result.returncode == 0, (
+            f"Command failed with exit code {result.returncode}\n"
+            f"Command: {' '.join(cmd)}\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
 
         gff3_path = os.path.join(output_dir, "consensus.gff3")
         with open(gff3_path) as f:
@@ -258,7 +282,15 @@ class TestIntegration:
         script_dir = os.path.dirname(__file__)
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.dirname(script_dir)
-        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env)
+        result = subprocess.run(
+            _add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env
+        )
+        assert result.returncode == 0, (
+            f"Command failed with exit code {result.returncode}\n"
+            f"Command: {' '.join(cmd)}\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
 
         prot_path = os.path.join(output_dir, "prot.fa")
         with open(prot_path) as f:
@@ -302,7 +334,15 @@ class TestIntegration:
         script_dir = os.path.dirname(__file__)
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.dirname(script_dir)
-        subprocess.run(_add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env)
+        result = subprocess.run(
+            _add_test_config(cmd), capture_output=True, text=True, cwd=script_dir, env=env
+        )
+        assert result.returncode == 0, (
+            f"Command failed with exit code {result.returncode}\n"
+            f"Command: {' '.join(cmd)}\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
 
         with open(os.path.join(output_dir, "summary.json")) as f:
             report = json.load(f)

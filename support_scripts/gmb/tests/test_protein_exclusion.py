@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import subprocess
 import tempfile
 
-from test_integration import _create_test_data
+from test_integration import _add_test_config, _create_test_data
 
 
 def test_protein_exclusion():
@@ -35,7 +35,18 @@ def test_protein_exclusion():
             "TEST",
         ]
 
-        subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(__file__)))
+        result = subprocess.run(
+            _add_test_config(cmd),
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
+        assert result.returncode == 0, (
+            f"Command failed with exit code {result.returncode}\n"
+            f"Command: {' '.join(cmd)}\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
         gff3_path = os.path.join(output_dir, "consensus.gff3")
 
         with open(gff3_path) as f:
