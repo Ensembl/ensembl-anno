@@ -568,7 +568,13 @@ def collapse_exact_duplicate_transcripts(
     -------
     tuple of (list of dict, list of dict, dict)
         ``(new_gff_rows, collapse_log_rows, stats)``. ``collapse_log_rows``
-        matches the ``collapsed_duplicate_transcripts.tsv`` schema.
+        matches the ``collapsed_duplicate_transcripts.tsv`` schema: one row
+        per group *member* (not per removal), so each group has exactly one
+        row with an empty ``removed_transcript_id`` -- that row documents
+        the retained/survivor transcript itself, sharing the same
+        ``retained_transcript_id`` as its sibling removal rows. This lets
+        the survivor's own classification/signature/score be inspected
+        alongside what was collapsed into it, without a separate table.
     """
     cfg = config.duplicate_transcript_collapse
     stats = {

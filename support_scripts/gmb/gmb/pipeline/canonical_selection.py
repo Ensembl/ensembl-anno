@@ -39,7 +39,13 @@ Output (all written to --output-dir, source files never touched):
     consensus.canonical_annotated.gff3 (optional, --annotate-gff3) -- a
         COPY of the input GFF3 with `canonical=1`/`canonical=0` added to
         each mRNA's attributes. The original consensus.gff3 is never
-        modified in place.
+        modified in place. NOTE: this is `1`/`0` (a lightweight GFF3-style
+        flag, matching how such attributes are conventionally written in
+        GFF3) rather than the `True`/`False` used for the equivalent
+        `is_canonical` column in transcript_ranking.tsv (pandas' default
+        rendering of a Python bool to CSV/TSV) -- both represent the same
+        underlying boolean; the difference is a deliberate concession to
+        each output format's own convention, not an inconsistency to "fix".
 """
 
 from __future__ import annotations

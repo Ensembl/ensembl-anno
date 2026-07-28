@@ -1053,6 +1053,14 @@ def main() -> None:
     # Written whenever the stage ran, independent of whether any row_dict
     # above needed it -- this is the compact table canonical-transcript
     # selection (gmb.pipeline.canonical_selection) and manual QC read from.
+    #
+    # Percentage-scale note: diamond_pident/diamond_qcov/diamond_scov are
+    # 0-100 (DIAMOND's own native percentage convention); psauron_score and
+    # protein_coding_score are 0-1 (Psauron's own convention, and the
+    # diamond/psauron weighted-combination result -- see
+    # ProteinValidationConfig.diamond_weight/psauron_weight in config.py).
+    # gmb_score is open-ended (can be negative) and is not a percentage at
+    # all -- it's the additive scoring.py isoform score.
     if config.protein_validation.enabled:
         protein_val_rows = []
         for m in output_mrnas:
