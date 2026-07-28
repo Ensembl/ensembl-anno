@@ -65,15 +65,25 @@ def parse_hmmer_domtblout(path: str, provider: str = "Pfam") -> list[dict]:
     parsed here (feature_name comes from column 4, the query/target's own
     short name, which does not).
 
-    Columns used (1-based, per HMMER's documented domtblout format):
+    Columns used (1-based, per HMMER's documented domtblout format --
+    verified against the format spec: target=the HMM/profile being scanned
+    against, query=the input protein sequence, in `hmmscan` orientation):
       1  target name        -> feature_accession (fallback: feature_name)
       2  target accession   -> feature_accession (preferred, if not "-")
+      3  tlen (target/HMM profile length, NOT the query/protein length --
+         used as the coverage denominator below)
       4  query name         -> transcript_id
-      7  full sequence E-value
-      14 this domain's c-Evalue -> evalue
-      16 hmm coord from  \
-      17 hmm coord to     >  used to estimate coverage against col 6 (tlen)
-      6  tlen (target/HMM length)
+      12 c-Evalue (conditional E-value; deliberately NOT column 13's
+         i-Evalue/independent E-value -- c-Evalue is the standard
+         per-domain significance measure when a query may contain
+         several domain copies, which independent E-value is not
+         designed for; not verified against a real installed HMMER
+         version, since none is available in this environment)
+      14 this domain's own bit score -> score
+      16 hmm coord from, 17 hmm coord to -- used to estimate coverage
+         against col 3 (tlen)
+      18 ali coord from, 19 ali coord to -- alignment coordinates in the
+         QUERY (protein) sequence -> start/end
     """
     rows = []
     with open(path) as fh:
@@ -119,22 +129,37 @@ def parse_hmmer_domtblout(path: str, provider: str = "Pfam") -> list[dict]:
 def parse_interproscan_tsv(path: str) -> list[dict]:
     """Parse InterProScan's tab-separated output into the sidecar schema.
 
-    InterProScan TSV has no header row. Standard columns (1-based):
+    InterProScan TSV has no header row. Standard 11-column layout (1-based,
+    per InterProScan's documented "TSV output format" -- NOT verified
+    against a real installed InterProScan version, since none is available
+    in this environment; confirm this mapping against `interproscan.sh
+    --formats tsv` output for whatever version is actually used before
+    relying on it for anything beyond QC inspection):
       1  Protein accession           -> transcript_id
       4  Analysis (provider), e.g. Pfam/PANTHER/CDD/SUPERFAMILY
       5  Signature accession         -> feature_accession
       6  Signature description       -> feature_name
       7  Start location (protein aa) -> start
       8  Stop location (protein aa)  -> end
-      8  Score (column 9 in 11/13/14+-column variants)
-      9  E-value (when present)
-      12 InterPro annotation status ("T"/"-") -- not the same concept as
-         our ``status``; the interpretation is provider-specific, so this
-         is passed through under ``status`` rather than reinterpreted.
-
-    InterProScan's column count varies by version (11, 13, or 15 columns
-    depending on flags like --goterms/--pathways); only the first 9 (always
-    present) are relied on here.
+      9  Score -- for e-value-based analyses (e.g. Pfam) this column *is*
+         the significance value, not a separate bit-score; InterProScan's
+         format does not report score and E-value as two distinct fields
+         the way HMMER domtblout does. Stored here under ``score`` for
+         provenance; ``evalue`` is left ``None`` rather than guessing
+         which analyses' column-9 values are safe to treat as E-values
+         and which are not (e.g. Coils/TMHMM report non-numeric values
+         here) -- summarize_transcript_domain_metrics()'s significance
+         filtering therefore currently cannot threshold InterProScan-
+         sourced rows on E-value; this is a known limitation to revisit
+         once a real installed version's output can be inspected.
+      10 Status ("T"/"?") -- passed through under ``status`` rather than
+         reinterpreted (previously misread from column 12, which is the
+         *InterPro accession*, not the status flag -- fixed).
+      11 Date of the run (not used)
+      12+ optional InterPro accession/description, then GO/pathway columns
+         if --iprlookup/--goterms/--pathways were used -- column count
+         varies by version/flags; only the first 10 (always present) are
+         relied on here.
     """
     rows = []
     with open(path) as fh:
@@ -153,7 +178,7 @@ def parse_interproscan_tsv(path: str) -> list[dict]:
             end = _safe_int(parts[7]) if len(parts) > 7 else None
             score_raw = parts[8] if len(parts) > 8 else None
             score = _safe_float(score_raw) if score_raw not in (None, "-") else None
-            status = parts[11] if len(parts) > 11 else None
+            status = parts[9] if len(parts) > 9 else None
 
             rows.append(
                 {

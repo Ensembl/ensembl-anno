@@ -40,6 +40,11 @@ def test_parse_interproscan_tsv(tmp_path):
     assert rows[0]["transcript_id"] == "tx1"
     assert rows[0]["start"] == 10
     assert rows[0]["end"] == 260
+    # Regression: status is column 10 ("T"), not column 12 (the InterPro
+    # accession "IPR000719") -- a real bug found and fixed while auditing
+    # this parser against InterProScan's documented TSV column layout.
+    assert rows[0]["status"] == "T"
+    assert rows[0]["status"] != "IPR000719"
 
 
 def test_summarize_transcript_domain_metrics_basic():
