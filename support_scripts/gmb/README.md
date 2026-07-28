@@ -585,7 +585,11 @@ All thresholds are config-driven — no hard-coded species constants.
 | pyyaml     | latest                     | latest                                    |
 | matplotlib | latest                     | latest                                    |
 
-CI runs both the default and compat environments.
+CI runs both the default and compat environments. pandas 3.0.0 requires
+Python >=3.11 (the compat job's `python-version` is already set to
+`'3.11'` to match); the full non-integration test suite has been verified
+to pass under this exact combination (`pip install -r
+requirements-compat.txt` then `pytest tests/ -m "not integration"`).
 
 ---
 

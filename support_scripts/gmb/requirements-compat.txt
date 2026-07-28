@@ -1,0 +1,18 @@
+# Forward-compatibility test target for CI's "Compat" job
+# (.github/workflows/ci.yml, test-compat).
+#
+# requirements.txt deliberately caps pandas at `<3` (the conservative,
+# currently-supported default). This file instead pins the newest pandas
+# major version plus the newest supported pyranges, so CI catches any
+# breakage from the pipeline's core PyRanges-based logic (see
+# tests/test_pyranges_compat.py) before pandas 3.x eventually becomes the
+# new floor -- without committing the conservative default range to it yet.
+#
+# pandas 3.0.0 requires Python >=3.11 (confirmed via PyPI package
+# metadata), matching this job's already-configured
+# `python-version: '3.11'`.
+pandas==3.0.0
+pyranges==0.1.4
+biopython
+pyyaml
+matplotlib
