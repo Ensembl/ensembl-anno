@@ -91,6 +91,11 @@ ignore = [
 "exploratory/test_clustering.py" = ["F", "E"]
 "gmb/compare/visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
 "gmb/compare/compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
+# `== True` used deliberately: comparison_details.tsv columns are read back
+# as object dtype (can hold NaN alongside True/False), where a plain truth
+# check and an explicit `== True` differ for NaN -- an explicit comparison
+# is the safer, intent-revealing choice here, not an oversight.
+"gmb/compare/tool_performance_analysis.py" = ["E712"]
 
 # ---------------------------------------------------------------------------
 # pytest

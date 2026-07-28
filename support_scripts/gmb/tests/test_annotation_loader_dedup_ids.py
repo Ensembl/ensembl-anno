@@ -13,7 +13,6 @@ import pytest
 
 from gmb.compare.annotation_loader import load_annotation
 
-
 TIBERIUS_STYLE_GTF = """\
 chr1\tTiberius\tgene\t100\t500\t.\t+\t.\tgene_id "g1";
 chr1\tTiberius\ttranscript\t100\t500\t.\t+\t.\tgene_id "g1"; transcript_id "g1.t1";
@@ -114,8 +113,13 @@ def test_real_tiberius_fixture_has_collisions_if_present():
     preserving every gene/transcript/exon/CDS row.
     """
     candidate = os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "..",
-        "tiberius_annotations", "GCA_009914755.4_tiberius.gtf",
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "..",
+        "..",
+        "tiberius_annotations",
+        "GCA_009914755.4_tiberius.gtf",
     )
     candidate = os.path.abspath(candidate)
     if not os.path.exists(candidate):

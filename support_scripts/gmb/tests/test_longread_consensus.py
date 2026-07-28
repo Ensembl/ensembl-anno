@@ -23,12 +23,12 @@ def _transcript_block(chrom, tid, strand, exons):
     """Emit a (deliberately-swapped-coords) transcript line + clean exon lines,
     mirroring the real raw file's ~2.93% swapped-coordinate transcript lines."""
     lines = [
-        f'{chrom}\tminimap\ttranscript\t{exons[-1][0]}\t{exons[0][1]}\t.\t{strand}\t.\t'
+        f"{chrom}\tminimap\ttranscript\t{exons[-1][0]}\t{exons[0][1]}\t.\t{strand}\t.\t"
         f'gene_id "{tid}"; transcript_id "{tid}";'
     ]
     for i, (s, e) in enumerate(exons, start=1):
         lines.append(
-            f'{chrom}\tminimap\texon\t{s}\t{e}\t.\t{strand}\t.\t'
+            f"{chrom}\tminimap\texon\t{s}\t{e}\t.\t{strand}\t.\t"
             f'gene_id "{tid}"; transcript_id "{tid}"; exon_number "{i}";'
         )
     return lines
@@ -112,9 +112,7 @@ class TestConsensusBuilding:
         # Gap of 100,000bp between exons -- far beyond max_intron_length.
         lines = []
         for i in range(3):
-            lines += _transcript_block(
-                "1", f"r{i}", "+", [(100, 200), (100_300, 100_400)]
-            )
+            lines += _transcript_block("1", f"r{i}", "+", [(100, 200), (100_300, 100_400)])
         split_path = tmp_path / "1.gtf"
         _write_gtf(split_path, lines)
 

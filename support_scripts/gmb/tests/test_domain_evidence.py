@@ -44,12 +44,30 @@ def test_parse_interproscan_tsv(tmp_path):
 
 def test_summarize_transcript_domain_metrics_basic():
     rows = [
-        {"transcript_id": "tx1", "provider": "Pfam", "feature_accession": "PF00069",
-         "feature_name": "Kinase", "start": 10, "end": 260, "score": 130.0,
-         "evalue": 1e-40, "coverage": 0.9, "status": None},
-        {"transcript_id": "tx1", "provider": "PANTHER", "feature_accession": "PTHR24347",
-         "feature_name": "Kinase-like", "start": 5, "end": 295, "score": None,
-         "evalue": None, "coverage": None, "status": None},
+        {
+            "transcript_id": "tx1",
+            "provider": "Pfam",
+            "feature_accession": "PF00069",
+            "feature_name": "Kinase",
+            "start": 10,
+            "end": 260,
+            "score": 130.0,
+            "evalue": 1e-40,
+            "coverage": 0.9,
+            "status": None,
+        },
+        {
+            "transcript_id": "tx1",
+            "provider": "PANTHER",
+            "feature_accession": "PTHR24347",
+            "feature_name": "Kinase-like",
+            "start": 5,
+            "end": 295,
+            "score": None,
+            "evalue": None,
+            "coverage": None,
+            "status": None,
+        },
     ]
     summary = summarize_transcript_domain_metrics(rows, protein_lengths={"tx1": 300})
     s = summary["tx1"]
@@ -68,12 +86,30 @@ def test_summarize_no_domains_is_not_a_penalty_signal():
 
 def test_duplicate_domain_detected():
     rows = [
-        {"transcript_id": "tx1", "provider": "Pfam", "feature_accession": "PF00069",
-         "feature_name": "Kinase", "start": 10, "end": 100, "score": 50.0,
-         "evalue": 1e-10, "coverage": None, "status": None},
-        {"transcript_id": "tx1", "provider": "Pfam", "feature_accession": "PF00069",
-         "feature_name": "Kinase", "start": 150, "end": 240, "score": 48.0,
-         "evalue": 1e-9, "coverage": None, "status": None},
+        {
+            "transcript_id": "tx1",
+            "provider": "Pfam",
+            "feature_accession": "PF00069",
+            "feature_name": "Kinase",
+            "start": 10,
+            "end": 100,
+            "score": 50.0,
+            "evalue": 1e-10,
+            "coverage": None,
+            "status": None,
+        },
+        {
+            "transcript_id": "tx1",
+            "provider": "Pfam",
+            "feature_accession": "PF00069",
+            "feature_name": "Kinase",
+            "start": 150,
+            "end": 240,
+            "score": 48.0,
+            "evalue": 1e-9,
+            "coverage": None,
+            "status": None,
+        },
     ]
     summary = summarize_transcript_domain_metrics(rows)
     assert summary["tx1"]["has_duplicate_domain"] is True

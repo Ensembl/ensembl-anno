@@ -31,7 +31,6 @@ from typing import Optional
 
 import pandas as pd
 
-
 # ---------------------------------------------------------------------------
 # Format detection
 # ---------------------------------------------------------------------------
@@ -76,7 +75,11 @@ def detect_format(path: str) -> str:
             if feat in ("gene", "transcript") and _TIBERIUS_BARE.match(attrs):
                 bare_gene_tx += 1
 
-            if feat in ("exon", "CDS") and _GTF_ATTR.search(attrs) and not _GFF3_ATTR.search(attrs):
+            if (
+                feat in ("exon", "CDS")
+                and _GTF_ATTR.search(attrs)
+                and not _GFF3_ATTR.search(attrs)
+            ):
                 gtf_child += 1
 
             if lines_checked >= 200:
@@ -112,7 +115,7 @@ def _parse_gtf_attrs(attrs_str: str) -> dict[str, str]:
     attrs: dict[str, str] = {}
     for m in re.finditer(r'(\w+)\s+"([^"]*)"', attrs_str):
         attrs[m.group(1)] = m.group(2)
-    for m in re.finditer(r'(\w+)=(\S+)', attrs_str):
+    for m in re.finditer(r"(\w+)=(\S+)", attrs_str):
         if m.group(1) not in attrs:
             attrs[m.group(1)] = m.group(2).rstrip(";")
     return attrs
@@ -137,8 +140,13 @@ def _strip_ensembl_prefix(val: str) -> str:
 def _extract_biotype(row: dict, attrs: dict, feat: str) -> None:
     """Extract gene_biotype and transcript_biotype from parsed attributes."""
     biotype = attrs.get("biotype", "")
-    gene_biotype = attrs.get("gene_biotype", biotype if feat in ("gene", "ncRNA_gene", "pseudogene") else "")
-    tx_biotype = attrs.get("transcript_biotype", biotype if feat not in ("gene", "ncRNA_gene", "pseudogene", "exon", "CDS") else "")
+    gene_biotype = attrs.get(
+        "gene_biotype", biotype if feat in ("gene", "ncRNA_gene", "pseudogene") else ""
+    )
+    tx_biotype = attrs.get(
+        "transcript_biotype",
+        biotype if feat not in ("gene", "ncRNA_gene", "pseudogene", "exon", "CDS") else "",
+    )
     row["gene_biotype"] = gene_biotype
     row["transcript_biotype"] = tx_biotype
     row["tags"] = attrs.get("tag", "")
@@ -170,9 +178,16 @@ def _parse_annotation_lines(path: str, fmt: str, source_label: str) -> list[dict
             strand = parts[6]
             attrs_str = parts[8].strip()
 
-            if feat in ("biological_region", "chromosome", "region",
-                        "intron", "start_codon", "stop_codon",
-                        "five_prime_UTR", "three_prime_UTR"):
+            if feat in (
+                "biological_region",
+                "chromosome",
+                "region",
+                "intron",
+                "start_codon",
+                "stop_codon",
+                "five_prime_UTR",
+                "three_prime_UTR",
+            ):
                 continue
 
             row = {
@@ -271,12 +286,27 @@ def _normalise_rows(rows: list[dict], fmt: str) -> list[dict]:
             r["feature"] = "mRNA"
 
         # Normalise biotype transcript features (lnc_RNA, etc.) for comparison
-        if feat in ("lnc_RNA", "ncRNA", "rRNA", "tRNA", "snRNA", "snoRNA",
-                     "miRNA", "pre_miRNA", "SRP_RNA", "RNase_P_RNA",
-                     "RNase_MRP_RNA", "telomerase_RNA", "scRNA",
-                     "processed_transcript", "V_gene_segment",
-                     "D_gene_segment", "J_gene_segment", "C_gene_segment",
-                     "pseudogenic_transcript"):
+        if feat in (
+            "lnc_RNA",
+            "ncRNA",
+            "rRNA",
+            "tRNA",
+            "snRNA",
+            "snoRNA",
+            "miRNA",
+            "pre_miRNA",
+            "SRP_RNA",
+            "RNase_P_RNA",
+            "RNase_MRP_RNA",
+            "telomerase_RNA",
+            "scRNA",
+            "processed_transcript",
+            "V_gene_segment",
+            "D_gene_segment",
+            "J_gene_segment",
+            "C_gene_segment",
+            "pseudogenic_transcript",
+        ):
             r["feature"] = "mRNA"
 
         # Also handle ncRNA_gene, pseudogene as gene
@@ -417,17 +447,38 @@ def _rows_to_dataframes(
     gene_id, transcript_id, ID, Parent, Source_label.
     """
     if not rows:
-        empty = pd.DataFrame(columns=[
-            "Chromosome", "Start", "End", "Strand", "Feature",
-            "gene_id", "transcript_id", "ID", "Parent", "Source_label",
-            "gene_biotype", "transcript_biotype", "tags",
-            "original_gene_id", "original_transcript_id",
-        ])
+        empty = pd.DataFrame(
+            columns=[
+                "Chromosome",
+                "Start",
+                "End",
+                "Strand",
+                "Feature",
+                "gene_id",
+                "transcript_id",
+                "ID",
+                "Parent",
+                "Source_label",
+                "gene_biotype",
+                "transcript_biotype",
+                "tags",
+                "original_gene_id",
+                "original_transcript_id",
+            ]
+        )
         return empty.copy(), empty.copy(), empty.copy(), empty.copy()
 
     df = pd.DataFrame(rows)
-    df.rename(columns={"seqname": "Chromosome", "feature": "Feature",
-                        "start": "Start", "end": "End", "strand": "Strand"}, inplace=True)
+    df.rename(
+        columns={
+            "seqname": "Chromosome",
+            "feature": "Feature",
+            "start": "Start",
+            "end": "End",
+            "strand": "Strand",
+        },
+        inplace=True,
+    )
     df["Source_label"] = source_label
 
     # Fill remaining blanks
@@ -444,10 +495,23 @@ def _rows_to_dataframes(
     df["transcript_id"] = df["transcript_id"].fillna(df["ID"]).fillna("unknown")
     df["gene_id"] = df["gene_id"].fillna(df["Parent"]).fillna(df["ID"]).fillna("unknown")
 
-    keep_cols = ["Chromosome", "Start", "End", "Strand", "Feature",
-                 "gene_id", "transcript_id", "ID", "Parent", "Source_label",
-                 "gene_biotype", "transcript_biotype", "tags",
-                 "original_gene_id", "original_transcript_id"]
+    keep_cols = [
+        "Chromosome",
+        "Start",
+        "End",
+        "Strand",
+        "Feature",
+        "gene_id",
+        "transcript_id",
+        "ID",
+        "Parent",
+        "Source_label",
+        "gene_biotype",
+        "transcript_biotype",
+        "tags",
+        "original_gene_id",
+        "original_transcript_id",
+    ]
     for c in keep_cols:
         if c not in df.columns:
             df[c] = ""
@@ -504,13 +568,14 @@ def load_annotation(
     n_tx = mrna["transcript_id"].nunique() if not mrna.empty else 0
     n_exons = len(exons)
     n_cds = len(cds)
-    print(f"  {source_label}: {n_genes} genes, {n_tx} transcripts, "
-          f"{n_exons} exons, {n_cds} CDS")
+    print(
+        f"  {source_label}: {n_genes} genes, {n_tx} transcripts, " f"{n_exons} exons, {n_cds} CDS"
+    )
 
     if n_genes == 0:
-        warnings.warn(f"No gene features found in {path}. Check format detection.")
+        warnings.warn(f"No gene features found in {path}. Check format detection.", stacklevel=2)
     if n_exons == 0:
-        warnings.warn(f"No exon features found in {path}.")
+        warnings.warn(f"No exon features found in {path}.", stacklevel=2)
 
     return genes, mrna, exons, cds
 
@@ -589,9 +654,7 @@ def select_transcripts(
     # Precompute total CDS length per transcript (vectorised, avoids O(n²) loop)
     if not cds.empty:
         cds_lengths = (
-            cds.assign(_len=cds["End"] - cds["Start"])
-            .groupby("transcript_id")["_len"]
-            .sum()
+            cds.assign(_len=cds["End"] - cds["Start"]).groupby("transcript_id")["_len"].sum()
         )
     else:
         cds_lengths = pd.Series(dtype="int64")
@@ -599,14 +662,12 @@ def select_transcripts(
     # Precompute total exon span per transcript for longest-transcript fallback
     if not exons.empty:
         tx_spans = (
-            exons.assign(_len=exons["End"] - exons["Start"])
-            .groupby("transcript_id")["_len"]
-            .sum()
+            exons.assign(_len=exons["End"] - exons["Start"]).groupby("transcript_id")["_len"].sum()
         )
     else:
         tx_spans = pd.Series(dtype="int64")
 
-    for gene_id, gene_mrna in mrna.groupby("gene_id"):
+    for _gene_id, gene_mrna in mrna.groupby("gene_id"):
         if mode == "canonical":
             canonical = gene_mrna[gene_mrna["tags"].str.contains("Ensembl_canonical", na=False)]
             if not canonical.empty:
@@ -686,7 +747,7 @@ def apply_evaluation_mode(
     if mode == "canonical":
         return select_transcripts(genes, mrna, exons, cds, mode="canonical")
 
-    warnings.warn(f"Unknown evaluation mode '{mode}', using 'all'.")
+    warnings.warn(f"Unknown evaluation mode '{mode}', using 'all'.", stacklevel=2)
     return genes, mrna, exons, cds
 
 
@@ -863,6 +924,6 @@ def validate_against_fasta(
         print(f"  [{label}] All coordinates validated against FASTA.")
     else:
         for d in diagnostics:
-            warnings.warn(d)
+            warnings.warn(d, stacklevel=2)
 
     return diagnostics

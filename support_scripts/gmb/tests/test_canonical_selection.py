@@ -97,8 +97,20 @@ class TestDiamondCoverageDifferentiation:
         # coverage/identity -- must not win on bitscore alone, since the
         # canonical scorer never uses raw bitscore as a component.
         records = [
-            _rec("t1", diamond_bitscore=200.0, diamond_pident=90.0, diamond_qcov=95.0, diamond_scov=95.0),
-            _rec("t2", diamond_bitscore=900.0, diamond_pident=30.0, diamond_qcov=20.0, diamond_scov=20.0),
+            _rec(
+                "t1",
+                diamond_bitscore=200.0,
+                diamond_pident=90.0,
+                diamond_qcov=95.0,
+                diamond_scov=95.0,
+            ),
+            _rec(
+                "t2",
+                diamond_bitscore=900.0,
+                diamond_pident=30.0,
+                diamond_qcov=20.0,
+                diamond_scov=20.0,
+            ),
         ]
         result = select_canonical_for_gene("G1", records, cfg, "Helixer")
         assert result["canonical_transcript_id"] == "t1"
@@ -157,7 +169,9 @@ class TestIncompleteOrfPenalty:
 
 class TestMissingOptionalFields:
     def test_absent_diamond_hit_handled_safely(self, cfg):
-        rec = _rec("t1", diamond_hit=None, diamond_pident=None, diamond_qcov=None, diamond_scov=None)
+        rec = _rec(
+            "t1", diamond_hit=None, diamond_pident=None, diamond_qcov=None, diamond_scov=None
+        )
         scored = score_transcript(rec, cfg, "Helixer", (0.0, 0.0))
         assert scored["diamond_hit_component"] == 0.0
         assert scored["diamond_identity_component"] == 0.0
@@ -263,8 +277,17 @@ class TestFileIOAndGff3Annotation:
         )
         ev = tmp_path / "evidence_attribution.tsv"
         pd.DataFrame(
-            [{"gene_id": "G1", "transcript_id": "G1.t1", "evidence_sources": "Scallop",
-              "exon_count": 1, "cds_bp": 400, "transcript_span_bp": 400, "gmb_score": 2.0}]
+            [
+                {
+                    "gene_id": "G1",
+                    "transcript_id": "G1.t1",
+                    "evidence_sources": "Scallop",
+                    "exon_count": 1,
+                    "cds_bp": 400,
+                    "transcript_span_bp": 400,
+                    "gmb_score": 2.0,
+                }
+            ]
         ).to_csv(ev, sep="\t", index=False)
 
         genes = load_transcript_records(str(gff3), str(ev), protein_validation_tsv=None)
@@ -287,10 +310,24 @@ class TestFileIOAndGff3Annotation:
         ev = tmp_path / "evidence_attribution.tsv"
         pd.DataFrame(
             [
-                {"gene_id": "G1", "transcript_id": "G1.t1", "evidence_sources": "Scallop",
-                 "exon_count": 1, "cds_bp": 400, "transcript_span_bp": 400, "gmb_score": 5.0},
-                {"gene_id": "G1", "transcript_id": "G1.t2", "evidence_sources": "StringTie",
-                 "exon_count": 1, "cds_bp": 800, "transcript_span_bp": 800, "gmb_score": 1.0},
+                {
+                    "gene_id": "G1",
+                    "transcript_id": "G1.t1",
+                    "evidence_sources": "Scallop",
+                    "exon_count": 1,
+                    "cds_bp": 400,
+                    "transcript_span_bp": 400,
+                    "gmb_score": 5.0,
+                },
+                {
+                    "gene_id": "G1",
+                    "transcript_id": "G1.t2",
+                    "evidence_sources": "StringTie",
+                    "exon_count": 1,
+                    "cds_bp": 800,
+                    "transcript_span_bp": 800,
+                    "gmb_score": 1.0,
+                },
             ]
         ).to_csv(ev, sep="\t", index=False)
 
@@ -340,8 +377,17 @@ class TestRunEndToEndSummaryFields:
         )
         ev = tmp_path / "evidence_attribution.tsv"
         pd.DataFrame(
-            [{"gene_id": "G1", "transcript_id": "G1.t1", "evidence_sources": "Scallop",
-              "exon_count": 1, "cds_bp": 400, "transcript_span_bp": 400, "gmb_score": 2.0}]
+            [
+                {
+                    "gene_id": "G1",
+                    "transcript_id": "G1.t1",
+                    "evidence_sources": "Scallop",
+                    "exon_count": 1,
+                    "cds_bp": 400,
+                    "transcript_span_bp": 400,
+                    "gmb_score": 2.0,
+                }
+            ]
         ).to_csv(ev, sep="\t", index=False)
 
         out_dir = tmp_path / "out"

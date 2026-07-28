@@ -36,7 +36,6 @@ Options for Seqname Mapping:
 
 import argparse
 import csv
-import gzip
 import json
 import os
 import sys
@@ -55,11 +54,7 @@ from gmb.compare.annotation_loader import (
     select_transcripts,
     validate_against_fasta,
 )
-from gmb.pipeline.annotate_cds_utrs import (
-    load_genome,
-    reverse_complement,
-    translate,
-)
+from gmb.pipeline.annotate_cds_utrs import load_genome, reverse_complement, translate
 from gmb.pipeline.subset_utils import (
     add_subset_args,
     build_mapping,
@@ -631,7 +626,8 @@ def _stratified_counts(ref_results, ref_exons_df=None):
 def _locus_detection_rate(ref_results):
     """Gene locus detection: any overlap on same strand counts as detected."""
     detected = sum(
-        1 for r in ref_results
+        1
+        for r in ref_results
         if r["classification"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")
     )
     total = len(ref_results)
@@ -640,7 +636,11 @@ def _locus_detection_rate(ref_results):
 
 def _intron_chain_recovery_rate(ref_results):
     """Fraction of matched ref genes where intron chain was fully recovered."""
-    matched = [r for r in ref_results if r["classification"] != "Missed" and r["classification"] != "Strand_Mismatch"]
+    matched = [
+        r
+        for r in ref_results
+        if r["classification"] != "Missed" and r["classification"] != "Strand_Mismatch"
+    ]
     if not matched:
         return 0, 0, 0.0
     recovered = sum(1 for r in matched if r.get("intron_chain_match", False))
@@ -671,7 +671,11 @@ def write_summary(ref_results, cons_results, output_dir, filter_info=None, ref_e
     ic_recovered, ic_matched, ic_rate = _intron_chain_recovery_rate(ref_results)
 
     # CDS intron chain recovery
-    cds_ic_matched = [r for r in ref_results if r["classification_cds"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")]
+    cds_ic_matched = [
+        r
+        for r in ref_results
+        if r["classification_cds"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")
+    ]
     cds_ic_recovered = sum(1 for r in cds_ic_matched if r.get("cds_intron_chain_match", False))
 
     # Stratified
@@ -746,7 +750,10 @@ def write_summary(ref_results, cons_results, output_dir, filter_info=None, ref_e
         )
 
         # CDS rates
-        cds_total = summary["sensitivity_cds"]["cds_any_match_count"] + summary["sensitivity_cds"]["cds_missed_count"]
+        cds_total = (
+            summary["sensitivity_cds"]["cds_any_match_count"]
+            + summary["sensitivity_cds"]["cds_missed_count"]
+        )
         if cds_total > 0:
             summary["sensitivity_cds"]["cds_exact_match_rate"] = round(
                 summary["sensitivity_cds"]["cds_exact_match_count"] / total_ref, 4
@@ -1176,7 +1183,9 @@ def main():
         description="Compare a query annotation against a reference annotation. "
         "Supports Ensembl GFF3, Helixer GFF3, ANNEVO GFF3, and Tiberius hybrid formats."
     )
-    parser.add_argument("--reference", required=True, help="Reference annotation (GFF3/GTF, can be .gz)")
+    parser.add_argument(
+        "--reference", required=True, help="Reference annotation (GFF3/GTF, can be .gz)"
+    )
     query_group = parser.add_mutually_exclusive_group(required=True)
     query_group.add_argument("--query", help="Query annotation to compare against reference")
     query_group.add_argument("--consensus", help="(deprecated, use --query) Consensus annotation")
@@ -1341,29 +1350,41 @@ def main():
     if gene_biotypes or tx_biotypes:
         print(f"Filtering reference by biotype: genes={gene_biotypes}, transcripts={tx_biotypes}")
         ref_genes, _ref_mrna, ref_exons, ref_cds = filter_by_biotype(
-            ref_genes, _ref_mrna, ref_exons, ref_cds,
-            gene_biotypes=gene_biotypes, transcript_biotypes=tx_biotypes,
+            ref_genes,
+            _ref_mrna,
+            ref_exons,
+            ref_cds,
+            gene_biotypes=gene_biotypes,
+            transcript_biotypes=tx_biotypes,
         )
 
     # Transcript selection
     if args.reference_transcript_selection != "all":
         print(f"Selecting transcripts: {args.reference_transcript_selection}")
         ref_genes, _ref_mrna, ref_exons, ref_cds = select_transcripts(
-            ref_genes, _ref_mrna, ref_exons, ref_cds,
+            ref_genes,
+            _ref_mrna,
+            ref_exons,
+            ref_cds,
             mode=args.reference_transcript_selection,
         )
 
     post_filter_ref_genes = len(ref_genes)
     post_filter_ref_tx = _ref_mrna["transcript_id"].nunique() if not _ref_mrna.empty else 0
     if post_filter_ref_genes != pre_filter_ref_genes:
-        print(f"  Reference after filtering: {post_filter_ref_genes} genes "
-              f"({pre_filter_ref_genes - post_filter_ref_genes} removed), "
-              f"{post_filter_ref_tx} transcripts "
-              f"({pre_filter_ref_tx - post_filter_ref_tx} removed)")
+        print(
+            f"  Reference after filtering: {post_filter_ref_genes} genes "
+            f"({pre_filter_ref_genes - post_filter_ref_genes} removed), "
+            f"{post_filter_ref_tx} transcripts "
+            f"({pre_filter_ref_tx - post_filter_ref_tx} removed)"
+        )
 
     # --- Generate filter audit ---
     generate_filter_audit(
-        ref_genes, _ref_mrna, ref_exons, ref_cds,
+        ref_genes,
+        _ref_mrna,
+        ref_exons,
+        ref_cds,
         output_dir=args.output_dir,
         evaluation_mode=args.evaluation_mode,
         transcript_selection=args.reference_transcript_selection,
@@ -1503,8 +1524,8 @@ def main():
             "seed": sample_seed,
             "source": sample_source,
             "note": "Loci are sampled AFTER biotype/transcript filtering. "
-                    "Changing evaluation mode or transcript selection resamples different loci. "
-                    "Percentages across modes are not directly comparable due to different sample composition.",
+            "Changing evaluation mode or transcript selection resamples different loci. "
+            "Percentages across modes are not directly comparable due to different sample composition.",
         }
 
     summary = write_summary(
@@ -1526,11 +1547,17 @@ def main():
     print(f"Evaluation mode:          {args.evaluation_mode}")
     print(f"Transcript selection:     {args.reference_transcript_selection}")
     if pre_filter_ref_genes != post_filter_ref_genes:
-        print(f"Reference (pre-filter):   {pre_filter_ref_genes} genes, {pre_filter_ref_tx} transcripts")
-    print(f"Reference (post-filter):  {post_filter_ref_genes} genes, {post_filter_ref_tx} transcripts")
+        print(
+            f"Reference (pre-filter):   {pre_filter_ref_genes} genes, {pre_filter_ref_tx} transcripts"
+        )
+    print(
+        f"Reference (post-filter):  {post_filter_ref_genes} genes, {post_filter_ref_tx} transcripts"
+    )
     if sample_loci:
-        print(f"Sampling:                 {sample_loci} loci from {sample_source} (seed={sample_seed})")
-        print(f"  NOTE: loci sampled AFTER filtering; changing mode resamples different loci")
+        print(
+            f"Sampling:                 {sample_loci} loci from {sample_source} (seed={sample_seed})"
+        )
+        print("  NOTE: loci sampled AFTER filtering; changing mode resamples different loci")
     print(f"Reference genes (sample): {summary['total_reference_genes']}")
     print(f"Query genes (sample):     {summary['total_consensus_genes']}")
     print()
@@ -1541,21 +1568,39 @@ def main():
     ic = summary.get("intron_chain", {})
 
     print("--- 1. Locus Recovery ---")
-    print(f"  Locus detection rate:       {sens.get('locus_detection_rate', 0):.1%}  ({sens.get('locus_detected_count', 0)}/{total_ref})")
-    print(f"  Missed rate:                {sens.get('missed_rate', 0):.1%}  ({sens.get('missed_count', 0)}/{total_ref})")
+    print(
+        f"  Locus detection rate:       {sens.get('locus_detection_rate', 0):.1%}  ({sens.get('locus_detected_count', 0)}/{total_ref})"
+    )
+    print(
+        f"  Missed rate:                {sens.get('missed_rate', 0):.1%}  ({sens.get('missed_count', 0)}/{total_ref})"
+    )
     print(f"  Strand mismatch:            {sens.get('strand_mismatch_count', 0)}/{total_ref}")
     print()
 
     print("--- 2. CDS Accuracy ---")
-    print(f"  CDS exact match:            {sens_cds.get('cds_exact_match_count', 0)}" +
-          (f"  ({sens_cds.get('cds_exact_match_rate', 0):.1%})" if "cds_exact_match_rate" in sens_cds else ""))
-    print(f"  CDS any match:              {sens_cds.get('cds_any_match_count', 0)}" +
-          (f"  ({sens_cds.get('cds_any_match_rate', 0):.1%})" if "cds_any_match_rate" in sens_cds else ""))
+    print(
+        f"  CDS exact match:            {sens_cds.get('cds_exact_match_count', 0)}"
+        + (
+            f"  ({sens_cds.get('cds_exact_match_rate', 0):.1%})"
+            if "cds_exact_match_rate" in sens_cds
+            else ""
+        )
+    )
+    print(
+        f"  CDS any match:              {sens_cds.get('cds_any_match_count', 0)}"
+        + (
+            f"  ({sens_cds.get('cds_any_match_rate', 0):.1%})"
+            if "cds_any_match_rate" in sens_cds
+            else ""
+        )
+    )
     print(f"  CDS exact, UTR differs:     {sens_cds.get('cds_exact_but_exon_differs', 0)}")
     print()
 
     print("--- 3. Splice/Intron-Chain Recovery ---")
-    print(f"  Intron chain recovered:     {ic.get('exon_intron_chain_recovered', 0)}/{ic.get('exon_intron_chain_matched', 0)}  ({ic.get('exon_intron_chain_rate', 0):.1%})")
+    print(
+        f"  Intron chain recovered:     {ic.get('exon_intron_chain_recovered', 0)}/{ic.get('exon_intron_chain_matched', 0)}  ({ic.get('exon_intron_chain_rate', 0):.1%})"
+    )
     cds_ic_rec = sens_cds.get("cds_intron_chain_recovered", 0)
     cds_ic_mat = sens_cds.get("cds_intron_chain_matched", 0)
     cds_ic_rate = cds_ic_rec / cds_ic_mat if cds_ic_mat > 0 else 0
@@ -1563,25 +1608,46 @@ def main():
     print()
 
     print("--- 4. Exact Transcript Structure ---")
-    print(f"  Exact match rate:           {sens.get('exact_match_rate', 0):.1%}  ({sens.get('exact_match_count', 0)}/{total_ref})")
+    print(
+        f"  Exact match rate:           {sens.get('exact_match_rate', 0):.1%}  ({sens.get('exact_match_count', 0)}/{total_ref})"
+    )
     print(f"  Any match rate:             {sens.get('any_match_rate', 0):.1%}")
     print()
 
     print("Reference gene classification:")
-    for cls in ["Exact_Match", "Structural_Mismatch", "Partial_Match", "Missed", "Strand_Mismatch"]:
+    for cls in [
+        "Exact_Match",
+        "Structural_Mismatch",
+        "Partial_Match",
+        "Missed",
+        "Strand_Mismatch",
+    ]:
         cnt = summary["reference_classification"].get(cls, 0)
         pct = cnt / total_ref * 100 if total_ref > 0 else 0
         print(f"  {cls:25s}  {cnt:5d}  ({pct:.1f}%)")
     print()
 
     print("Query gene classification:")
-    for cls in ["Exact_Match", "Structural_Mismatch", "Partial_Match", "Matched", "Novel", "Strand_Mismatch"]:
+    for cls in [
+        "Exact_Match",
+        "Structural_Mismatch",
+        "Partial_Match",
+        "Matched",
+        "Novel",
+        "Strand_Mismatch",
+    ]:
         cnt = summary["consensus_classification"].get(cls, 0)
         if cnt == 0:
             continue
-        pct = cnt / summary["total_consensus_genes"] * 100 if summary["total_consensus_genes"] > 0 else 0
+        pct = (
+            cnt / summary["total_consensus_genes"] * 100
+            if summary["total_consensus_genes"] > 0
+            else 0
+        )
         print(f"  {cls:25s}  {cnt:5d}  ({pct:.1f}%)")
-    print(f"\nNovel query genes:          {summary['specificity'].get('novel_consensus_count', 0)}")
+    print(
+        f"\nNovel query genes:          {summary['specificity'].get('novel_consensus_count', 0)}"
+    )
 
     # --- Evidence tracks for plotting ---
     print("\nLoading evidence tracks for visualisation...")
@@ -1594,7 +1660,9 @@ def main():
     evidence_tracks["Query"] = (cons_exons, cons_cds)
 
     if args.helixer and args.tiberius:
-        sys.exit("ERROR: pass only one ab initio backbone track: --helixer or --tiberius, not both.")
+        sys.exit(
+            "ERROR: pass only one ab initio backbone track: --helixer or --tiberius, not both."
+        )
     if args.helixer and os.path.exists(args.helixer):
         hx_exons, hx_cds, _ = load_gff(args.helixer, "Helixer")
         if mapping:

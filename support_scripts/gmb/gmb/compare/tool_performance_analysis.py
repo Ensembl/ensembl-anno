@@ -35,7 +35,6 @@ import argparse
 import json
 import os
 import sys
-from collections import defaultdict
 from typing import Dict, Optional
 
 import numpy as np
@@ -46,7 +45,6 @@ from gmb.compare.annotation_loader import (
     load_annotation,
     select_transcripts,
 )
-
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -84,8 +82,6 @@ def compute_reference_features(
       - gene_length, cds_length, exon_count, intron_count,
         transcript_count, is_single_exon
     """
-    features = []
-
     # Gene length
     gene_lengths = ref_genes.set_index("ID" if "ID" in ref_genes.columns else "gene_id")[
         ["Start", "End"]
@@ -108,7 +104,9 @@ def compute_reference_features(
 
     # Transcript count per gene
     if not ref_mrna.empty and "gene_id" in ref_mrna.columns:
-        tx_counts = ref_mrna.groupby("gene_id")["transcript_id"].nunique().rename("transcript_count")
+        tx_counts = (
+            ref_mrna.groupby("gene_id")["transcript_id"].nunique().rename("transcript_count")
+        )
     else:
         tx_counts = pd.Series(dtype="int64", name="transcript_count")
 
@@ -116,7 +114,11 @@ def compute_reference_features(
     # Better: count unique introns from exon boundaries per gene
     if "gene_id" in ref_exons.columns and "transcript_id" in ref_exons.columns:
         # Use first transcript per gene for intron count
-        first_tx = ref_mrna.groupby("gene_id")["transcript_id"].first() if not ref_mrna.empty else pd.Series(dtype="str")
+        first_tx = (
+            ref_mrna.groupby("gene_id")["transcript_id"].first()
+            if not ref_mrna.empty
+            else pd.Series(dtype="str")
+        )
         first_tx_set = set(first_tx.values)
         first_tx_exons = ref_exons[ref_exons["transcript_id"].isin(first_tx_set)]
         exon_per_tx = first_tx_exons.groupby("gene_id").size()
@@ -139,13 +141,15 @@ def compute_reference_features(
     feat_df["cds_length"] = cds_lengths
     feat_df["transcript_count"] = tx_counts
     feat_df["intron_count"] = intron_counts
-    feat_df = feat_df.fillna(0).astype({
-        "gene_length": "int64",
-        "exon_count": "int64",
-        "cds_length": "int64",
-        "transcript_count": "int64",
-        "intron_count": "int64",
-    })
+    feat_df = feat_df.fillna(0).astype(
+        {
+            "gene_length": "int64",
+            "exon_count": "int64",
+            "cds_length": "int64",
+            "transcript_count": "int64",
+            "intron_count": "int64",
+        }
+    )
     feat_df["is_single_exon"] = feat_df["exon_count"] <= 1
 
     return feat_df
@@ -172,13 +176,17 @@ def assign_strata(feat_df: pd.DataFrame) -> pd.DataFrame:
     # Intron complexity
     bins_intron = [-1, 0, 2, 9, float("inf")]
     labels_intron = ["0_introns", "1-2_introns", "3-9_introns", ">=10_introns"]
-    df["intron_stratum"] = pd.cut(df["intron_count"], bins=bins_intron, labels=labels_intron, right=True)
+    df["intron_stratum"] = pd.cut(
+        df["intron_count"], bins=bins_intron, labels=labels_intron, right=True
+    )
 
     # Gene length quartiles
     q_gene = df["gene_length"].quantile([0.25, 0.5, 0.75])
     bins_gene = [0, q_gene[0.25], q_gene[0.5], q_gene[0.75], float("inf")]
     labels_gene = ["Q1_shortest", "Q2", "Q3", "Q4_longest"]
-    df["gene_length_stratum"] = pd.cut(df["gene_length"], bins=bins_gene, labels=labels_gene, right=True, duplicates="drop")
+    df["gene_length_stratum"] = pd.cut(
+        df["gene_length"], bins=bins_gene, labels=labels_gene, right=True, duplicates="drop"
+    )
 
     # CDS length quartiles (only for genes with CDS)
     cds_mask = df["cds_length"] > 0
@@ -195,7 +203,9 @@ def assign_strata(feat_df: pd.DataFrame) -> pd.DataFrame:
     # Transcript complexity
     bins_tx = [0, 1, 5, 20, float("inf")]
     labels_tx = ["mono_tx", "2-5_tx", "6-20_tx", ">20_tx"]
-    df["transcript_stratum"] = pd.cut(df["transcript_count"], bins=bins_tx, labels=labels_tx, right=True)
+    df["transcript_stratum"] = pd.cut(
+        df["transcript_count"], bins=bins_tx, labels=labels_tx, right=True
+    )
 
     return df
 
@@ -221,7 +231,12 @@ def compute_overall_profile(ref_details: pd.DataFrame) -> dict:
     strand = cls.get("Strand_Mismatch", 0)
 
     cds_exact = cls_cds.get("Exact_Match", 0)
-    cds_any = total - cls_cds.get("Missed", 0) - cls_cds.get("Strand_Mismatch", 0) - cls_cds.get("No_CDS", 0)
+    cds_any = (
+        total
+        - cls_cds.get("Missed", 0)
+        - cls_cds.get("Strand_Mismatch", 0)
+        - cls_cds.get("No_CDS", 0)
+    )
 
     detected = total - missed
     intron_chain = ref_details["intron_chain_match"].sum()
@@ -249,9 +264,7 @@ def compute_novel_rate(cons_details: pd.DataFrame) -> float:
     return novel / total
 
 
-def compute_stratified_metrics(
-    ref_details: pd.DataFrame, feat_df: pd.DataFrame
-) -> pd.DataFrame:
+def compute_stratified_metrics(ref_details: pd.DataFrame, feat_df: pd.DataFrame) -> pd.DataFrame:
     """Compute metrics stratified by reference structural features.
 
     Returns a DataFrame with columns: tool, stratum_type, stratum, metric, value
@@ -262,8 +275,11 @@ def compute_stratified_metrics(
     merged = ref_details.merge(strata_df, left_on="gene_id", right_index=True, how="left")
 
     stratum_cols = [
-        "exon_stratum", "intron_stratum", "gene_length_stratum",
-        "cds_length_stratum", "transcript_stratum",
+        "exon_stratum",
+        "intron_stratum",
+        "gene_length_stratum",
+        "cds_length_stratum",
+        "transcript_stratum",
     ]
 
     rows = []
@@ -274,14 +290,16 @@ def compute_stratified_metrics(
                 continue
             metrics = _compute_group_metrics(group)
             for metric_name, metric_val in metrics.items():
-                rows.append({
-                    "tool": ref_details["tool"].iloc[0] if not ref_details.empty else "",
-                    "stratum_type": stratum_type,
-                    "stratum": str(stratum_val),
-                    "n_genes": len(group),
-                    "metric": metric_name,
-                    "value": metric_val,
-                })
+                rows.append(
+                    {
+                        "tool": ref_details["tool"].iloc[0] if not ref_details.empty else "",
+                        "stratum_type": stratum_type,
+                        "stratum": str(stratum_val),
+                        "n_genes": len(group),
+                        "metric": metric_name,
+                        "value": metric_val,
+                    }
+                )
 
     return pd.DataFrame(rows)
 
@@ -374,34 +392,40 @@ def compute_boundary_analysis(
 
     thresholds = [0, 10, 50, 100, 500]
     for thresh in thresholds:
-        rows.append({
-            "tool": tool,
-            "boundary": "start",
-            "threshold_bp": thresh,
-            "count_within": int((start_arr <= thresh).sum()),
-            "rate_within": float((start_arr <= thresh).sum() / n_matched),
-            "n_matched": n_matched,
-        })
-        rows.append({
-            "tool": tool,
-            "boundary": "end",
-            "threshold_bp": thresh,
-            "count_within": int((end_arr <= thresh).sum()),
-            "rate_within": float((end_arr <= thresh).sum() / n_matched),
-            "n_matched": n_matched,
-        })
+        rows.append(
+            {
+                "tool": tool,
+                "boundary": "start",
+                "threshold_bp": thresh,
+                "count_within": int((start_arr <= thresh).sum()),
+                "rate_within": float((start_arr <= thresh).sum() / n_matched),
+                "n_matched": n_matched,
+            }
+        )
+        rows.append(
+            {
+                "tool": tool,
+                "boundary": "end",
+                "threshold_bp": thresh,
+                "count_within": int((end_arr <= thresh).sum()),
+                "rate_within": float((end_arr <= thresh).sum() / n_matched),
+                "n_matched": n_matched,
+            }
+        )
 
     # Combined (both start and end within threshold)
     for thresh in thresholds:
         both = int(((start_arr <= thresh) & (end_arr <= thresh)).sum())
-        rows.append({
-            "tool": tool,
-            "boundary": "both",
-            "threshold_bp": thresh,
-            "count_within": both,
-            "rate_within": float(both / n_matched),
-            "n_matched": n_matched,
-        })
+        rows.append(
+            {
+                "tool": tool,
+                "boundary": "both",
+                "threshold_bp": thresh,
+                "count_within": both,
+                "rate_within": float(both / n_matched),
+                "n_matched": n_matched,
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -432,11 +456,6 @@ def compute_intron_chain_analysis(ref_details: pd.DataFrame, feat_df: pd.DataFra
     ]
     n_detected = len(detected)
     ic_no_match = n_detected - int(detected["intron_chain_match"].sum())
-
-    # Single-exon reference that was also predicted single-exon
-    single_exon_ref = feat_df[feat_df["exon_count"] == 1].index
-    single_ref_details = ref_details[ref_details["gene_id"].isin(single_exon_ref)]
-    # (reported separately)
 
     missed = (multi_ref["classification"] == "Missed").sum()
     strand_mm = (multi_ref["classification"] == "Strand_Mismatch").sum()
@@ -499,18 +518,16 @@ def compute_error_taxonomy(
     # Fragmentation: ref genes whose matched_id appears more than once
     matched_ref = ref_details[ref_details["matched_id"] != ""]
     fragmented_query_ids = matched_ref["matched_id"].value_counts()
-    fragmented_count = (fragmented_query_ids > 1).sum()  # Number of query genes matching >1 ref
-    ref_fragmented = matched_ref[matched_ref["matched_id"].isin(
-        fragmented_query_ids[fragmented_query_ids > 1].index
-    )]["gene_id"].nunique()
+    ref_fragmented = matched_ref[
+        matched_ref["matched_id"].isin(fragmented_query_ids[fragmented_query_ids > 1].index)
+    ]["gene_id"].nunique()
 
     # Merging: query genes whose matched_id appears more than once
     matched_cons = cons_details[cons_details["matched_id"] != ""]
     merged_ref_ids = matched_cons["matched_id"].value_counts()
-    merged_count = (merged_ref_ids > 1).sum()  # Number of ref genes matched by >1 query
-    query_merged = matched_cons[matched_cons["matched_id"].isin(
-        merged_ref_ids[merged_ref_ids > 1].index
-    )]["gene_id"].nunique()
+    query_merged = matched_cons[
+        matched_cons["matched_id"].isin(merged_ref_ids[merged_ref_ids > 1].index)
+    ]["gene_id"].nunique()
 
     # Remaining: partial overlaps
     partial_cds = (
@@ -553,47 +570,60 @@ def compute_cross_ranking(
     # Overall rankings
     tools = list(all_profiles.keys())
     overall_metrics = [
-        "locus_detection_rate", "exact_transcript_match_rate",
-        "cds_exact_match_rate", "cds_any_match_rate",
-        "intron_chain_recovery_rate", "missed_rate",
+        "locus_detection_rate",
+        "exact_transcript_match_rate",
+        "cds_exact_match_rate",
+        "cds_any_match_rate",
+        "intron_chain_recovery_rate",
+        "missed_rate",
     ]
     for metric in overall_metrics:
         vals = {t: all_profiles[t].get(metric, 0) for t in tools}
         # For missed_rate, lower is better
         reverse = metric != "missed_rate"
         ranked = sorted(vals.items(), key=lambda x: x[1], reverse=reverse)
-        rows.append({
-            "metric": metric,
-            "stratum_type": "overall",
-            "stratum": "all",
-            "rank_1": ranked[0][0] if len(ranked) > 0 else "",
-            "rank_1_value": ranked[0][1] if len(ranked) > 0 else 0,
-            "rank_2": ranked[1][0] if len(ranked) > 1 else "",
-            "rank_2_value": ranked[1][1] if len(ranked) > 1 else 0,
-            "rank_3": ranked[2][0] if len(ranked) > 2 else "",
-            "rank_3_value": ranked[2][1] if len(ranked) > 2 else 0,
-        })
+        rows.append(
+            {
+                "metric": metric,
+                "stratum_type": "overall",
+                "stratum": "all",
+                "rank_1": ranked[0][0] if len(ranked) > 0 else "",
+                "rank_1_value": ranked[0][1] if len(ranked) > 0 else 0,
+                "rank_2": ranked[1][0] if len(ranked) > 1 else "",
+                "rank_2_value": ranked[1][1] if len(ranked) > 1 else 0,
+                "rank_3": ranked[2][0] if len(ranked) > 2 else "",
+                "rank_3_value": ranked[2][1] if len(ranked) > 2 else 0,
+            }
+        )
 
     # Stratified rankings
     if not all_strata.empty:
-        strata_metrics = ["locus_detection_rate", "exact_match_rate", "cds_exact_match_rate", "intron_chain_rate", "missed_rate"]
+        strata_metrics = [
+            "locus_detection_rate",
+            "exact_match_rate",
+            "cds_exact_match_rate",
+            "intron_chain_rate",
+            "missed_rate",
+        ]
         for metric in strata_metrics:
             metric_data = all_strata[all_strata["metric"] == metric]
             for (stype, sval), group in metric_data.groupby(["stratum_type", "stratum"]):
                 vals = {row["tool"]: row["value"] for _, row in group.iterrows()}
                 reverse = metric != "missed_rate"
                 ranked = sorted(vals.items(), key=lambda x: x[1], reverse=reverse)
-                rows.append({
-                    "metric": metric,
-                    "stratum_type": stype,
-                    "stratum": sval,
-                    "rank_1": ranked[0][0] if len(ranked) > 0 else "",
-                    "rank_1_value": ranked[0][1] if len(ranked) > 0 else 0,
-                    "rank_2": ranked[1][0] if len(ranked) > 1 else "",
-                    "rank_2_value": ranked[1][1] if len(ranked) > 1 else 0,
-                    "rank_3": ranked[2][0] if len(ranked) > 2 else "",
-                    "rank_3_value": ranked[2][1] if len(ranked) > 2 else 0,
-                })
+                rows.append(
+                    {
+                        "metric": metric,
+                        "stratum_type": stype,
+                        "stratum": sval,
+                        "rank_1": ranked[0][0] if len(ranked) > 0 else "",
+                        "rank_1_value": ranked[0][1] if len(ranked) > 0 else 0,
+                        "rank_2": ranked[1][0] if len(ranked) > 1 else "",
+                        "rank_2_value": ranked[1][1] if len(ranked) > 1 else 0,
+                        "rank_3": ranked[2][0] if len(ranked) > 2 else "",
+                        "rank_3_value": ranked[2][1] if len(ranked) > 2 else 0,
+                    }
+                )
 
     return pd.DataFrame(rows)
 
@@ -639,7 +669,7 @@ def run_analysis(
     query_genes_by_tool = {}
 
     if reference_gff:
-        print(f"\nLoading reference annotation for stratification...")
+        print("\nLoading reference annotation for stratification...")
         r_genes, r_mrna, r_exons, r_cds = load_annotation(reference_gff, "Reference")
 
         if evaluation_mode != "all":
@@ -651,16 +681,20 @@ def run_analysis(
         if transcript_selection != "all":
             print(f"  Selecting transcripts: {transcript_selection}")
             r_genes, r_mrna, r_exons, r_cds = select_transcripts(
-                r_genes, r_mrna, r_exons, r_cds, mode=transcript_selection,
+                r_genes,
+                r_mrna,
+                r_exons,
+                r_cds,
+                mode=transcript_selection,
             )
 
-        print(f"  Computing reference structural features...")
+        print("  Computing reference structural features...")
         feat_df = compute_reference_features(r_genes, r_mrna, r_exons, r_cds)
         ref_genes = r_genes
         print(f"  {len(feat_df)} genes with features computed")
 
         # Load query annotations for boundary analysis
-        for tool_label, comp_dir in comparisons.items():
+        for tool_label, _comp_dir in comparisons.items():
             summary = all_summaries[tool_label]
             query_path = summary.get("query_path")
             if query_path and os.path.exists(query_path):
@@ -675,10 +709,12 @@ def run_analysis(
         profile = compute_overall_profile(all_ref_details[tool_label])
         profile["novel_rate"] = compute_novel_rate(all_cons_details[tool_label])
         all_profiles[tool_label] = profile
-        print(f"  {tool_label}: exact={profile.get('exact_transcript_match_rate', 0):.1%}, "
-              f"CDS={profile.get('cds_exact_match_rate', 0):.1%}, "
-              f"IC={profile.get('intron_chain_recovery_rate', 0):.1%}, "
-              f"missed={profile.get('missed_rate', 0):.1%}")
+        print(
+            f"  {tool_label}: exact={profile.get('exact_transcript_match_rate', 0):.1%}, "
+            f"CDS={profile.get('cds_exact_match_rate', 0):.1%}, "
+            f"IC={profile.get('intron_chain_recovery_rate', 0):.1%}, "
+            f"missed={profile.get('missed_rate', 0):.1%}"
+        )
 
     # Write summary
     summary_rows = []
@@ -687,7 +723,9 @@ def run_analysis(
         row.update(profile)
         summary_rows.append(row)
     summary_df = pd.DataFrame(summary_rows)
-    summary_df.to_csv(os.path.join(output_dir, "tool_performance_summary.tsv"), sep="\t", index=False)
+    summary_df.to_csv(
+        os.path.join(output_dir, "tool_performance_summary.tsv"), sep="\t", index=False
+    )
 
     # --- Analysis 2: Stratified performance ---
     all_strata = pd.DataFrame()
@@ -698,7 +736,9 @@ def run_analysis(
             strata = compute_stratified_metrics(all_ref_details[tool_label], feat_df)
             strata_parts.append(strata)
         all_strata = pd.concat(strata_parts, ignore_index=True)
-        all_strata.to_csv(os.path.join(output_dir, "tool_performance_strata.tsv"), sep="\t", index=False)
+        all_strata.to_csv(
+            os.path.join(output_dir, "tool_performance_strata.tsv"), sep="\t", index=False
+        )
         print(f"  {len(all_strata)} stratum-metric rows written")
 
     # --- Analysis 3: Boundary analysis ---
@@ -714,7 +754,9 @@ def run_analysis(
                     boundary_parts.append(bnd)
         if boundary_parts:
             boundary_df = pd.concat(boundary_parts, ignore_index=True)
-            boundary_df.to_csv(os.path.join(output_dir, "tool_boundary_analysis.tsv"), sep="\t", index=False)
+            boundary_df.to_csv(
+                os.path.join(output_dir, "tool_boundary_analysis.tsv"), sep="\t", index=False
+            )
             print(f"  Boundary analysis: {len(boundary_df)} rows")
 
     # --- Analysis 4: Intron chain analysis ---
@@ -736,8 +778,10 @@ def run_analysis(
             all_ref_details[tool_label], all_cons_details[tool_label]
         )
         error_results.append(taxonomy)
-        print(f"  {tool_label}: fragmented={taxonomy['fragmented_predictions']}, "
-              f"merged={taxonomy['merged_predictions']}, missed={taxonomy['missed_gene']}")
+        print(
+            f"  {tool_label}: fragmented={taxonomy['fragmented_predictions']}, "
+            f"merged={taxonomy['merged_predictions']}, missed={taxonomy['missed_gene']}"
+        )
     error_df = pd.DataFrame(error_results)
     error_df.to_csv(os.path.join(output_dir, "tool_error_taxonomy.tsv"), sep="\t", index=False)
 
@@ -754,8 +798,19 @@ def run_analysis(
         ref_det = all_ref_details[tool_label].copy()
         if feat_df is not None:
             ref_det = ref_det.merge(
-                assign_strata(feat_df)[["exon_count", "cds_length", "gene_length", "intron_count", "exon_stratum", "gene_length_stratum"]],
-                left_on="gene_id", right_index=True, how="left"
+                assign_strata(feat_df)[
+                    [
+                        "exon_count",
+                        "cds_length",
+                        "gene_length",
+                        "intron_count",
+                        "exon_stratum",
+                        "gene_length_stratum",
+                    ]
+                ],
+                left_on="gene_id",
+                right_index=True,
+                how="left",
             )
         best_match_parts.append(ref_det)
     best_match_df = pd.concat(best_match_parts, ignore_index=True)
@@ -775,7 +830,9 @@ def run_analysis(
         json.dump(full_results, fh, indent=2, default=str)
 
     # --- Print final report ---
-    _print_final_report(all_profiles, error_results, ic_results if feat_df is not None else [], ranking_df)
+    _print_final_report(
+        all_profiles, error_results, ic_results if feat_df is not None else [], ranking_df
+    )
 
     print(f"\nAll outputs written to: {output_dir}/")
     return full_results

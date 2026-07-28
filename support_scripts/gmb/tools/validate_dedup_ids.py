@@ -132,10 +132,15 @@ def main():
             gid = row["gene_id"]
             if gid in gene_lookup and gene_lookup[gid] != row["Chromosome"]:
                 mismatches += 1
-        check(f"every exon's gene_id resolves to a gene on the same chromosome ({mismatches} mismatches)", mismatches == 0)
+        check(
+            f"every exon's gene_id resolves to a gene on the same chromosome ({mismatches} mismatches)",
+            mismatches == 0,
+        )
     else:
-        print("[INFO] No cross-chromosome ID collisions detected in this file — "
-              "namespacing was a no-op, as expected for genome-wide-unique IDs.")
+        print(
+            "[INFO] No cross-chromosome ID collisions detected in this file — "
+            "namespacing was a no-op, as expected for genome-wide-unique IDs."
+        )
         check(
             "gene_id left untouched (original_gene_id == gene_id)",
             (genes["gene_id"] == genes["original_gene_id"]).all() if not genes.empty else True,

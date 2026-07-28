@@ -61,7 +61,7 @@ import re
 import sys
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 import yaml
@@ -188,13 +188,13 @@ def split_by_seqname(
         ``{seqname: filepath}`` for every seqname actually written.
     """
     ensure_dir(split_dir)
-    handles: dict[str, "object"] = {}
+    handles: dict[str, object] = {}
     paths: dict[str, str] = {}
     n_lines = 0
     n_skipped_other_seqname = 0
     t0 = time.time()
 
-    with open(input_path, "r") as fh:
+    with open(input_path) as fh:
         for line in fh:
             n_lines += 1
             if n_lines % 20_000_000 == 0:
@@ -227,7 +227,11 @@ def split_by_seqname(
     print(
         f"    Split complete: {n_lines:,} lines -> {len(paths)} seqname file(s) "
         f"({time.time() - t0:.0f}s)"
-        + (f", {n_skipped_other_seqname:,} lines skipped (not {only_seqname})" if only_seqname else "")
+        + (
+            f", {n_skipped_other_seqname:,} lines skipped (not {only_seqname})"
+            if only_seqname
+            else ""
+        )
     )
     return paths
 
@@ -253,10 +257,13 @@ def _intron_chain_str(exons: list[tuple[int, int]], snap_bp: int = 0) -> str:
     if len(exons) < 2:
         return "single-exon"
     if snap_bp > 0:
+
         def snap(x):
             return round(x / snap_bp) * snap_bp
 
-        return ",".join(f"{snap(exons[i][1])}-{snap(exons[i + 1][0])}" for i in range(len(exons) - 1))
+        return ",".join(
+            f"{snap(exons[i][1])}-{snap(exons[i + 1][0])}" for i in range(len(exons) - 1)
+        )
     return ",".join(f"{exons[i][1]}-{exons[i + 1][0]}" for i in range(len(exons) - 1))
 
 
@@ -268,7 +275,7 @@ def _load_transcripts_from_split_file(split_path: str) -> dict[str, dict]:
     span is derived purely from its (clean) exon rows.
     """
     transcripts: dict[str, dict] = {}
-    with open(split_path, "r") as fh:
+    with open(split_path) as fh:
         for line in fh:
             f = line.rstrip("\n").split("\t")
             if len(f) != 9:
@@ -349,7 +356,9 @@ def _cluster_single_exon(reads: list[dict], tol_bp: int) -> list[list[dict]]:
     return finished
 
 
-def _load_shortread_exons_for_seqname(paths: list[str], seqname: str) -> list[tuple[int, int, str]]:
+def _load_shortread_exons_for_seqname(
+    paths: list[str], seqname: str
+) -> list[tuple[int, int, str]]:
     """Load (start, end, strand) exon intervals for one seqname from small
     short-read GTFs (Scallop/StringTie). These files are small enough to
     read directly without pandas."""
@@ -372,7 +381,10 @@ def _load_shortread_exons_for_seqname(paths: list[str], seqname: str) -> list[tu
 
 
 def _has_shortread_support(
-    exons: list[tuple[int, int]], strand: str, shortread_exons: list[tuple[int, int, str]], min_overlap: float
+    exons: list[tuple[int, int]],
+    strand: str,
+    shortread_exons: list[tuple[int, int, str]],
+    min_overlap: float,
 ) -> bool:
     for s_start, s_end, s_strand in shortread_exons:
         if s_strand != strand:
@@ -480,7 +492,9 @@ def build_consensus_for_seqname(
 
             chain_groups: dict[str, list[dict]] = defaultdict(list)
             for c in multi:
-                chain_groups[_intron_chain_str(c["exons"], snap_bp=cfg.splice_site_tolerance_bp)].append(c)
+                chain_groups[
+                    _intron_chain_str(c["exons"], snap_bp=cfg.splice_site_tolerance_bp)
+                ].append(c)
 
             single_groups = _cluster_single_exon(single, cfg.collapse_terminal_variation_bp)
 
@@ -488,7 +502,7 @@ def build_consensus_for_seqname(
 
             group_id = 0
             accepted_multiexon_exons: list[tuple[int, int]] = []
-            for chain, members in chain_groups.items():
+            for _chain, members in chain_groups.items():
                 group_id += 1
                 support = len(members)
                 min_req = cfg.min_read_support_multi_exon
@@ -626,7 +640,9 @@ def _suppress_contained_models(records: list[dict]) -> list[dict]:
             s, e = r["exons"][0][0], r["exons"][-1][1]
             active = [a for a in active if a["exons"][-1][1] >= s]
             contained = any(
-                a["exons"][0][0] <= s and e <= a["exons"][-1][1] and a["read_support"] >= r["read_support"]
+                a["exons"][0][0] <= s
+                and e <= a["exons"][-1][1]
+                and a["read_support"] >= r["read_support"]
                 for a in active
                 if a is not r
             )
@@ -734,7 +750,9 @@ def _consensus_exons_multi(members: list[dict]) -> list[tuple[int, int]]:
 # ---------------------------------------------------------------------------
 
 
-def write_consensus_gtf(records: list[dict], output_path: str, source_label: str = "Minimap2Consensus") -> None:
+def write_consensus_gtf(
+    records: list[dict], output_path: str, source_label: str = "Minimap2Consensus"
+) -> None:
     """Write consensus records as a GTF, including explicit ``gene`` rows.
 
     ``gmb.compare.annotation_loader`` builds its gene table from
@@ -754,7 +772,7 @@ def write_consensus_gtf(records: list[dict], output_path: str, source_label: str
             strand = gene_records[0]["strand"]
             seqname = gene_records[0]["seqname"]
             fh.write(
-                f'{seqname}\t{source_label}\tgene\t{gene_start}\t{gene_end}\t.\t'
+                f"{seqname}\t{source_label}\tgene\t{gene_start}\t{gene_end}\t.\t"
                 f'{strand}\t.\tgene_id "{gid}";\n'
             )
             for rec in gene_records:
@@ -775,7 +793,7 @@ def write_consensus_gtf(records: list[dict], output_path: str, source_label: str
                 for i, (s, e) in enumerate(exons, start=1):
                     fh.write(
                         f"{seqname}\t{source_label}\texon\t{s}\t{e}\t.\t"
-                        f"{strand}\t.\tgene_id \"{gid}\"; transcript_id \"{tid}\"; "
+                        f'{strand}\t.\tgene_id "{gid}"; transcript_id "{tid}"; '
                         f'exon_number "{i}"; read_support "{rec["read_support"]}";\n'
                     )
 
@@ -806,7 +824,9 @@ def parse_args():
     parser.add_argument(
         "--stringtie", default=None, help="StringTie GTF, for single-read rescue cross-check"
     )
-    parser.add_argument("--log-file", default=None, help="Log path. Default: <output-dir>/longread_consensus.log")
+    parser.add_argument(
+        "--log-file", default=None, help="Log path. Default: <output-dir>/longread_consensus.log"
+    )
     parser.add_argument("--no-log-file", action="store_true")
     return parser.parse_args()
 
