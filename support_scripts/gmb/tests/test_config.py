@@ -6,11 +6,18 @@ import os
 import sys
 
 import pytest
+import yaml
 
 sys.path.insert(0, os.path.dirname(__file__))
 from gmb.pipeline.config import PipelineConfig, load_config
 
 _CONFIGS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs")
+_FUNGI_DEFAULT_YAML = os.path.join(_CONFIGS_DIR, "fungi_default.yaml")
+
+
+def _fungi_default_raw() -> dict:
+    with open(_FUNGI_DEFAULT_YAML) as fh:
+        return yaml.safe_load(fh)
 
 
 class TestDefaultConfig:
@@ -31,7 +38,16 @@ class TestDefaultConfig:
         assert cfg.orf.min_codons == 33
         assert cfg.orf.allow_partial_5 is True
         assert cfg.protein_filter.top_n_per_locus == 3
-        assert cfg.scoring.max_isoforms_per_locus == 5  # set to 5 in fungi_default.yaml
+        # max_isoforms_per_locus's tuned value has drifted once already (5 -> 3,
+        # 2026-05-12) without this assertion being updated -- see
+        # fungi_default.yaml's comment on the key for the history. Read the
+        # tracked value directly rather than re-hard-coding a number here, so
+        # this test validates that config loading is faithful to the YAML
+        # (and fails if the key is ever silently removed), not a specific
+        # untracked business decision.
+        raw = _fungi_default_raw()
+        assert "max_isoforms_per_locus" in raw["scoring"]
+        assert cfg.scoring.max_isoforms_per_locus == raw["scoring"]["max_isoforms_per_locus"]
         assert cfg.scoring.fungal_single_exon_mode is True
         assert cfg.transcriptomic_filter.allow_single_exon is True
 
