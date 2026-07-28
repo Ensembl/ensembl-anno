@@ -106,11 +106,19 @@ class ProteinValidationConfig:
     diamond_path: str = "diamond"
     psauron_path: str = "psauron"
     diamond_db: str = "swissprot.dmnd"
+    # Kept for schema/backward-compat only: psauron 1.0.8 has no --model
+    # flag (there is only one TCN model), so this field is not wired into
+    # the actual psauron invocation. See psauron_min_length/psauron_use_cpu
+    # for the real tunable flags.
     psauron_model: str = "default"
+    psauron_min_length: int = 5  # psauron -m/--minimum-length (aa), psauron's own default
+    psauron_use_cpu: bool = False  # psauron -c/--use-cpu; False lets it auto-detect a GPU
     diamond_weight: float = 0.5
     psauron_weight: float = 0.5
     min_score: float = 0.5
     policy: str = "drop"  # 'drop' or 'penalize' (also accepts 'penalise')
+    diamond_min_query_coverage: float = 0.0  # 0-100; additional gate before counting a hit
+    diamond_min_target_coverage: float = 0.0  # 0-100; additional gate before counting a hit
 
 
 @dataclass
@@ -183,6 +191,42 @@ class DedupConfig:
 
 
 @dataclass
+class DuplicateIsoformConfig:
+    """Config for gmb.pipeline.duplicate_isoform_collapse.
+
+    Distinct from DedupConfig: dedup_genes.py merges whole *genes* by
+    overlap + a single (first-mRNA, tolerance-bp) structural check -- it is
+    what brings exact-duplicate fragments together as isoforms of one gene
+    in the first place (see that module's docstring for the root cause:
+    exon-level PyRanges clustering can split one transcript's own exons
+    across separate clusters when no other evidence bridges the intron
+    gap, and each fragment is independently re-admitted by the
+    keep_helixer_without_support single-exon exception). This section
+    controls a stricter, *exact*-equality-only pass that runs after that,
+    within each gene's assembled isoform set, so it only ever removes
+    transcripts proven structurally and translationally identical -- never
+    genuinely distinct isoforms.
+    """
+
+    collapse_exact_duplicates: bool = True
+    # When True (default), two transcripts with identical CDS but different
+    # UTR extents are kept as separate isoforms rather than collapsed --
+    # genuinely different supported UTRs are real evidence, not redundancy.
+    preserve_distinct_utrs: bool = True
+    # When True (default), two transcripts are only ever collapsed if their
+    # translated protein sequences also match exactly (belt-and-braces on
+    # top of CDS-coordinate equality -- catches the case where identical
+    # CDS coordinates on inconsistent reference sequence data could still
+    # translate differently, though that should not happen in practice).
+    preserve_distinct_proteins: bool = True
+    # CDS phase/frame is compared when both records have it recorded;
+    # missing phase information on both sides is not itself a mismatch
+    # (see module docstring for why this is the safest available rule
+    # given the current data model).
+    require_matching_cds_phase: bool = True
+
+
+@dataclass
 class ExportConfig:
     write_cdna: bool = True
     write_protein: bool = True
@@ -193,6 +237,99 @@ class ExportConfig:
 @dataclass
 class ReportingConfig:
     formats: List[str] = field(default_factory=lambda: ["json", "tsv"])
+
+
+@dataclass
+class CanonicalProteinValidationWeights:
+    """Protein-plausibility component weights (gmb.pipeline.canonical_selection).
+
+    psauron/diamond_identity/diamond_query_coverage/diamond_target_coverage
+    are each already bounded 0-1 (psauron score) or 0-100 (DIAMOND percentages,
+    divided by 100 before weighting) -- deliberately NOT including raw DIAMOND
+    bitscore, which scales with protein length and would let long proteins
+    dominate regardless of match quality. diamond_hit_bonus is a flat, bounded
+    bonus for "a significant hit exists at all", independent of its strength.
+    """
+
+    psauron_weight: float = 0.35
+    diamond_identity_weight: float = 0.15
+    diamond_query_coverage_weight: float = 0.15
+    diamond_target_coverage_weight: float = 0.15
+    diamond_hit_bonus: float = 0.2
+
+
+@dataclass
+class CanonicalEvidenceWeights:
+    """Annotation-evidence component weights.
+
+    gmb_score is min-max normalised across the gene's own isoforms before
+    weighting (it is open-ended/additive in gmb.pipeline.scoring, not
+    naturally bounded); the *_support flags are 0/1 (does evidence_sources
+    contain a track of that kind); independent_source_weight scales with the
+    count of distinct evidence source types, capped at 3 (see
+    independent_source_cap) so a transcript backed by many redundant tracks
+    of the same kind cannot dominate one backed by 3+ genuinely different
+    kinds.
+    """
+
+    gmb_score_weight: float = 0.30
+    independent_source_weight: float = 0.15
+    independent_source_cap: int = 3
+    transcriptomic_support_weight: float = 0.10
+    protein_alignment_support_weight: float = 0.10
+    longread_support_weight: float = 0.10
+    backbone_support_weight: float = 0.10
+
+
+@dataclass
+class CanonicalStructureWeights:
+    complete_orf_bonus: float = 0.30
+    internal_stop_penalty: float = 0.50
+    partial_cds_penalty: float = 0.20
+
+
+@dataclass
+class CanonicalDomainConfig:
+    """Protein-domain/feature evidence (Pfam, InterPro, ...).
+
+    Disabled by default: no domain adapter has run for this first pass (see
+    gmb.pipeline.domain_evidence). All weights are TBC placeholders --
+    plumbed through end-to-end (config -> scorer -> report) but inert at 0
+    until real domain data and a considered weighting are available. Domain
+    evidence must stay *supportive*, never a requirement: a transcript with
+    zero domain hits (e.g. a genuinely lineage-specific or poorly-annotated
+    protein) must not be penalised just for having none -- only
+    fragmented/suspicious *positive* domain signals are ever penalised here.
+    """
+
+    enabled: bool = False
+    domain_support_weight: float = 0.0  # TBC
+    domain_coverage_weight: float = 0.0  # TBC
+    complete_domain_bonus: float = 0.0  # TBC
+    fragmented_domain_penalty: float = 0.0  # TBC
+    suspicious_fusion_penalty: float = 0.0  # TBC
+    cross_provider_agreement_bonus: float = 0.0  # TBC
+
+
+@dataclass
+class CanonicalSelectionConfig:
+    """Config for gmb.pipeline.canonical_selection (a standalone post-build
+    reporting step -- see that module's docstring for why it reads
+    consensus.gff3/evidence_attribution.tsv/protein_validation.tsv rather
+    than running inside gmb.cli.build itself).
+    """
+
+    enabled: bool = True
+    protein_validation: CanonicalProteinValidationWeights = field(
+        default_factory=CanonicalProteinValidationWeights
+    )
+    evidence: CanonicalEvidenceWeights = field(default_factory=CanonicalEvidenceWeights)
+    structure: CanonicalStructureWeights = field(default_factory=CanonicalStructureWeights)
+    domains: CanonicalDomainConfig = field(default_factory=CanonicalDomainConfig)
+    # Winner/runner-up total-score gap below which a selection is flagged
+    # "low_confidence" in the report (in addition to the separate
+    # LOW_CONFIDENCE_NO_PROTEIN_SUPPORT reason code for missing evidence).
+    low_confidence_score_gap: float = 0.05
 
 
 @dataclass
@@ -212,9 +349,15 @@ class PipelineConfig:
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     utr: UtrConfig = field(default_factory=UtrConfig)
     dedup: DedupConfig = field(default_factory=DedupConfig)
+    duplicate_isoform_handling: DuplicateIsoformConfig = field(
+        default_factory=DuplicateIsoformConfig
+    )
     qc: QcConfig = field(default_factory=QcConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
+    canonical_selection: CanonicalSelectionConfig = field(
+        default_factory=CanonicalSelectionConfig
+    )
 
 
 # ---------------------------------------------------------------------------

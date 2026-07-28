@@ -27,6 +27,10 @@ support_scripts/gmb/c_albicans
 support_scripts/gmb/c_auris
 support_scripts/gmb/swissprot.dmnd
 support_scripts/gmb/uniprot_sprot.fasta
+# Any DIAMOND database copied locally for protein validation (e.g. a local
+# copy of the cluster's uniprot_euk.fa.dmnd) -- defense in depth, since such
+# copies are typically kept outside the repo entirely.
+*.dmnd
 support_scripts/gmb/*_output*/
 support_scripts/gmb/*_comparison*/
 support_scripts/gmb/output/

@@ -296,6 +296,7 @@ def select_isoforms(
 
     for s in candidates:
         r = s["rep"]
+        r["score"] = s["score"]
         # Try to assign to an existing gene sub-cluster
         found = -1
         for i, g_isoforms in enumerate(genes):

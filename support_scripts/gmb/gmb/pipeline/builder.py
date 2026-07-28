@@ -40,6 +40,7 @@ import pyranges as pr
 from gmb.pipeline.annotate_cds_utrs import annotate_all_transcripts, load_genome
 from gmb.pipeline.config import load_config
 from gmb.pipeline.dedup_genes import dedup_genes
+from gmb.pipeline.duplicate_isoform_collapse import collapse_exact_duplicate_transcripts
 from gmb.pipeline.evidence_filter import (
     filter_chimeras,
     filter_helixer_models,
@@ -592,11 +593,12 @@ def main() -> None:
     )
 
     validation_scores = {}
+    validation_details = {}
     if config.protein_validation.enabled:
         print("Running Protein Validation Stage...")
         check_dependencies(config.protein_validation)
         protein_dict = {tid: ann["protein"] for tid, ann in annotations.items() if ann["protein"]}
-        validation_scores = batch_score_proteins(protein_dict, config)
+        validation_scores, validation_details = batch_score_proteins(protein_dict, config)
 
     if validation_scores:
         candidate_exons["protein_coding_score"] = (
@@ -727,7 +729,23 @@ def main() -> None:
                     "ID": new_tid,
                     "Parent": gene_id,
                     "Evidence": model.get("combined_evidence", ""),
+                    "gmb_score": model.get("score"),
                 }
+
+                # Attach here (not re-looked-up later) because `annotations`
+                # and `validation_details` are keyed by the original
+                # candidate `tid`, not the renamed `new_tid` written to the
+                # final GFF3 -- a later re-lookup by `new_tid` would silently
+                # miss every row.
+                if ann:
+                    mrna_row["orf_label"] = ann.get("orf_label")
+                    mrna_row["is_partial_5"] = ann.get("is_partial_5")
+                    mrna_row["is_partial_3"] = ann.get("is_partial_3")
+                    mrna_row["internal_stop_count"] = (ann.get("protein") or "").count("*")
+                    mrna_row["protein_length"] = len(ann.get("protein") or "")
+                mrna_row["protein_coding_score"] = validation_scores.get(tid)
+                if tid in validation_details:
+                    mrna_row["protein_validation_detail"] = validation_details[tid]
 
                 if "utr_support" in model:
                     mrna_row["utr_support"] = model["utr_support"]
@@ -855,6 +873,38 @@ def main() -> None:
     else:
         print(f"    No duplicates found ({dedup_stats.get('genes_output', 0)} genes)")
 
+    # --- Exact-duplicate transcript collapse ---
+    # Runs strictly after dedup_genes() (which brings duplicate fragments
+    # together as isoforms of one gene via gene-level overlap merging) and
+    # before FASTA/evidence-attribution output, on the final isoform set --
+    # see gmb.pipeline.duplicate_isoform_collapse's module docstring for the
+    # full root-cause account and insertion-point rationale.
+    print("  Collapsing exact-duplicate transcripts...")
+    protein_by_tid = {
+        rec.split("\n", 1)[0].lstrip(">"): rec.split("\n", 1)[1]
+        for rec in selected_prot_fa
+        if "\n" in rec
+    }
+    selected_gff_rows, collapse_log_rows, collapse_stats = collapse_exact_duplicate_transcripts(
+        selected_gff_rows,
+        config,
+        protein_by_tid=protein_by_tid,
+        genome_dict=genome_dict,
+        protein_supported_tids=protein_supported_tids,
+    )
+    stats.update({f"duplicate_collapse_{k}": v for k, v in collapse_stats.items()})
+    if collapse_stats["transcripts_removed"] > 0:
+        print(
+            f"    {collapse_stats['duplicate_groups_found']} exact-duplicate group(s), "
+            f"{collapse_stats['transcripts_removed']} transcript(s) collapsed across "
+            f"{collapse_stats['genes_with_collapse']} gene(s)"
+        )
+        collapse_path = os.path.join(args.output_dir, "collapsed_duplicate_transcripts.tsv")
+        pd.DataFrame(collapse_log_rows).to_csv(collapse_path, sep="\t", index=False)
+        print(f"    Collapse log: {collapse_path}")
+    else:
+        print("    No exact-duplicate transcripts found")
+
     # Final gene count
     final_gene_count = sum(1 for r in selected_gff_rows if r.get("Feature") == "gene")
     stats["total_loci"] = final_gene_count
@@ -885,6 +935,8 @@ def main() -> None:
                     attr += f";Parent={r['Parent']}"
                 if "Evidence" in r and pd.notna(r["Evidence"]) and r["Evidence"] != "":
                     attr += f";Evidence={r['Evidence']}"
+                if "CollapsedFrom" in r and pd.notna(r["CollapsedFrom"]) and r["CollapsedFrom"] != "":
+                    attr += f";CollapsedFrom={r['CollapsedFrom']}"
                 fh.write(
                     f"{r['Chromosome']}\t{r['Source']}\t{r['Feature']}\t{r['Start']}\t{r['End']}\t{r['Score']}\t{r['Strand']}\t{r['Frame']}\t{attr}\n"
                 )
@@ -966,6 +1018,7 @@ def main() -> None:
             "max_exon_len_bp": max_exon_len_bp,
             "max_intron_len_bp": max_intron_len_bp,
             "transcript_span_bp": transcript_span_bp,
+            "gmb_score": m.get("gmb_score"),
         }
 
         # Extract support from the mRNA dict (injected during gene_model_builder formulation)
@@ -989,6 +1042,43 @@ def main() -> None:
         ev_path = os.path.join(args.output_dir, "evidence_attribution.tsv")
         ev_df.to_csv(ev_path, sep="\t", index=False)
         print(f"  Evidence attribution: {ev_path}")
+
+    # --- Protein validation TSV (per-transcript DIAMOND/Psauron detail) ---
+    # Written whenever the stage ran, independent of whether any row_dict
+    # above needed it -- this is the compact table canonical-transcript
+    # selection (gmb.pipeline.canonical_selection) and manual QC read from.
+    if config.protein_validation.enabled:
+        protein_val_rows = []
+        for m in output_mrnas:
+            tid = m["ID"]
+            gene_id = m["Parent"]
+            detail = m.get("protein_validation_detail", {})
+            protein_val_rows.append(
+                {
+                    "gene_id": gene_id,
+                    "transcript_id": tid,
+                    "diamond_hit": detail.get("diamond_hit"),
+                    "diamond_pident": detail.get("diamond_pident"),
+                    "diamond_qcov": detail.get("diamond_qcov"),
+                    "diamond_scov": detail.get("diamond_scov"),
+                    "diamond_bitscore": detail.get("diamond_bitscore"),
+                    "diamond_evalue": detail.get("diamond_evalue"),
+                    "psauron_score": detail.get("psauron_score"),
+                    "protein_length": m.get("protein_length"),
+                    "orf_label": m.get("orf_label"),
+                    "is_partial_5": m.get("is_partial_5"),
+                    "is_partial_3": m.get("is_partial_3"),
+                    "internal_stop_count": m.get("internal_stop_count"),
+                    "protein_coding_score": m.get("protein_coding_score"),
+                    "gmb_score": m.get("gmb_score"),
+                    "evidence_sources": m.get("Evidence", ""),
+                }
+            )
+        if protein_val_rows:
+            pv_df = pd.DataFrame(protein_val_rows)
+            pv_path = os.path.join(args.output_dir, "protein_validation.tsv")
+            pv_df.to_csv(pv_path, sep="\t", index=False)
+            print(f"  Protein validation detail: {pv_path}")
 
     def _default_encoder(obj):
         if hasattr(obj, "item"):

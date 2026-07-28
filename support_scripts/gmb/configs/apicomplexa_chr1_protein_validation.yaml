@@ -1,0 +1,63 @@
+# Apicomplexa chr1 protein-validation config -- Plasmodium falciparum GCA_000002765.3
+#
+# Purpose: enable and validate the existing DIAMOND/Psauron protein-
+# validation stage locally, scoped to chromosome/seqname 1 only, against a
+# DIAMOND database copied from the cluster to this machine.
+#
+# Reproduces (not "extends" -- `load_config()` only accepts one override
+# path on top of fungi_default.yaml, so there is no live-inheritance
+# mechanism to point at apicomplexa_first_pass.yaml without a code change
+# outside this task's scope) all of that file's deltas, so behaviour on
+# chr1 with this config matches the established apicomplexa_first_pass.yaml
+# tuning -- see that file for the full empirical rationale behind each
+# value. The only substantive addition here is protein_validation.
+#
+# Do not edit fungi_default.yaml or apicomplexa_first_pass.yaml for this.
+
+protein_filter:
+  min_bitscore: 30.0
+
+transcriptomic_filter:
+  max_transcript_length: 35000
+  max_intron_length: 2500
+
+transcript_splitting:
+  split_gap_bp: 2500
+
+scoring:
+  weights:
+    helixer: 2.6
+    minimap2: 1.3
+  multi_source_bonus: 1.2
+
+qc:
+  skip_orf_inference_tracks: ["OrthoDB", "UniProt", "GenBlast"]
+
+utr:
+  max_5p_bp: 3000
+  max_total_bp: 6000
+
+# --- The actual point of this config: enable protein validation locally ---
+protein_validation:
+  enabled: true
+  # Local copy of the cluster's uniprot_euk.fa.dmnd
+  # (/hps/nobackup/flicek/ensembl/genebuild/blastdb/uniprot_euk_diamond/).
+  # This is the one intentionally machine-specific path in this config; see
+  # the report for `diamond dbinfo` output confirming it is readable and
+  # not a rebuild target. Do not commit this .dmnd file (see .gitignore).
+  diamond_db: "/Users/leanne/Desktop/Everything/Code/ensembl_anno_apicomplexa/uniprot_euk.fa.dmnd"
+  # psauron 1.0.8 has no --model flag; psauron_model is kept for schema
+  # compatibility with fungi_default.yaml but is not used by the code path
+  # it used to control (see protein_validation.py and psauron_min_length/
+  # psauron_use_cpu below for the flags that actually exist in this
+  # version).
+  psauron_model: "default"
+  psauron_min_length: 5
+  # No CUDA GPU on this machine; let psauron probe for one and fall back
+  # rather than forcing CPU, since that matched local testing. Set to true
+  # for a deterministic CPU-only run (e.g. on a shared/headless box).
+  psauron_use_cpu: false
+  diamond_weight: 0.7
+  psauron_weight: 0.3
+  min_score: 0.7
+  policy: "penalize"
