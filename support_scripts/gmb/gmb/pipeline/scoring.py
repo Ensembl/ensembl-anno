@@ -253,14 +253,14 @@ def select_isoforms(
         # initio backbone (scfg.backbone_label) single-exon gene should not be
         # silently dropped by this gate when the operator has explicitly opted
         # in to keeping the backbone without support.
-        helixer_protected = (
+        backbone_protected = (
             scfg.backbone_label in s["sources"] and scfg.keep_helixer_without_support
         )
         if (
             keep
             and scfg.require_support_for_single_exon
             and s["rep"]["exon_count"] == 1
-            and not helixer_protected
+            and not backbone_protected
         ):
             if not s["protein_support"] and len(s["sources"]) < 2:
                 keep = False

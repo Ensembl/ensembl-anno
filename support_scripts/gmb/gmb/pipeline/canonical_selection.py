@@ -18,7 +18,21 @@ scoring) even if ``protein_validation.tsv`` was never produced.
 
 Output (all written to --output-dir, source files never touched):
     canonical_transcripts.tsv   -- one row per gene: winner + component
-                                   scores + rank/runner-up/reason/confidence
+                                   scores + rank/runner-up/reason/confidence.
+                                   NOTE: `canonical_total_score` (and its
+                                   sibling `runner_up_total_score`) is the
+                                   continuous weighted score, reported for
+                                   interpreting *how much better* the winner
+                                   is -- it is NOT what picked the winner.
+                                   Selection uses the lexicographic priority
+                                   tuple in `_rank_key` (complete ORF, then
+                                   protein-validation subtotal, independent
+                                   source count, gmb_score, CDS length,
+                                   transcript ID), so a lower total_score can
+                                   still win outright (e.g. a complete ORF
+                                   beats a fractionally-higher-scoring
+                                   partial one). See `_rank_key` and
+                                   `reason_code` for the actual decision.
     transcript_ranking.tsv      -- one row per transcript (all isoforms,
                                    winners and non-winners alike)
     canonical_selection_summary.json -- run-level counts
@@ -189,7 +203,9 @@ def score_transcript(
     )
     has_any_protein_support = psauron is not None or has_diamond_hit
 
-    sources = {s.strip() for s in str(record.get("evidence_sources") or "").split(",") if s.strip()}
+    sources = {
+        s.strip() for s in str(record.get("evidence_sources") or "").split(",") if s.strip()
+    }
     lower_sources = {s.lower() for s in sources}
     n_sources = len(sources)
     source_count_component = min(n_sources / max(ev_cfg.independent_source_cap, 1), 1.0)
@@ -218,7 +234,9 @@ def score_transcript(
 
     is_partial_5 = bool(record.get("is_partial_5"))
     is_partial_3 = bool(record.get("is_partial_3"))
-    has_complete_orf = record.get("orf_label") is not None and not is_partial_5 and not is_partial_3
+    has_complete_orf = (
+        record.get("orf_label") is not None and not is_partial_5 and not is_partial_3
+    )
     has_internal_stop = (record.get("internal_stop_count") or 0) > 0
     is_partial = is_partial_5 or is_partial_3
 
@@ -238,9 +256,17 @@ def score_transcript(
             dm_cfg.domain_support_weight * (1.0 if dm.get("n_significant_domains") else 0.0)
             + dm_cfg.domain_coverage_weight * cov
             + (dm_cfg.complete_domain_bonus if dm.get("has_complete_domain_coverage") else 0.0)
-            - (dm_cfg.fragmented_domain_penalty if dm.get("n_nonoverlapping_domains", 0) > 1 and cov < 0.5 else 0.0)
+            - (
+                dm_cfg.fragmented_domain_penalty
+                if dm.get("n_nonoverlapping_domains", 0) > 1 and cov < 0.5
+                else 0.0
+            )
             - (dm_cfg.suspicious_fusion_penalty if dm.get("has_suspected_fusion") else 0.0)
-            + (dm_cfg.cross_provider_agreement_bonus if dm.get("cross_provider_agreement") else 0.0)
+            + (
+                dm_cfg.cross_provider_agreement_bonus
+                if dm.get("cross_provider_agreement")
+                else 0.0
+            )
         )
 
     total = protein_validation_subtotal + evidence_subtotal + structure_subtotal + domain_subtotal
@@ -306,14 +332,16 @@ def _reason_code(winner_rec, winner_scored, runner_rec, runner_scored) -> str:
         return "ONLY_ISOFORM"
     if winner_scored["has_complete_orf"] != runner_scored["has_complete_orf"]:
         return "ONLY_COMPLETE_ORF"
-    if winner_scored["protein_validation_subtotal"] != runner_scored["protein_validation_subtotal"]:
+    if (
+        winner_scored["protein_validation_subtotal"]
+        != runner_scored["protein_validation_subtotal"]
+    ):
         # Distinguish which protein-validation signal was the larger
         # contributor to the gap, for a more specific reason code.
         psauron_gap = winner_scored["psauron_component"] - runner_scored["psauron_component"]
         cov_gap = (
-            (winner_scored["diamond_qcov_component"] + winner_scored["diamond_scov_component"])
-            - (runner_scored["diamond_qcov_component"] + runner_scored["diamond_scov_component"])
-        )
+            winner_scored["diamond_qcov_component"] + winner_scored["diamond_scov_component"]
+        ) - (runner_scored["diamond_qcov_component"] + runner_scored["diamond_scov_component"])
         if abs(psauron_gap) >= abs(cov_gap):
             return "BEST_PSAURON"
         return "BEST_DIAMOND_COVERAGE"
@@ -357,7 +385,8 @@ def select_canonical_for_gene(
         winner_scored["total_score"] - runner_scored["total_score"] if runner_scored else None
     )
     highest_raw_gmb_tid = max(
-        records, key=lambda r: (r.get("gmb_score") if r.get("gmb_score") is not None else float("-inf"))
+        records,
+        key=lambda r: (r.get("gmb_score") if r.get("gmb_score") is not None else float("-inf")),
     )["transcript_id"]
 
     if not winner_scored["has_any_protein_support"]:
@@ -404,7 +433,9 @@ def run_canonical_selection(
     ensure_dir(output_dir)
     cfg = config.canonical_selection
 
-    genes = load_transcript_records(consensus_gff3, evidence_attribution_tsv, protein_validation_tsv)
+    genes = load_transcript_records(
+        consensus_gff3, evidence_attribution_tsv, protein_validation_tsv
+    )
 
     domain_metrics = None
     if cfg.domains.enabled and domain_sidecar_rows:
@@ -563,7 +594,9 @@ def parse_args():
     )
     parser.add_argument("--consensus-gff3", required=True)
     parser.add_argument("--evidence-attribution", required=True)
-    parser.add_argument("--protein-validation", default=None, help="Optional protein_validation.tsv")
+    parser.add_argument(
+        "--protein-validation", default=None, help="Optional protein_validation.tsv"
+    )
     parser.add_argument("--config", default=None, help="YAML with a canonical_selection: section")
     parser.add_argument("--preset", default="fungi")
     parser.add_argument("--output-dir", required=True)

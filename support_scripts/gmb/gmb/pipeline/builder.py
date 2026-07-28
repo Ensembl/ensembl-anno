@@ -40,7 +40,7 @@ import pyranges as pr
 from gmb.pipeline.annotate_cds_utrs import annotate_all_transcripts, load_genome
 from gmb.pipeline.config import load_config
 from gmb.pipeline.dedup_genes import dedup_genes
-from gmb.pipeline.duplicate_isoform_collapse import collapse_exact_duplicate_transcripts
+from gmb.pipeline.duplicate_transcript_collapse import collapse_exact_duplicate_transcripts
 from gmb.pipeline.evidence_filter import (
     filter_chimeras,
     filter_helixer_models,
@@ -296,9 +296,7 @@ def parse_args():
     parser.add_input_args.add_argument(
         "--minimap2", help="Minimap2 long-read transcript alignments (GTF), optional"
     )
-    parser.add_input_args.add_argument(
-        "--helixer", help="Helixer GFF3 (ab initio backbone)"
-    )
+    parser.add_input_args.add_argument("--helixer", help="Helixer GFF3 (ab initio backbone)")
     parser.add_input_args.add_argument(
         "--tiberius",
         help="Tiberius GTF (ab initio backbone, alternative to --helixer; "
@@ -415,9 +413,7 @@ def main() -> None:
         print(f"Logging to {log_file}")
 
     if args.helixer and args.tiberius:
-        sys.exit(
-            "ERROR: pass only one ab initio backbone: --helixer or --tiberius, not both."
-        )
+        sys.exit("ERROR: pass only one ab initio backbone: --helixer or --tiberius, not both.")
     backbone_path, backbone_label = (
         (args.tiberius, "Tiberius") if args.tiberius else (args.helixer, "Helixer")
     )
@@ -877,7 +873,7 @@ def main() -> None:
     # Runs strictly after dedup_genes() (which brings duplicate fragments
     # together as isoforms of one gene via gene-level overlap merging) and
     # before FASTA/evidence-attribution output, on the final isoform set --
-    # see gmb.pipeline.duplicate_isoform_collapse's module docstring for the
+    # see gmb.pipeline.duplicate_transcript_collapse's module docstring for the
     # full root-cause account and insertion-point rationale.
     print("  Collapsing exact-duplicate transcripts...")
     protein_by_tid = {
@@ -935,7 +931,11 @@ def main() -> None:
                     attr += f";Parent={r['Parent']}"
                 if "Evidence" in r and pd.notna(r["Evidence"]) and r["Evidence"] != "":
                     attr += f";Evidence={r['Evidence']}"
-                if "CollapsedFrom" in r and pd.notna(r["CollapsedFrom"]) and r["CollapsedFrom"] != "":
+                if (
+                    "CollapsedFrom" in r
+                    and pd.notna(r["CollapsedFrom"])
+                    and r["CollapsedFrom"] != ""
+                ):
                     attr += f";CollapsedFrom={r['CollapsedFrom']}"
                 fh.write(
                     f"{r['Chromosome']}\t{r['Source']}\t{r['Feature']}\t{r['Start']}\t{r['End']}\t{r['Score']}\t{r['Strand']}\t{r['Frame']}\t{attr}\n"

@@ -65,7 +65,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from gmb.pipeline.config import DuplicateIsoformConfig, PipelineConfig
+    from gmb.pipeline.config import DuplicateTranscriptCollapseConfig, PipelineConfig
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ def classify_pair(t1: dict, t2: dict) -> str:
 
 
 def is_exact_duplicate_pair(
-    t1: dict, t2: dict, cfg: DuplicateIsoformConfig
+    t1: dict, t2: dict, cfg: DuplicateTranscriptCollapseConfig
 ) -> tuple[bool, str, str]:
     """Apply the Part 2 conservative collapse rule to a pair.
 
@@ -184,23 +184,37 @@ def is_exact_duplicate_pair(
     if category == CATEGORY_GENUINE_ALTERNATIVE:
         return False, category, "structurally distinct -- genuine alternative isoform"
     if category == CATEGORY_SAME_INTRON_CHAIN_DIFFERENT_ENDS:
-        return False, category, "same intron chain but different transcript ends -- retained as alternative"
+        return (
+            False,
+            category,
+            "same intron chain but different transcript ends -- retained as alternative",
+        )
     if category == CATEGORY_SAME_CDS_DIFFERENT_UTR:
         if cfg.preserve_distinct_utrs:
-            return False, category, "same CDS, different UTR/exon boundary -- preserved (preserve_distinct_utrs=true)"
+            return (
+                False,
+                category,
+                "same CDS, different UTR/exon boundary -- preserved (preserve_distinct_utrs=true)",
+            )
         # Opt-in aggressive mode: collapse on CDS+phase+protein match alone.
     # From here, category is one of the "identical exon+CDS coordinates"
     # family (4/5/6) or the opted-in same-CDS-different-UTR case above.
 
     if cfg.require_matching_cds_phase:
-        p1, p2 = cds_phase_signature(t1.get("cds_phases")), cds_phase_signature(t2.get("cds_phases"))
+        p1, p2 = cds_phase_signature(t1.get("cds_phases")), cds_phase_signature(
+            t2.get("cds_phases")
+        )
         if p1 is not None and p2 is not None and p1 != p2:
             return False, category, "CDS phase/frame differs -- not collapsed"
 
     if cfg.preserve_distinct_proteins:
         prot1, prot2 = t1.get("protein"), t2.get("protein")
         if prot1 and prot2 and prot1 != prot2:
-            return False, category, "translated proteins differ -- not collapsed (data anomaly: identical CDS coords but different protein)"
+            return (
+                False,
+                category,
+                "translated proteins differ -- not collapsed (data anomaly: identical CDS coords but different protein)",
+            )
         # If either side lacks a translated protein, we cannot verify
         # protein identity -- see module docstring: documented limitation,
         # falls back to the (already very strict) coordinate-only rule
@@ -215,7 +229,7 @@ def is_exact_duplicate_pair(
 
 
 def group_exact_duplicates(
-    transcripts: list[dict], cfg: DuplicateIsoformConfig
+    transcripts: list[dict], cfg: DuplicateTranscriptCollapseConfig
 ) -> list[list[dict]]:
     """Partition one gene's transcripts into groups where every member is
     an exact duplicate of every other member (transitive: verified pairwise
@@ -365,14 +379,16 @@ def recalculate_gmb_score(
 # ---------------------------------------------------------------------------
 
 
-def build_duplicate_audit_rows(genes: dict[str, list[dict]], cfg: DuplicateIsoformConfig) -> list[dict]:
-    """One row per transcript-pair-membership, for `duplicate_isoform_audit.tsv`.
+def build_duplicate_audit_rows(
+    genes: dict[str, list[dict]], cfg: DuplicateTranscriptCollapseConfig
+) -> list[dict]:
+    """One row per transcript-pair-membership, for `duplicate_transcript_audit.tsv`.
 
     ``genes`` is ``{gene_id: [transcript_record, ...]}`` -- see
     ``gmb.pipeline.canonical_selection.load_transcript_records`` for one way
     to build this from a completed run's output files, extended with
     exon/cds/cds_phases/protein (this module does not itself parse GFF3/FASTA
-    -- see ``tools/audit_duplicate_isoforms.py`` for the file-reading glue).
+    -- see ``tools/audit_duplicate_transcripts.py`` for the file-reading glue).
     """
     rows = []
     group_counter = 0
@@ -387,20 +403,46 @@ def build_duplicate_audit_rows(genes: dict[str, list[dict]], cfg: DuplicateIsofo
                 # not itself a "duplicate group" in the report's sense.
                 t = group[0]
                 rows.append(
-                    _audit_row(gene_id, t, group_counter, "no_duplicate", None, None, t, "keep", "unique structure in gene")
+                    _audit_row(
+                        gene_id,
+                        t,
+                        group_counter,
+                        "no_duplicate",
+                        None,
+                        None,
+                        t,
+                        "keep",
+                        "unique structure in gene",
+                    )
                 )
                 continue
             retained = select_retained_transcript(group)
             for t in group:
-                _eligible, category, reason = is_exact_duplicate_pair(t, retained, cfg) if t is not retained else (True, classify_pair(t, retained), "retained record")
+                _eligible, category, reason = (
+                    is_exact_duplicate_pair(t, retained, cfg)
+                    if t is not retained
+                    else (True, classify_pair(t, retained), "retained record")
+                )
                 action = "retain" if t is retained else "collapse_into_retained"
                 rows.append(
-                    _audit_row(gene_id, t, group_counter, category, exon_signature(t["exons"]), cds_signature(t.get("cds", [])), retained, action, reason)
+                    _audit_row(
+                        gene_id,
+                        t,
+                        group_counter,
+                        category,
+                        exon_signature(t["exons"]),
+                        cds_signature(t.get("cds", [])),
+                        retained,
+                        action,
+                        reason,
+                    )
                 )
     return rows
 
 
-def _audit_row(gene_id, t, group_id, category, exon_sig, cds_sig, retained, action, reason) -> dict:
+def _audit_row(
+    gene_id, t, group_id, category, exon_sig, cds_sig, retained, action, reason
+) -> dict:
     return {
         "gene_id": gene_id,
         "transcript_id": t["transcript_id"],
@@ -528,7 +570,7 @@ def collapse_exact_duplicate_transcripts(
         ``(new_gff_rows, collapse_log_rows, stats)``. ``collapse_log_rows``
         matches the ``collapsed_duplicate_transcripts.tsv`` schema.
     """
-    cfg = config.duplicate_isoform_handling
+    cfg = config.duplicate_transcript_collapse
     stats = {
         "duplicate_groups_found": 0,
         "transcripts_removed": 0,
@@ -574,7 +616,11 @@ def collapse_exact_duplicate_transcripts(
             retained_recalculated_score[retained["transcript_id"]] = recalculated
 
             for t in group:
-                category = classify_pair(t, retained) if t is not retained else CATEGORY_IDENTICAL_STRUCTURE_SAME_EVIDENCE
+                category = (
+                    classify_pair(t, retained)
+                    if t is not retained
+                    else CATEGORY_IDENTICAL_STRUCTURE_SAME_EVIDENCE
+                )
                 if t is not retained:
                     removed_tids.add(t["transcript_id"])
                 collapse_log_rows.append(
@@ -583,7 +629,9 @@ def collapse_exact_duplicate_transcripts(
                         "removed_transcript_id": None if t is retained else t["transcript_id"],
                         "gene_id": gene_id,
                         "duplicate_classification": category,
-                        "structure_signature": exon_signature(t["exons"]) + "|" + cds_signature(t.get("cds", [])),
+                        "structure_signature": exon_signature(t["exons"])
+                        + "|"
+                        + cds_signature(t.get("cds", [])),
                         "evidence_merged": merged_evidence,
                         "gmb_score_before": t.get("gmb_score"),
                         "gmb_score_recalculated": recalculated,
@@ -603,7 +651,10 @@ def collapse_exact_duplicate_transcripts(
     for r in gff_rows:
         if r.get("Feature") == "mRNA" and r["ID"] in removed_tids:
             continue
-        if r.get("Feature") in ("exon", "CDS", "five_prime_UTR", "three_prime_UTR") and r.get("Parent") in removed_tids:
+        if (
+            r.get("Feature") in ("exon", "CDS", "five_prime_UTR", "three_prime_UTR")
+            and r.get("Parent") in removed_tids
+        ):
             continue
         if r.get("Feature") == "mRNA" and r["ID"] in retained_collapsed_from:
             r = dict(r)

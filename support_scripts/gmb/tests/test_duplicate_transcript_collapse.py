@@ -1,4 +1,4 @@
-"""Tests for gmb.pipeline.duplicate_isoform_collapse.
+"""Tests for gmb.pipeline.duplicate_transcript_collapse.
 
 Covers the 16 scenarios from the duplicate-isoform-collapse task: exact
 collapse of identical structures from different sources, evidence
@@ -15,7 +15,7 @@ import pytest
 
 from gmb.pipeline.canonical_selection import select_canonical_for_gene
 from gmb.pipeline.config import load_config
-from gmb.pipeline.duplicate_isoform_collapse import (
+from gmb.pipeline.duplicate_transcript_collapse import (
     CATEGORY_GENUINE_ALTERNATIVE,
     CATEGORY_IDENTICAL_STRUCTURE_DIFFERENT_EVIDENCE,
     CATEGORY_IDENTICAL_STRUCTURE_SAME_EVIDENCE,
@@ -31,7 +31,9 @@ from gmb.pipeline.duplicate_isoform_collapse import (
 )
 
 
-def _t(tid, exons, cds=None, strand="+", chrom="1", protein="MKV", evidence="Tiberius", **overrides):
+def _t(
+    tid, exons, cds=None, strand="+", chrom="1", protein="MKV", evidence="Tiberius", **overrides
+):
     rec = {
         "transcript_id": tid,
         "gene_id": "G1",
@@ -54,7 +56,7 @@ def _t(tid, exons, cds=None, strand="+", chrom="1", protein="MKV", evidence="Tib
 
 @pytest.fixture
 def cfg():
-    return load_config().duplicate_isoform_handling
+    return load_config().duplicate_transcript_collapse
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +167,9 @@ class TestNeverCollapse:
 
     def test_same_intron_chain_different_ends_retained(self, cfg):
         t1 = _t("t1", [(100, 200), (300, 400)])
-        t2 = _t("t2", [(90, 200), (300, 410)])  # same intron junction (200-300), different outer ends
+        t2 = _t(
+            "t2", [(90, 200), (300, 410)]
+        )  # same intron junction (200-300), different outer ends
         eligible, category, _reason = is_exact_duplicate_pair(t1, t2, cfg)
         assert category == CATEGORY_SAME_INTRON_CHAIN_DIFFERENT_ENDS
         assert eligible is False
@@ -257,9 +261,16 @@ def _make_gff_rows(transcripts, gene_id="G1", chrom="1", strand="+"):
     all_end = max(e[1] for _t, exs, _ev, _sc in transcripts for e in exs)
     rows = [
         {
-            "Chromosome": chrom, "Source": "GMB", "Feature": "gene",
-            "Start": all_start, "End": all_end, "Score": ".", "Strand": strand,
-            "Frame": ".", "ID": gene_id, "Parent": "",
+            "Chromosome": chrom,
+            "Source": "GMB",
+            "Feature": "gene",
+            "Start": all_start,
+            "End": all_end,
+            "Score": ".",
+            "Strand": strand,
+            "Frame": ".",
+            "ID": gene_id,
+            "Parent": "",
         }
     ]
     for tid, exons, evidence, gmb_score in transcripts:
@@ -267,26 +278,51 @@ def _make_gff_rows(transcripts, gene_id="G1", chrom="1", strand="+"):
         end = max(e[1] for e in exons)
         rows.append(
             {
-                "Chromosome": chrom, "Source": "GMB", "Feature": "mRNA",
-                "Start": start, "End": end, "Score": ".", "Strand": strand,
-                "Frame": ".", "ID": tid, "Parent": gene_id, "Evidence": evidence,
-                "gmb_score": gmb_score, "protein_coding_score": 0.5,
-                "orf_label": "ORF:3aa ATG|STOP", "is_partial_5": False, "is_partial_3": False,
+                "Chromosome": chrom,
+                "Source": "GMB",
+                "Feature": "mRNA",
+                "Start": start,
+                "End": end,
+                "Score": ".",
+                "Strand": strand,
+                "Frame": ".",
+                "ID": tid,
+                "Parent": gene_id,
+                "Evidence": evidence,
+                "gmb_score": gmb_score,
+                "protein_coding_score": 0.5,
+                "orf_label": "ORF:3aa ATG|STOP",
+                "is_partial_5": False,
+                "is_partial_3": False,
             }
         )
         for i, (s, e) in enumerate(exons, start=1):
             rows.append(
                 {
-                    "Chromosome": chrom, "Source": "GMB", "Feature": "exon",
-                    "Start": s, "End": e, "Score": ".", "Strand": strand,
-                    "Frame": ".", "ID": f"{tid}.exon{i}", "Parent": tid,
+                    "Chromosome": chrom,
+                    "Source": "GMB",
+                    "Feature": "exon",
+                    "Start": s,
+                    "End": e,
+                    "Score": ".",
+                    "Strand": strand,
+                    "Frame": ".",
+                    "ID": f"{tid}.exon{i}",
+                    "Parent": tid,
                 }
             )
             rows.append(
                 {
-                    "Chromosome": chrom, "Source": "GMB", "Feature": "CDS",
-                    "Start": s, "End": e, "Score": ".", "Strand": strand,
-                    "Frame": ".", "ID": f"{tid}.cds{i}", "Parent": tid,
+                    "Chromosome": chrom,
+                    "Source": "GMB",
+                    "Feature": "CDS",
+                    "Start": s,
+                    "End": e,
+                    "Score": ".",
+                    "Strand": strand,
+                    "Frame": ".",
+                    "ID": f"{tid}.cds{i}",
+                    "Parent": tid,
                 }
             )
     return rows
@@ -342,7 +378,7 @@ class TestCollapsePipelineIntegration:
             ]
         )
         config = load_config()
-        config.duplicate_isoform_handling.collapse_exact_duplicates = False
+        config.duplicate_transcript_collapse.collapse_exact_duplicates = False
         new_rows, log_rows, stats = collapse_exact_duplicate_transcripts(gff_rows, config)
         assert new_rows == gff_rows
         assert log_rows == []

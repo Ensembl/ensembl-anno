@@ -188,8 +188,8 @@ class DedupConfig:
 
 
 @dataclass
-class DuplicateIsoformConfig:
-    """Config for gmb.pipeline.duplicate_isoform_collapse.
+class DuplicateTranscriptCollapseConfig:
+    """Config for gmb.pipeline.duplicate_transcript_collapse.
 
     Distinct from DedupConfig: dedup_genes.py merges whole *genes* by
     overlap + a single (first-mRNA, tolerance-bp) structural check -- it is
@@ -346,15 +346,13 @@ class PipelineConfig:
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     utr: UtrConfig = field(default_factory=UtrConfig)
     dedup: DedupConfig = field(default_factory=DedupConfig)
-    duplicate_isoform_handling: DuplicateIsoformConfig = field(
-        default_factory=DuplicateIsoformConfig
+    duplicate_transcript_collapse: DuplicateTranscriptCollapseConfig = field(
+        default_factory=DuplicateTranscriptCollapseConfig
     )
     qc: QcConfig = field(default_factory=QcConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
-    canonical_selection: CanonicalSelectionConfig = field(
-        default_factory=CanonicalSelectionConfig
-    )
+    canonical_selection: CanonicalSelectionConfig = field(default_factory=CanonicalSelectionConfig)
 
 
 # ---------------------------------------------------------------------------

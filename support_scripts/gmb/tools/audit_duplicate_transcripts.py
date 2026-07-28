@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Standalone diagnostic: classify duplicate/alternative isoforms in a
-completed GMB run and write duplicate_isoform_audit.tsv.
+completed GMB run and write duplicate_transcript_audit.tsv.
 
 Reads a run's own output files (consensus.gff3, evidence_attribution.tsv,
 optional protein_validation.tsv, prot.fa) -- does not require re-running
 gmb.cli.build. Uses the same classification engine
-(gmb.pipeline.duplicate_isoform_collapse) that the real in-pipeline collapse
+(gmb.pipeline.duplicate_transcript_collapse) that the real in-pipeline collapse
 uses, so this audit is a preview of what collapse would do, not a
 separately-maintained duplicate of that logic.
 
 Usage:
-    python tools/audit_duplicate_isoforms.py \
+    python tools/audit_duplicate_transcripts.py \
         --consensus-gff3 out/consensus.gff3 \
         --evidence-attribution out/evidence_attribution.tsv \
         --protein-validation out/protein_validation.tsv \
@@ -26,7 +26,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from gmb.pipeline.config import load_config
-from gmb.pipeline.duplicate_isoform_collapse import build_duplicate_audit_rows
+from gmb.pipeline.duplicate_transcript_collapse import build_duplicate_audit_rows
 from gmb.utils.gff import parse_gff3_hierarchy
 
 
@@ -51,14 +51,24 @@ def _read_prot_fa(path):
     return seqs
 
 
-def load_genes_for_audit(consensus_gff3, evidence_attribution_tsv, protein_validation_tsv, prot_fa):
+def load_genes_for_audit(
+    consensus_gff3, evidence_attribution_tsv, protein_validation_tsv, prot_fa
+):
     hierarchy = parse_gff3_hierarchy(consensus_gff3)
     transcripts = hierarchy["transcripts"]
 
-    ev_by_tid = pd.read_csv(evidence_attribution_tsv, sep="\t").set_index("transcript_id").to_dict(orient="index")
+    ev_by_tid = (
+        pd.read_csv(evidence_attribution_tsv, sep="\t")
+        .set_index("transcript_id")
+        .to_dict(orient="index")
+    )
     pv_by_tid = {}
     if protein_validation_tsv and os.path.exists(protein_validation_tsv):
-        pv_by_tid = pd.read_csv(protein_validation_tsv, sep="\t").set_index("transcript_id").to_dict(orient="index")
+        pv_by_tid = (
+            pd.read_csv(protein_validation_tsv, sep="\t")
+            .set_index("transcript_id")
+            .to_dict(orient="index")
+        )
     proteins = _read_prot_fa(prot_fa)
 
     genes = {}
@@ -130,10 +140,10 @@ def main():
         args.consensus_gff3, args.evidence_attribution, args.protein_validation, prot_fa
     )
 
-    rows = build_duplicate_audit_rows(genes, config.duplicate_isoform_handling)
+    rows = build_duplicate_audit_rows(genes, config.duplicate_transcript_collapse)
 
     os.makedirs(args.output_dir, exist_ok=True)
-    out_path = os.path.join(args.output_dir, "duplicate_isoform_audit.tsv")
+    out_path = os.path.join(args.output_dir, "duplicate_transcript_audit.tsv")
     pd.DataFrame(rows).to_csv(out_path, sep="\t", index=False)
 
     n_genes_multi = sum(1 for t in genes.values() if len(t) > 1)
