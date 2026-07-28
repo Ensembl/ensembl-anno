@@ -257,6 +257,7 @@ def group_exact_duplicates(
 # Part 4: deterministic retained-transcript selection within a duplicate group
 # ---------------------------------------------------------------------------
 
+
 # Priority order (adapted from the task's suggested order to match what
 # this data model actually records at the point this module runs):
 #   1. structurally valid transcript      -- always true here: dedup_genes.py
@@ -298,6 +299,7 @@ def select_retained_transcript(group: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 # Part 3: evidence provenance merge policy
 # ---------------------------------------------------------------------------
+
 
 # Explicit, documented per-field policy (task requires distinguishing these):
 #

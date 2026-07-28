@@ -307,6 +307,7 @@ def score_transcript(
 # Per-gene selection: deterministic tie-break order (documented choice)
 # ---------------------------------------------------------------------------
 
+
 # 1. complete valid ORF                                   (has_complete_orf)
 # 2. stronger protein-validation score                    (protein_validation_subtotal)
 # 3. broader independent evidence support                 (n_independent_sources)

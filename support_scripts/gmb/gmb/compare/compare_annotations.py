@@ -211,9 +211,11 @@ def classify_locus_pairs(
         evidence = ""
         if cons_mrna is not None and not cons_mrna.empty:
             mrna_rows = cons_mrna[
-                cons_mrna["transcript_id"].str.startswith(gid.split(".")[0])
-                if isinstance(gid, str)
-                else cons_mrna["transcript_id"] == gid
+                (
+                    cons_mrna["transcript_id"].str.startswith(gid.split(".")[0])
+                    if isinstance(gid, str)
+                    else cons_mrna["transcript_id"] == gid
+                )
             ]
             # Try to get evidence from attributes
             if not mrna_rows.empty:

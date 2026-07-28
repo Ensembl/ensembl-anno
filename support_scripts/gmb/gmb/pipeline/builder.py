@@ -536,13 +536,13 @@ def main() -> None:
 
     if subset_regions:
         _n_before = {
-            "transcriptomic": tx_exons_filtered["transcript_id"].nunique()
-            if not tx_exons_filtered.empty
-            else 0,
+            "transcriptomic": (
+                tx_exons_filtered["transcript_id"].nunique() if not tx_exons_filtered.empty else 0
+            ),
             "helixer": h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0,
-            "protein": prot_exons_filt["transcript_id"].nunique()
-            if not prot_exons_filt.empty
-            else 0,
+            "protein": (
+                prot_exons_filt["transcript_id"].nunique() if not prot_exons_filt.empty else 0
+            ),
         }
         print(f"  Subsetting to {len(subset_regions)} region(s)...")
         tx_exons_filtered = subset_df_by_regions(tx_exons_filtered, subset_regions)
@@ -557,13 +557,13 @@ def main() -> None:
         if minimap2_cds is not None and not minimap2_cds.empty:
             minimap2_cds = subset_df_by_regions(minimap2_cds, subset_regions)
         _n_after = {
-            "transcriptomic": tx_exons_filtered["transcript_id"].nunique()
-            if not tx_exons_filtered.empty
-            else 0,
+            "transcriptomic": (
+                tx_exons_filtered["transcript_id"].nunique() if not tx_exons_filtered.empty else 0
+            ),
             "helixer": h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0,
-            "protein": prot_exons_filt["transcript_id"].nunique()
-            if not prot_exons_filt.empty
-            else 0,
+            "protein": (
+                prot_exons_filt["transcript_id"].nunique() if not prot_exons_filt.empty else 0
+            ),
         }
         for track, n_b in _n_before.items():
             n_a = _n_after[track]

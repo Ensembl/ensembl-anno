@@ -4,6 +4,7 @@
 Preserves backward compatibility:
     python visualize_disagreements.py ...
 """
+
 import os
 import sys
 

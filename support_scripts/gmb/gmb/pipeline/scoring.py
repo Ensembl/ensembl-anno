@@ -159,12 +159,16 @@ def select_isoforms(
                 "start": grp["Start"].min(),
                 "end": grp["End"].max(),
                 "exon_count": len(grp),
-                "combined_evidence": grp["combined_evidence"].iloc[0]
-                if "combined_evidence" in grp.columns
-                else source,
-                "protein_coding_score": grp["protein_coding_score"].iloc[0]
-                if "protein_coding_score" in grp.columns
-                else 0.0,
+                "combined_evidence": (
+                    grp["combined_evidence"].iloc[0]
+                    if "combined_evidence" in grp.columns
+                    else source
+                ),
+                "protein_coding_score": (
+                    grp["protein_coding_score"].iloc[0]
+                    if "protein_coding_score" in grp.columns
+                    else 0.0
+                ),
             }
         )
 
