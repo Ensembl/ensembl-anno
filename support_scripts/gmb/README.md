@@ -22,7 +22,10 @@ Originally developed for eukaryotic genomes, the pipeline has been heavily optim
 ## Installation
 
 Requirements:
-*   Python 3.8+
+*   Python 3.9+ (raised from a previously-declared but never actually
+    supported 3.8+: the pinned dependency versions already require 3.9 --
+    `pip show pandas`/`numpy`/`biopython` each report `Requires-Python: >=3.9`
+    -- and CI (`.github/workflows/ci.yml`) has only ever tested 3.9 and 3.11)
 *   `pandas`
 *   `pyranges`
 *   `biopython`
@@ -145,8 +148,13 @@ custom config) to add:
 protein_validation:
   enabled: true
   diamond_db: swissprot.dmnd   # path relative to the gmb/ working directory
-  diamond_threads: 4
-  psauron_threshold: 0.5
+  diamond_weight: 0.7          # combined_score = diamond_weight*DIAMOND + psauron_weight*Psauron
+  psauron_weight: 0.3
+  min_score: 0.7
+  policy: penalize              # "drop" | "penalize" (also accepts "penalise")
+  psauron_min_length: 5         # psauron -m/--minimum-length (aa); NOT a model selector --
+                                 # psauron has one bundled model and no model-selection option
+  psauron_use_cpu: false        # psauron -c/--use-cpu; only needs to be true on GPU-less/headless hosts
 ```
 
 Then run:
@@ -158,14 +166,101 @@ python -m gmb.cli.build \
     --seqname 1
 ```
 
-To verify that DIAMOND and Psauron are on `$PATH` before running:
+### Layering multiple `--config` files
+
+`--config` may be repeated; later files override earlier ones on any key they
+both set (dicts deep-merge, lists replace entirely -- same rules as a single
+override, applied once per file in order). This avoids duplicating a whole
+tuning file just to add one small overlay -- for example, the bundled
+Apicomplexa chr1 example only needs to add `protein_validation` settings on
+top of the already-established `apicomplexa_first_pass.yaml` tuning:
+
+```bash
+gmb-build \
+    --config configs/apicomplexa_first_pass.yaml \
+    --config configs/apicomplexa_chr1_protein_validation.example.yaml \
+    --seqname 1 \
+    ...
+```
+
+A single `--config path.yaml` continues to work exactly as before. Passing no
+`--config` at all uses `fungi_default.yaml` alone, as always.
+
+To verify that DIAMOND and Psauron are on `$PATH` before running -- this also prints the
+detected Psauron version and fails clearly if the installed binary is missing a flag GMB
+needs (capability detection, not a hard-coded version check):
 
 ```bash
 python -m gmb.cli.build --check-deps
 ```
 
+Per-transcript DIAMOND/Psauron results (hit ID, coverage, bitscore, Psauron score, combined
+`protein_coding_score`) are written to `protein_validation.tsv` alongside the other outputs.
+
 > **CI note:** Protein validation is skipped in CI by default.  To run it locally, set
 > `RUN_EXTERNAL_TOOLS=1` before running pytest (see [Testing](#testing) below).
+
+---
+
+### Long-read consensus preprocessing (optional `--minimap2` evidence)
+
+Raw long-read (e.g. Minimap2) transcript alignments are typically far too large and noisy
+to feed into `gmb.cli.build` directly. `gmb.cli.longread_consensus` collapses them into a
+smaller, deduplicated consensus track first:
+
+```bash
+python -m gmb.cli.longread_consensus \
+    --input raw_minimap2.gtf \
+    --output-dir longread_consensus_out/ \
+    --seqname 1
+```
+
+This writes `minimap2_consensus.gtf` (source label `Minimap2Consensus`) that can then be
+passed to `gmb.cli.build --minimap2 longread_consensus_out/minimap2_consensus.gtf`. See the
+module docstring in `gmb/pipeline/longread_consensus.py` for the clustering/support-
+filtering rules applied.
+
+---
+
+### Duplicate transcript collapse (automatic, within `gmb.cli.build`)
+
+Because clustering happens at the exon level (see
+`gmb/pipeline/duplicate_transcript_collapse.py` for the full root-cause explanation), a
+single transcript occasionally gets reconstructed as two structurally-identical "isoforms"
+of one gene. GMB automatically collapses transcripts proven identical in exon/CDS
+coordinates, CDS phase, and translated protein sequence (never genuinely distinct
+isoforms) after gene-level deduplication, and writes a `collapsed_duplicate_transcripts.tsv`
+log whenever any collapse occurs. This is on by default
+(`duplicate_transcript_collapse.collapse_exact_duplicates: true`); see
+`DuplicateTranscriptCollapseConfig` in `gmb/pipeline/config.py` for the tunable rules.
+
+---
+
+### Canonical transcript selection (standalone, post-build)
+
+For genes with multiple surviving isoforms, `gmb.cli.canonical_selection` is a standalone,
+non-destructive reporting step that ranks isoforms and picks one representative canonical
+transcript per gene, reading a completed build's own output files (never mutating them):
+
+```bash
+python -m gmb.cli.canonical_selection \
+    --consensus-gff3 output/consensus.gff3 \
+    --evidence-attribution output/evidence_attribution.tsv \
+    --protein-validation output/protein_validation.tsv \
+    --output-dir output/canonical_selection/
+```
+
+Writes `canonical_transcripts.tsv`, `transcript_ranking.tsv`, and
+`canonical_selection_summary.json`. Selection uses a deterministic priority order (complete
+ORF, then protein-validation support, independent evidence-source count, GMB score, CDS
+length, transcript ID) -- see `_rank_key` in `gmb/pipeline/canonical_selection.py`. The
+reported `canonical_total_score` is the continuous weighted score for interpreting *how
+much better* the winner is, not what picked it.
+
+Optional protein-domain evidence (Pfam/InterPro, via `gmb/pipeline/domain_evidence.py`) can
+feed into canonical scoring but is **disabled by default and not yet biologically
+validated** -- it is plumbed through end-to-end (config → scorer → report) as a TBC
+placeholder for future work, and never penalises a transcript for having zero domain hits.
 
 ---
 
@@ -247,8 +342,8 @@ Key configurable areas:
 *   `orf.min_codons`: Minimum ORF length (default 33 for fungi).
 *   `protein_filter`: Thresholds for dropping fragmented or poorly supported protein alignments. **OrthoDB filters**: now configurable via `min_alignment_coverage`, `min_percent_identity`, and `min_bitscore` here.
 *   `transcriptomic_filter`: Thresholds for identifying artificially merged transcript models (e.g., max intron length).
-*   `helixer_filter`: Rules for filtering unreliable *ab initio* models.
-*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support/configurable thresholds for keeping Helixer models).
+*   `backbone_filter`: Rules for filtering unreliable *ab initio* backbone models (Helixer or Tiberius, whichever is loaded; legacy key `helixer_filter` still accepted with a deprecation warning).
+*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support/configurable thresholds for keeping the ab initio backbone -- `weights.backbone`, `keep_backbone_without_support`; legacy keys `weights.helixer`/`keep_helixer_without_support` still accepted with a deprecation warning).
 *   `protein_validation`: Enable a batch validation stage (`enabled: true`) that writes translated candidate models to a FASTA, runs DIAMOND and Psauron, and injects a derived `protein_coding_score` back into the candidate gating logic.
 *   `utr`: Thresholds and criteria for keeping or trimming Untranslated Regions. Features robust "end support" validation (`require_end_support: true`), allowing you to configure exactly which evidence assemblies must agree on a transcript's start/end coordinates (`end_support_sources`), with a distance tolerance (`end_tolerance_bp`). If the transcript edges lack multi-source agreement or protein validation (depending on `end_support_mode` policy), they can fallback to `drop_utr`, `hard_cap` to a hardcoded base definition, or `drop_transcript` fully based on `fallback_policy_when_unsupported`.
 
@@ -490,7 +585,11 @@ All thresholds are config-driven — no hard-coded species constants.
 | pyyaml     | latest                     | latest                                    |
 | matplotlib | latest                     | latest                                    |
 
-CI runs both the default and compat environments.
+CI runs both the default and compat environments. pandas 3.0.0 requires
+Python >=3.11 (the compat job's `python-version` is already set to
+`'3.11'` to match); the full non-integration test suite has been verified
+to pass under this exact combination (`pip install -r
+requirements-compat.txt` then `pytest tests/ -m "not integration"`).
 
 ---
 

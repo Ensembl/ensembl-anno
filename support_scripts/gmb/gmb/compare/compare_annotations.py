@@ -36,9 +36,9 @@ Options for Seqname Mapping:
 
 import argparse
 import csv
-import gzip
 import json
 import os
+import sys
 from collections import Counter, defaultdict
 
 import matplotlib.patches as patches
@@ -54,11 +54,7 @@ from gmb.compare.annotation_loader import (
     select_transcripts,
     validate_against_fasta,
 )
-from gmb.pipeline.annotate_cds_utrs import (
-    load_genome,
-    reverse_complement,
-    translate,
-)
+from gmb.pipeline.annotate_cds_utrs import load_genome, reverse_complement, translate
 from gmb.pipeline.subset_utils import (
     add_subset_args,
     build_mapping,
@@ -215,9 +211,11 @@ def classify_locus_pairs(
         evidence = ""
         if cons_mrna is not None and not cons_mrna.empty:
             mrna_rows = cons_mrna[
-                cons_mrna["transcript_id"].str.startswith(gid.split(".")[0])
-                if isinstance(gid, str)
-                else cons_mrna["transcript_id"] == gid
+                (
+                    cons_mrna["transcript_id"].str.startswith(gid.split(".")[0])
+                    if isinstance(gid, str)
+                    else cons_mrna["transcript_id"] == gid
+                )
             ]
             # Try to get evidence from attributes
             if not mrna_rows.empty:
@@ -592,13 +590,29 @@ def _stratified_counts(ref_results, ref_exons_df=None):
         "non_cds": Counter(),
     }
 
+    # Real per-transcript exon counts, when available. A gene is multi-exon
+    # if any of its transcripts has >1 exon — genuine intron content, not
+    # alternative-splicing isoform count (genes with a single isoform are
+    # not necessarily single-exon, and vice versa).
+    tx_exon_count = None
+    if ref_exons_df is not None and not ref_exons_df.empty:
+        tx_exon_count = ref_exons_df.groupby("transcript_id").size()
+
     for r in ref_results:
         cls = r["classification"]
-        n_tids = len(r.get("tids", []))
+        tids = r.get("tids", [])
         has_cds = r.get("classification_cds", "") not in ("No_CDS", "Missed", "")
 
-        # Exon count: use number of transcripts as proxy for complexity
-        if n_tids <= 1:
+        if tx_exon_count is not None and tids:
+            max_exons = max((tx_exon_count.get(tid, 1) for tid in tids), default=1)
+            is_single_exon = max_exons <= 1
+        else:
+            # Fallback when exon data isn't available: transcript-isoform
+            # count is a poor proxy (conflates AS complexity with intron
+            # content) but better than nothing.
+            is_single_exon = len(tids) <= 1
+
+        if is_single_exon:
             strata["single_exon"][cls] += 1
         else:
             strata["multi_exon"][cls] += 1
@@ -614,7 +628,8 @@ def _stratified_counts(ref_results, ref_exons_df=None):
 def _locus_detection_rate(ref_results):
     """Gene locus detection: any overlap on same strand counts as detected."""
     detected = sum(
-        1 for r in ref_results
+        1
+        for r in ref_results
         if r["classification"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")
     )
     total = len(ref_results)
@@ -623,14 +638,18 @@ def _locus_detection_rate(ref_results):
 
 def _intron_chain_recovery_rate(ref_results):
     """Fraction of matched ref genes where intron chain was fully recovered."""
-    matched = [r for r in ref_results if r["classification"] != "Missed" and r["classification"] != "Strand_Mismatch"]
+    matched = [
+        r
+        for r in ref_results
+        if r["classification"] != "Missed" and r["classification"] != "Strand_Mismatch"
+    ]
     if not matched:
         return 0, 0, 0.0
     recovered = sum(1 for r in matched if r.get("intron_chain_match", False))
     return recovered, len(matched), round(recovered / len(matched), 4)
 
 
-def write_summary(ref_results, cons_results, output_dir, filter_info=None):
+def write_summary(ref_results, cons_results, output_dir, filter_info=None, ref_exons_df=None):
     """Write summary and detailed comparison files."""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -654,11 +673,15 @@ def write_summary(ref_results, cons_results, output_dir, filter_info=None):
     ic_recovered, ic_matched, ic_rate = _intron_chain_recovery_rate(ref_results)
 
     # CDS intron chain recovery
-    cds_ic_matched = [r for r in ref_results if r["classification_cds"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")]
+    cds_ic_matched = [
+        r
+        for r in ref_results
+        if r["classification_cds"] in ("Exact_Match", "Partial_Match", "Structural_Mismatch")
+    ]
     cds_ic_recovered = sum(1 for r in cds_ic_matched if r.get("cds_intron_chain_match", False))
 
     # Stratified
-    strata = _stratified_counts(ref_results)
+    strata = _stratified_counts(ref_results, ref_exons_df=ref_exons_df)
 
     summary = {
         "total_reference_genes": len(ref_results),
@@ -705,7 +728,7 @@ def write_summary(ref_results, cons_results, output_dir, filter_info=None):
         "specificity": {
             "novel_consensus_count": cons_class_counts.get("Novel", 0),
             "matched_consensus_count": cons_class_counts.get("Matched", 0)
-            + sum(1 for c in cons_class_counts.values())
+            + sum(cons_class_counts.values())
             - cons_class_counts.get("Novel", 0)
             - cons_class_counts.get("Strand_Mismatch", 0),
         },
@@ -729,7 +752,10 @@ def write_summary(ref_results, cons_results, output_dir, filter_info=None):
         )
 
         # CDS rates
-        cds_total = summary["sensitivity_cds"]["cds_any_match_count"] + summary["sensitivity_cds"]["cds_missed_count"]
+        cds_total = (
+            summary["sensitivity_cds"]["cds_any_match_count"]
+            + summary["sensitivity_cds"]["cds_missed_count"]
+        )
         if cds_total > 0:
             summary["sensitivity_cds"]["cds_exact_match_rate"] = round(
                 summary["sensitivity_cds"]["cds_exact_match_count"] / total_ref, 4
@@ -844,9 +870,12 @@ TRACK_COLORS = {
     "Query": "#337AB7",
     "Scallop": "#5CB85C",
     "StringTie": "#F0AD4E",
+    "Minimap2": "#E67E22",
     "Helixer": "#9B59B6",
+    "Tiberius": "#16A085",
     "OrthoDB": "#999999",
     "UniProt": "#888888",
+    "GenBlast": "#7F8C8D",
 }
 
 CDS_HEIGHT = 0.4
@@ -988,6 +1017,57 @@ def plot_comparison_locus(
     plt.close()
 
 
+def _write_qc_index_html(qc_dir, rows):
+    """Write a small HTML index linking each QC plot to its locus metadata.
+
+    `rows` is a list of dicts with keys: filename, category, gene_id,
+    matched_id, chrom, start, end. This mirrors the fields written per-locus
+    to comparison_details.tsv so a reader can cross-reference a plot with its
+    row there (matched on gene_id).
+    """
+    by_category = defaultdict(list)
+    for row in rows:
+        by_category[row["category"]].append(row)
+
+    html = [
+        "<!doctype html><html><head><meta charset='utf-8'>",
+        "<title>GMB comparison QC index</title>",
+        "<style>",
+        "body{font-family:sans-serif;margin:2em;}",
+        "table{border-collapse:collapse;margin-bottom:2em;}",
+        "td,th{border:1px solid #ccc;padding:6px 10px;text-align:left;font-size:0.9em;}",
+        "img{max-width:480px;display:block;}",
+        "h2{margin-top:2em;}",
+        "</style></head><body>",
+        "<h1>GMB comparison QC index</h1>",
+        "<p>Each row's gene_id/matched_id can be cross-referenced against "
+        "comparison_details.tsv for the full per-locus record.</p>",
+    ]
+    for category in sorted(by_category):
+        html.append(f"<h2>{category} ({len(by_category[category])})</h2>")
+        html.append(
+            "<table><tr><th>Plot</th><th>Reference gene_id</th>"
+            "<th>Matched query id</th><th>Locus</th></tr>"
+        )
+        for row in by_category[category]:
+            html.append(
+                "<tr><td><a href='{f}'><img src='{f}'></a></td>"
+                "<td>{gid}</td><td>{mid}</td><td>{chrom}:{start}-{end}</td></tr>".format(
+                    f=row["filename"],
+                    gid=row["gene_id"],
+                    mid=row.get("matched_id", "") or "-",
+                    chrom=row["chrom"],
+                    start=row["start"],
+                    end=row["end"],
+                )
+            )
+        html.append("</table>")
+    html.append("</body></html>")
+
+    with open(os.path.join(qc_dir, "index.html"), "w") as fh:
+        fh.write("\n".join(html))
+
+
 def generate_comparison_plots(
     ref_results, cons_results, evidence_tracks, output_dir, plots_per_category=3
 ):
@@ -1006,6 +1086,7 @@ def generate_comparison_plots(
             by_class["Novel"].append(r)
 
     plot_count = 0
+    index_rows = []
     for category, entries in by_class.items():
         # Sort by chromosome + position for reproducibility
         entries.sort(key=lambda e: (e["chrom"], e["start"]))
@@ -1026,8 +1107,20 @@ def generate_comparison_plots(
                 filepath,
             )
             plot_count += 1
+            index_rows.append(
+                {
+                    "filename": filename,
+                    "category": category,
+                    "gene_id": entry["gene_id"],
+                    "matched_id": entry.get("matched_id", ""),
+                    "chrom": entry["chrom"],
+                    "start": entry["start"],
+                    "end": entry["end"],
+                }
+            )
 
-    print(f"  Generated {plot_count} comparison plots in {qc_dir}/")
+    _write_qc_index_html(qc_dir, index_rows)
+    print(f"  Generated {plot_count} comparison plots in {qc_dir}/ (see index.html)")
 
 
 # ---------------------------------------------------------------------------
@@ -1092,7 +1185,9 @@ def main():
         description="Compare a query annotation against a reference annotation. "
         "Supports Ensembl GFF3, Helixer GFF3, ANNEVO GFF3, and Tiberius hybrid formats."
     )
-    parser.add_argument("--reference", required=True, help="Reference annotation (GFF3/GTF, can be .gz)")
+    parser.add_argument(
+        "--reference", required=True, help="Reference annotation (GFF3/GTF, can be .gz)"
+    )
     query_group = parser.add_mutually_exclusive_group(required=True)
     query_group.add_argument("--query", help="Query annotation to compare against reference")
     query_group.add_argument("--consensus", help="(deprecated, use --query) Consensus annotation")
@@ -1151,9 +1246,18 @@ def main():
     )
     parser.add_argument("--scallop", default=None, help="Scallop GTF")
     parser.add_argument("--stringtie", default=None, help="StringTie GTF")
-    parser.add_argument("--helixer", default=None, help="Helixer GFF3")
+    parser.add_argument(
+        "--minimap2", default=None, help="Minimap2 long-read transcript alignments (GTF)"
+    )
+    parser.add_argument("--helixer", default=None, help="Helixer GFF3 (ab initio backbone)")
+    parser.add_argument(
+        "--tiberius",
+        default=None,
+        help="Tiberius GTF evidence track (ab initio backbone, alternative to --helixer)",
+    )
     parser.add_argument("--orthodb", default=None, help="OrthoDB GTF")
     parser.add_argument("--uniprot", default=None, help="UniProt GTF")
+    parser.add_argument("--genblast", default=None, help="GenBlast protein alignment GTF")
     parser.add_argument(
         "--plots-per-category",
         type=int,
@@ -1248,29 +1352,41 @@ def main():
     if gene_biotypes or tx_biotypes:
         print(f"Filtering reference by biotype: genes={gene_biotypes}, transcripts={tx_biotypes}")
         ref_genes, _ref_mrna, ref_exons, ref_cds = filter_by_biotype(
-            ref_genes, _ref_mrna, ref_exons, ref_cds,
-            gene_biotypes=gene_biotypes, transcript_biotypes=tx_biotypes,
+            ref_genes,
+            _ref_mrna,
+            ref_exons,
+            ref_cds,
+            gene_biotypes=gene_biotypes,
+            transcript_biotypes=tx_biotypes,
         )
 
     # Transcript selection
     if args.reference_transcript_selection != "all":
         print(f"Selecting transcripts: {args.reference_transcript_selection}")
         ref_genes, _ref_mrna, ref_exons, ref_cds = select_transcripts(
-            ref_genes, _ref_mrna, ref_exons, ref_cds,
+            ref_genes,
+            _ref_mrna,
+            ref_exons,
+            ref_cds,
             mode=args.reference_transcript_selection,
         )
 
     post_filter_ref_genes = len(ref_genes)
     post_filter_ref_tx = _ref_mrna["transcript_id"].nunique() if not _ref_mrna.empty else 0
     if post_filter_ref_genes != pre_filter_ref_genes:
-        print(f"  Reference after filtering: {post_filter_ref_genes} genes "
-              f"({pre_filter_ref_genes - post_filter_ref_genes} removed), "
-              f"{post_filter_ref_tx} transcripts "
-              f"({pre_filter_ref_tx - post_filter_ref_tx} removed)")
+        print(
+            f"  Reference after filtering: {post_filter_ref_genes} genes "
+            f"({pre_filter_ref_genes - post_filter_ref_genes} removed), "
+            f"{post_filter_ref_tx} transcripts "
+            f"({pre_filter_ref_tx - post_filter_ref_tx} removed)"
+        )
 
     # --- Generate filter audit ---
     generate_filter_audit(
-        ref_genes, _ref_mrna, ref_exons, ref_cds,
+        ref_genes,
+        _ref_mrna,
+        ref_exons,
+        ref_cds,
         output_dir=args.output_dir,
         evaluation_mode=args.evaluation_mode,
         transcript_selection=args.reference_transcript_selection,
@@ -1410,11 +1526,13 @@ def main():
             "seed": sample_seed,
             "source": sample_source,
             "note": "Loci are sampled AFTER biotype/transcript filtering. "
-                    "Changing evaluation mode or transcript selection resamples different loci. "
-                    "Percentages across modes are not directly comparable due to different sample composition.",
+            "Changing evaluation mode or transcript selection resamples different loci. "
+            "Percentages across modes are not directly comparable due to different sample composition.",
         }
 
-    summary = write_summary(ref_results, cons_results, args.output_dir, filter_info=filter_info)
+    summary = write_summary(
+        ref_results, cons_results, args.output_dir, filter_info=filter_info, ref_exons_df=ref_exons
+    )
     # Include subset info in summary
     if subset_regions:
         summary["subset_regions"] = [str(r) for r in subset_regions]
@@ -1431,11 +1549,17 @@ def main():
     print(f"Evaluation mode:          {args.evaluation_mode}")
     print(f"Transcript selection:     {args.reference_transcript_selection}")
     if pre_filter_ref_genes != post_filter_ref_genes:
-        print(f"Reference (pre-filter):   {pre_filter_ref_genes} genes, {pre_filter_ref_tx} transcripts")
-    print(f"Reference (post-filter):  {post_filter_ref_genes} genes, {post_filter_ref_tx} transcripts")
+        print(
+            f"Reference (pre-filter):   {pre_filter_ref_genes} genes, {pre_filter_ref_tx} transcripts"
+        )
+    print(
+        f"Reference (post-filter):  {post_filter_ref_genes} genes, {post_filter_ref_tx} transcripts"
+    )
     if sample_loci:
-        print(f"Sampling:                 {sample_loci} loci from {sample_source} (seed={sample_seed})")
-        print(f"  NOTE: loci sampled AFTER filtering; changing mode resamples different loci")
+        print(
+            f"Sampling:                 {sample_loci} loci from {sample_source} (seed={sample_seed})"
+        )
+        print("  NOTE: loci sampled AFTER filtering; changing mode resamples different loci")
     print(f"Reference genes (sample): {summary['total_reference_genes']}")
     print(f"Query genes (sample):     {summary['total_consensus_genes']}")
     print()
@@ -1446,21 +1570,39 @@ def main():
     ic = summary.get("intron_chain", {})
 
     print("--- 1. Locus Recovery ---")
-    print(f"  Locus detection rate:       {sens.get('locus_detection_rate', 0):.1%}  ({sens.get('locus_detected_count', 0)}/{total_ref})")
-    print(f"  Missed rate:                {sens.get('missed_rate', 0):.1%}  ({sens.get('missed_count', 0)}/{total_ref})")
+    print(
+        f"  Locus detection rate:       {sens.get('locus_detection_rate', 0):.1%}  ({sens.get('locus_detected_count', 0)}/{total_ref})"
+    )
+    print(
+        f"  Missed rate:                {sens.get('missed_rate', 0):.1%}  ({sens.get('missed_count', 0)}/{total_ref})"
+    )
     print(f"  Strand mismatch:            {sens.get('strand_mismatch_count', 0)}/{total_ref}")
     print()
 
     print("--- 2. CDS Accuracy ---")
-    print(f"  CDS exact match:            {sens_cds.get('cds_exact_match_count', 0)}" +
-          (f"  ({sens_cds.get('cds_exact_match_rate', 0):.1%})" if "cds_exact_match_rate" in sens_cds else ""))
-    print(f"  CDS any match:              {sens_cds.get('cds_any_match_count', 0)}" +
-          (f"  ({sens_cds.get('cds_any_match_rate', 0):.1%})" if "cds_any_match_rate" in sens_cds else ""))
+    print(
+        f"  CDS exact match:            {sens_cds.get('cds_exact_match_count', 0)}"
+        + (
+            f"  ({sens_cds.get('cds_exact_match_rate', 0):.1%})"
+            if "cds_exact_match_rate" in sens_cds
+            else ""
+        )
+    )
+    print(
+        f"  CDS any match:              {sens_cds.get('cds_any_match_count', 0)}"
+        + (
+            f"  ({sens_cds.get('cds_any_match_rate', 0):.1%})"
+            if "cds_any_match_rate" in sens_cds
+            else ""
+        )
+    )
     print(f"  CDS exact, UTR differs:     {sens_cds.get('cds_exact_but_exon_differs', 0)}")
     print()
 
     print("--- 3. Splice/Intron-Chain Recovery ---")
-    print(f"  Intron chain recovered:     {ic.get('exon_intron_chain_recovered', 0)}/{ic.get('exon_intron_chain_matched', 0)}  ({ic.get('exon_intron_chain_rate', 0):.1%})")
+    print(
+        f"  Intron chain recovered:     {ic.get('exon_intron_chain_recovered', 0)}/{ic.get('exon_intron_chain_matched', 0)}  ({ic.get('exon_intron_chain_rate', 0):.1%})"
+    )
     cds_ic_rec = sens_cds.get("cds_intron_chain_recovered", 0)
     cds_ic_mat = sens_cds.get("cds_intron_chain_matched", 0)
     cds_ic_rate = cds_ic_rec / cds_ic_mat if cds_ic_mat > 0 else 0
@@ -1468,35 +1610,75 @@ def main():
     print()
 
     print("--- 4. Exact Transcript Structure ---")
-    print(f"  Exact match rate:           {sens.get('exact_match_rate', 0):.1%}  ({sens.get('exact_match_count', 0)}/{total_ref})")
+    print(
+        f"  Exact match rate:           {sens.get('exact_match_rate', 0):.1%}  ({sens.get('exact_match_count', 0)}/{total_ref})"
+    )
     print(f"  Any match rate:             {sens.get('any_match_rate', 0):.1%}")
     print()
 
     print("Reference gene classification:")
-    for cls in ["Exact_Match", "Structural_Mismatch", "Partial_Match", "Missed", "Strand_Mismatch"]:
+    for cls in [
+        "Exact_Match",
+        "Structural_Mismatch",
+        "Partial_Match",
+        "Missed",
+        "Strand_Mismatch",
+    ]:
         cnt = summary["reference_classification"].get(cls, 0)
         pct = cnt / total_ref * 100 if total_ref > 0 else 0
         print(f"  {cls:25s}  {cnt:5d}  ({pct:.1f}%)")
     print()
 
     print("Query gene classification:")
-    for cls in ["Exact_Match", "Structural_Mismatch", "Partial_Match", "Matched", "Novel", "Strand_Mismatch"]:
+    for cls in [
+        "Exact_Match",
+        "Structural_Mismatch",
+        "Partial_Match",
+        "Matched",
+        "Novel",
+        "Strand_Mismatch",
+    ]:
         cnt = summary["consensus_classification"].get(cls, 0)
         if cnt == 0:
             continue
-        pct = cnt / summary["total_consensus_genes"] * 100 if summary["total_consensus_genes"] > 0 else 0
+        pct = (
+            cnt / summary["total_consensus_genes"] * 100
+            if summary["total_consensus_genes"] > 0
+            else 0
+        )
         print(f"  {cls:25s}  {cnt:5d}  ({pct:.1f}%)")
-    print(f"\nNovel query genes:          {summary['specificity'].get('novel_consensus_count', 0)}")
+    print(
+        f"\nNovel query genes:          {summary['specificity'].get('novel_consensus_count', 0)}"
+    )
 
     # --- Evidence tracks for plotting ---
     print("\nLoading evidence tracks for visualisation...")
     evidence_tracks = {}
 
-    # Always include ref and query
+    # Fixed track order for QC plots/legends, independent of CLI flag order:
+    # Reference, Query (GMB consensus), ab initio backbone, short-read
+    # transcriptomic, long-read consensus, protein evidence.
     evidence_tracks["Reference"] = (ref_exons, ref_cds)
     evidence_tracks["Query"] = (cons_exons, cons_cds)
 
-    # Optional evidence tracks
+    if args.helixer and args.tiberius:
+        sys.exit(
+            "ERROR: pass only one ab initio backbone track: --helixer or --tiberius, not both."
+        )
+    if args.helixer and os.path.exists(args.helixer):
+        hx_exons, hx_cds, _ = load_gff(args.helixer, "Helixer")
+        if mapping:
+            hx_exons = remap_df_seqnames(hx_exons, mapping)
+            if not hx_cds.empty:
+                hx_cds = remap_df_seqnames(hx_cds, mapping)
+        evidence_tracks["Helixer"] = (hx_exons, hx_cds)
+    if args.tiberius and os.path.exists(args.tiberius):
+        tb_exons, tb_cds, _ = load_gff(args.tiberius, "Tiberius")
+        if mapping:
+            tb_exons = remap_df_seqnames(tb_exons, mapping)
+            if not tb_cds.empty:
+                tb_cds = remap_df_seqnames(tb_cds, mapping)
+        evidence_tracks["Tiberius"] = (tb_exons, tb_cds)
     if args.scallop and os.path.exists(args.scallop):
         sc_exons, _, _ = load_gff(args.scallop, "Scallop")
         if mapping:
@@ -1507,13 +1689,11 @@ def main():
         if mapping:
             st_exons = remap_df_seqnames(st_exons, mapping)
         evidence_tracks["StringTie"] = (st_exons, pd.DataFrame())
-    if args.helixer and os.path.exists(args.helixer):
-        hx_exons, hx_cds, _ = load_gff(args.helixer, "Helixer")
+    if args.minimap2 and os.path.exists(args.minimap2):
+        mm_exons, _, _ = load_gff(args.minimap2, "Minimap2")
         if mapping:
-            hx_exons = remap_df_seqnames(hx_exons, mapping)
-            if not hx_cds.empty:
-                hx_cds = remap_df_seqnames(hx_cds, mapping)
-        evidence_tracks["Helixer"] = (hx_exons, hx_cds)
+            mm_exons = remap_df_seqnames(mm_exons, mapping)
+        evidence_tracks["Minimap2"] = (mm_exons, pd.DataFrame())
     if args.orthodb and os.path.exists(args.orthodb):
         od_exons, _, _ = load_gff(args.orthodb, "OrthoDB")
         if mapping:
@@ -1524,6 +1704,11 @@ def main():
         if mapping:
             up_exons = remap_df_seqnames(up_exons, mapping)
         evidence_tracks["UniProt"] = (up_exons, pd.DataFrame())
+    if args.genblast and os.path.exists(args.genblast):
+        gb_exons, _, _ = load_gff(args.genblast, "GenBlast")
+        if mapping:
+            gb_exons = remap_df_seqnames(gb_exons, mapping)
+        evidence_tracks["GenBlast"] = (gb_exons, pd.DataFrame())
 
     # --- Generate plots ---
     print("Generating comparison plots...")

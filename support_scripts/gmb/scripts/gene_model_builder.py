@@ -4,6 +4,7 @@
 Preserves backward compatibility:
     python gene_model_builder.py ...
 """
+
 import os
 import sys
 

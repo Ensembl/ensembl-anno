@@ -223,7 +223,6 @@ class TestHelixerCdsExport:
         prot = "".join(l.strip() for l in lines[1:])
         assert prot[0] == "M"
 
-
     def test_helixer_cds_minus_strand_multiexon(self, tmp_path, config):
         """Minus-strand multi-exon Helixer CDS must not produce internal stop codons.
 
@@ -252,8 +251,8 @@ class TestHelixerCdsExport:
         # Correct mRNA CDS (5'→3'): RC(exon2_genomic) + RC(exon1_genomic)
         #   = ATGAAATTT + GGGTAA  →  ATG-AAA-TTT-GGG-TAA  →  M-K-F-G-*  →  protein "MKFG"
         exon2_genomic = "AAATTTCAT"  # high coord → 5' in mRNA
-        exon1_genomic = "TTACCC"     # low coord  → 3' in mRNA
-        padding = "N" * 14           # gap so exon2 starts at exactly position 20
+        exon1_genomic = "TTACCC"  # low coord  → 3' in mRNA
+        padding = "N" * 14  # gap so exon2 starts at exactly position 20
         genome_seq = exon1_genomic + padding + exon2_genomic  # len = 6+14+9 = 29
         genome = {"chr1": genome_seq}
 

@@ -4,6 +4,7 @@
 Preserves backward compatibility:
     python compare_annotations.py ...
 """
+
 import os
 import sys
 

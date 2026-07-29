@@ -40,9 +40,10 @@ import pyranges as pr
 from gmb.pipeline.annotate_cds_utrs import annotate_all_transcripts, load_genome
 from gmb.pipeline.config import load_config
 from gmb.pipeline.dedup_genes import dedup_genes
+from gmb.pipeline.duplicate_transcript_collapse import collapse_exact_duplicate_transcripts
 from gmb.pipeline.evidence_filter import (
+    filter_backbone_models,
     filter_chimeras,
-    filter_helixer_models,
     filter_protein_evidence,
     split_mega_transcripts,
 )
@@ -282,7 +283,13 @@ def compute_utr_end_support(
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_setup_args = parser.add_argument_group("Setup")
-    parser.add_setup_args.add_argument("--config", help="Path to YAML config")
+    parser.add_setup_args.add_argument(
+        "--config",
+        action="append",
+        help="Path to a YAML config override. May be repeated to layer several "
+        "files in order (each later --config overrides earlier ones on the "
+        "same keys); a single --config continues to work exactly as before.",
+    )
     parser.add_setup_args.add_argument("--preset", default="fungi", help="Config preset")
     parser.add_setup_args.add_argument(
         "--check-deps", action="store_true", help="Check external tool dependencies and exit"
@@ -292,9 +299,18 @@ def parse_args():
     parser.add_input_args.add_argument("--genome", help="Genome FASTA")
     parser.add_input_args.add_argument("--scallop", help="Scallop GTF")
     parser.add_input_args.add_argument("--stringtie", help="StringTie GTF")
-    parser.add_input_args.add_argument("--helixer", help="Helixer GFF3")
+    parser.add_input_args.add_argument(
+        "--minimap2", help="Minimap2 long-read transcript alignments (GTF), optional"
+    )
+    parser.add_input_args.add_argument("--helixer", help="Helixer GFF3 (ab initio backbone)")
+    parser.add_input_args.add_argument(
+        "--tiberius",
+        help="Tiberius GTF (ab initio backbone, alternative to --helixer; "
+        "mutually exclusive with --helixer)",
+    )
     parser.add_input_args.add_argument("--orthodb", help="OrthoDB GTF")
     parser.add_input_args.add_argument("--uniprot", help="UniProt GTF")
+    parser.add_input_args.add_argument("--genblast", help="GenBlast protein alignment GTF")
 
     parser.add_output_args = parser.add_argument_group("Outputs")
     parser.add_output_args.add_argument("--output-dir", required=True, help="Output directory")
@@ -402,7 +418,18 @@ def main() -> None:
     if log_file:
         print(f"Logging to {log_file}")
 
+    if args.helixer and args.tiberius:
+        sys.exit("ERROR: pass only one ab initio backbone: --helixer or --tiberius, not both.")
+    backbone_path, backbone_label = (
+        (args.tiberius, "Tiberius") if args.tiberius else (args.helixer, "Helixer")
+    )
+
     config = load_config(args.config, args.preset)
+    # Sync the scoring gate's backbone string to whichever ab initio track was
+    # actually loaded, so weighting/single-exon-without-support logic (which
+    # matches on this label) applies correctly regardless of --helixer vs
+    # --tiberius.
+    config.scoring.backbone_label = backbone_label
 
     if args.check_deps:
         check_dependencies(config.protein_validation)
@@ -415,13 +442,15 @@ def main() -> None:
     print("Loading transcriptomic evidence...")
     scallop_exons, scallop_cds = load_evidence(args.scallop, "Scallop")
     stringtie_exons, stringtie_cds = load_evidence(args.stringtie, "StringTie")
+    minimap2_exons, minimap2_cds = load_evidence(args.minimap2, "Minimap2")
 
     print("Loading ab initio evidence...")
-    helixer_exons, helixer_cds = load_evidence(args.helixer, "Helixer")
+    helixer_exons, helixer_cds = load_evidence(backbone_path, backbone_label)
 
     print("Loading protein evidence...")
     orthodb_exons, orthodb_cds = load_evidence(args.orthodb, "OrthoDB")
     uniprot_exons, uniprot_cds = load_evidence(args.uniprot, "UniProt")
+    genblast_exons, genblast_cds = load_evidence(args.genblast, "GenBlast")
 
     stats = {}
 
@@ -447,29 +476,41 @@ def main() -> None:
         scallop_cds = remap_df_seqnames(scallop_cds, mapping)
         stringtie_exons = remap_df_seqnames(stringtie_exons, mapping, "StringTie")
         stringtie_cds = remap_df_seqnames(stringtie_cds, mapping)
-        helixer_exons = remap_df_seqnames(helixer_exons, mapping, "Helixer")
+        minimap2_exons = remap_df_seqnames(minimap2_exons, mapping, "Minimap2")
+        minimap2_cds = remap_df_seqnames(minimap2_cds, mapping)
+        helixer_exons = remap_df_seqnames(helixer_exons, mapping, backbone_label)
         helixer_cds = remap_df_seqnames(helixer_cds, mapping)
         orthodb_exons = remap_df_seqnames(orthodb_exons, mapping, "OrthoDB")
         orthodb_cds = remap_df_seqnames(orthodb_cds, mapping)
         uniprot_exons = remap_df_seqnames(uniprot_exons, mapping, "UniProt")
         uniprot_cds = remap_df_seqnames(uniprot_cds, mapping)
+        genblast_exons = remap_df_seqnames(genblast_exons, mapping, "GenBlast")
+        genblast_cds = remap_df_seqnames(genblast_cds, mapping)
 
     print("Filtering Evidence...")
-    tx_frames = [df for df in [scallop_exons, stringtie_exons] if df is not None and not df.empty]
+    tx_frames = [
+        df
+        for df in [scallop_exons, stringtie_exons, minimap2_exons]
+        if df is not None and not df.empty
+    ]
     tx_exons = pd.concat(tx_frames, ignore_index=True) if tx_frames else pd.DataFrame()
     tx_exons_filtered = filter_chimeras(tx_exons, config, stats)
 
     if config.transcript_splitting.split_enabled:
         tx_exons_filtered = split_mega_transcripts(tx_exons_filtered, config, stats)
 
-    h_exons_filt, h_cds_filt = filter_helixer_models(
+    h_exons_filt, h_cds_filt = filter_backbone_models(
         helixer_exons if helixer_exons is not None else pd.DataFrame(),
         helixer_cds if helixer_cds is not None else pd.DataFrame(),
         config,
         stats,
     )
 
-    prot_frames = [df for df in [orthodb_exons, uniprot_exons] if df is not None and not df.empty]
+    prot_frames = [
+        df
+        for df in [orthodb_exons, uniprot_exons, genblast_exons]
+        if df is not None and not df.empty
+    ]
     prot_exons = pd.concat(prot_frames, ignore_index=True) if prot_frames else pd.DataFrame()
     prot_exons_filt = filter_protein_evidence(prot_exons, config, stats, tx_exons_filtered)
 
@@ -495,13 +536,13 @@ def main() -> None:
 
     if subset_regions:
         _n_before = {
-            "transcriptomic": tx_exons_filtered["transcript_id"].nunique()
-            if not tx_exons_filtered.empty
-            else 0,
+            "transcriptomic": (
+                tx_exons_filtered["transcript_id"].nunique() if not tx_exons_filtered.empty else 0
+            ),
             "helixer": h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0,
-            "protein": prot_exons_filt["transcript_id"].nunique()
-            if not prot_exons_filt.empty
-            else 0,
+            "protein": (
+                prot_exons_filt["transcript_id"].nunique() if not prot_exons_filt.empty else 0
+            ),
         }
         print(f"  Subsetting to {len(subset_regions)} region(s)...")
         tx_exons_filtered = subset_df_by_regions(tx_exons_filtered, subset_regions)
@@ -509,20 +550,20 @@ def main() -> None:
         h_cds_filt = subset_df_by_regions(h_cds_filt, subset_regions)
         prot_exons_filt = subset_df_by_regions(prot_exons_filt, subset_regions)
         # Also subset CDS tracks
-        for _name, _cds_var in [("scallop", scallop_cds), ("stringtie", stringtie_cds)]:
-            if _cds_var is not None and not _cds_var.empty:
-                if _name == "scallop":
-                    scallop_cds = subset_df_by_regions(_cds_var, subset_regions)
-                else:
-                    stringtie_cds = subset_df_by_regions(_cds_var, subset_regions)
+        if scallop_cds is not None and not scallop_cds.empty:
+            scallop_cds = subset_df_by_regions(scallop_cds, subset_regions)
+        if stringtie_cds is not None and not stringtie_cds.empty:
+            stringtie_cds = subset_df_by_regions(stringtie_cds, subset_regions)
+        if minimap2_cds is not None and not minimap2_cds.empty:
+            minimap2_cds = subset_df_by_regions(minimap2_cds, subset_regions)
         _n_after = {
-            "transcriptomic": tx_exons_filtered["transcript_id"].nunique()
-            if not tx_exons_filtered.empty
-            else 0,
+            "transcriptomic": (
+                tx_exons_filtered["transcript_id"].nunique() if not tx_exons_filtered.empty else 0
+            ),
             "helixer": h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0,
-            "protein": prot_exons_filt["transcript_id"].nunique()
-            if not prot_exons_filt.empty
-            else 0,
+            "protein": (
+                prot_exons_filt["transcript_id"].nunique() if not prot_exons_filt.empty else 0
+            ),
         }
         for track, n_b in _n_before.items():
             n_a = _n_after[track]
@@ -543,7 +584,7 @@ def main() -> None:
     candidate_exons = pd.concat(all_dfs, ignore_index=True)
 
     cds_dfs = []
-    for d in [scallop_cds, stringtie_cds, h_cds_filt]:
+    for d in [scallop_cds, stringtie_cds, minimap2_cds, h_cds_filt]:
         if d is not None and not d.empty:
             cds_dfs.append(d)
     candidate_cds = pd.concat(cds_dfs, ignore_index=True) if cds_dfs else None
@@ -554,11 +595,12 @@ def main() -> None:
     )
 
     validation_scores = {}
+    validation_details = {}
     if config.protein_validation.enabled:
         print("Running Protein Validation Stage...")
         check_dependencies(config.protein_validation)
         protein_dict = {tid: ann["protein"] for tid, ann in annotations.items() if ann["protein"]}
-        validation_scores = batch_score_proteins(protein_dict, config)
+        validation_scores, validation_details = batch_score_proteins(protein_dict, config)
 
     if validation_scores:
         candidate_exons["protein_coding_score"] = (
@@ -689,7 +731,23 @@ def main() -> None:
                     "ID": new_tid,
                     "Parent": gene_id,
                     "Evidence": model.get("combined_evidence", ""),
+                    "gmb_score": model.get("score"),
                 }
+
+                # Attach here (not re-looked-up later) because `annotations`
+                # and `validation_details` are keyed by the original
+                # candidate `tid`, not the renamed `new_tid` written to the
+                # final GFF3 -- a later re-lookup by `new_tid` would silently
+                # miss every row.
+                if ann:
+                    mrna_row["orf_label"] = ann.get("orf_label")
+                    mrna_row["is_partial_5"] = ann.get("is_partial_5")
+                    mrna_row["is_partial_3"] = ann.get("is_partial_3")
+                    mrna_row["internal_stop_count"] = (ann.get("protein") or "").count("*")
+                    mrna_row["protein_length"] = len(ann.get("protein") or "")
+                mrna_row["protein_coding_score"] = validation_scores.get(tid)
+                if tid in validation_details:
+                    mrna_row["protein_validation_detail"] = validation_details[tid]
 
                 if "utr_support" in model:
                     mrna_row["utr_support"] = model["utr_support"]
@@ -817,6 +875,38 @@ def main() -> None:
     else:
         print(f"    No duplicates found ({dedup_stats.get('genes_output', 0)} genes)")
 
+    # --- Exact-duplicate transcript collapse ---
+    # Runs strictly after dedup_genes() (which brings duplicate fragments
+    # together as isoforms of one gene via gene-level overlap merging) and
+    # before FASTA/evidence-attribution output, on the final isoform set --
+    # see gmb.pipeline.duplicate_transcript_collapse's module docstring for the
+    # full root-cause account and insertion-point rationale.
+    print("  Collapsing exact-duplicate transcripts...")
+    protein_by_tid = {
+        rec.split("\n", 1)[0].lstrip(">"): rec.split("\n", 1)[1]
+        for rec in selected_prot_fa
+        if "\n" in rec
+    }
+    selected_gff_rows, collapse_log_rows, collapse_stats = collapse_exact_duplicate_transcripts(
+        selected_gff_rows,
+        config,
+        protein_by_tid=protein_by_tid,
+        genome_dict=genome_dict,
+        protein_supported_tids=protein_supported_tids,
+    )
+    stats.update({f"duplicate_collapse_{k}": v for k, v in collapse_stats.items()})
+    if collapse_stats["transcripts_removed"] > 0:
+        print(
+            f"    {collapse_stats['duplicate_groups_found']} exact-duplicate group(s), "
+            f"{collapse_stats['transcripts_removed']} transcript(s) collapsed across "
+            f"{collapse_stats['genes_with_collapse']} gene(s)"
+        )
+        collapse_path = os.path.join(args.output_dir, "collapsed_duplicate_transcripts.tsv")
+        pd.DataFrame(collapse_log_rows).to_csv(collapse_path, sep="\t", index=False)
+        print(f"    Collapse log: {collapse_path}")
+    else:
+        print("    No exact-duplicate transcripts found")
+
     # Final gene count
     final_gene_count = sum(1 for r in selected_gff_rows if r.get("Feature") == "gene")
     stats["total_loci"] = final_gene_count
@@ -847,6 +937,12 @@ def main() -> None:
                     attr += f";Parent={r['Parent']}"
                 if "Evidence" in r and pd.notna(r["Evidence"]) and r["Evidence"] != "":
                     attr += f";Evidence={r['Evidence']}"
+                if (
+                    "CollapsedFrom" in r
+                    and pd.notna(r["CollapsedFrom"])
+                    and r["CollapsedFrom"] != ""
+                ):
+                    attr += f";CollapsedFrom={r['CollapsedFrom']}"
                 fh.write(
                     f"{r['Chromosome']}\t{r['Source']}\t{r['Feature']}\t{r['Start']}\t{r['End']}\t{r['Score']}\t{r['Strand']}\t{r['Frame']}\t{attr}\n"
                 )
@@ -928,6 +1024,7 @@ def main() -> None:
             "max_exon_len_bp": max_exon_len_bp,
             "max_intron_len_bp": max_intron_len_bp,
             "transcript_span_bp": transcript_span_bp,
+            "gmb_score": m.get("gmb_score"),
         }
 
         # Extract support from the mRNA dict (injected during gene_model_builder formulation)
@@ -951,6 +1048,51 @@ def main() -> None:
         ev_path = os.path.join(args.output_dir, "evidence_attribution.tsv")
         ev_df.to_csv(ev_path, sep="\t", index=False)
         print(f"  Evidence attribution: {ev_path}")
+
+    # --- Protein validation TSV (per-transcript DIAMOND/Psauron detail) ---
+    # Written whenever the stage ran, independent of whether any row_dict
+    # above needed it -- this is the compact table canonical-transcript
+    # selection (gmb.pipeline.canonical_selection) and manual QC read from.
+    #
+    # Percentage-scale note: diamond_pident/diamond_qcov/diamond_scov are
+    # 0-100 (DIAMOND's own native percentage convention); psauron_score and
+    # protein_coding_score are 0-1 (Psauron's own convention, and the
+    # diamond/psauron weighted-combination result -- see
+    # ProteinValidationConfig.diamond_weight/psauron_weight in config.py).
+    # gmb_score is open-ended (can be negative) and is not a percentage at
+    # all -- it's the additive scoring.py isoform score.
+    if config.protein_validation.enabled:
+        protein_val_rows = []
+        for m in output_mrnas:
+            tid = m["ID"]
+            gene_id = m["Parent"]
+            detail = m.get("protein_validation_detail", {})
+            protein_val_rows.append(
+                {
+                    "gene_id": gene_id,
+                    "transcript_id": tid,
+                    "diamond_hit": detail.get("diamond_hit"),
+                    "diamond_pident": detail.get("diamond_pident"),
+                    "diamond_qcov": detail.get("diamond_qcov"),
+                    "diamond_scov": detail.get("diamond_scov"),
+                    "diamond_bitscore": detail.get("diamond_bitscore"),
+                    "diamond_evalue": detail.get("diamond_evalue"),
+                    "psauron_score": detail.get("psauron_score"),
+                    "protein_length": m.get("protein_length"),
+                    "orf_label": m.get("orf_label"),
+                    "is_partial_5": m.get("is_partial_5"),
+                    "is_partial_3": m.get("is_partial_3"),
+                    "internal_stop_count": m.get("internal_stop_count"),
+                    "protein_coding_score": m.get("protein_coding_score"),
+                    "gmb_score": m.get("gmb_score"),
+                    "evidence_sources": m.get("Evidence", ""),
+                }
+            )
+        if protein_val_rows:
+            pv_df = pd.DataFrame(protein_val_rows)
+            pv_path = os.path.join(args.output_dir, "protein_validation.tsv")
+            pv_df.to_csv(pv_path, sep="\t", index=False)
+            print(f"  Protein validation detail: {pv_path}")
 
     def _default_encoder(obj):
         if hasattr(obj, "item"):

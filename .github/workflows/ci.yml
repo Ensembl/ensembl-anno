@@ -12,18 +12,26 @@ on:
 
 jobs:
   lint:
-    name: Lint (ruff)
+    name: Lint and format (ruff, black, isort, whitespace)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install ruff
-        run: pip install "ruff>=0.4"
+      - name: Install formatting/lint tools
+        run: pip install "ruff>=0.4" "black>=24.0" "isort>=5.12"
       - name: Run ruff
         working-directory: support_scripts/gmb
         run: ruff check .
+      - name: Run black --check
+        working-directory: support_scripts/gmb
+        run: black --check .
+      - name: Run isort --check-only
+        working-directory: support_scripts/gmb
+        run: isort --check-only .
+      - name: Check for whitespace errors
+        run: git diff --check
 
   test-default:
     name: Unit + synthetic integration tests

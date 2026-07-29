@@ -6,7 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "gene-model-builder"
 version = "2.0.0"
 description = "Consensus gene model builder for eukaryotic genomes"
-requires-python = ">=3.8"
+# Genuinely the lowest supported version, not just the local dev version:
+# the pinned/resolvable dependency versions (pandas, numpy, biopython) all
+# declare Requires-Python >=3.9 already, and CI (.github/workflows/ci.yml)
+# has only ever tested 3.9 and 3.11 -- 3.8 was never actually exercised.
+# See the Python-support note in README.md for the full evidence trail.
+requires-python = ">=3.9"
 dependencies = [
     "pandas>=2.0,<3",
     "pyranges>=0.0.120,<=0.1.4",
@@ -28,6 +33,8 @@ dev = [
 gmb-build = "gmb.cli.build:main"
 gmb-compare = "gmb.cli.compare:main"
 gmb-visualize = "gmb.cli.visualize:main"
+gmb-longread-consensus = "gmb.cli.longread_consensus:main"
+gmb-canonical-selection = "gmb.cli.canonical_selection:main"
 
 [tool.setuptools.packages.find]
 include = ["gmb*"]
@@ -37,7 +44,7 @@ include = ["gmb*"]
 # ---------------------------------------------------------------------------
 [tool.black]
 line-length = 99
-target-version = ["py38"]
+target-version = ["py39"]
 
 # ---------------------------------------------------------------------------
 # isort
@@ -54,7 +61,7 @@ known_first_party = [
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 99
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.lint]
 select = [
@@ -89,6 +96,11 @@ ignore = [
 "exploratory/test_clustering.py" = ["F", "E"]
 "gmb/compare/visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
 "gmb/compare/compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
+# `== True` used deliberately: comparison_details.tsv columns are read back
+# as object dtype (can hold NaN alongside True/False), where a plain truth
+# check and an explicit `== True` differ for NaN -- an explicit comparison
+# is the safer, intent-revealing choice here, not an oversight.
+"gmb/compare/tool_performance_analysis.py" = ["E712"]
 
 # ---------------------------------------------------------------------------
 # pytest

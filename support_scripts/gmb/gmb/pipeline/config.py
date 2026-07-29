@@ -7,13 +7,16 @@ never hard-coded in pipeline logic.
 
 Usage:
     from gmb.pipeline.config import load_config
-    cfg = load_config()                   # fungal defaults
-    cfg = load_config("my_config.yaml")   # custom overrides
+    cfg = load_config()                                  # fungal defaults
+    cfg = load_config("my_config.yaml")                  # custom overrides
+    cfg = load_config(["base.yaml", "overlay.yaml"])      # layered overrides
+                                                           # (overlay.yaml wins)
 """
 
 import os
+import warnings
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional, Union
 
 import yaml
 
@@ -65,17 +68,35 @@ class TranscriptSplittingConfig:
 
 
 @dataclass
-class HelixerFilterConfig:
+class BackboneFilterConfig:
+    """Plausibility filter for the ab initio backbone track (Helixer or
+    Tiberius, whichever was loaded -- see PipelineConfig.scoring.backbone_label).
+    Named generically since this section is never Helixer-specific despite
+    its legacy `helixer_filter` YAML key (still accepted, see
+    _DEPRECATED_KEY_ALIASES below).
+    """
+
     min_cds_bp: int = 90
     max_exons: int = 50
     enabled: bool = True
 
 
+# Deprecated alias for the pre-rename class name -- see _DEPRECATED_KEY_ALIASES
+# for the corresponding YAML key alias (helixer_filter -> backbone_filter).
+# Remove once no code/config plausibly still imports this name directly.
+HelixerFilterConfig = BackboneFilterConfig
+
+
 @dataclass
 class ScoringWeights:
-    helixer: float = 2.0
+    # backbone: weight for whichever ab initio backbone is actually loaded
+    # (Helixer or Tiberius -- matched against scoring.backbone_label, not a
+    # fixed source name). Legacy YAML key `helixer` is still accepted (see
+    # _DEPRECATED_KEY_ALIASES).
+    backbone: float = 2.0
     scallop: float = 1.0
     stringtie: float = 1.0
+    minimap2: float = 1.0
 
 
 @dataclass
@@ -87,11 +108,19 @@ class ScoringConfig:
     max_isoforms_per_locus: int = 2
     min_alternate_score: float = 3.0
     fungal_single_exon_mode: bool = True
-    keep_helixer_without_support: bool = True
+    # Legacy YAML key `keep_helixer_without_support` is still accepted (see
+    # _DEPRECATED_KEY_ALIASES) -- this has never been Helixer-specific: it
+    # protects whichever backbone (Helixer or Tiberius) is actually loaded.
+    keep_backbone_without_support: bool = True
     require_protein_support_for_single_source: bool = False
     min_cds_bp: int = 150
     require_support_for_single_exon: bool = True
     same_gene_overlap_threshold: float = 0.15
+    # Source label of the ab initio backbone track actually loaded (set
+    # automatically by the CLI based on --helixer vs --tiberius). Determines
+    # which string in `weights` and `keep_backbone_without_support` applies —
+    # not necessarily "Helixer".
+    backbone_label: str = "Helixer"
 
 
 @dataclass
@@ -100,17 +129,22 @@ class ProteinValidationConfig:
     diamond_path: str = "diamond"
     psauron_path: str = "psauron"
     diamond_db: str = "swissprot.dmnd"
-    psauron_model: str = "default"
+    # Psauron uses one bundled model checkpoint and exposes no model-
+    # selection option; -m specifies minimum protein length, not a model.
+    psauron_min_length: int = 5  # psauron -m/--minimum-length (aa), psauron's own default
+    psauron_use_cpu: bool = False  # psauron -c/--use-cpu; False lets it auto-detect a GPU
     diamond_weight: float = 0.5
     psauron_weight: float = 0.5
     min_score: float = 0.5
     policy: str = "drop"  # 'drop' or 'penalize' (also accepts 'penalise')
+    diamond_min_query_coverage: float = 0.0  # 0-100; additional gate before counting a hit
+    diamond_min_target_coverage: float = 0.0  # 0-100; additional gate before counting a hit
 
 
 @dataclass
 class QcConfig:
     max_transcripts_per_track: int = 5
-    skip_orf_inference_tracks: List[str] = field(default_factory=lambda: ["OrthoDB", "UniProt"])
+    skip_orf_inference_tracks: list[str] = field(default_factory=lambda: ["OrthoDB", "UniProt"])
     parallel: bool = False
     workers: int = 4
 
@@ -146,7 +180,7 @@ class UtrConfig:
     # End support logic
     require_end_support: bool = True
     end_support_mode: str = "multisource_end_agreement"
-    end_support_sources: List[str] = field(default_factory=lambda: ["Scallop", "StringTie"])
+    end_support_sources: list[str] = field(default_factory=lambda: ["Scallop", "StringTie"])
     end_tolerance_bp: int = 50
     require_multisource_for_utr_5p: bool = True
     require_multisource_for_utr_3p: bool = True
@@ -177,6 +211,42 @@ class DedupConfig:
 
 
 @dataclass
+class DuplicateTranscriptCollapseConfig:
+    """Config for gmb.pipeline.duplicate_transcript_collapse.
+
+    Distinct from DedupConfig: dedup_genes.py merges whole *genes* by
+    overlap + a single (first-mRNA, tolerance-bp) structural check -- it is
+    what brings exact-duplicate fragments together as isoforms of one gene
+    in the first place (see that module's docstring for the root cause:
+    exon-level PyRanges clustering can split one transcript's own exons
+    across separate clusters when no other evidence bridges the intron
+    gap, and each fragment is independently re-admitted by the
+    keep_backbone_without_support single-exon exception). This section
+    controls a stricter, *exact*-equality-only pass that runs after that,
+    within each gene's assembled isoform set, so it only ever removes
+    transcripts proven structurally and translationally identical -- never
+    genuinely distinct isoforms.
+    """
+
+    collapse_exact_duplicates: bool = True
+    # When True (default), two transcripts with identical CDS but different
+    # UTR extents are kept as separate isoforms rather than collapsed --
+    # genuinely different supported UTRs are real evidence, not redundancy.
+    preserve_distinct_utrs: bool = True
+    # When True (default), two transcripts are only ever collapsed if their
+    # translated protein sequences also match exactly (belt-and-braces on
+    # top of CDS-coordinate equality -- catches the case where identical
+    # CDS coordinates on inconsistent reference sequence data could still
+    # translate differently, though that should not happen in practice).
+    preserve_distinct_proteins: bool = True
+    # CDS phase/frame is compared when both records have it recorded;
+    # missing phase information on both sides is not itself a mismatch
+    # (see module docstring for why this is the safest available rule
+    # given the current data model).
+    require_matching_cds_phase: bool = True
+
+
+@dataclass
 class ExportConfig:
     write_cdna: bool = True
     write_protein: bool = True
@@ -186,7 +256,100 @@ class ExportConfig:
 
 @dataclass
 class ReportingConfig:
-    formats: List[str] = field(default_factory=lambda: ["json", "tsv"])
+    formats: list[str] = field(default_factory=lambda: ["json", "tsv"])
+
+
+@dataclass
+class CanonicalProteinValidationWeights:
+    """Protein-plausibility component weights (gmb.pipeline.canonical_selection).
+
+    psauron/diamond_identity/diamond_query_coverage/diamond_target_coverage
+    are each already bounded 0-1 (psauron score) or 0-100 (DIAMOND percentages,
+    divided by 100 before weighting) -- deliberately NOT including raw DIAMOND
+    bitscore, which scales with protein length and would let long proteins
+    dominate regardless of match quality. diamond_hit_bonus is a flat, bounded
+    bonus for "a significant hit exists at all", independent of its strength.
+    """
+
+    psauron_weight: float = 0.35
+    diamond_identity_weight: float = 0.15
+    diamond_query_coverage_weight: float = 0.15
+    diamond_target_coverage_weight: float = 0.15
+    diamond_hit_bonus: float = 0.2
+
+
+@dataclass
+class CanonicalEvidenceWeights:
+    """Annotation-evidence component weights.
+
+    gmb_score is min-max normalised across the gene's own isoforms before
+    weighting (it is open-ended/additive in gmb.pipeline.scoring, not
+    naturally bounded); the *_support flags are 0/1 (does evidence_sources
+    contain a track of that kind); independent_source_weight scales with the
+    count of distinct evidence source types, capped at 3 (see
+    independent_source_cap) so a transcript backed by many redundant tracks
+    of the same kind cannot dominate one backed by 3+ genuinely different
+    kinds.
+    """
+
+    gmb_score_weight: float = 0.30
+    independent_source_weight: float = 0.15
+    independent_source_cap: int = 3
+    transcriptomic_support_weight: float = 0.10
+    protein_alignment_support_weight: float = 0.10
+    longread_support_weight: float = 0.10
+    backbone_support_weight: float = 0.10
+
+
+@dataclass
+class CanonicalStructureWeights:
+    complete_orf_bonus: float = 0.30
+    internal_stop_penalty: float = 0.50
+    partial_cds_penalty: float = 0.20
+
+
+@dataclass
+class CanonicalDomainConfig:
+    """Protein-domain/feature evidence (Pfam, InterPro, ...).
+
+    Disabled by default: no domain adapter has run for this first pass (see
+    gmb.pipeline.domain_evidence). All weights are TBC placeholders --
+    plumbed through end-to-end (config -> scorer -> report) but inert at 0
+    until real domain data and a considered weighting are available. Domain
+    evidence must stay *supportive*, never a requirement: a transcript with
+    zero domain hits (e.g. a genuinely lineage-specific or poorly-annotated
+    protein) must not be penalised just for having none -- only
+    fragmented/suspicious *positive* domain signals are ever penalised here.
+    """
+
+    enabled: bool = False
+    domain_support_weight: float = 0.0  # TBC
+    domain_coverage_weight: float = 0.0  # TBC
+    complete_domain_bonus: float = 0.0  # TBC
+    fragmented_domain_penalty: float = 0.0  # TBC
+    suspicious_fusion_penalty: float = 0.0  # TBC
+    cross_provider_agreement_bonus: float = 0.0  # TBC
+
+
+@dataclass
+class CanonicalSelectionConfig:
+    """Config for gmb.pipeline.canonical_selection (a standalone post-build
+    reporting step -- see that module's docstring for why it reads
+    consensus.gff3/evidence_attribution.tsv/protein_validation.tsv rather
+    than running inside gmb.cli.build itself).
+    """
+
+    enabled: bool = True
+    protein_validation: CanonicalProteinValidationWeights = field(
+        default_factory=CanonicalProteinValidationWeights
+    )
+    evidence: CanonicalEvidenceWeights = field(default_factory=CanonicalEvidenceWeights)
+    structure: CanonicalStructureWeights = field(default_factory=CanonicalStructureWeights)
+    domains: CanonicalDomainConfig = field(default_factory=CanonicalDomainConfig)
+    # Winner/runner-up total-score gap below which a selection is flagged
+    # "low_confidence" in the report (in addition to the separate
+    # LOW_CONFIDENCE_NO_PROTEIN_SUPPORT reason code for missing evidence).
+    low_confidence_score_gap: float = 0.05
 
 
 @dataclass
@@ -200,20 +363,75 @@ class PipelineConfig:
     transcript_splitting: TranscriptSplittingConfig = field(
         default_factory=TranscriptSplittingConfig
     )
-    helixer_filter: HelixerFilterConfig = field(default_factory=HelixerFilterConfig)
+    # Legacy YAML section name `helixer_filter` is still accepted (see
+    # _DEPRECATED_KEY_ALIASES).
+    backbone_filter: BackboneFilterConfig = field(default_factory=BackboneFilterConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     protein_validation: ProteinValidationConfig = field(default_factory=ProteinValidationConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     utr: UtrConfig = field(default_factory=UtrConfig)
     dedup: DedupConfig = field(default_factory=DedupConfig)
+    duplicate_transcript_collapse: DuplicateTranscriptCollapseConfig = field(
+        default_factory=DuplicateTranscriptCollapseConfig
+    )
     qc: QcConfig = field(default_factory=QcConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
+    canonical_selection: CanonicalSelectionConfig = field(default_factory=CanonicalSelectionConfig)
 
 
 # ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
+
+# Deprecated config-key aliases, scoped by the *containing* dataclass's type
+# name (so an old name is only ever remapped within the section it actually
+# belonged to). Each entry exists because a "generalise backbone naming"
+# pass renamed a Helixer-specific-sounding key to its accurate generic name
+# without breaking configs already using the old one. Remove an entry (and
+# its DeprecationWarning) once no config plausibly still sets the old key --
+# not before, and not silently.
+_DEPRECATED_KEY_ALIASES: dict = {
+    "PipelineConfig": {"helixer_filter": "backbone_filter"},
+    "ScoringConfig": {"keep_helixer_without_support": "keep_backbone_without_support"},
+    "ScoringWeights": {"helixer": "backbone"},
+}
+
+
+def _apply_deprecated_key_aliases(dc, d: dict, path_prefix: str) -> dict:
+    """Return `d` with any legacy keys (scoped to `dc`'s type) renamed to
+    their current name, each emitting one DeprecationWarning.
+
+    If both the legacy key and its current name are set in the same dict,
+    the current name always wins -- the legacy value is dropped (never
+    silently combined) with a warning explaining why.
+    """
+    aliases = _DEPRECATED_KEY_ALIASES.get(type(dc).__name__)
+    if not aliases or not any(old in d for old in aliases):
+        return d
+    resolved = dict(d)
+    for old_key, new_key in aliases.items():
+        if old_key not in resolved:
+            continue
+        old_val = resolved.pop(old_key)
+        if new_key in resolved:
+            warnings.warn(
+                f"Config key '{path_prefix}{old_key}' is deprecated and was "
+                f"ignored because '{path_prefix}{new_key}' was also set -- "
+                "the current key always takes precedence over the legacy one.",
+                DeprecationWarning,
+                stacklevel=5,
+            )
+        else:
+            warnings.warn(
+                f"Config key '{path_prefix}{old_key}' is deprecated; use "
+                f"'{path_prefix}{new_key}' instead. This alias will be "
+                "removed in a future release.",
+                DeprecationWarning,
+                stacklevel=5,
+            )
+            resolved[new_key] = old_val
+    return resolved
 
 
 def _update_dataclass(dc, d: dict, path_prefix: str = ""):
@@ -223,10 +441,12 @@ def _update_dataclass(dc, d: dict, path_prefix: str = ""):
       - dict -> deep merge
       - list -> replace entirely
       - scalar -> override
-      - unknown keys -> raise ValueError
+      - unknown keys -> raise ValueError, unless a documented deprecated
+        alias exists for this dataclass (see _DEPRECATED_KEY_ALIASES)
     """
     if d is None:
         return dc
+    d = _apply_deprecated_key_aliases(dc, d, path_prefix)
     for key, val in d.items():
         if not hasattr(dc, key):
             raise ValueError(f"Unknown configuration key: '{path_prefix}{key}'")
@@ -250,13 +470,26 @@ def _validate_dataclass(dc):
                 _validate_dataclass(val)
 
 
-def load_config(path: Optional[str] = None, preset: str = "fungi") -> PipelineConfig:
+def load_config(path: Optional[Union[str, list]] = None, preset: str = "fungi") -> PipelineConfig:
     """Load pipeline configuration.
 
     Parameters
     ----------
-    path : str or None
-        Path to a YAML config file.  If None, uses built-in defaults.
+    path : str, list of str, or None
+        One or more paths to YAML override files, applied in order on top
+        of the preset default -- each later file deep-merges its dicts
+        on top of the previous state and replaces (never concatenates)
+        any list-valued key it sets, so the last file to set a given key
+        always wins. A single string is accepted for backward
+        compatibility and is equivalent to a one-element list. `None`
+        (or an empty list) applies no override, matching pre-existing
+        behaviour with no `--config` supplied.
+
+        Missing files are silently skipped -- this matches the
+        pre-existing single-path behaviour (see
+        ``test_missing_file_returns_defaults``) rather than introducing
+        a new failure mode for the (already-existing) single-file case;
+        it applies uniformly to every path in the list.
     preset : str
         Preset name ('fungi' uses configs/fungi_default.yaml).
 
@@ -278,11 +511,16 @@ def load_config(path: Optional[str] = None, preset: str = "fungi") -> PipelineCo
         else:
             raise FileNotFoundError(f"Missing default config preset: {default_yaml}")
 
-    # User overrides
-    if path is not None and os.path.exists(path):
-        with open(path) as fh:
-            data = yaml.safe_load(fh) or {}
-        _update_dataclass(cfg, data)
+    # User overrides -- applied in order, so later paths win on any key
+    # they also set (see _update_dataclass's deep-merge/list-replace rules,
+    # which already give the right per-key semantics with no extra logic
+    # needed here: each file's dict just updates whatever it names).
+    paths = [path] if isinstance(path, str) else (path or [])
+    for override_path in paths:
+        if override_path is not None and os.path.exists(override_path):
+            with open(override_path) as fh:
+                data = yaml.safe_load(fh) or {}
+            _update_dataclass(cfg, data)
 
     _validate_dataclass(cfg)
     return cfg

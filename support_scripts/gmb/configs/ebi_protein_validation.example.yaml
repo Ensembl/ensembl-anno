@@ -1,0 +1,27 @@
+# EBI-site protein-validation overlay.
+#
+# This is a SITE-SPECIFIC configuration, not a portable default: diamond_db
+# below is the established shared DIAMOND database on the EBI cluster
+# (/hps/nobackup/flicek/...). It only resolves on hosts with that filesystem
+# mounted (e.g. EBI's LSF/Slurm compute nodes) -- it will not exist on
+# GitHub Actions runners, a laptop, or any other machine outside EBI.
+#
+# Layer this on top of whichever biological tuning config you are using,
+# via a repeated --config (gmb.pipeline.config.load_config() applies
+# multiple --config files in order, later ones winning per-key):
+#
+#   gmb-build \
+#       --config configs/fungi_default.yaml \
+#       --config configs/ebi_protein_validation.example.yaml \
+#       ...
+#
+# For a machine with a local copy of the database instead (e.g. a laptop
+# with the .dmnd file copied down), copy this file and point diamond_db at
+# your own local path -- see
+# configs/apicomplexa_chr1_protein_validation.example.yaml for a worked
+# example of that pattern. Requires the `diamond` and `psauron` binaries on
+# $PATH (see `gmb-build --check-deps`) in addition to the database itself.
+
+protein_validation:
+  enabled: true
+  diamond_db: "/hps/nobackup/flicek/ensembl/genebuild/blastdb/uniprot_euk_diamond/uniprot_euk.fa.dmnd"

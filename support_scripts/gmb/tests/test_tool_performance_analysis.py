@@ -21,7 +21,6 @@ from gmb.compare.tool_performance_analysis import (
     run_analysis,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -30,80 +29,160 @@ from gmb.compare.tool_performance_analysis import (
 @pytest.fixture
 def sample_ref_details():
     """Sample reference-perspective comparison details."""
-    return pd.DataFrame({
-        "source": ["reference"] * 10,
-        "gene_id": [f"GENE{i:03d}" for i in range(10)],
-        "chrom": ["1"] * 10,
-        "start": [1000 * i for i in range(10)],
-        "end": [1000 * i + 900 for i in range(10)],
-        "strand": ["+"] * 10,
-        "classification": [
-            "Exact_Match", "Exact_Match", "Structural_Mismatch",
-            "Structural_Mismatch", "Partial_Match", "Partial_Match",
-            "Partial_Match", "Missed", "Strand_Mismatch", "Exact_Match",
-        ],
-        "classification_cds": [
-            "Exact_Match", "Exact_Match", "Exact_Match",
-            "Structural_Mismatch", "Partial_Match", "Missed",
-            "Partial_Match", "Missed", "Strand_Mismatch", "No_CDS",
-        ],
-        "matched_id": [
-            "Q001", "Q002", "Q003", "Q003", "Q005", "Q006", "Q007", "", "Q009", "Q010",
-        ],
-        "best_match_transcript_id": [
-            "Q001.1", "Q002.1", "Q003.1", "Q003.1", "Q005.1", "Q006.1", "Q007.1", "", "Q009.1", "Q010.1",
-        ],
-        "exon_overlap": [1.0, 0.95, 0.9, 0.85, 0.7, 0.5, 0.6, 0.0, 0.0, 0.98],
-        "intron_chain_match": [True, True, False, False, False, False, False, False, False, True],
-        "cds_overlap": [1.0, 0.95, 0.9, 0.8, 0.6, 0.0, 0.5, 0.0, 0.0, 0.0],
-        "cds_intron_chain_match": [True, True, True, False, False, False, False, False, False, False],
-        "match_basis": ["exon"] * 10,
-        "tool": ["TestTool"] * 10,
-    })
+    return pd.DataFrame(
+        {
+            "source": ["reference"] * 10,
+            "gene_id": [f"GENE{i:03d}" for i in range(10)],
+            "chrom": ["1"] * 10,
+            "start": [1000 * i for i in range(10)],
+            "end": [1000 * i + 900 for i in range(10)],
+            "strand": ["+"] * 10,
+            "classification": [
+                "Exact_Match",
+                "Exact_Match",
+                "Structural_Mismatch",
+                "Structural_Mismatch",
+                "Partial_Match",
+                "Partial_Match",
+                "Partial_Match",
+                "Missed",
+                "Strand_Mismatch",
+                "Exact_Match",
+            ],
+            "classification_cds": [
+                "Exact_Match",
+                "Exact_Match",
+                "Exact_Match",
+                "Structural_Mismatch",
+                "Partial_Match",
+                "Missed",
+                "Partial_Match",
+                "Missed",
+                "Strand_Mismatch",
+                "No_CDS",
+            ],
+            "matched_id": [
+                "Q001",
+                "Q002",
+                "Q003",
+                "Q003",
+                "Q005",
+                "Q006",
+                "Q007",
+                "",
+                "Q009",
+                "Q010",
+            ],
+            "best_match_transcript_id": [
+                "Q001.1",
+                "Q002.1",
+                "Q003.1",
+                "Q003.1",
+                "Q005.1",
+                "Q006.1",
+                "Q007.1",
+                "",
+                "Q009.1",
+                "Q010.1",
+            ],
+            "exon_overlap": [1.0, 0.95, 0.9, 0.85, 0.7, 0.5, 0.6, 0.0, 0.0, 0.98],
+            "intron_chain_match": [
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+            "cds_overlap": [1.0, 0.95, 0.9, 0.8, 0.6, 0.0, 0.5, 0.0, 0.0, 0.0],
+            "cds_intron_chain_match": [
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+            ],
+            "match_basis": ["exon"] * 10,
+            "tool": ["TestTool"] * 10,
+        }
+    )
 
 
 @pytest.fixture
 def sample_cons_details():
     """Sample consensus-perspective comparison details."""
-    return pd.DataFrame({
-        "source": ["consensus"] * 8,
-        "gene_id": [f"Q{i:03d}" for i in range(1, 9)],
-        "chrom": ["1"] * 8,
-        "start": [1000 * i for i in range(8)],
-        "end": [1000 * i + 900 for i in range(8)],
-        "strand": ["+"] * 8,
-        "classification": [
-            "Exact_Match", "Exact_Match", "Structural_Mismatch",
-            "Novel", "Partial_Match", "Partial_Match", "Partial_Match", "Novel",
-        ],
-        "classification_cds": [
-            "Exact_Match", "Exact_Match", "Structural_Mismatch",
-            "Novel", "Partial_Match", "Partial_Match", "Partial_Match", "Novel",
-        ],
-        "matched_id": [
-            "GENE000", "GENE001", "GENE002", "", "GENE004", "GENE005", "GENE006", "",
-        ],
-        "best_match_transcript_id": [""] * 8,
-        "exon_overlap": [1.0, 0.95, 0.9, 0.0, 0.7, 0.5, 0.6, 0.0],
-        "intron_chain_match": [True, True, False, False, False, False, False, False],
-        "cds_overlap": [1.0, 0.95, 0.9, 0.0, 0.6, 0.0, 0.5, 0.0],
-        "cds_intron_chain_match": [True, True, True, False, False, False, False, False],
-        "match_basis": ["exon"] * 8,
-        "tool": ["TestTool"] * 8,
-    })
+    return pd.DataFrame(
+        {
+            "source": ["consensus"] * 8,
+            "gene_id": [f"Q{i:03d}" for i in range(1, 9)],
+            "chrom": ["1"] * 8,
+            "start": [1000 * i for i in range(8)],
+            "end": [1000 * i + 900 for i in range(8)],
+            "strand": ["+"] * 8,
+            "classification": [
+                "Exact_Match",
+                "Exact_Match",
+                "Structural_Mismatch",
+                "Novel",
+                "Partial_Match",
+                "Partial_Match",
+                "Partial_Match",
+                "Novel",
+            ],
+            "classification_cds": [
+                "Exact_Match",
+                "Exact_Match",
+                "Structural_Mismatch",
+                "Novel",
+                "Partial_Match",
+                "Partial_Match",
+                "Partial_Match",
+                "Novel",
+            ],
+            "matched_id": [
+                "GENE000",
+                "GENE001",
+                "GENE002",
+                "",
+                "GENE004",
+                "GENE005",
+                "GENE006",
+                "",
+            ],
+            "best_match_transcript_id": [""] * 8,
+            "exon_overlap": [1.0, 0.95, 0.9, 0.0, 0.7, 0.5, 0.6, 0.0],
+            "intron_chain_match": [True, True, False, False, False, False, False, False],
+            "cds_overlap": [1.0, 0.95, 0.9, 0.0, 0.6, 0.0, 0.5, 0.0],
+            "cds_intron_chain_match": [True, True, True, False, False, False, False, False],
+            "match_basis": ["exon"] * 8,
+            "tool": ["TestTool"] * 8,
+        }
+    )
 
 
 @pytest.fixture
 def sample_features():
     """Sample reference feature DataFrame."""
-    return pd.DataFrame({
-        "gene_length": [500, 2000, 5000, 10000, 50000, 1000, 3000, 80000, 15000, 900],
-        "exon_count": [1, 2, 5, 12, 20, 1, 3, 15, 8, 1],
-        "cds_length": [300, 1500, 3000, 8000, 20000, 0, 2000, 40000, 6000, 500],
-        "transcript_count": [1, 3, 5, 10, 25, 1, 2, 30, 8, 1],
-        "intron_count": [0, 1, 4, 11, 19, 0, 2, 14, 7, 0],
-        "is_single_exon": [True, False, False, False, False, True, False, False, False, True],
-    }, index=[f"GENE{i:03d}" for i in range(10)])
+    return pd.DataFrame(
+        {
+            "gene_length": [500, 2000, 5000, 10000, 50000, 1000, 3000, 80000, 15000, 900],
+            "exon_count": [1, 2, 5, 12, 20, 1, 3, 15, 8, 1],
+            "cds_length": [300, 1500, 3000, 8000, 20000, 0, 2000, 40000, 6000, 500],
+            "transcript_count": [1, 3, 5, 10, 25, 1, 2, 30, 8, 1],
+            "intron_count": [0, 1, 4, 11, 19, 0, 2, 14, 7, 0],
+            "is_single_exon": [True, False, False, False, False, True, False, False, False, True],
+        },
+        index=[f"GENE{i:03d}" for i in range(10)],
+    )
     # index name = gene_id
 
 
@@ -136,7 +215,9 @@ class TestOverallProfile:
         assert profile["cds_exact_match_rate"] == 3 / 10
 
     def test_empty_df(self):
-        empty = pd.DataFrame(columns=["classification", "classification_cds", "intron_chain_match", "tool"])
+        empty = pd.DataFrame(
+            columns=["classification", "classification_cds", "intron_chain_match", "tool"]
+        )
         profile = compute_overall_profile(empty)
         assert profile == {}
 
@@ -255,23 +336,25 @@ class TestIntronChainAnalysis:
 
 class TestBoundaryAnalysis:
     def test_basic_boundary(self, sample_ref_details):
-        ref_genes = pd.DataFrame({
-            "ID": [f"GENE{i:03d}" for i in range(10)],
-            "Chromosome": ["1"] * 10,
-            "Start": [1000 * i for i in range(10)],
-            "End": [1000 * i + 900 for i in range(10)],
-            "Strand": ["+"] * 10,
-        })
-        query_genes = pd.DataFrame({
-            "ID": [f"Q{i:03d}" for i in range(1, 11)],
-            "Chromosome": ["1"] * 10,
-            "Start": [1000 * i + 5 for i in range(10)],  # 5bp offset
-            "End": [1000 * i + 905 for i in range(10)],
-            "Strand": ["+"] * 10,
-        })
-        bnd = compute_boundary_analysis(
-            sample_ref_details, ref_genes, {"TestTool": query_genes}
+        ref_genes = pd.DataFrame(
+            {
+                "ID": [f"GENE{i:03d}" for i in range(10)],
+                "Chromosome": ["1"] * 10,
+                "Start": [1000 * i for i in range(10)],
+                "End": [1000 * i + 900 for i in range(10)],
+                "Strand": ["+"] * 10,
+            }
         )
+        query_genes = pd.DataFrame(
+            {
+                "ID": [f"Q{i:03d}" for i in range(1, 11)],
+                "Chromosome": ["1"] * 10,
+                "Start": [1000 * i + 5 for i in range(10)],  # 5bp offset
+                "End": [1000 * i + 905 for i in range(10)],
+                "Strand": ["+"] * 10,
+            }
+        )
+        bnd = compute_boundary_analysis(sample_ref_details, ref_genes, {"TestTool": query_genes})
         assert not bnd.empty
         # Should have rows for start, end, both at various thresholds
         assert "start" in bnd["boundary"].values
@@ -280,27 +363,33 @@ class TestBoundaryAnalysis:
 
     def test_exact_boundaries(self):
         """When ref and query have identical boundaries, exact rate should be 1.0."""
-        ref_details = pd.DataFrame({
-            "source": ["reference"] * 3,
-            "gene_id": ["G1", "G2", "G3"],
-            "classification": ["Exact_Match", "Structural_Mismatch", "Partial_Match"],
-            "matched_id": ["Q1", "Q2", "Q3"],
-            "tool": ["MyTool"] * 3,
-        })
-        ref_genes = pd.DataFrame({
-            "ID": ["G1", "G2", "G3"],
-            "Chromosome": ["1"] * 3,
-            "Start": [100, 500, 900],
-            "End": [200, 600, 1000],
-            "Strand": ["+"] * 3,
-        })
-        query_genes = pd.DataFrame({
-            "ID": ["Q1", "Q2", "Q3"],
-            "Chromosome": ["1"] * 3,
-            "Start": [100, 500, 900],
-            "End": [200, 600, 1000],
-            "Strand": ["+"] * 3,
-        })
+        ref_details = pd.DataFrame(
+            {
+                "source": ["reference"] * 3,
+                "gene_id": ["G1", "G2", "G3"],
+                "classification": ["Exact_Match", "Structural_Mismatch", "Partial_Match"],
+                "matched_id": ["Q1", "Q2", "Q3"],
+                "tool": ["MyTool"] * 3,
+            }
+        )
+        ref_genes = pd.DataFrame(
+            {
+                "ID": ["G1", "G2", "G3"],
+                "Chromosome": ["1"] * 3,
+                "Start": [100, 500, 900],
+                "End": [200, 600, 1000],
+                "Strand": ["+"] * 3,
+            }
+        )
+        query_genes = pd.DataFrame(
+            {
+                "ID": ["Q1", "Q2", "Q3"],
+                "Chromosome": ["1"] * 3,
+                "Start": [100, 500, 900],
+                "End": [200, 600, 1000],
+                "Strand": ["+"] * 3,
+            }
+        )
         bnd = compute_boundary_analysis(ref_details, ref_genes, {"MyTool": query_genes})
         exact_start = bnd[(bnd["boundary"] == "start") & (bnd["threshold_bp"] == 0)]
         assert exact_start["rate_within"].iloc[0] == 1.0
@@ -314,12 +403,22 @@ class TestBoundaryAnalysis:
 class TestCrossRanking:
     def test_ranking_order(self):
         profiles = {
-            "ToolA": {"locus_detection_rate": 0.9, "exact_transcript_match_rate": 0.3,
-                      "cds_exact_match_rate": 0.5, "cds_any_match_rate": 0.8,
-                      "intron_chain_recovery_rate": 0.4, "missed_rate": 0.1},
-            "ToolB": {"locus_detection_rate": 0.85, "exact_transcript_match_rate": 0.4,
-                      "cds_exact_match_rate": 0.6, "cds_any_match_rate": 0.85,
-                      "intron_chain_recovery_rate": 0.5, "missed_rate": 0.15},
+            "ToolA": {
+                "locus_detection_rate": 0.9,
+                "exact_transcript_match_rate": 0.3,
+                "cds_exact_match_rate": 0.5,
+                "cds_any_match_rate": 0.8,
+                "intron_chain_recovery_rate": 0.4,
+                "missed_rate": 0.1,
+            },
+            "ToolB": {
+                "locus_detection_rate": 0.85,
+                "exact_transcript_match_rate": 0.4,
+                "cds_exact_match_rate": 0.6,
+                "cds_any_match_rate": 0.85,
+                "intron_chain_recovery_rate": 0.5,
+                "missed_rate": 0.15,
+            },
         }
         strata = pd.DataFrame()
         ranking = compute_cross_ranking(strata, profiles)
@@ -340,23 +439,25 @@ class TestCrossRanking:
 class TestFileIO:
     def test_load_comparison_details(self, tmp_path):
         # Create a minimal comparison_details.tsv
-        df = pd.DataFrame({
-            "source": ["reference", "consensus"],
-            "gene_id": ["G1", "Q1"],
-            "chrom": ["1", "1"],
-            "start": [100, 100],
-            "end": [200, 200],
-            "strand": ["+", "+"],
-            "classification": ["Exact_Match", "Exact_Match"],
-            "classification_cds": ["Exact_Match", "Exact_Match"],
-            "matched_id": ["Q1", "G1"],
-            "best_match_transcript_id": ["Q1.1", "G1.1"],
-            "exon_overlap": [1.0, 1.0],
-            "intron_chain_match": [True, True],
-            "cds_overlap": [1.0, 1.0],
-            "cds_intron_chain_match": [True, True],
-            "match_basis": ["exon", "exon"],
-        })
+        df = pd.DataFrame(
+            {
+                "source": ["reference", "consensus"],
+                "gene_id": ["G1", "Q1"],
+                "chrom": ["1", "1"],
+                "start": [100, 100],
+                "end": [200, 200],
+                "strand": ["+", "+"],
+                "classification": ["Exact_Match", "Exact_Match"],
+                "classification_cds": ["Exact_Match", "Exact_Match"],
+                "matched_id": ["Q1", "G1"],
+                "best_match_transcript_id": ["Q1.1", "G1.1"],
+                "exon_overlap": [1.0, 1.0],
+                "intron_chain_match": [True, True],
+                "cds_overlap": [1.0, 1.0],
+                "cds_intron_chain_match": [True, True],
+                "match_basis": ["exon", "exon"],
+            }
+        )
         df.to_csv(tmp_path / "comparison_details.tsv", sep="\t", index=False)
 
         loaded = load_comparison_details(str(tmp_path), "test_tool")
@@ -389,23 +490,25 @@ class TestIntegration:
             tool_dir = tmp_path / f"compare_{tool_name}"
             tool_dir.mkdir()
 
-            details = pd.DataFrame({
-                "source": ["reference", "reference", "consensus", "consensus"],
-                "gene_id": ["G1", "G2", "Q1", "Q2"],
-                "chrom": ["1", "1", "1", "1"],
-                "start": [100, 500, 100, 500],
-                "end": [200, 600, 200, 600],
-                "strand": ["+", "+", "+", "+"],
-                "classification": ["Exact_Match", "Missed", "Exact_Match", "Novel"],
-                "classification_cds": ["Exact_Match", "Missed", "Exact_Match", "Novel"],
-                "matched_id": ["Q1", "", "G1", ""],
-                "best_match_transcript_id": ["Q1.1", "", "G1.1", ""],
-                "exon_overlap": [1.0, 0.0, 1.0, 0.0],
-                "intron_chain_match": [True, False, True, False],
-                "cds_overlap": [1.0, 0.0, 1.0, 0.0],
-                "cds_intron_chain_match": [True, False, True, False],
-                "match_basis": ["exon", "exon", "exon", "exon"],
-            })
+            details = pd.DataFrame(
+                {
+                    "source": ["reference", "reference", "consensus", "consensus"],
+                    "gene_id": ["G1", "G2", "Q1", "Q2"],
+                    "chrom": ["1", "1", "1", "1"],
+                    "start": [100, 500, 100, 500],
+                    "end": [200, 600, 200, 600],
+                    "strand": ["+", "+", "+", "+"],
+                    "classification": ["Exact_Match", "Missed", "Exact_Match", "Novel"],
+                    "classification_cds": ["Exact_Match", "Missed", "Exact_Match", "Novel"],
+                    "matched_id": ["Q1", "", "G1", ""],
+                    "best_match_transcript_id": ["Q1.1", "", "G1.1", ""],
+                    "exon_overlap": [1.0, 0.0, 1.0, 0.0],
+                    "intron_chain_match": [True, False, True, False],
+                    "cds_overlap": [1.0, 0.0, 1.0, 0.0],
+                    "cds_intron_chain_match": [True, False, True, False],
+                    "match_basis": ["exon", "exon", "exon", "exon"],
+                }
+            )
             details.to_csv(tool_dir / "comparison_details.tsv", sep="\t", index=False)
 
             summary = {

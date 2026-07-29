@@ -176,7 +176,14 @@ def _parse_gff3_mrnas(gff3_path: Path) -> list[str]:
 
 @pytest.fixture(scope="module")
 def region1_output(tmp_path_factory):
-    """Run the pipeline once on the pre-subsetted 500 kb region; share output."""
+    """Run the pipeline once on the pre-subsetted 500 kb region; share output.
+
+    Asserts the subprocess succeeded here (not just in
+    ``test_pipeline_exits_zero``) so that a real pipeline failure surfaces
+    once, clearly, as this fixture's own error -- instead of every other
+    test in the class independently hitting a confusing FileNotFoundError
+    when it tries to read an output file that was never written.
+    """
     if not _REGION_FIXTURES.exists():
         pytest.skip(
             "Pre-subsetted region fixtures not found. "
@@ -184,6 +191,11 @@ def region1_output(tmp_path_factory):
         )
     output_dir = tmp_path_factory.mktemp("ztritici_region1")
     result = _run_pipeline_region(output_dir)
+    assert result.returncode == 0, (
+        f"Pipeline failed with exit code {result.returncode}\n"
+        f"STDOUT:\n{result.stdout}\n"
+        f"STDERR:\n{result.stderr}"
+    )
     return output_dir, result
 
 
@@ -228,9 +240,7 @@ class TestZTriticiRegion1:
         gff3 = output_dir / "consensus.gff3"
         mrna_ids = _parse_gff3_mrnas(gff3)
         bad = [m for m in mrna_ids if m.startswith(("OrthoDB_", "UniProt_"))]
-        assert bad == [], (
-            f"Protein evidence IDs appeared as mRNA in consensus.gff3: {bad[:5]}"
-        )
+        assert bad == [], f"Protein evidence IDs appeared as mRNA in consensus.gff3: {bad[:5]}"
 
     def test_summary_json_structure(self, region1_output):
         """summary.json must have the expected top-level structure."""
@@ -311,8 +321,7 @@ class TestRegion1GoldenRegression:
             for g in _parse_gff3_genes(output_dir / "consensus.gff3")
         )
         expected_genes = sorted(
-            (g["seqname"], g["start"], g["end"], g["strand"])
-            for g in _parse_gff3_genes(golden)
+            (g["seqname"], g["start"], g["end"], g["strand"]) for g in _parse_gff3_genes(golden)
         )
         assert actual_genes == expected_genes, (
             f"Gene loci changed vs golden. "
@@ -344,13 +353,18 @@ class TestZTriticiSeqname1Slow:
             pytest.skip("Set RUN_SLOW_INTEGRATION=1 to run this slow test (~25 min)")
         output_dir = tmp_path_factory.mktemp("ztritici_seqname1_slow")
         result = _run_pipeline_seqname1(output_dir)
+        assert result.returncode == 0, (
+            f"Pipeline failed with exit code {result.returncode}\n"
+            f"STDOUT:\n{result.stdout}\n"
+            f"STDERR:\n{result.stderr}"
+        )
         return output_dir, result
 
     def test_pipeline_exits_zero(self, seqname1_output):
         _, result = seqname1_output
-        assert result.returncode == 0, (
-            f"Pipeline failed:\nSTDOUT:{result.stdout[-2000:]}\nSTDERR:{result.stderr[-2000:]}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Pipeline failed:\nSTDOUT:{result.stdout[-2000:]}\nSTDERR:{result.stderr[-2000:]}"
 
     def test_nonzero_gene_count(self, seqname1_output):
         output_dir, _ = seqname1_output

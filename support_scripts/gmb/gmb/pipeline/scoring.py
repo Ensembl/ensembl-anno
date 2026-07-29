@@ -67,14 +67,17 @@ def score_model(
     # Base evidence weight
     sources = set(model.get("combined_evidence", model["source"]).split(","))
     weights = scfg.weights
+    backbone_lower = scfg.backbone_label.strip().lower()
     for s in sources:
         s_lower = s.strip().lower()
-        if s_lower == "helixer":
-            score += weights.helixer
+        if s_lower == backbone_lower:
+            score += weights.backbone
         elif s_lower == "scallop":
             score += weights.scallop
         elif s_lower == "stringtie":
             score += weights.stringtie
+        elif s_lower == "minimap2":
+            score += weights.minimap2
         else:
             score += 1.0  # unknown source gets base weight
 
@@ -156,12 +159,16 @@ def select_isoforms(
                 "start": grp["Start"].min(),
                 "end": grp["End"].max(),
                 "exon_count": len(grp),
-                "combined_evidence": grp["combined_evidence"].iloc[0]
-                if "combined_evidence" in grp.columns
-                else source,
-                "protein_coding_score": grp["protein_coding_score"].iloc[0]
-                if "protein_coding_score" in grp.columns
-                else 0.0,
+                "combined_evidence": (
+                    grp["combined_evidence"].iloc[0]
+                    if "combined_evidence" in grp.columns
+                    else source
+                ),
+                "protein_coding_score": (
+                    grp["protein_coding_score"].iloc[0]
+                    if "protein_coding_score" in grp.columns
+                    else 0.0
+                ),
             }
         )
 
@@ -221,7 +228,7 @@ def select_isoforms(
 
         # Apply configured gating logic
         if s["protein_support"] or (
-            "Helixer" in s["sources"] and scfg.keep_helixer_without_support
+            scfg.backbone_label in s["sources"] and scfg.keep_backbone_without_support
         ):
             keep = True
         elif len(s["sources"]) > 1:
@@ -246,15 +253,18 @@ def select_isoforms(
             keep = True
 
         # Single-exon models require protein support when configured.
-        # Exception: keep_helixer_without_support takes precedence — a Helixer
-        # single-exon gene should not be silently dropped by this gate when the
-        # operator has explicitly opted in to keeping Helixer without support.
-        helixer_protected = "Helixer" in s["sources"] and scfg.keep_helixer_without_support
+        # Exception: keep_backbone_without_support takes precedence — an ab
+        # initio backbone (scfg.backbone_label) single-exon gene should not be
+        # silently dropped by this gate when the operator has explicitly opted
+        # in to keeping the backbone without support.
+        backbone_protected = (
+            scfg.backbone_label in s["sources"] and scfg.keep_backbone_without_support
+        )
         if (
             keep
             and scfg.require_support_for_single_exon
             and s["rep"]["exon_count"] == 1
-            and not helixer_protected
+            and not backbone_protected
         ):
             if not s["protein_support"] and len(s["sources"]) < 2:
                 keep = False
@@ -290,6 +300,7 @@ def select_isoforms(
 
     for s in candidates:
         r = s["rep"]
+        r["score"] = s["score"]
         # Try to assign to an existing gene sub-cluster
         found = -1
         for i, g_isoforms in enumerate(genes):
