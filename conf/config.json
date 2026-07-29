@@ -73,10 +73,10 @@
         "software": "STAR"
     },
     "stringtie": {
-      "software": "stringtie"
+        "software": "stringtie"
     },
     "scallop": {
-      "software": "scallop"
+        "software": "scallop"
     },
     "trf": {
         "software": "trf",
@@ -89,8 +89,8 @@
         "maxperiod" : 500
     },
     "trnascan": {
-        "software": "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/tRNAscan-SE",
-        "filter_path" : "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter"
+        "software": "tRNAscan-SE",
+        "filter_path" : "EukHighConfidenceFilter"
     },
     "trimgalore": {
         "software": "trim_galore"
