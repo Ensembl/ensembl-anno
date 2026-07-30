@@ -244,7 +244,12 @@ class TestEvidenceClassFieldsInOutput:
         canon = pd.read_csv(out_dir / "canonical_transcripts.tsv", sep="\t")
         ranking = pd.read_csv(out_dir / "transcript_ranking.tsv", sep="\t")
         for df in (canon, ranking):
-            for col in ("named_sources", "n_named_sources", "evidence_classes", "n_evidence_classes"):
+            for col in (
+                "named_sources",
+                "n_named_sources",
+                "evidence_classes",
+                "n_evidence_classes",
+            ):
                 assert col in df.columns
         assert ranking.loc[0, "n_named_sources"] == 2
         assert ranking.loc[0, "evidence_classes"] == "short_read_transcriptomic"

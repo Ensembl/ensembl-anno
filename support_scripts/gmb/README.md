@@ -133,8 +133,7 @@ python -m gmb.cli.build \
 > numbers (e.g. `CM001642.1`) while the genome FASTA uses short integer chromosome names
 > (`1`, `2`, …).  The `--assembly-report` flag handles this remapping automatically.
 > Always specify `--seqname` using the *mapped* name (e.g. `--seqname 1`), not the raw
-> accession.  See [KI-002](KNOWN_ISSUES.md#ki-002--seqname-mapping-is-applied-globally-before-any-subsetting)
-> for details.
+> accession.
 
 ---
 
@@ -507,13 +506,8 @@ scripts/                     # Backward-compatible wrapper scripts
   visualize_disagreements.py # -> gmb.compare.visualize_disagreements
 tools/                       # Optional helper utilities
   remap_helixer.py           # Remap Helixer GFF3 seq IDs via assembly report
-  make_fixed_prot.py         # Re-translate Helixer CDS with corrected sort
   retranslate_from_gff3.py   # Re-translate all CDS from consensus GFF3
-  check_lengths.py           # Quick transcript length sanity checks
-exploratory/                 # Debugging & one-off analysis scripts
-  debug_scoring.py           # Interactive scoring inspection
-  gen_extra_plots.py         # Generate additional comparison plots
-  test_clustering.py         # Ad-hoc clustering experiments
+  audit_duplicate_transcripts.py  # Preview duplicate-collapse decisions on a build
 ```
 
 ---
@@ -525,12 +519,8 @@ Helper scripts live in `tools/` and are not required for normal pipeline use:
 | Script | Purpose |
 | :----- | :------ |
 | `tools/remap_helixer.py` | Remap Helixer GFF3 sequence IDs using an NCBI assembly report |
-| `tools/make_fixed_prot.py` | Re-translate Helixer-sourced CDS with corrected strand sort |
 | `tools/retranslate_from_gff3.py` | Re-translate all CDS from a consensus GFF3 + genome |
-| `tools/check_lengths.py` | Quick transcript length sanity checks on GFF3/GTF files |
-
-Ad-hoc debugging and plotting scripts are in `exploratory/` — these are not
-maintained for general use.
+| `tools/audit_duplicate_transcripts.py` | Preview what duplicate-collapse would do on a completed build (reads its output files; does not re-run the build) |
 
 ---
 

@@ -572,7 +572,9 @@ def check_safeguards(current_row: dict, runner_up_row: dict, reason_code: str, c
         ok = not run_stop or cur_stop
         checks["no_new_internal_stops"] = ok
         if not ok:
-            notes.append("runner-up introduces an internal stop the initial canonical did not have")
+            notes.append(
+                "runner-up introduces an internal stop the initial canonical did not have"
+            )
 
     if reason_code not in _SAFETY_OVERRIDE_REASONS:
         cur_psauron = current_row.get("psauron_score")
@@ -651,7 +653,9 @@ def decide_canonical(
     return {
         "gene_id": gene_id,
         "initial_canonical_transcript_id": initial_id,
-        "interpro_recommended_transcript_id": recommended_id if is_replacement_candidate else initial_id,
+        "interpro_recommended_transcript_id": (
+            recommended_id if is_replacement_candidate else initial_id
+        ),
         "final_canonical_transcript_id": final_id,
         "replaced": replaced,
         "interpro_verdict": comparison["verdict"],
@@ -741,7 +745,9 @@ def build_resolver_report(
                 "runner_up_has_negative_evidence": run_summary["has_negative_evidence"],
                 "interpro_verdict": decision["interpro_verdict"],
                 "reason_code": decision["reason_code"],
-                "interpro_recommended_transcript_id": decision["interpro_recommended_transcript_id"],
+                "interpro_recommended_transcript_id": decision[
+                    "interpro_recommended_transcript_id"
+                ],
                 "final_canonical_transcript_id": decision["final_canonical_transcript_id"],
                 "replaced": decision["replaced"],
                 "recommendation_differs_from_initial": (
@@ -830,7 +836,9 @@ def build_canonical_decisions(canonical_rows: list, resolver_report: list) -> li
                 "initial_selection_reason": canon_row.get("selection_reason"),
                 "canonical_selection_stage": "interpro",
                 "interpro_verdict": decision["interpro_verdict"],
-                "interpro_recommended_transcript_id": decision["interpro_recommended_transcript_id"],
+                "interpro_recommended_transcript_id": decision[
+                    "interpro_recommended_transcript_id"
+                ],
                 "reason_code": decision["reason_code"],
                 "replaced": decision["replaced"],
                 "final_canonical_transcript_id": decision["final_canonical_transcript_id"],

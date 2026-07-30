@@ -81,7 +81,10 @@ def score_model(
         else:
             score += 1.0  # unknown source gets base weight
 
-    # Multi-source bonus
+    # Multi-source bonus — uses raw named-source count, not biological evidence classes.
+    # canonical_selection uses evidence classes for breadth ranking; these are different
+    # questions (model retention here vs canonical ranking there), so the difference is
+    # intentional, not a bug.
     if len(sources) > 1:
         score += scfg.multi_source_bonus * (len(sources) - 1)
 

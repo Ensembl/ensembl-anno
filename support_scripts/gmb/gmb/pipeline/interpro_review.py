@@ -501,9 +501,11 @@ def main() -> None:
         # parameterised by canonical_selection.interpro_resolver.nextflow --
         # never the default (run_interproscan defaults False -> Mode B,
         # consume an already-completed run's output instead).
-        print(f"run_interproscan is true -- launching InterProScan via Nextflow "
-              f"({cfg.nextflow.workflow} -r {cfg.nextflow.revision}, "
-              f"profile={cfg.nextflow.profile})")
+        print(
+            f"run_interproscan is true -- launching InterProScan via Nextflow "
+            f"({cfg.nextflow.workflow} -r {cfg.nextflow.revision}, "
+            f"profile={cfg.nextflow.profile})"
+        )
         result = run_interproscan_workflow(cfg.nextflow, paths["fasta"], args.output_dir)
         print(f"  InterProScan output: {result['output_dir']}")
 

@@ -167,9 +167,7 @@ class TestFusionDetection:
             length=600,
         )
         runner_up = _summary([_match(ipr="IPR1", start=1, end=50)], length=100)
-        assert (
-            detect_fusion(current, runner_up, 600, 100, cfg.length_ratio_flag) is True
-        )
+        assert detect_fusion(current, runner_up, 600, 100, cfg.length_ratio_flag) is True
 
     def test_no_fusion_when_runner_up_has_no_domains(self, cfg):
         current = _summary([_match(ipr="IPR1", start=1, end=50)], length=600)
@@ -244,7 +242,9 @@ class TestDecideCanonical:
         runner_up_row = _row("G1.t2")
         cur_summary = _summary([_match(ipr="IPR1", start=1, end=20)])
         run_summary = _summary([_match(ipr="IPR1", start=1, end=190)])
-        decision = decide_canonical("G1", current_row, runner_up_row, cur_summary, run_summary, cfg)
+        decision = decide_canonical(
+            "G1", current_row, runner_up_row, cur_summary, run_summary, cfg
+        )
         assert decision["replaced"] is True
         assert decision["final_canonical_transcript_id"] == "G1.t2"
         assert decision["reason_code"] == REASON_C_TERMINAL_TRUNCATION_RESOLVED
@@ -255,7 +255,9 @@ class TestDecideCanonical:
         runner_up_row = _row("G1.t2")
         cur_summary = _summary([_match(ipr="IPR1", start=1, end=20)])
         run_summary = _summary([_match(ipr="IPR1", start=1, end=190)])
-        decision = decide_canonical("G1", current_row, runner_up_row, cur_summary, run_summary, cfg)
+        decision = decide_canonical(
+            "G1", current_row, runner_up_row, cur_summary, run_summary, cfg
+        )
         assert decision["replaced"] is False
         assert decision["final_canonical_transcript_id"] == "G1.t1"
         # The recommendation is still recorded even though it was not applied.
@@ -267,7 +269,9 @@ class TestDecideCanonical:
         runner_up_row = _row("G1.t2", has_complete_orf=False)  # worse structural class
         cur_summary = _summary([_match(ipr="IPR1", start=1, end=20)])
         run_summary = _summary([_match(ipr="IPR1", start=1, end=190)])
-        decision = decide_canonical("G1", current_row, runner_up_row, cur_summary, run_summary, cfg)
+        decision = decide_canonical(
+            "G1", current_row, runner_up_row, cur_summary, run_summary, cfg
+        )
         assert decision["replaced"] is False
         assert decision["final_canonical_transcript_id"] == "G1.t1"
         assert decision["safeguards_passed"] is False
@@ -279,7 +283,9 @@ class TestDecideCanonical:
         runner_up_row = _row("G1.t2")
         cur_summary = _summary([_match(ipr="IPR1", start=1, end=100)])
         run_summary = _summary([_match(ipr="IPR1", start=1, end=100)])
-        decision = decide_canonical("G1", current_row, runner_up_row, cur_summary, run_summary, cfg)
+        decision = decide_canonical(
+            "G1", current_row, runner_up_row, cur_summary, run_summary, cfg
+        )
         assert decision["reason_code"] == REASON_EQUIVALENT
         assert decision["replaced"] is False
         assert decision["safeguard_checks"] == {}
@@ -289,7 +295,9 @@ class TestDecideCanonical:
         runner_up_row = _row("G1.t2")
         cur_summary = _summary([])
         run_summary = _summary([])
-        decision = decide_canonical("G1", current_row, runner_up_row, cur_summary, run_summary, cfg)
+        decision = decide_canonical(
+            "G1", current_row, runner_up_row, cur_summary, run_summary, cfg
+        )
         assert decision["initial_canonical_transcript_id"] == "G1.t1"
         assert decision["interpro_recommended_transcript_id"] == "G1.t1"
         assert decision["final_canonical_transcript_id"] == "G1.t1"

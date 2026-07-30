@@ -1110,9 +1110,7 @@ def main() -> None:
                     # batch_score_proteins doc for the "compute once, consume
                     # many" contract this makes auditable per-row).
                     "protein_validation_source": detail.get("protein_validation_source"),
-                    "protein_validation_reused_from": detail.get(
-                        "protein_validation_reused_from"
-                    ),
+                    "protein_validation_reused_from": detail.get("protein_validation_reused_from"),
                     "diamond_version": detail.get("diamond_version"),
                     "psauron_version": detail.get("psauron_version"),
                     "diamond_db": detail.get("diamond_db"),

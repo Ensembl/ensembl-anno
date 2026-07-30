@@ -830,9 +830,7 @@ class TestInterProScanNextflowModeA:
         assert any("out/interpro_run/work" in part for part in cmd)
 
     def test_explicit_output_and_work_dir_override_defaults(self):
-        nf_cfg = self._nf_cfg(
-            data_dir="/data", output_dir="/custom/out", work_dir="/custom/work"
-        )
+        nf_cfg = self._nf_cfg(data_dir="/data", output_dir="/custom/out", work_dir="/custom/work")
         cmd = build_interproscan_nextflow_command(nf_cfg, "candidates.faa", "out")
         assert "/custom/out" in cmd
         assert "/custom/work" in cmd
