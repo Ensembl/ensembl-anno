@@ -61,11 +61,6 @@ gmb-compare   --help
 gmb-visualize --help
 ```
 
-**Backward-compatible wrapper scripts** are also available under `scripts/`
-(`scripts/gene_model_builder.py`, `scripts/compare_annotations.py`,
-`scripts/visualize_disagreements.py`). CLI arguments are identical — these
-simply delegate to the package entry points.
-
 ### Quickstart — bundled *Z. tritici* example data
 
 The repository includes a complete set of example evidence files for *Zymoseptoria tritici*
@@ -500,10 +495,6 @@ gmb/                         # Installable Python package
     build.py                 # python -m gmb.cli.build / gmb-build
     compare.py               # python -m gmb.cli.compare / gmb-compare
     visualize.py             # python -m gmb.cli.visualize / gmb-visualize
-scripts/                     # Backward-compatible wrapper scripts
-  gene_model_builder.py      # -> gmb.pipeline.builder
-  compare_annotations.py     # -> gmb.compare.compare_annotations
-  visualize_disagreements.py # -> gmb.compare.visualize_disagreements
 tools/                       # Optional helper utilities
   remap_helixer.py           # Remap Helixer GFF3 seq IDs via assembly report
   retranslate_from_gff3.py   # Re-translate all CDS from consensus GFF3
