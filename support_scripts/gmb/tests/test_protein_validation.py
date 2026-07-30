@@ -14,6 +14,7 @@ from gmb.pipeline.protein_validation import (
     batch_score_proteins,
     check_dependencies,
     detect_psauron_capabilities,
+    protein_sha256,
 )
 
 
@@ -374,3 +375,216 @@ class TestBatchScoreProteinsCsvHardening:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ---------------------------------------------------------------------------
+# Compute-once / consume-many contract
+#
+# DIAMOND and psauron must run exactly once per build, over deduplicated
+# sequences, and every downstream consumer (model scoring, duplicate
+# collapse, canonical selection, InterPro review) must reuse those results
+# rather than recomputing them.
+# ---------------------------------------------------------------------------
+
+
+class TestComputeOnceContract:
+    def _fake_run_factory(self, calls, psauron_csv):
+        """subprocess.run stub recording every external tool invocation."""
+
+        def _fake_run(cmd, **kwargs):
+            # Distinguish real scans from cheap version probes: a scan is
+            # `diamond blastp ...` or `psauron -i ...`; `diamond version`
+            # and `psauron --help` are provenance lookups, not work.
+            if cmd[0] == "diamond" and "blastp" in cmd:
+                calls.append("diamond")
+            elif cmd[0] != "diamond" and "-i" in cmd:
+                calls.append("psauron")
+            if "-o" in cmd:
+                out_path = cmd[cmd.index("-o") + 1]
+                if cmd[0] == "diamond":
+                    open(out_path, "w").close()  # no hits
+                else:
+                    with open(out_path, "w") as fh:
+                        fh.write(psauron_csv)
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"", stderr=b"")
+
+        return _fake_run
+
+    def test_diamond_and_psauron_each_run_once_for_many_transcripts(self, config):
+        config.protein_validation.enabled = True
+        calls = []
+        # Three transcripts, two distinct sequences.
+        proteins = {"t1": "MAAAA", "t2": "MAAAA", "t3": "MBBBB"}
+        csv_text = (
+            "description,psauron_is_protein,in-frame_score\nseq_0,True,0.9\nseq_1,True,0.8\n"
+        )
+        with patch("subprocess.run", side_effect=self._fake_run_factory(calls, csv_text)):
+            scores, details = batch_score_proteins(proteins, config)
+
+        assert (
+            calls.count("diamond") == 1
+        ), f"DIAMOND ran {calls.count('diamond')} times, expected 1"
+        assert (
+            calls.count("psauron") == 1
+        ), f"psauron ran {calls.count('psauron')} times, expected 1"
+        assert set(scores) == {"t1", "t2", "t3"}
+
+    def test_identical_proteins_share_one_validation_result(self, config):
+        config.protein_validation.enabled = True
+        calls = []
+        proteins = {"t1": "MAAAA", "t2": "MAAAA"}
+        csv_text = "description,psauron_is_protein,in-frame_score\nseq_0,True,0.9\n"
+        with patch("subprocess.run", side_effect=self._fake_run_factory(calls, csv_text)):
+            scores, details = batch_score_proteins(proteins, config)
+
+        assert scores["t1"] == scores["t2"]
+        assert details["t1"]["protein_sha256"] == details["t2"]["protein_sha256"]
+        assert details["t1"]["psauron_score"] == details["t2"]["psauron_score"]
+
+    def test_checksum_is_stable_and_maps_transcripts_that_are_renamed(self, config):
+        # The checksum, not the transcript ID, is the reuse key: it must
+        # survive the candidate -> final transcript ID rename.
+        assert protein_sha256("MAAAA") == protein_sha256("MAAAA")
+        assert protein_sha256("MAAAA") != protein_sha256("MBBBB")
+        # ...and is not a substitute for the ID (both are retained in the
+        # sidecar; see builder.py's protein_validation.tsv writer).
+        assert protein_sha256("MAAAA") is not None
+
+    def test_disabled_validation_still_returns_checksummed_records(self, config):
+        config.protein_validation.enabled = False
+        scores, details = batch_score_proteins({"t1": "MAAAA"}, config)
+        assert scores["t1"] == 0.0
+        assert details["t1"]["protein_sha256"] == protein_sha256("MAAAA")
+        assert details["t1"]["validation_status"] == "not_run"
+
+    def test_provenance_recorded_for_reuse_decisions(self, config):
+        config.protein_validation.enabled = True
+        calls = []
+        csv_text = "description,psauron_is_protein,in-frame_score\nseq_0,True,0.9\n"
+        with patch("subprocess.run", side_effect=self._fake_run_factory(calls, csv_text)):
+            _, details = batch_score_proteins({"t1": "MAAAA"}, config)
+        # diamond_db identity must be recorded so a consumer can tell
+        # whether a cached result was produced against the same database.
+        assert details["t1"]["diamond_db"] == config.protein_validation.diamond_db
+        assert "diamond_version" in details["t1"]
+        assert "psauron_version" in details["t1"]
+
+    def test_one_transcript_per_sequence_marked_calculated_rest_reused(self, config):
+        # Exactly one key sharing a sequence must be "calculated" and every
+        # other key sharing that same sequence must be "reused", pointing
+        # back at the calculated key -- this is what makes the compute-once/
+        # consume-many contract auditable per transcript rather than only
+        # inferable from a shared protein_sha256 (see
+        # batch_score_proteins()'s "calculated vs reused" contract).
+        config.protein_validation.enabled = True
+        calls = []
+        # Three transcripts share one sequence; t4 has a distinct sequence.
+        proteins = {"t3": "MAAAA", "t1": "MAAAA", "t2": "MAAAA", "t4": "MBBBB"}
+        csv_text = (
+            "description,psauron_is_protein,in-frame_score\nseq_0,True,0.9\nseq_1,True,0.8\n"
+        )
+        with patch("subprocess.run", side_effect=self._fake_run_factory(calls, csv_text)):
+            _, details = batch_score_proteins(proteins, config)
+
+        # Deterministic choice: lexicographically-first key among {t1,t2,t3}.
+        assert details["t1"]["protein_validation_source"] == "calculated"
+        assert details["t1"]["protein_validation_reused_from"] is None
+        for reused_key in ("t2", "t3"):
+            assert details[reused_key]["protein_validation_source"] == "reused"
+            assert details[reused_key]["protein_validation_reused_from"] == "t1"
+        # t4 is the sole transcript for its sequence, so it is "calculated"
+        # with nothing to reuse from.
+        assert details["t4"]["protein_validation_source"] == "calculated"
+        assert details["t4"]["protein_validation_reused_from"] is None
+        # Still only one DIAMOND/psauron invocation regardless of the
+        # calculated/reused bookkeeping.
+        assert calls.count("diamond") == 1
+        assert calls.count("psauron") == 1
+
+    def test_calculated_reused_fields_are_none_when_validation_not_run(self, config):
+        config.protein_validation.enabled = False
+        _, details = batch_score_proteins({"t1": "MAAAA"}, config)
+        assert details["t1"]["protein_validation_source"] is None
+        assert details["t1"]["protein_validation_reused_from"] is None
+
+
+class TestCanonicalSelectionDoesNotInvokeExternalTools:
+    """Canonical selection must consume the sidecar, never recompute it."""
+
+    def test_canonical_selection_module_never_calls_subprocess(self):
+        # Structural guarantee: the module must not even import subprocess.
+        import gmb.pipeline.canonical_selection as cs
+
+        source = open(cs.__file__).read()
+        assert "subprocess" not in source, "canonical_selection must not shell out"
+        assert (
+            "batch_score_proteins" not in source
+        ), "canonical_selection must not recompute protein validation"
+
+    def test_run_canonical_selection_with_sidecar_invokes_no_executable(self, tmp_path):
+        """Fails if canonical selection tries to run DIAMOND/psauron when
+        valid sidecar results were supplied."""
+        import pandas as pd
+
+        from gmb.pipeline.canonical_selection import run_canonical_selection
+
+        gff3 = tmp_path / "consensus.gff3"
+        gff3.write_text(
+            "##gff-version 3\n"
+            "1\tGMB\tgene\t100\t400\t.\t+\t.\tID=G1\n"
+            "1\tGMB\tmRNA\t100\t400\t.\t+\t.\tID=G1.t1;Parent=G1;Evidence=Tiberius\n"
+            "1\tGMB\texon\t100\t400\t.\t+\t.\tID=G1.t1.exon1;Parent=G1.t1\n"
+            "1\tGMB\tCDS\t100\t400\t.\t+\t0\tID=G1.t1.cds1;Parent=G1.t1\n"
+        )
+        ev = tmp_path / "evidence_attribution.tsv"
+        pd.DataFrame(
+            [
+                {
+                    "gene_id": "G1",
+                    "transcript_id": "G1.t1",
+                    "evidence_sources": "Tiberius",
+                    "exon_count": 1,
+                    "cds_bp": 300,
+                    "transcript_span_bp": 300,
+                    "gmb_score": 2.6,
+                }
+            ]
+        ).to_csv(ev, sep="\t", index=False)
+        pv = tmp_path / "protein_validation.tsv"
+        pd.DataFrame(
+            [
+                {
+                    "gene_id": "G1",
+                    "transcript_id": "G1.t1",
+                    "protein_sha256": "abc",
+                    "diamond_hit": "X",
+                    "diamond_pident": 60.0,
+                    "diamond_qcov": 90.0,
+                    "diamond_scov": 90.0,
+                    "psauron_score": 0.99,
+                    "protein_length": 99,
+                    "orf_label": "ORF:99aa ATG|STOP",
+                    "is_partial_5": False,
+                    "is_partial_3": False,
+                    "internal_stop_count": 0,
+                    "protein_coding_score": 0.9,
+                    "gmb_score": 2.6,
+                }
+            ]
+        ).to_csv(pv, sep="\t", index=False)
+
+        out = tmp_path / "canonical"
+        with patch("subprocess.run") as mock_run:
+            run_canonical_selection(
+                str(gff3),
+                str(ev),
+                str(out),
+                load_config(),
+                protein_validation_tsv=str(pv),
+                annotate_gff3=False,
+            )
+        assert mock_run.call_count == 0, (
+            "canonical selection invoked an external process despite valid "
+            f"sidecar results being supplied (calls: {mock_run.call_args_list})"
+        )
+        assert (out / "canonical_transcripts.tsv").exists()

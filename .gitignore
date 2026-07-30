@@ -36,4 +36,17 @@ support_scripts/gmb/*_comparison*/
 support_scripts/gmb/output/
 support_scripts/gmb/comparison/
 
+# InterProScan results and Nextflow state. Full InterProScan output runs to
+# megabytes per format (the reference 101-protein run produced ~10 MB across
+# gff3/json/jsonl/tsv/xml) and the InterPro member-database `data/` directory
+# is far larger again -- none of it belongs in Git. Small trimmed parser
+# fixtures live in tests/fixtures/interpro/ and ARE tracked deliberately.
+.nextflow/
+.nextflow.log*
+**/interpro_run/
+*.faa.jsonl
+*.faa.json
+*.faa.xml
+!support_scripts/gmb/tests/fixtures/interpro/*
+
 .DS_Store

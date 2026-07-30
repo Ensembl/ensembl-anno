@@ -25,9 +25,12 @@ Output (all written to --output-dir, source files never touched):
                                    interpreting *how much better* the winner
                                    is -- it is NOT what picked the winner.
                                    Selection uses the lexicographic priority
-                                   tuple in `_rank_key` (complete ORF, then
-                                   protein-validation subtotal, independent
-                                   source count, gmb_score, CDS length,
+                                   tuple in `_rank_key` (structural/ORF
+                                   validity, then protein plausibility via
+                                   balanced DIAMOND coverage, then
+                                   evidence-class breadth, then detailed
+                                   named-source support, then gmb_score as a
+                                   late tie-breaker, then CDS length, then
                                    transcript ID), so a lower total_score can
                                    still win outright (e.g. a complete ORF
                                    beats a fractionally-higher-scoring
@@ -54,11 +57,20 @@ import argparse
 import json
 import os
 import sys
+import warnings
 from collections import defaultdict
 from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 
+from gmb.pipeline.canonical_evidence import (
+    EVIDENCE_CLASS_BACKBONE,
+    EVIDENCE_CLASS_LONG_READ,
+    EVIDENCE_CLASS_PROTEIN_ALIGNMENT,
+    EVIDENCE_CLASS_SHORT_READ,
+    balanced_coverage,
+    evidence_classes_for_transcript,
+)
 from gmb.pipeline.config import load_config
 from gmb.utils.gff import parse_gff3_hierarchy
 from gmb.utils.io import ensure_dir
@@ -196,6 +208,18 @@ def score_transcript(
 
     psauron_component = psauron if psauron is not None else 0.0
     identity_component = (pident / 100.0) if pident is not None else 0.0
+    # Balanced coverage (min(qcov, scov)/100) replaces separately-weighted
+    # query/target coverage terms -- see canonical_evidence.balanced_coverage
+    # and CanonicalProteinValidationWeights.diamond_balanced_coverage_weight
+    # for why: weighting each side independently let a hit covering 100% of
+    # a short query but 10% of a long target (a fragment match) be flattered
+    # by the query-coverage term even though the target side already told
+    # the real story.
+    balanced_cov = balanced_coverage(qcov, scov)
+    balanced_coverage_component = balanced_cov if balanced_cov is not None else 0.0
+    # Still individually reported (not weighted into the subtotal below) so
+    # a reviewer can see each raw side, even though scoring now only uses
+    # their minimum.
     qcov_component = (qcov / 100.0) if qcov is not None else 0.0
     scov_component = (scov / 100.0) if scov is not None else 0.0
     hit_component = 1.0 if has_diamond_hit else 0.0
@@ -203,8 +227,7 @@ def score_transcript(
     protein_validation_subtotal = (
         pv_cfg.psauron_weight * psauron_component
         + pv_cfg.diamond_identity_weight * identity_component
-        + pv_cfg.diamond_query_coverage_weight * qcov_component
-        + pv_cfg.diamond_target_coverage_weight * scov_component
+        + pv_cfg.diamond_balanced_coverage_weight * balanced_coverage_component
         + pv_cfg.diamond_hit_bonus * hit_component
     )
     has_any_protein_support = psauron is not None or has_diamond_hit
@@ -212,13 +235,30 @@ def score_transcript(
     sources = {
         s.strip() for s in str(record.get("evidence_sources") or "").split(",") if s.strip()
     }
-    lower_sources = {s.lower() for s in sources}
     n_sources = len(sources)
-    source_count_component = min(n_sources / max(ev_cfg.independent_source_cap, 1), 1.0)
-    transcriptomic_flag = 1.0 if ({"scallop", "stringtie"} & lower_sources) else 0.0
-    protein_alignment_flag = 1.0 if ({"orthodb", "genblast", "uniprot"} & lower_sources) else 0.0
-    longread_flag = 1.0 if any("minimap2" in s for s in lower_sources) else 0.0
-    backbone_flag = 1.0 if backbone_label.lower() in lower_sources else 0.0
+
+    # Evidence-CLASS breadth (mandatory change -- see the score-provenance
+    # audit in the project report): Scallop+StringTie are two assemblers
+    # customarily run over the SAME short-read libraries, so counting named
+    # sources directly overstates independent support. evidence_sources is
+    # mapped through the single shared vocabulary in
+    # gmb.pipeline.canonical_evidence so this module and
+    # gmb.pipeline.interpro_review can never drift apart on what counts as
+    # a class again. protein_validation is included as a class here (it
+    # was excluded from interpro_review's pre-existing evidence_classes()) --
+    # class *presence* is a breadth signal distinct from
+    # protein_validation_subtotal's *strength* signal above, so this is not
+    # double counting: one asks "how good is the protein evidence", the
+    # other asks "how many independent kinds of evidence exist at all".
+    evidence_classes, unknown_sources = evidence_classes_for_transcript(
+        record.get("evidence_sources"), backbone_label, has_any_protein_support
+    )
+    n_evidence_classes = len(evidence_classes)
+    class_breadth_component = min(n_evidence_classes / max(ev_cfg.independent_source_cap, 1), 1.0)
+    transcriptomic_flag = 1.0 if EVIDENCE_CLASS_SHORT_READ in evidence_classes else 0.0
+    protein_alignment_flag = 1.0 if EVIDENCE_CLASS_PROTEIN_ALIGNMENT in evidence_classes else 0.0
+    longread_flag = 1.0 if EVIDENCE_CLASS_LONG_READ in evidence_classes else 0.0
+    backbone_flag = 1.0 if EVIDENCE_CLASS_BACKBONE in evidence_classes else 0.0
 
     gmb_score = record.get("gmb_score")
     lo, hi = gene_gmb_score_range
@@ -231,7 +271,7 @@ def score_transcript(
 
     evidence_subtotal = (
         ev_cfg.gmb_score_weight * gmb_score_component
-        + ev_cfg.independent_source_weight * source_count_component
+        + ev_cfg.independent_source_weight * class_breadth_component
         + ev_cfg.transcriptomic_support_weight * transcriptomic_flag
         + ev_cfg.protein_alignment_support_weight * protein_alignment_flag
         + ev_cfg.longread_support_weight * longread_flag
@@ -280,14 +320,19 @@ def score_transcript(
     return {
         "psauron_component": round(psauron_component, 4),
         "diamond_identity_component": round(identity_component, 4),
+        "diamond_balanced_coverage_component": round(balanced_coverage_component, 4),
         "diamond_qcov_component": round(qcov_component, 4),
         "diamond_scov_component": round(scov_component, 4),
         "diamond_hit_component": hit_component,
         "protein_validation_subtotal": round(protein_validation_subtotal, 4),
         "has_any_protein_support": has_any_protein_support,
         "gmb_score_component": round(gmb_score_component, 4),
-        "source_count_component": round(source_count_component, 4),
+        "class_breadth_component": round(class_breadth_component, 4),
+        "n_evidence_classes": n_evidence_classes,
+        "evidence_classes": ",".join(sorted(evidence_classes)),
+        "unknown_evidence_sources": sorted(unknown_sources),
         "n_independent_sources": n_sources,
+        "named_evidence_sources": ",".join(sorted(sources)),
         "transcriptomic_support": bool(transcriptomic_flag),
         "protein_alignment_support": bool(protein_alignment_flag),
         "longread_support": bool(longread_flag),
@@ -308,12 +353,15 @@ def score_transcript(
 # ---------------------------------------------------------------------------
 
 
-# 1. complete valid ORF                                   (has_complete_orf)
-# 2. stronger protein-validation score                    (protein_validation_subtotal)
-# 3. broader independent evidence support                 (n_independent_sources)
-# 4. higher current GMB score                              (raw gmb_score)
-# 5. greater CDS length, among structurally valid models   (cds_bp)
-# 6. stable transcript ID lexical ordering                 (transcript_id)
+# 1. structural/ORF validity                          (has_complete_orf, has_internal_stop)
+# 2. protein plausibility via balanced DIAMOND coverage (protein_validation_subtotal,
+#                                                         which now scores min(qcov,scov)
+#                                                         rather than qcov/scov independently)
+# 3. evidence-class breadth                             (n_evidence_classes)
+# 4. detailed named-source/transcript support           (n_independent_sources)
+# 5. higher current GMB score, as a late tie-breaker     (raw gmb_score)
+# 6. greater CDS length, among structurally valid models (cds_bp)
+# 7. stable transcript ID lexical ordering               (transcript_id)
 #
 # Chosen over ranking purely by the continuous weighted `total_score`
 # because the task calls for an explicit, auditable priority order (e.g. a
@@ -321,10 +369,23 @@ def score_transcript(
 # just because its evidence weights summed higher) -- `total_score` is still
 # computed and reported for magnitude/confidence purposes (the "how much
 # better" question), but this tuple decides "who wins".
+#
+# Tier 3 (n_evidence_classes) was inserted ahead of tier 4
+# (n_independent_sources, the older raw named-source count) as the
+# mandatory change identified by the score-provenance audit: Scallop and
+# StringTie are two assemblers customarily run over the SAME short-read
+# libraries, so a raw named-source count overstates independent support
+# relative to grouping them into one short_read_transcriptomic class (see
+# gmb.pipeline.canonical_evidence). The raw named-source count is not
+# discarded -- it still breaks ties the class count leaves open, standing
+# in for "detailed [named-]source/transcript support" one level more
+# granular than the class-level breadth measure above it.
 def _rank_key(rec: dict, scored: dict) -> tuple:
     return (
         not scored["has_complete_orf"],  # False (complete) sorts before True
+        scored["has_internal_stop"],  # False (no internal stop) sorts before True
         -scored["protein_validation_subtotal"],
+        -scored["n_evidence_classes"],
         -scored["n_independent_sources"],
         -(rec.get("gmb_score") if rec.get("gmb_score") is not None else float("-inf")),
         -(rec.get("cds_bp") if rec.get("cds_bp") is not None else -1),
@@ -339,6 +400,8 @@ def _reason_code(winner_rec, winner_scored, runner_rec, runner_scored) -> str:
         return "ONLY_ISOFORM"
     if winner_scored["has_complete_orf"] != runner_scored["has_complete_orf"]:
         return "ONLY_COMPLETE_ORF"
+    if winner_scored["has_internal_stop"] != runner_scored["has_internal_stop"]:
+        return "ONLY_NO_INTERNAL_STOP"
     if (
         winner_scored["protein_validation_subtotal"]
         != runner_scored["protein_validation_subtotal"]
@@ -347,11 +410,14 @@ def _reason_code(winner_rec, winner_scored, runner_rec, runner_scored) -> str:
         # contributor to the gap, for a more specific reason code.
         psauron_gap = winner_scored["psauron_component"] - runner_scored["psauron_component"]
         cov_gap = (
-            winner_scored["diamond_qcov_component"] + winner_scored["diamond_scov_component"]
-        ) - (runner_scored["diamond_qcov_component"] + runner_scored["diamond_scov_component"])
+            winner_scored["diamond_balanced_coverage_component"]
+            - runner_scored["diamond_balanced_coverage_component"]
+        )
         if abs(psauron_gap) >= abs(cov_gap):
             return "BEST_PSAURON"
         return "BEST_DIAMOND_COVERAGE"
+    if winner_scored["n_evidence_classes"] != runner_scored["n_evidence_classes"]:
+        return "BEST_EVIDENCE_CLASS_BREADTH"
     if winner_scored["n_independent_sources"] != runner_scored["n_independent_sources"]:
         return "BEST_MULTI_SOURCE_SUPPORT"
     if (winner_rec.get("gmb_score") or 0) != (runner_rec.get("gmb_score") or 0):
@@ -464,6 +530,7 @@ def run_canonical_selection(
 
     canonical_rows = []
     ranking_rows = []
+    all_unknown_sources: set = set()
     for gene_id, result in gene_results.items():
         scored_by_tid = result["_scored_by_tid"]
         winner_scored = scored_by_tid[result["canonical_transcript_id"]]
@@ -485,10 +552,18 @@ def run_canonical_selection(
                 "score_gap": result["score_gap"],
                 "differs_from_highest_gmb_score": result["differs_from_highest_gmb_score"],
                 "highest_gmb_score_transcript_id": result["highest_gmb_score_transcript_id"],
+                # Evidence-class breadth (Part 3 contract): named sources are
+                # never hidden -- both the raw named-source string/count and
+                # the class-grouped string/count are reported side by side.
+                "named_sources": winner_scored["named_evidence_sources"],
+                "n_named_sources": winner_scored["n_independent_sources"],
+                "evidence_classes": winner_scored["evidence_classes"],
+                "n_evidence_classes": winner_scored["n_evidence_classes"],
             }
         )
         for rank, rec in enumerate(result["_ranked_records"], start=1):
             scored = scored_by_tid[rec["transcript_id"]]
+            all_unknown_sources.update(scored["unknown_evidence_sources"])
             ranking_rows.append(
                 {
                     "gene_id": gene_id,
@@ -505,14 +580,37 @@ def run_canonical_selection(
                     "diamond_pident": rec.get("diamond_pident"),
                     "diamond_qcov": rec.get("diamond_qcov"),
                     "diamond_scov": rec.get("diamond_scov"),
+                    "diamond_balanced_coverage": balanced_coverage(
+                        rec.get("diamond_qcov"), rec.get("diamond_scov")
+                    ),
                     "has_complete_orf": scored["has_complete_orf"],
                     "has_internal_stop": scored["has_internal_stop"],
                     "gmb_score": rec.get("gmb_score"),
                     "n_independent_sources": scored["n_independent_sources"],
                     "evidence_sources": rec.get("evidence_sources"),
+                    # Evidence-class contract (Part 3): named sources kept
+                    # verbatim (named_sources/n_named_sources) alongside the
+                    # class-grouped view (evidence_classes/n_evidence_classes)
+                    # -- neither replaces the other.
+                    "named_sources": scored["named_evidence_sources"],
+                    "n_named_sources": scored["n_independent_sources"],
+                    "evidence_classes": scored["evidence_classes"],
+                    "n_evidence_classes": scored["n_evidence_classes"],
                     "cds_bp": rec.get("cds_bp"),
                 }
             )
+
+    if all_unknown_sources:
+        warnings.warn(
+            f"Evidence source(s) not recognised by gmb.pipeline.canonical_evidence "
+            f"were mapped to the 'other' evidence class across this run: "
+            f"{sorted(all_unknown_sources)}. Never dropped -- see "
+            "named_sources/evidence_classes in transcript_ranking.tsv for the full "
+            "per-transcript detail. Consider adding them to "
+            "canonical_evidence._SOURCE_TO_CLASS if they represent a genuinely new "
+            "evidence type.",
+            stacklevel=2,
+        )
 
     can_path = os.path.join(output_dir, "canonical_transcripts.tsv")
     pd.DataFrame(canonical_rows).to_csv(can_path, sep="\t", index=False)
@@ -535,6 +633,7 @@ def run_canonical_selection(
         "n_canonical_differs_from_highest_gmb_score": n_differs,
         "selection_reason_counts": dict(reason_counts),
         "confidence_counts": dict(confidence_counts),
+        "unknown_evidence_sources": sorted(all_unknown_sources),
         "config": {
             "protein_validation": vars(cfg.protein_validation),
             "evidence": vars(cfg.evidence),

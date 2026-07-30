@@ -166,6 +166,89 @@ class TestIncompleteOrfPenalty:
         assert with_stop["structure_subtotal"] < clean["structure_subtotal"]
         assert with_stop["has_internal_stop"] is True
 
+    def test_no_internal_stop_beats_internal_stop_when_orf_complete_and_tied(self, cfg):
+        # Both candidates have has_complete_orf True and identical
+        # protein-validation/evidence-class/gmb_score/cds_bp -- only
+        # has_internal_stop differs. Rank-key tier 1 (structural/ORF
+        # validity) now covers this via has_internal_stop, ahead of the
+        # protein-plausibility tier.
+        records = [
+            _rec("t_clean"),
+            _rec("t_stopped", internal_stop_count=1),
+        ]
+        result = select_canonical_for_gene("G1", records, cfg, "Helixer")
+        assert result["canonical_transcript_id"] == "t_clean"
+        assert result["selection_reason"] == "ONLY_NO_INTERNAL_STOP"
+
+
+class TestBalancedDiamondCoverage:
+    def test_fragment_match_not_flattered_by_averaging(self, cfg):
+        # 100% query coverage / 10% target coverage is a fragment match --
+        # balanced (min-based) coverage must score it near the WEAK side
+        # (0.10), not the mean (0.55) an average would give.
+        fragment = score_transcript(
+            _rec("t1", diamond_qcov=100.0, diamond_scov=10.0), cfg, "Helixer", (0.0, 0.0)
+        )
+        assert fragment["diamond_balanced_coverage_component"] == 0.10
+
+    def test_balanced_coverage_drives_protein_validation_subtotal_not_separate_sides(self, cfg):
+        # Two candidates with identical (high) query coverage but very
+        # different target coverage must be told apart by the balanced
+        # (weaker-side) measure.
+        strong = score_transcript(
+            _rec("t1", diamond_qcov=95.0, diamond_scov=95.0), cfg, "Helixer", (0.0, 0.0)
+        )
+        fragment = score_transcript(
+            _rec("t1", diamond_qcov=95.0, diamond_scov=10.0), cfg, "Helixer", (0.0, 0.0)
+        )
+        assert strong["protein_validation_subtotal"] > fragment["protein_validation_subtotal"]
+
+
+class TestEvidenceClassFieldsInOutput:
+    def test_score_transcript_reports_class_and_named_source_fields(self, cfg):
+        rec = _rec("t1", evidence_sources="Scallop,StringTie")
+        scored = score_transcript(rec, cfg, "Helixer", (0.0, 0.0))
+        assert scored["n_evidence_classes"] >= 1
+        assert "short_read_transcriptomic" in scored["evidence_classes"]
+        assert scored["n_independent_sources"] == 2
+        assert scored["named_evidence_sources"] == "Scallop,StringTie"
+
+    def test_run_end_to_end_writes_evidence_class_columns(self, tmp_path):
+        gff3 = tmp_path / "consensus.gff3"
+        gff3.write_text(
+            "##gff-version 3\n"
+            "1\tGMB\tgene\t100\t500\t.\t+\t.\tID=G1\n"
+            "1\tGMB\tmRNA\t100\t500\t.\t+\t.\tID=G1.t1;Parent=G1;Evidence=Scallop\n"
+            "1\tGMB\texon\t100\t500\t.\t+\t.\tID=G1.t1.exon1;Parent=G1.t1\n"
+            "1\tGMB\tCDS\t100\t500\t.\t+\t.\tID=G1.t1.cds1;Parent=G1.t1\n"
+        )
+        ev = tmp_path / "evidence_attribution.tsv"
+        pd.DataFrame(
+            [
+                {
+                    "gene_id": "G1",
+                    "transcript_id": "G1.t1",
+                    "evidence_sources": "Scallop,StringTie",
+                    "exon_count": 1,
+                    "cds_bp": 400,
+                    "transcript_span_bp": 400,
+                    "gmb_score": 2.0,
+                }
+            ]
+        ).to_csv(ev, sep="\t", index=False)
+
+        out_dir = tmp_path / "out"
+        config = load_config()
+        run_canonical_selection(str(gff3), str(ev), str(out_dir), config)
+
+        canon = pd.read_csv(out_dir / "canonical_transcripts.tsv", sep="\t")
+        ranking = pd.read_csv(out_dir / "transcript_ranking.tsv", sep="\t")
+        for df in (canon, ranking):
+            for col in ("named_sources", "n_named_sources", "evidence_classes", "n_evidence_classes"):
+                assert col in df.columns
+        assert ranking.loc[0, "n_named_sources"] == 2
+        assert ranking.loc[0, "evidence_classes"] == "short_read_transcriptomic"
+
 
 class TestMissingOptionalFields:
     def test_absent_diamond_hit_handled_safely(self, cfg):
@@ -222,12 +305,33 @@ class TestDeterministicTieBreak:
         assert r1["canonical_transcript_id"] == r2["canonical_transcript_id"]
 
     def test_broader_evidence_breaks_tie_before_gmb_score(self, cfg):
+        # t_multi: Scallop+StringTie collapse to ONE short_read_transcriptomic
+        # class; Tiberius is not the configured backbone here ("Helixer"),
+        # so it maps to the 'other' evidence class rather than being
+        # silently dropped -- giving t_multi 3 classes (short_read, other,
+        # protein_validation) vs t_single's 2 (short_read,
+        # protein_validation). Evidence-CLASS breadth (mandatory change --
+        # see the score-provenance audit) now decides this tie before the
+        # raw named-source count would have.
         records = [
             _rec("t_multi", evidence_sources="Scallop,StringTie,Tiberius", gmb_score=3.0),
             _rec("t_single", evidence_sources="Scallop", gmb_score=4.0),
         ]
         result = select_canonical_for_gene("G1", records, cfg, "Helixer")
         assert result["canonical_transcript_id"] == "t_multi"
+        assert result["selection_reason"] == "BEST_EVIDENCE_CLASS_BREADTH"
+
+    def test_named_source_count_still_breaks_ties_evidence_classes_leave_open(self, cfg):
+        # Two named sources that map to the SAME evidence class (Scallop +
+        # StringTie, both short_read_transcriptomic) tie on class breadth,
+        # so the older, more granular named-source count still decides --
+        # it was demoted, not discarded (see _rank_key's tier 4).
+        records = [
+            _rec("t_two_sources", evidence_sources="Scallop,StringTie", gmb_score=3.0),
+            _rec("t_one_source", evidence_sources="Scallop", gmb_score=4.0),
+        ]
+        result = select_canonical_for_gene("G1", records, cfg, "Helixer")
+        assert result["canonical_transcript_id"] == "t_two_sources"
         assert result["selection_reason"] == "BEST_MULTI_SOURCE_SUPPORT"
 
     def test_cds_length_tiebreak_after_evidence_and_gmb_score_tied(self, cfg):

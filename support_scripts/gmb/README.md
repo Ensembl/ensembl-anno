@@ -264,6 +264,57 @@ placeholder for future work, and never penalises a transcript for having zero do
 
 ---
 
+### InterProScan resolver for ambiguous canonical choices (optional second stage)
+
+Disabled by default (`canonical_selection.interpro_resolver.enabled: false`) --
+a first-pass GMB build completes exactly the same whether or not this section
+of config exists. For the small subset of genes whose canonical choice GMB
+could not make confidently, `gmb-interpro-review` prepares one batched
+InterProScan input and `gmb-interpro-resolve` turns completed InterProScan
+output into a review report, and -- when passed the build's
+`canonical_transcripts.tsv`/`consensus.gff3` -- a full attribution trail:
+
+```bash
+gmb-interpro-review \
+    --canonical-transcripts output/canonical_selection/canonical_transcripts.tsv \
+    --transcript-ranking    output/canonical_selection/transcript_ranking.tsv \
+    --protein-validation    output/protein_validation.tsv \
+    --prot-fa               output/prot.fa \
+    --config                my_config.yaml \
+    --output-dir            output/interpro_review
+
+# ...get InterProScan output: Mode B (default) runs it externally (Docker
+# locally, Slurm+Singularity on a cluster); Mode A (run_interproscan: true)
+# has GMB launch it itself via Nextflow, fully parameterised, no hardcoded
+# Docker/Slurm/paths...
+
+gmb-interpro-resolve \
+    --manifest             output/interpro_review/interpro_review_manifest.tsv \
+    --interpro-jsonl        results.faa.jsonl \
+    --config                my_config.yaml \
+    --canonical-transcripts output/canonical_selection/canonical_transcripts.tsv \
+    --consensus-gff3        output/consensus.gff3 \
+    --output-dir            output/interpro_review
+```
+
+InterProScan is **never required** for GMB to complete and never triggers a second
+DIAMOND/Psauron pass. The resolver applies a conservative, safeguarded replacement
+policy (ten specific `INTERPRO_*` reason codes; structural/protein-validation-override
+safeguards; `apply_replacements: false` for report-only mode) rather than blindly
+trusting every domain-architecture comparison -- and it **never modifies
+`consensus.gff3`/`canonical_transcripts.tsv` in place**: a replaced canonical only
+ever appears in the new `canonical_decisions.tsv` and
+`consensus.final_canonical_annotated.gff3` files. This is a canonical-choice
+resolver only, **not** a geneset QC or domain-coverage tool.
+
+See **[docs/interpro_resolver.md](docs/interpro_resolver.md)** for the full config
+schema, the ambiguity policy, the evidence model and replacement/safeguard rules,
+caching rules, local Docker and cluster Slurm/Singularity execution examples
+(both consumed-externally and GMB-launched), known limitations, and the list of
+cluster requirements still to be confirmed.
+
+---
+
 ### Compare and validate the output
 
 After building the consensus annotation, compare it against the bundled Ensembl Fungi

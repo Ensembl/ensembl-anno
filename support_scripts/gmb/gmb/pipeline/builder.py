@@ -746,6 +746,10 @@ def main() -> None:
                     mrna_row["internal_stop_count"] = (ann.get("protein") or "").count("*")
                     mrna_row["protein_length"] = len(ann.get("protein") or "")
                 mrna_row["protein_coding_score"] = validation_scores.get(tid)
+                # `tid` is the ORIGINAL candidate transcript ID; `new_tid` is
+                # the final renamed one. Both are recorded so the sidecar can
+                # be joined either way (see protein_validation.tsv below).
+                mrna_row["candidate_transcript_id"] = tid
                 if tid in validation_details:
                     mrna_row["protein_validation_detail"] = validation_details[tid]
 
@@ -1071,6 +1075,14 @@ def main() -> None:
                 {
                     "gene_id": gene_id,
                     "transcript_id": tid,
+                    # Original pre-rename candidate ID: lets this sidecar be
+                    # joined to anything keyed on candidate IDs, and lets a
+                    # consumer verify which candidate produced the result.
+                    "candidate_transcript_id": m.get("candidate_transcript_id"),
+                    # Sequence-identity reuse key -- stable across the
+                    # candidate->final transcript rename, and the key used to
+                    # deduplicate identical proteins for InterPro review.
+                    "protein_sha256": detail.get("protein_sha256"),
                     "diamond_hit": detail.get("diamond_hit"),
                     "diamond_pident": detail.get("diamond_pident"),
                     "diamond_qcov": detail.get("diamond_qcov"),
@@ -1086,6 +1098,24 @@ def main() -> None:
                     "protein_coding_score": m.get("protein_coding_score"),
                     "gmb_score": m.get("gmb_score"),
                     "evidence_sources": m.get("Evidence", ""),
+                    # Provenance: what produced this row. A consumer can
+                    # decide whether the result is still reusable without
+                    # rerunning DIAMOND/psauron.
+                    "validation_status": detail.get("validation_status"),
+                    "validation_reason": detail.get("validation_reason"),
+                    # Whether DIAMOND/psauron actually ran for THIS row, or
+                    # whether the row is sharing another transcript's result
+                    # because they translate to an identical protein (see
+                    # protein_sha256 above, and protein_validation.py's
+                    # batch_score_proteins doc for the "compute once, consume
+                    # many" contract this makes auditable per-row).
+                    "protein_validation_source": detail.get("protein_validation_source"),
+                    "protein_validation_reused_from": detail.get(
+                        "protein_validation_reused_from"
+                    ),
+                    "diamond_version": detail.get("diamond_version"),
+                    "psauron_version": detail.get("psauron_version"),
+                    "diamond_db": detail.get("diamond_db"),
                 }
             )
         if protein_val_rows:

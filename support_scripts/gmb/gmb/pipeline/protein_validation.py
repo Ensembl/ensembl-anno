@@ -11,13 +11,14 @@ values (for reporting and canonical-transcript selection).
 from __future__ import annotations
 
 import csv
+import hashlib
 import os
 import re
 import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from gmb.pipeline.config import PipelineConfig, ProteinValidationConfig
@@ -43,6 +44,59 @@ if TYPE_CHECKING:
 # version-specific code path -- only feature detection, as a safety net
 # against a future release or non-standard/patched build changing the CLI.
 _PSAURON_VERSION_RE = re.compile(r"PSAURON version (\S+)", re.IGNORECASE)
+
+
+# ---------------------------------------------------------------------------
+# Protein identity / provenance (the "compute once, consume many" contract)
+# ---------------------------------------------------------------------------
+
+
+def protein_sha256(seq: Optional[str]) -> Optional[str]:
+    """Stable SHA-256 of a protein sequence, or None for an empty sequence.
+
+    This is the reuse key for the whole protein-validation contract:
+    identical sequences validate once and every consumer (model scoring,
+    duplicate collapse, canonical selection, InterPro review) refers to the
+    same result through this checksum. It deliberately does NOT replace
+    transcript IDs -- both are carried in the sidecar, because transcript
+    IDs are renamed late in the build (candidate ID -> final PFAL_xxxxx.tN)
+    while the checksum stays constant across that rename.
+
+    Normalised to uppercase with surrounding whitespace stripped, so the
+    same peptide written with different casing/wrapping hashes identically.
+    """
+    if not seq:
+        return None
+    return hashlib.sha256(seq.strip().upper().encode()).hexdigest()
+
+
+def _tool_version(path: str, args: list) -> Optional[str]:
+    """Best-effort single-token version string for a tool, or None."""
+    try:
+        result = subprocess.run(
+            [path, *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+    except (FileNotFoundError, OSError):
+        return None
+    text = (result.stdout or "") + " " + (result.stderr or "")
+    match = re.search(r"(\d+\.\d+(?:\.\d+)*)", text)
+    return match.group(1) if match else None
+
+
+def build_validation_provenance(val_cfg: ProteinValidationConfig) -> dict:
+    """Tool/database provenance recorded alongside every validation result.
+
+    Lets a consumer decide whether a cached/sidecar result is still valid
+    without rerunning anything: a different DIAMOND database or a different
+    tool version invalidates reuse, and that is only detectable if the
+    producing run recorded what it used.
+    """
+    return {
+        "diamond_version": _tool_version(val_cfg.diamond_path, ["version"]),
+        "psauron_version": detect_psauron_capabilities(val_cfg.psauron_path).get("version"),
+        "diamond_db": val_cfg.diamond_db,
+    }
+
 
 # One dict per flag GMB may construct a command from: label for error
 # messages, and the detect_psauron_capabilities() key that reports it.
@@ -224,12 +278,20 @@ def batch_score_proteins(
         values (``diamond_hit``, ``diamond_pident``, ``diamond_qcov``,
         ``diamond_scov``, ``diamond_bitscore``, ``diamond_evalue``,
         ``psauron_score``, ``protein_length``), each ``None``/``0`` when
-        not available (no hit, sequence too short, empty protein, etc.).
+        not available (no hit, sequence too short, empty protein, etc.), plus
+        provenance: ``protein_sha256``, ``validation_status``,
+        ``validation_reason``, tool/database versions, and
+        ``protein_validation_source`` (``"calculated"``/``"reused"``/``None``)
+        with ``protein_validation_reused_from`` recording which key's
+        calculation is being reused when the sequence is a duplicate of one
+        already scored in this same batch.
     """
     val_cfg = config.protein_validation
+    provenance = build_validation_provenance(val_cfg)
 
-    def _empty_detail(seq: str) -> dict:
+    def _empty_detail(seq: str, status: str, reason: str) -> dict:
         return {
+            "protein_sha256": protein_sha256(seq),
             "diamond_hit": None,
             "diamond_pident": None,
             "diamond_qcov": None,
@@ -238,15 +300,33 @@ def batch_score_proteins(
             "diamond_evalue": None,
             "psauron_score": None,
             "protein_length": len(seq) if seq else 0,
+            "validation_status": status,
+            "validation_reason": reason,
+            # No DIAMOND/psauron invocation happened for this key at all
+            # (validation disabled, or no translatable protein), so
+            # "calculated vs reused" does not apply -- see the real
+            # computation below for the populated values.
+            "protein_validation_source": None,
+            "protein_validation_reused_from": None,
+            **provenance,
         }
 
-    if not val_cfg.enabled or not protein_dict:
+    if not val_cfg.enabled:
         return (
             {k: 0.0 for k in protein_dict},
-            {k: _empty_detail(seq) for k, seq in protein_dict.items()},
+            {
+                k: _empty_detail(seq, "not_run", "protein_validation.enabled is false")
+                for k, seq in protein_dict.items()
+            },
         )
 
-    # Deduplicate strictly identical sequences.
+    if not protein_dict:
+        return ({}, {})
+
+    # Deduplicate strictly identical sequences -- this is the "compute once"
+    # half of the compute-once/consume-many contract: DIAMOND and Psauron
+    # each see one copy of each distinct sequence, and every transcript
+    # sharing that sequence receives the same result object.
     # We map sequence -> list of keys that produced it.
     seq_to_keys = defaultdict(list)
     for k, seq in protein_dict.items():
@@ -256,7 +336,10 @@ def batch_score_proteins(
     if not seq_to_keys:
         return (
             {k: 0.0 for k in protein_dict},
-            {k: _empty_detail(seq) for k, seq in protein_dict.items()},
+            {
+                k: _empty_detail(seq, "no_protein", "empty or missing translated sequence")
+                for k, seq in protein_dict.items()
+            },
         )
 
     with tempfile.TemporaryDirectory() as td:
@@ -439,21 +522,50 @@ def batch_score_proteins(
             p_score = psauron_scores.get(sid, 0.0)
 
             comb_score = (d_score * val_cfg.diamond_weight) + (p_score * val_cfg.psauron_weight)
-            detail = _empty_detail(seq)
+            has_diamond = sid in diamond_detail_by_sid
+            has_psauron = sid in psauron_scores
+            if has_diamond and has_psauron:
+                status, reason = "ok", ""
+            elif has_psauron:
+                status, reason = "no_diamond_hit", "no DIAMOND hit passing coverage gates"
+            elif has_diamond:
+                status, reason = "no_psauron_score", "psauron returned no score for this sequence"
+            else:
+                status, reason = "no_evidence", "neither DIAMOND nor psauron returned a result"
+
+            detail = _empty_detail(seq, status, reason)
             detail["protein_length"] = len(seq)
-            if sid in diamond_detail_by_sid:
+            if has_diamond:
                 detail.update(diamond_detail_by_sid[sid])
-            if sid in psauron_scores:
+            if has_psauron:
                 detail["psauron_score"] = psauron_scores[sid]
+            # Every transcript sharing this sequence gets the *same* result;
+            # copied per key so a later per-transcript annotation (e.g. the
+            # final transcript ID) cannot leak across transcripts. Exactly
+            # one key per unique sequence is deterministically designated
+            # "calculated" (the lexicographically-first key -- an arbitrary
+            # but stable and reproducible choice); every other key sharing
+            # that sequence is "reused", with reused_from recording which
+            # key's result it is sharing. This makes the compute-once/
+            # consume-many contract auditable per transcript rather than
+            # only inferable from a shared protein_sha256.
+            calculated_key = min(keys)
             for k in keys:
                 final_scores[k] = comb_score
-                details[k] = detail
+                row = dict(detail)
+                if k == calculated_key:
+                    row["protein_validation_source"] = "calculated"
+                    row["protein_validation_reused_from"] = None
+                else:
+                    row["protein_validation_source"] = "reused"
+                    row["protein_validation_reused_from"] = calculated_key
+                details[k] = row
 
     # Re-apply defaults for missing/empty
     for k, seq in protein_dict.items():
         if k not in final_scores:
             final_scores[k] = 0.0
         if k not in details:
-            details[k] = _empty_detail(seq)
+            details[k] = _empty_detail(seq, "no_protein", "empty or missing translated sequence")
 
     return final_scores, details

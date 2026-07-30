@@ -376,5 +376,70 @@ class TestAllTrackedConfigsLoad:
         assert isinstance(cfg, PipelineConfig)
 
 
+class TestInterProResolverConfig:
+    """canonical_selection.interpro_resolver -- nesting, defaults, override shape."""
+
+    def test_lives_under_canonical_selection_not_top_level(self):
+        cfg = load_config()
+        assert hasattr(cfg.canonical_selection, "interpro_resolver")
+        assert not hasattr(cfg, "interpro_review")
+
+    def test_master_switch_defaults_to_false(self):
+        # InterPro involvement must be opt-in: a first-pass GMB build must
+        # complete without it, and accidentally enabling it must never
+        # happen just by loading defaults.
+        cfg = load_config()
+        resolver = cfg.canonical_selection.interpro_resolver
+        assert resolver.enabled is False
+        assert resolver.run_interproscan is False
+        # apply_replacements defaults True, but is inert while enabled=False.
+        assert resolver.apply_replacements is True
+
+    def test_nextflow_exec_settings_have_no_hardcoded_site_paths(self):
+        cfg = load_config()
+        nf = cfg.canonical_selection.interpro_resolver.nextflow
+        # Only the workflow identity/version and a generic default profile
+        # are meaningful defaults; anything site-specific (data dir, work
+        # dir, output dir, extra config file) must default to None/empty --
+        # never a guessed laptop or cluster path.
+        assert nf.data_dir is None
+        assert nf.work_dir is None
+        assert nf.output_dir is None
+        assert nf.config_file is None
+        assert nf.extra_args == []
+        assert nf.workflow == "ebi-pf-team/interproscan6"
+
+    def test_yaml_override_reaches_nested_resolver_config(self, tmp_path):
+        override = tmp_path / "override.yaml"
+        override.write_text(
+            "canonical_selection:\n"
+            "  interpro_resolver:\n"
+            "    enabled: true\n"
+            "    run_interproscan: true\n"
+            "    apply_replacements: false\n"
+            "    nextflow:\n"
+            "      profile: slurm,singularity\n"
+            "      data_dir: /shared/interpro/data\n"
+        )
+        cfg = load_config(str(override))
+        resolver = cfg.canonical_selection.interpro_resolver
+        assert resolver.enabled is True
+        assert resolver.run_interproscan is True
+        assert resolver.apply_replacements is False
+        assert resolver.nextflow.profile == "slurm,singularity"
+        assert resolver.nextflow.data_dir == "/shared/interpro/data"
+        # Untouched nested defaults must survive the partial override.
+        assert resolver.min_isoforms == 2
+
+    def test_old_top_level_interpro_review_key_now_rejected(self, tmp_path):
+        # The old top-level `interpro_review:` section moved under
+        # canonical_selection -- a config still using the old location
+        # should fail loudly (unknown key), not be silently ignored.
+        override = tmp_path / "old_shape.yaml"
+        override.write_text("interpro_review:\n  enabled: true\n")
+        with pytest.raises(ValueError, match="interpro_review"):
+            load_config(str(override))
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

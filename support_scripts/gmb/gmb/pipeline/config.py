@@ -263,18 +263,28 @@ class ReportingConfig:
 class CanonicalProteinValidationWeights:
     """Protein-plausibility component weights (gmb.pipeline.canonical_selection).
 
-    psauron/diamond_identity/diamond_query_coverage/diamond_target_coverage
-    are each already bounded 0-1 (psauron score) or 0-100 (DIAMOND percentages,
-    divided by 100 before weighting) -- deliberately NOT including raw DIAMOND
-    bitscore, which scales with protein length and would let long proteins
-    dominate regardless of match quality. diamond_hit_bonus is a flat, bounded
-    bonus for "a significant hit exists at all", independent of its strength.
+    psauron/diamond_identity/diamond_balanced_coverage are each already
+    bounded 0-1 (psauron score; DIAMOND percentages divided by 100 before
+    weighting) -- deliberately NOT including raw DIAMOND bitscore, which
+    scales with protein length and would let long proteins dominate
+    regardless of match quality. diamond_hit_bonus is a flat, bounded bonus
+    for "a significant hit exists at all", independent of its strength.
+
+    diamond_balanced_coverage_weight replaced two separate
+    diamond_query_coverage_weight/diamond_target_coverage_weight terms: the
+    coverage component now uses gmb.pipeline.canonical_evidence.balanced_coverage
+    (min(qcov, scov)/100), not the two sides scored and weighted
+    independently. A hit covering 100% of a short query but 10% of a long
+    target is a fragment match; weighting each side separately let the
+    query-coverage term flatter it even though the target side already told
+    the real story. The default (0.30) equals the sum of the two weights it
+    replaces, so the total achievable protein-validation_subtotal is
+    unchanged from before this change.
     """
 
     psauron_weight: float = 0.35
     diamond_identity_weight: float = 0.15
-    diamond_query_coverage_weight: float = 0.15
-    diamond_target_coverage_weight: float = 0.15
+    diamond_balanced_coverage_weight: float = 0.30
     diamond_hit_bonus: float = 0.2
 
 
@@ -284,12 +294,20 @@ class CanonicalEvidenceWeights:
 
     gmb_score is min-max normalised across the gene's own isoforms before
     weighting (it is open-ended/additive in gmb.pipeline.scoring, not
-    naturally bounded); the *_support flags are 0/1 (does evidence_sources
-    contain a track of that kind); independent_source_weight scales with the
-    count of distinct evidence source types, capped at 3 (see
-    independent_source_cap) so a transcript backed by many redundant tracks
-    of the same kind cannot dominate one backed by 3+ genuinely different
-    kinds.
+    naturally bounded); the *_support flags are 0/1 (does the transcript's
+    evidence-class set contain a class of that kind -- see
+    gmb.pipeline.canonical_evidence). independent_source_weight scales with
+    the transcript's *evidence-class* breadth (not a raw named-source
+    count -- Scallop+StringTie is one short_read_transcriptomic class, not
+    two independent sources), capped at independent_source_cap classes, so
+    a transcript backed by many redundant tracks of the same underlying
+    evidence type cannot out-rank one backed by several genuinely different
+    types. The field name is kept as `independent_source_weight` for
+    backward-compatible config keys even though it now scores class breadth
+    -- see `n_evidence_classes` in the transcript-ranking output for the
+    raw count this weight is derived from, and `n_independent_sources` for
+    the (still separately reported, no longer scored here) raw named-source
+    count.
     """
 
     gmb_score_weight: float = 0.30
@@ -332,6 +350,138 @@ class CanonicalDomainConfig:
 
 
 @dataclass
+class InterProNextflowExecConfig:
+    """Fully parameterised, portable settings for running InterProScan 6 via
+    Nextflow (Mode A -- ``run_interproscan: true``, GMB launches the scan
+    itself). Every field is a placeholder the operator supplies for their
+    own environment; NONE of this is hardcoded anywhere in GMB Python code
+    (no Docker/Slurm/Singularity/Apptainer image name, executor, or
+    site-specific path is ever assumed) -- see docs/interpro_resolver.md
+    and docs/interproscan6_cluster.example.config for how these map onto a
+    laptop Docker run vs a cluster Slurm+Singularity/Apptainer run.
+
+    Irrelevant, and never read, when ``run_interproscan: false`` (Mode B --
+    GMB only consumes an already-completed InterProScan run's output files,
+    produced any way the operator likes).
+    """
+
+    nextflow_executable: str = "nextflow"
+    workflow: str = "ebi-pf-team/interproscan6"
+    revision: str = "6.0.1"
+    # e.g. "docker" (laptop) or "slurm,singularity" / "slurm,apptainer" (cluster).
+    profile: str = "docker"
+    # -c <file>: an external Nextflow config supplying site-specific values
+    # (queue/partition, container cache dir, bind mounts, ...). See
+    # docs/interproscan6_cluster.example.config for a fully-placeholdered
+    # example; None runs with no extra config (e.g. plain local Docker).
+    config_file: Optional[str] = None
+    # --datadir: shared InterPro member-database data directory. Required
+    # for a real run; left None here since its location is entirely
+    # site-specific and must never be assumed.
+    data_dir: Optional[str] = None
+    # --interpro: the InterPro data release to scan against (e.g. "109.0"),
+    # or "latest".
+    interpro_release: str = "latest"
+    # --appl: comma-separated application/member-database list; None scans
+    # with the workflow's own default application set.
+    applications: Optional[str] = None
+    work_dir: Optional[str] = None  # -work-dir
+    output_dir: Optional[str] = None  # --outdir; None defaults to
+    # <canonical-selection output-dir>/interpro_run/results (see
+    # gmb.pipeline.interpro_review.run_interproscan_workflow).
+    cpus: Optional[int] = None
+    max_workers: Optional[int] = None
+    # Any additional raw Nextflow CLI arguments the operator's environment
+    # requires, appended verbatim and unvalidated -- an intentional escape
+    # hatch so this dataclass never needs to anticipate every possible
+    # execution profile.
+    extra_args: list[str] = field(default_factory=list)
+
+
+@dataclass
+class InterProResolverConfig:
+    """Optional second-stage InterProScan resolver for ambiguous canonical
+    choices, nested under CanonicalSelectionConfig.interpro_resolver.
+
+    InterProScan is a SECOND-STAGE RESOLVER only: it is never part of a
+    normal GMB run, never required for completion, and never triggers a
+    second DIAMOND/psauron pass (see gmb.pipeline.protein_validation's
+    compute-once contract, which this section never touches). This section
+    only decides which small subset of genes is worth the cost of a domain
+    scan -- the initial canonical selection itself still happens without it
+    (see gmb.pipeline.canonical_selection), and `final = initial` whenever
+    this resolver is disabled or a review does not lead to a safeguarded
+    replacement.
+
+    ``enabled`` is the master switch and defaults to **False**: InterPro
+    involvement is opt-in. ``run_interproscan``/``apply_replacements`` are
+    independent sub-flags:
+      * ``run_interproscan=False`` (default): Mode B -- GMB only consumes
+        an already-completed InterProScan run's output files (any
+        execution profile). This is the safer default for a first pass on
+        a new dataset: review candidates and manifest are prepared, but
+        nothing is launched automatically.
+      * ``run_interproscan=True``: Mode A -- GMB launches InterProScan 6
+        itself via Nextflow, fully parameterised by ``nextflow`` below.
+      * ``apply_replacements=True`` (default, but only takes effect when
+        ``enabled=True``): the resolver may replace the initial canonical
+        transcript when its conservative replacement policy and safeguards
+        (see gmb.pipeline.interpro_resolver.decide_canonical) are met.
+        ``apply_replacements=False`` keeps the resolver a report-only
+        layer (verdicts/recommendations recorded, canonical outputs
+        untouched) even while ``enabled=True`` -- useful for evaluating the
+        evidence model on a new dataset before trusting it to replace
+        anything.
+    """
+
+    enabled: bool = False
+    run_interproscan: bool = False
+    apply_replacements: bool = True
+    # Never review a gene with fewer than this many isoforms -- a
+    # single-transcript gene has no choice to disambiguate.
+    min_isoforms: int = 2
+    # Only the top-N ranked candidates per reviewed gene are submitted;
+    # sending every isoform would defeat the point of a targeted resolver.
+    max_candidates_per_gene: int = 2
+    # Winner/runner-up total_score gap at or below which the choice counts
+    # as "close" (an ambiguity trigger). Deliberately looser than
+    # CanonicalSelectionConfig.low_confidence_score_gap, since this decides
+    # what is worth *reviewing*, not what is reported as low confidence.
+    close_call_score_gap: float = 0.10
+    # Individual ambiguity triggers, each independently switchable so a run
+    # can be scoped (e.g. review only genuinely conflicting evidence).
+    trigger_low_confidence: bool = True
+    trigger_close_score: bool = True
+    trigger_diamond_psauron_disagree: bool = True
+    trigger_length_or_lexical_only: bool = True
+    trigger_internal_stop_conflict: bool = True
+    # A candidate this many times longer than its rival, without stronger
+    # protein support, suggests possible fusion or a run-on model.
+    length_ratio_flag: float = 1.5
+    # --- Replacement-policy safeguards (only relevant when
+    # apply_replacements=True; see interpro_resolver.decide_canonical) ---
+    # Representative-coverage delta below which a coverage-based
+    # improvement is NOT considered material enough to replace the initial
+    # canonical on its own (categorical cases -- AntiFam avoidance, a
+    # complete domain appearing where there was none -- bypass this
+    # threshold, since they are not coverage-magnitude judgements).
+    min_coverage_delta_for_replacement: float = 0.10
+    # Never replace with a candidate that is structurally worse (e.g. an
+    # incomplete ORF where the initial choice was complete).
+    require_no_worse_structural_class: bool = True
+    # Never replace with a candidate that introduces an internal stop the
+    # initial choice did not have.
+    require_no_new_internal_stops: bool = True
+    # Never replace when the initial choice's own DIAMOND/psauron evidence
+    # is materially stronger than the replacement candidate's -- InterPro
+    # architecture evidence must not silently override much stronger
+    # protein-validation evidence already on record. Expressed as a
+    # balanced-DIAMOND-coverage-or-psauron-score gap threshold.
+    max_protein_validation_override_gap: float = 0.15
+    nextflow: InterProNextflowExecConfig = field(default_factory=InterProNextflowExecConfig)
+
+
+@dataclass
 class CanonicalSelectionConfig:
     """Config for gmb.pipeline.canonical_selection (a standalone post-build
     reporting step -- see that module's docstring for why it reads
@@ -350,6 +500,7 @@ class CanonicalSelectionConfig:
     # "low_confidence" in the report (in addition to the separate
     # LOW_CONFIDENCE_NO_PROTEIN_SUPPORT reason code for missing evidence).
     low_confidence_score_gap: float = 0.05
+    interpro_resolver: InterProResolverConfig = field(default_factory=InterProResolverConfig)
 
 
 @dataclass
@@ -377,6 +528,11 @@ class PipelineConfig:
     qc: QcConfig = field(default_factory=QcConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     reporting: ReportingConfig = field(default_factory=ReportingConfig)
+    # InterPro second-stage resolver config lives at
+    # canonical_selection.interpro_resolver (see InterProResolverConfig) --
+    # nested there, not top-level, since it is conceptually part of
+    # canonical selection's optional second stage, not a sibling pipeline
+    # stage of its own.
     canonical_selection: CanonicalSelectionConfig = field(default_factory=CanonicalSelectionConfig)
 
 

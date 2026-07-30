@@ -1,0 +1,9 @@
+##gff-version 3.1.26
+##interpro-version 109.0
+##interproscan-version 6.0.1
+##sequence-region sp|Q9QXX0|JAG1_MOUSE 1 1218
+sp|Q9QXX0|JAG1_MOUSE	CATH-Gene3D	polypeptide_domain	821	860	3.5E-13	.	.	Name=G3DSA:2.10.25.10;type=Homologous_superfamily;representative=true
+sp|Q9QXX0|JAG1_MOUSE	CATH-Gene3D	polypeptide_domain	188	233	1.3E-19	.	.	Name=G3DSA:2.10.25.140;type=Homologous_superfamily;representative=true
+sp|Q9QXX0|JAG1_MOUSE	CATH-Gene3D	polypeptide_domain	32	187	1.4E-62	.	.	Name=G3DSA:2.60.40.3510;type=Homologous_superfamily;representative=true
+sp|Q9QXX0|JAG1_MOUSE	CATH-Gene3D	polypeptide_domain	375	413	2.4E-13	.	.	Name=G3DSA:2.10.25.10;type=Homologous_superfamily;representative=false
+sp|Q9QXX0|JAG1_MOUSE	CATH-Gene3D	polypeptide_domain	526	570	1.8E-11	.	.	Name=G3DSA:2.10.25.10;type=Homologous_superfamily;representative=false
