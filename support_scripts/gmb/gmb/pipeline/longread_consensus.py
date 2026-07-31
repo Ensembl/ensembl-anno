@@ -128,6 +128,31 @@ class LongreadConsensusConfig:
     require_shortread_support_for_single_read_models: bool = False
     shortread_overlap_fraction: float = 0.5
 
+    # Structure-aware single-read rescue.  Both fields default to "" (disabled).
+    # Setting rescue_multi_exon_policy gates rescue of single-read multi-exon
+    # candidates; rescue_single_exon_policy gates single-exon candidates.
+    # Rescue is only ever attempted when support == 1 for a group.
+    #
+    # Multi-exon policies:
+    #   M1 — all splice junctions in the candidate must appear in at least one
+    #         short-read transcript (junction match within rescue_junction_tolerance_bp)
+    #   M2 — the complete intron chain must match at least one short-read
+    #         transcript exactly (same set of junctions, same tolerance)
+    #   M3 — the intron chain must be independently supported by BOTH a
+    #         Scallop transcript AND a StringTie transcript (M1 level each)
+    #
+    # Single-exon policies:
+    #   S1 — a short-read exon reciprocally overlaps the candidate by at least
+    #         rescue_reciprocal_overlap_min in both directions
+    #   S2 — both Scallop AND StringTie independently provide an S1-level
+    #         reciprocal-overlap match
+    #   S3 — at least two independent short-read transcripts each meet S1
+    rescue_multi_exon_policy: str = ""
+    rescue_single_exon_policy: str = ""
+    rescue_junction_tolerance_bp: int = 10
+    rescue_reciprocal_overlap_min: float = 0.80
+    rescue_boundary_tolerance_bp: int = 20
+
     # Genome-wide (not just within one raw-read locus cluster) containment
     # suppression: after all clusters are processed, drop any consensus
     # model whose exon span is fully contained within a higher-read-support
@@ -395,11 +420,265 @@ def _has_shortread_support(
     return False
 
 
+def _load_shortread_transcripts_for_seqname(
+    scallop_paths: list[str],
+    stringtie_paths: list[str],
+    seqname: str,
+) -> dict[str, list[dict]]:
+    """Load full short-read transcript structures for one seqname.
+
+    Returns ``{"scallop": [...], "stringtie": [...], "all": [...]}`` where
+    each entry is ``{"tid": str, "strand": str, "exons": sorted list, "source": str}``.
+    Used by structure-aware rescue (not the old overlap rescue, which only
+    needs flat exon intervals and uses ``_load_shortread_exons_for_seqname``).
+    """
+
+    def _load(paths, source_name):
+        by_tid: dict[str, dict] = {}
+        for path in paths:
+            if not path or not os.path.exists(path):
+                continue
+            with open(path) as fh:
+                for line in fh:
+                    if line.startswith("#"):
+                        continue
+                    f = line.rstrip("\n").split("\t")
+                    if len(f) != 9 or f[0] != seqname or f[2] != "exon":
+                        continue
+                    try:
+                        start, end = int(f[3]), int(f[4])
+                    except ValueError:
+                        continue
+                    attrs = _parse_attrs(f[8])
+                    tid = attrs.get("transcript_id")
+                    if not tid:
+                        continue
+                    if tid not in by_tid:
+                        by_tid[tid] = {
+                            "tid": tid,
+                            "strand": f[6],
+                            "exons": [],
+                            "source": source_name,
+                        }
+                    by_tid[tid]["exons"].append((start, end))
+        txs = list(by_tid.values())
+        for tx in txs:
+            tx["exons"].sort()
+        return txs
+
+    scallop = _load(scallop_paths, "scallop")
+    stringtie = _load(stringtie_paths, "stringtie")
+    return {"scallop": scallop, "stringtie": stringtie, "all": scallop + stringtie}
+
+
+# ---------------------------------------------------------------------------
+# Structure-aware rescue helpers
+# ---------------------------------------------------------------------------
+
+
+def _junctions_from_exons(
+    exons: list[tuple[int, int]], tol_bp: int = 0
+) -> frozenset[tuple[int, int]]:
+    """Return the set of (donor, acceptor) intron junctions from an exon list.
+
+    If ``tol_bp`` > 0, each boundary is snapped to the nearest multiple so
+    that minor alignment jitter doesn't prevent matching.
+    """
+    exons = sorted(exons)
+    if len(exons) < 2:
+        return frozenset()
+    junctions = []
+    for i in range(len(exons) - 1):
+        donor = exons[i][1]
+        acceptor = exons[i + 1][0]
+        if tol_bp > 0:
+            donor = round(donor / tol_bp) * tol_bp
+            acceptor = round(acceptor / tol_bp) * tol_bp
+        junctions.append((donor, acceptor))
+    return frozenset(junctions)
+
+
+def _m1_junction_complete(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    sr_transcripts: list[dict],
+    tol_bp: int,
+) -> tuple[bool, list[str]]:
+    """M1: every junction in the candidate has SR support from ≥1 transcript."""
+    cand_junctions = _junctions_from_exons(cand_exons, tol_bp)
+    if not cand_junctions:
+        return False, []
+    sr_junctions: set[tuple[int, int]] = set()
+    support_tids: list[str] = []
+    for tx in sr_transcripts:
+        if tx["strand"] != strand:
+            continue
+        tx_j = _junctions_from_exons(tx["exons"], tol_bp)
+        if tx_j & cand_junctions:
+            support_tids.append(tx["tid"])
+        sr_junctions |= tx_j
+    if cand_junctions.issubset(sr_junctions):
+        return True, support_tids
+    return False, []
+
+
+def _m2_full_chain(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    sr_transcripts: list[dict],
+    tol_bp: int,
+) -> tuple[bool, list[str]]:
+    """M2: the full intron chain matches at least one complete SR transcript."""
+    cand_junctions = _junctions_from_exons(cand_exons, tol_bp)
+    if not cand_junctions:
+        return False, []
+    support_tids = [
+        tx["tid"]
+        for tx in sr_transcripts
+        if tx["strand"] == strand
+        and _junctions_from_exons(tx["exons"], tol_bp) == cand_junctions
+    ]
+    return bool(support_tids), support_tids
+
+
+def _m3_dual_assembler_chain(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    scallop_txs: list[dict],
+    stringtie_txs: list[dict],
+    tol_bp: int,
+) -> tuple[bool, list[str]]:
+    """M3: intron chain supported by both Scallop AND StringTie (M1-level each)."""
+    ok_s, tids_s = _m1_junction_complete(cand_exons, strand, scallop_txs, tol_bp)
+    ok_st, tids_st = _m1_junction_complete(cand_exons, strand, stringtie_txs, tol_bp)
+    if ok_s and ok_st:
+        return True, tids_s + tids_st
+    return False, []
+
+
+def _s1_reciprocal_boundary(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    sr_transcripts: list[dict],
+    min_overlap: float,
+) -> tuple[bool, list[str]]:
+    """S1: a SR exon reciprocally overlaps the single-exon candidate."""
+    if len(cand_exons) != 1:
+        return False, []
+    c_start, c_end = cand_exons[0]
+    support_tids: list[str] = []
+    for tx in sr_transcripts:
+        if tx["strand"] != strand:
+            continue
+        for e_start, e_end in tx["exons"]:
+            if reciprocal_overlap(c_start, c_end, e_start, e_end) >= min_overlap:
+                support_tids.append(tx["tid"])
+                break
+    return bool(support_tids), support_tids
+
+
+def _s2_dual_assembler_boundary(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    scallop_txs: list[dict],
+    stringtie_txs: list[dict],
+    min_overlap: float,
+) -> tuple[bool, list[str]]:
+    """S2: reciprocal boundary support independently from both assemblers."""
+    ok_s, tids_s = _s1_reciprocal_boundary(cand_exons, strand, scallop_txs, min_overlap)
+    ok_st, tids_st = _s1_reciprocal_boundary(cand_exons, strand, stringtie_txs, min_overlap)
+    if ok_s and ok_st:
+        return True, tids_s + tids_st
+    return False, []
+
+
+def _s3_independent_evidence(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    sr_transcripts: list[dict],
+    min_overlap: float,
+    n_required: int = 2,
+) -> tuple[bool, list[str]]:
+    """S3: N independent SR transcripts each meeting the S1 criterion."""
+    if len(cand_exons) != 1:
+        return False, []
+    c_start, c_end = cand_exons[0]
+    support_tids: list[str] = []
+    for tx in sr_transcripts:
+        if tx["strand"] != strand:
+            continue
+        for e_start, e_end in tx["exons"]:
+            if reciprocal_overlap(c_start, c_end, e_start, e_end) >= min_overlap:
+                support_tids.append(tx["tid"])
+                break
+    if len(support_tids) >= n_required:
+        return True, support_tids
+    return False, []
+
+
+def _rescue_multi_exon_structured(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    sr_data: dict,
+    cfg: LongreadConsensusConfig,
+) -> tuple[bool, Optional[str], list[str]]:
+    """Dispatch structure-aware rescue for a single-read multi-exon candidate.
+
+    Returns ``(kept, reason_code, supporting_sr_tids)``.
+    """
+    policy = cfg.rescue_multi_exon_policy
+    if not policy:
+        return False, None, []
+    tol = cfg.rescue_junction_tolerance_bp
+    if policy == "M1":
+        kept, tids = _m1_junction_complete(cand_exons, strand, sr_data["all"], tol)
+        return kept, "M1_junction_complete" if kept else None, tids
+    if policy == "M2":
+        kept, tids = _m2_full_chain(cand_exons, strand, sr_data["all"], tol)
+        return kept, "M2_full_chain" if kept else None, tids
+    if policy == "M3":
+        kept, tids = _m3_dual_assembler_chain(
+            cand_exons, strand, sr_data["scallop"], sr_data["stringtie"], tol
+        )
+        return kept, "M3_dual_assembler" if kept else None, tids
+    return False, None, []
+
+
+def _rescue_single_exon_structured(
+    cand_exons: list[tuple[int, int]],
+    strand: str,
+    sr_data: dict,
+    cfg: LongreadConsensusConfig,
+) -> tuple[bool, Optional[str], list[str]]:
+    """Dispatch structure-aware rescue for a single-read single-exon candidate.
+
+    Returns ``(kept, reason_code, supporting_sr_tids)``.
+    """
+    policy = cfg.rescue_single_exon_policy
+    if not policy:
+        return False, None, []
+    min_ro = cfg.rescue_reciprocal_overlap_min
+    if policy == "S1":
+        kept, tids = _s1_reciprocal_boundary(cand_exons, strand, sr_data["all"], min_ro)
+        return kept, "S1_reciprocal_boundary" if kept else None, tids
+    if policy == "S2":
+        kept, tids = _s2_dual_assembler_boundary(
+            cand_exons, strand, sr_data["scallop"], sr_data["stringtie"], min_ro
+        )
+        return kept, "S2_dual_assembler" if kept else None, tids
+    if policy == "S3":
+        kept, tids = _s3_independent_evidence(cand_exons, strand, sr_data["all"], min_ro)
+        return kept, "S3_independent_evidence" if kept else None, tids
+    return False, None, []
+
+
 def build_consensus_for_seqname(
     seqname: str,
     split_path: str,
     cfg: LongreadConsensusConfig,
     shortread_paths: Optional[list[str]] = None,
+    scallop_paths: Optional[list[str]] = None,
+    stringtie_paths: Optional[list[str]] = None,
 ) -> tuple[list[dict], dict]:
     """Build consensus transcript models for one seqname's split file.
 
@@ -457,6 +736,15 @@ def build_consensus_for_seqname(
         shortread_exons = _load_shortread_exons_for_seqname(shortread_paths, seqname)
     stats["shortread_exons_loaded"] = len(shortread_exons) if shortread_exons else 0
 
+    sr_data = None
+    if cfg.rescue_multi_exon_policy or cfg.rescue_single_exon_policy:
+        sr_data = _load_shortread_transcripts_for_seqname(
+            scallop_paths or [], stringtie_paths or [], seqname
+        )
+    stats["sr_transcripts_loaded"] = (
+        len(sr_data["all"]) if sr_data is not None else 0
+    )
+
     # --- Cluster by strand + genomic overlap (split on large gaps) ---
     consensus_records = []
     n_clusters = 0
@@ -506,8 +794,8 @@ def build_consensus_for_seqname(
                 group_id += 1
                 support = len(members)
                 min_req = cfg.min_read_support_multi_exon
-                keep, rescued = _keep_or_rescue(
-                    support, min_req, members, strand, shortread_exons, cfg
+                keep, rescued, reason, sr_tids = _keep_or_rescue(
+                    support, min_req, members, strand, shortread_exons, cfg, sr_data
                 )
                 if not keep:
                     if support < min_req and support == 1:
@@ -530,6 +818,8 @@ def build_consensus_for_seqname(
                         "read_support": support,
                         "cluster_size": cluster_size,
                         "rescued_by_shortread": rescued,
+                        "rescue_reason": reason,
+                        "rescue_sr_tids": sr_tids,
                         "n_exons": len(exons_consensus),
                     }
                 )
@@ -556,8 +846,8 @@ def build_consensus_for_seqname(
 
                 support = len(members)
                 min_req = cfg.min_read_support_single_exon
-                keep, rescued = _keep_or_rescue(
-                    support, min_req, members, strand, shortread_exons, cfg
+                keep, rescued, reason, sr_tids = _keep_or_rescue(
+                    support, min_req, members, strand, shortread_exons, cfg, sr_data
                 )
                 if not keep:
                     if support < min_req and support == 1:
@@ -584,6 +874,8 @@ def build_consensus_for_seqname(
                         "read_support": support,
                         "cluster_size": cluster_size,
                         "rescued_by_shortread": rescued,
+                        "rescue_reason": reason,
+                        "rescue_sr_tids": sr_tids,
                         "n_exons": 1,
                     }
                 )
@@ -699,15 +991,47 @@ def _assign_gene_ids(records: list[dict], seqname: str, min_intergenic_gap: int)
     return n_genes
 
 
-def _keep_or_rescue(support, min_req, members, strand, shortread_exons, cfg):
-    """Decide whether a candidate group survives, and whether via rescue."""
+def _keep_or_rescue(
+    support,
+    min_req,
+    members,
+    strand,
+    shortread_exons,
+    cfg,
+    sr_data=None,
+):
+    """Decide whether a candidate group survives, and whether via rescue.
+
+    Returns ``(kept, rescued, reason_code, support_sr_tids)`` where
+    ``reason_code`` is a string identifying which rescue policy fired (or
+    ``None`` when the group met the read-support bar without rescue) and
+    ``support_sr_tids`` is a list of short-read transcript IDs that
+    contributed evidence for structure-aware rescue (empty for legacy rescue
+    or when no rescue occurred).
+    """
     if support >= min_req:
-        return True, False
-    if support == 1 and cfg.require_shortread_support_for_single_read_models and shortread_exons:
+        return True, False, None, []
+
+    if support != 1:
+        return False, False, None, []
+
+    # Old overlap rescue (disabled by default, see require_shortread_support_for_single_read_models)
+    if cfg.require_shortread_support_for_single_read_models and shortread_exons:
         exons = members[0]["exons"]
         if _has_shortread_support(exons, strand, shortread_exons, cfg.shortread_overlap_fraction):
-            return True, True
-    return False, False
+            return True, True, "legacy_overlap", []
+
+    # New structure-aware rescue
+    if sr_data is not None:
+        exons = members[0]["exons"]
+        if len(exons) > 1:
+            kept, reason, tids = _rescue_multi_exon_structured(exons, strand, sr_data, cfg)
+        else:
+            kept, reason, tids = _rescue_single_exon_structured(exons, strand, sr_data, cfg)
+        if kept:
+            return True, True, reason, tids
+
+    return False, False, None, []
 
 
 def _median(values: list[int]) -> int:
@@ -780,11 +1104,13 @@ def write_consensus_gtf(
                 exons = rec["exons"]
                 start = exons[0][0]
                 end = exons[-1][1]
+                rescue_reason = rec.get("rescue_reason") or ""
                 common_attrs = (
                     f'gene_id "{gid}"; transcript_id "{tid}"; '
                     f'read_support "{rec["read_support"]}"; '
                     f'cluster_size "{rec["cluster_size"]}"; '
-                    f'rescued_by_shortread "{rec["rescued_by_shortread"]}";'
+                    f'rescued_by_shortread "{rec["rescued_by_shortread"]}"; '
+                    f'rescue_reason "{rescue_reason}";'
                 )
                 fh.write(
                     f"{seqname}\t{source_label}\ttranscript\t{start}\t{end}\t.\t"
@@ -796,6 +1122,40 @@ def write_consensus_gtf(
                         f'{strand}\t.\tgene_id "{gid}"; transcript_id "{tid}"; '
                         f'exon_number "{i}"; read_support "{rec["read_support"]}";\n'
                     )
+
+
+def write_rescue_attribution_tsv(records: list[dict], output_path: str) -> int:
+    """Write a per-rescued-transcript attribution TSV sidecar.
+
+    Only rows where ``rescued_by_shortread`` is True are written.  Columns:
+
+    * ``transcript_id`` — consensus transcript ID (after gene ID assignment)
+    * ``seqname`` / ``strand``
+    * ``start`` / ``end`` — exon-derived span
+    * ``n_exons``
+    * ``rescue_reason`` — policy code (e.g. ``M1_junction_complete``)
+    * ``rescue_sr_tids`` — pipe-separated short-read transcript IDs that
+      contributed to the rescue decision
+
+    Returns the number of rescued rows written.
+    """
+    n = 0
+    with open(output_path, "w") as fh:
+        fh.write(
+            "transcript_id\tseqname\tstrand\tstart\tend\tn_exons"
+            "\trescue_reason\trescue_sr_tids\n"
+        )
+        for rec in records:
+            if not rec.get("rescued_by_shortread"):
+                continue
+            tids_str = "|".join(rec.get("rescue_sr_tids") or [])
+            fh.write(
+                f"{rec['transcript_id']}\t{rec['seqname']}\t{rec['strand']}\t"
+                f"{rec['exons'][0][0]}\t{rec['exons'][-1][1]}\t{rec['n_exons']}\t"
+                f"{rec.get('rescue_reason') or ''}\t{tids_str}\n"
+            )
+            n += 1
+    return n
 
 
 # ---------------------------------------------------------------------------
@@ -854,7 +1214,9 @@ def main() -> None:
     if not seqname_paths:
         sys.exit("ERROR: no records found (check --seqname matches the input file's naming).")
 
-    shortread_paths = [p for p in (args.scallop, args.stringtie) if p]
+    scallop_paths = [args.scallop] if args.scallop else []
+    stringtie_paths = [args.stringtie] if args.stringtie else []
+    shortread_paths = scallop_paths + stringtie_paths
 
     print(f"Stage 2: building consensus for {len(seqname_paths)} seqname(s)...")
     all_records = []
@@ -862,7 +1224,12 @@ def main() -> None:
     for seqname in sorted(seqname_paths):
         t0 = time.time()
         records, stats = build_consensus_for_seqname(
-            seqname, seqname_paths[seqname], cfg, shortread_paths=shortread_paths
+            seqname,
+            seqname_paths[seqname],
+            cfg,
+            shortread_paths=shortread_paths,
+            scallop_paths=scallop_paths,
+            stringtie_paths=stringtie_paths,
         )
         stats["elapsed_s"] = round(time.time() - t0, 1)
         all_records.extend(records)
@@ -876,6 +1243,11 @@ def main() -> None:
     output_gtf = os.path.join(args.output_dir, "minimap2_consensus.gtf")
     write_consensus_gtf(all_records, output_gtf)
     print(f"Wrote {len(all_records):,} consensus transcripts to {output_gtf}")
+
+    attribution_path = os.path.join(args.output_dir, "rescue_attribution.tsv")
+    n_rescued_attr = write_rescue_attribution_tsv(all_records, attribution_path)
+    if n_rescued_attr:
+        print(f"Rescue attribution: {n_rescued_attr} rows -> {attribution_path}")
 
     summary = {
         "input_path": args.input,
@@ -896,6 +1268,8 @@ def main() -> None:
                 "dropped_low_support",
                 "dropped_single_read_no_rescue",
                 "suppressed_fragment_of_multiexon",
+                "shortread_exons_loaded",
+                "sr_transcripts_loaded",
                 "rescued_by_shortread",
                 "consensus_models_before_containment_suppression",
                 "suppressed_contained_in_higher_support_model",
