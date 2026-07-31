@@ -29,10 +29,33 @@ class TestNamedSourceEvidenceClasses:
     def test_backbone_matched_against_configured_label(self):
         classes, _ = named_source_evidence_classes("Tiberius", backbone_label="Tiberius")
         assert classes == {EVIDENCE_CLASS_BACKBONE}
-        # Same source string, different configured backbone -> not backbone.
-        classes2, unknown2 = named_source_evidence_classes("Tiberius", backbone_label="Helixer")
+
+    def test_tiberius_always_backbone_regardless_of_label(self):
+        # Tiberius and Helixer are in _SOURCE_TO_CLASS -> BACKBONE so they
+        # resolve correctly in standalone canonical_selection runs where the
+        # backbone_label from the build step may not be propagated.
+        classes, unknown = named_source_evidence_classes("Tiberius", backbone_label="Helixer")
+        assert classes == {EVIDENCE_CLASS_BACKBONE}
+        assert unknown == set()
+
+    def test_helixer_always_backbone_regardless_of_label(self):
+        classes, unknown = named_source_evidence_classes("Helixer", backbone_label="Tiberius")
+        assert classes == {EVIDENCE_CLASS_BACKBONE}
+        assert unknown == set()
+
+    def test_backbone_label_still_works_for_unlisted_source(self):
+        # A source not in _SOURCE_TO_CLASS but matching backbone_label -> backbone.
+        classes, unknown = named_source_evidence_classes(
+            "CustomAbInitio", backbone_label="CustomAbInitio"
+        )
+        assert classes == {EVIDENCE_CLASS_BACKBONE}
+        assert unknown == set()
+        # Same source, different label -> OTHER (not a known backbone).
+        classes2, unknown2 = named_source_evidence_classes(
+            "CustomAbInitio", backbone_label="Helixer"
+        )
         assert classes2 == {EVIDENCE_CLASS_OTHER}
-        assert unknown2 == {"tiberius"}
+        assert unknown2 == {"customabinitio"}
 
     def test_protein_alignment_sources(self):
         classes, _ = named_source_evidence_classes("OrthoDB,GenBlast,UniProt")

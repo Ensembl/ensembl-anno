@@ -564,6 +564,11 @@ def annotate_transcript(exons_df, chrom, strand, genome, cds_df=None, min_codons
     if chrom not in genome:
         return _empty_result(exons)
 
+    if strand not in ("+", "-"):
+        # Unresolved strand: CDS coordinates and protein cannot be computed
+        # reliably. Callers must handle this case (e.g. exclude from output).
+        return _empty_result(exons)
+
     chrom_seq = genome[chrom]
 
     # Path A: CDS already provided

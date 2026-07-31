@@ -422,6 +422,26 @@ class TestAnnotateTranscript:
         exon_len = tx["exons"][0][1] - tx["exons"][0][0]
         assert total == exon_len, f"UTR+CDS={total}, exon={exon_len}"
 
+    def test_unresolved_strand_returns_empty_cds(self):
+        """strand='.' must return no CDS or protein — cannot determine orientation."""
+        exon_df = pd.DataFrame({"Start": [1000], "End": [2000]})
+        # Genome must contain the chromosome so we reach the strand guard.
+        genome = {"chr1": "A" * 3000}
+        result = annotate_transcript(exon_df, "chr1", ".", genome, cds_df=None)
+        assert result["cds"] == [], "Unresolved-strand transcript must have no CDS"
+        assert result["protein"] is None, "Unresolved-strand transcript must have no protein"
+        assert result["five_prime_utr"] == []
+        assert result["three_prime_utr"] == []
+
+    def test_unresolved_strand_with_provided_cds_also_returns_empty(self):
+        """Even when a CDS DataFrame is passed, strand='.' must still return empty."""
+        exon_df = pd.DataFrame({"Start": [1000], "End": [2000]})
+        cds_df = pd.DataFrame({"Start": [1100], "End": [1900]})
+        genome = {"chr1": "A" * 3000}
+        result = annotate_transcript(exon_df, "chr1", ".", genome, cds_df=cds_df)
+        assert result["cds"] == []
+        assert result["protein"] is None
+
 
 class TestPartialOrf:
     def test_partial_orf(self):

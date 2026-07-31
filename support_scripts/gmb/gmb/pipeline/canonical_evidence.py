@@ -85,16 +85,24 @@ NAMED_SOURCE_EVIDENCE_CLASSES = (
 )
 ALL_EVIDENCE_CLASSES = NAMED_SOURCE_EVIDENCE_CLASSES + (EVIDENCE_CLASS_PROTEIN_VALIDATION,)
 
-# Named source (lower-cased) -> evidence class. Backbone is handled
-# separately (matched against the run's configured backbone_label, since
-# the same underlying class can be produced by either Helixer or Tiberius
-# depending which was actually loaded for a given run -- see
-# ScoringConfig.backbone_label).
+# Named source (lower-cased) -> evidence class. The two known backbone
+# sources (Helixer, Tiberius) are listed here directly so that the mapping
+# works correctly in standalone canonical-selection runs where the caller
+# may not have propagated backbone_label from the build step. The
+# backbone_label check in named_source_evidence_classes still fires first
+# (so a custom backbone label also works), and since both paths produce
+# EVIDENCE_CLASS_BACKBONE the result is identical when they agree.
 _SOURCE_TO_CLASS = {
+    # Known backbone sources
+    "helixer": EVIDENCE_CLASS_BACKBONE,
+    "tiberius": EVIDENCE_CLASS_BACKBONE,
+    # Short-read transcriptomic assemblers
     "scallop": EVIDENCE_CLASS_SHORT_READ,
     "stringtie": EVIDENCE_CLASS_SHORT_READ,
+    # Long-read transcriptomic
     "minimap2": EVIDENCE_CLASS_LONG_READ,
     "minimap2consensus": EVIDENCE_CLASS_LONG_READ,
+    # Protein alignments
     "orthodb": EVIDENCE_CLASS_PROTEIN_ALIGNMENT,
     "genblast": EVIDENCE_CLASS_PROTEIN_ALIGNMENT,
     "uniprot": EVIDENCE_CLASS_PROTEIN_ALIGNMENT,

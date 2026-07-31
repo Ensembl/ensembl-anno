@@ -62,6 +62,49 @@ from gmb.pipeline.subset_utils import (
 from gmb.utils.logging import resolve_log_file, setup_logging
 
 
+def compute_cds_phases(cds_intervals: list, strand: str) -> list:
+    """Compute GFF3 CDS phase values for a list of CDS intervals.
+
+    GFF3 phase is the number of bases at the biological 5' start of each CDS
+    segment that must be skipped to reach the first base of the next complete
+    codon.  Phase 0 at the transcript's biological 5' CDS start.  Values 0,
+    1, or 2 only; never ".".
+
+    Parameters
+    ----------
+    cds_intervals : list of (start, end)
+        CDS intervals as 0-based half-open genomic coordinates, in any order.
+    strand : str
+        "+" or "-".  Any other value returns an empty list (caller must guard
+        against unresolved strand before calling).
+
+    Returns
+    -------
+    list of int
+        Phase per CDS interval in ascending genomic coordinate order
+        (as required for GFF3 output).  Same length as cds_intervals.
+    """
+    if not cds_intervals or strand not in ("+", "-"):
+        return []
+
+    sorted_asc = sorted(cds_intervals)
+
+    # Biological translation order: ascending for "+", descending for "-"
+    bio_order = sorted_asc if strand == "+" else list(reversed(sorted_asc))
+
+    cumulative_bp = 0
+    bio_phases: list[int] = []
+    for s, e in bio_order:
+        bio_phases.append((3 - (cumulative_bp % 3)) % 3)
+        cumulative_bp += e - s
+
+    # Map back to ascending genomic (GFF3) order
+    if strand == "+":
+        return bio_phases
+    else:
+        return list(reversed(bio_phases))
+
+
 def compute_percentile_guardrails(
     locus_df: pd.DataFrame,
     config: PipelineConfig,
@@ -629,6 +672,7 @@ def main() -> None:
     selected_gff_rows = []
     selected_cdna_fa = []
     selected_prot_fa = []
+    unstranded_exclusion_rows: list[dict] = []
 
     gene_counter = 1
 
@@ -641,6 +685,24 @@ def main() -> None:
             gene_id = f"{args.gene_prefix}_{gene_counter:05d}"
             gene_chrom = gene_models[0]["chrom"]
             gene_strand = gene_models[0]["strand"]
+
+            # Exclude loci with unresolved strand: CDS coordinates and protein
+            # translations cannot be computed reliably without a known strand.
+            # Record every excluded transcript for attribution before skipping.
+            if gene_strand not in ("+", "-"):
+                for model in gene_models:
+                    unstranded_exclusion_rows.append(
+                        {
+                            "gene_id": gene_id,
+                            "candidate_transcript_id": model["id"],
+                            "chrom": gene_chrom,
+                            "strand": gene_strand,
+                            "evidence_sources": model.get("combined_evidence", ""),
+                            "rejection_reason": "UNRESOLVED_STRAND",
+                        }
+                    )
+                gene_counter += 1
+                continue
 
             # Collect all mRNA rows first so we can recompute gene span from children
             gene_mrna_rows = []
@@ -776,6 +838,7 @@ def main() -> None:
                     )
 
                 if ann:
+                    cds_phases = compute_cds_phases(ann["cds"], gene_strand)
                     for j, (s, e) in enumerate(ann["cds"]):
                         selected_gff_rows.append(
                             {
@@ -786,7 +849,7 @@ def main() -> None:
                                 "End": e,
                                 "Score": ".",
                                 "Strand": gene_strand,
-                                "Frame": ".",
+                                "Frame": str(cds_phases[j]) if j < len(cds_phases) else ".",
                                 "ID": f"{new_tid}.cds{j + 1}",
                                 "Parent": new_tid,
                             }
@@ -1052,6 +1115,17 @@ def main() -> None:
         ev_path = os.path.join(args.output_dir, "evidence_attribution.tsv")
         ev_df.to_csv(ev_path, sep="\t", index=False)
         print(f"  Evidence attribution: {ev_path}")
+
+    if unstranded_exclusion_rows:
+        excl_df = pd.DataFrame(unstranded_exclusion_rows)
+        excl_path = os.path.join(args.output_dir, "unstranded_exclusions.tsv")
+        excl_df.to_csv(excl_path, sep="\t", index=False)
+        n_excl = len(unstranded_exclusion_rows)
+        stats["unstranded_exclusions"] = n_excl
+        print(
+            f"  Unstranded exclusions: {n_excl} transcript(s) excluded (UNRESOLVED_STRAND). "
+            f"See {excl_path}"
+        )
 
     # --- Protein validation TSV (per-transcript DIAMOND/Psauron detail) ---
     # Written whenever the stage ran, independent of whether any row_dict
