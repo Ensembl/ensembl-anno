@@ -2,13 +2,21 @@
 
 Covers: seqname-interleaved splitting, chimera/oversized-span rejection,
 intron-chain grouping + min-read-support gating, single-exon collapsing,
-and the short-read rescue path for otherwise-unsupported single reads.
+dropped-record attribution, and the structure-aware short-read rescue path.
+
+Note: `build_consensus_for_seqname` returns a 3-tuple (records, stats, dropped).
+The legacy overlap-based rescue (`require_shortread_support_for_single_read_models`,
+`shortread_overlap_fraction`, `shortread_paths`) was removed; use the nested
+`shortread_rescue` config with `scallop_paths` / `stringtie_paths` instead.
 """
 
 import os
 
 from gmb.pipeline.longread_consensus import (
     LongreadConsensusConfig,
+    MultiExonRescueConfig,
+    ShortreadRescueConfig,
+    SingleExonRescueConfig,
     build_consensus_for_seqname,
     split_by_seqname,
 )
@@ -82,7 +90,7 @@ class TestConsensusBuilding:
         _write_gtf(split_path, lines)
 
         cfg = self._cfg(min_read_support_multi_exon=2)
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert len(records) == 1
         rec = records[0]
@@ -100,13 +108,14 @@ class TestConsensusBuilding:
         split_path = tmp_path / "1.gtf"
         _write_gtf(split_path, lines)
 
-        cfg = self._cfg(
-            min_read_support_multi_exon=2, require_shortread_support_for_single_read_models=False
-        )
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        cfg = self._cfg(min_read_support_multi_exon=2)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert records == []
         assert stats["dropped_single_read_no_rescue"] == 1
+        # Dropped attribution must include this read
+        assert len(dropped) >= 1
+        assert any(d["reason_code"] == "DROPPED_SINGLE_READ_NO_RESCUE" for d in dropped)
 
     def test_chimeric_intron_rejected(self, tmp_path):
         # Gap of 100,000bp between exons -- far beyond max_intron_length.
@@ -119,7 +128,7 @@ class TestConsensusBuilding:
         cfg = self._cfg(
             max_intron_length=3000, min_read_support_multi_exon=2, max_span_length=200_000
         )
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert records == []
         assert stats["dropped_bad_intron_or_overlap"] == 3
@@ -133,7 +142,7 @@ class TestConsensusBuilding:
         _write_gtf(split_path, lines)
 
         cfg = self._cfg(max_span_length=45_000)
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert records == []
         assert stats["dropped_oversized_span"] == 3
@@ -147,53 +156,70 @@ class TestConsensusBuilding:
         _write_gtf(split_path, lines)
 
         cfg = self._cfg(min_read_support_single_exon=4)
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert records == []
         assert stats["dropped_low_support"] >= 1
 
-    def test_single_read_rescued_by_shortread_support(self, tmp_path):
-        lines = _transcript_block("1", "r1", "+", [(1000, 1100)])
+    def test_single_read_rescued_by_structure_aware_rescue(self, tmp_path):
+        """Single multi-exon read rescued by M1 (junction-complete) policy."""
+        lines = _transcript_block("1", "r1", "+", [(1000, 1100), (1300, 1400)])
         split_path = tmp_path / "1.gtf"
         _write_gtf(split_path, lines)
 
         scallop_path = tmp_path / "scallop.gtf"
         _write_gtf(
             scallop_path,
-            ['1\tScallop\texon\t1000\t1100\t.\t+\t.\tgene_id "s1"; transcript_id "s1";'],
+            [
+                '1\tScallop\texon\t1000\t1100\t.\t+\t.\tgene_id "s1"; transcript_id "s1";',
+                '1\tScallop\texon\t1300\t1400\t.\t+\t.\tgene_id "s1"; transcript_id "s1";',
+            ],
         )
 
-        cfg = self._cfg(
-            min_read_support_single_exon=4,
-            require_shortread_support_for_single_read_models=True,
-            shortread_overlap_fraction=0.5,
+        rescue_cfg = ShortreadRescueConfig(
+            enabled=True,
+            multi_exon=MultiExonRescueConfig(enabled=True, policy="M1", junction_tolerance_bp=0),
+            single_exon=SingleExonRescueConfig(enabled=False),
         )
-        records, stats = build_consensus_for_seqname(
-            "1", str(split_path), cfg, shortread_paths=[str(scallop_path)]
+        cfg = LongreadConsensusConfig(
+            min_read_support_multi_exon=2,
+            shortread_rescue=rescue_cfg,
+        )
+        records, stats, dropped = build_consensus_for_seqname(
+            "1", str(split_path), cfg, scallop_paths=[str(scallop_path)]
         )
 
         assert len(records) == 1
         assert records[0]["rescued_by_shortread"] is True
+        assert records[0]["rescue_reason"] == "M1_junction_complete"
         assert stats["rescued_by_shortread"] == 1
 
-    def test_single_read_not_rescued_without_shortread_overlap(self, tmp_path):
-        lines = _transcript_block("1", "r1", "+", [(1000, 1100)])
+    def test_single_read_not_rescued_at_different_locus(self, tmp_path):
+        """SR transcript at a completely different locus must not rescue the LR model."""
+        lines = _transcript_block("1", "r1", "+", [(1000, 1100), (1300, 1400)])
         split_path = tmp_path / "1.gtf"
         _write_gtf(split_path, lines)
 
         scallop_path = tmp_path / "scallop.gtf"
         _write_gtf(
             scallop_path,
-            # Different locus entirely -- no overlap.
-            ['1\tScallop\texon\t50000\t50100\t.\t+\t.\tgene_id "s1"; transcript_id "s1";'],
+            [
+                '1\tScallop\texon\t50000\t50100\t.\t+\t.\tgene_id "s1"; transcript_id "s1";',
+                '1\tScallop\texon\t50300\t50400\t.\t+\t.\tgene_id "s1"; transcript_id "s1";',
+            ],
         )
 
-        cfg = self._cfg(
-            min_read_support_single_exon=4,
-            require_shortread_support_for_single_read_models=True,
+        rescue_cfg = ShortreadRescueConfig(
+            enabled=True,
+            multi_exon=MultiExonRescueConfig(enabled=True, policy="M1", junction_tolerance_bp=0),
+            single_exon=SingleExonRescueConfig(enabled=False),
         )
-        records, stats = build_consensus_for_seqname(
-            "1", str(split_path), cfg, shortread_paths=[str(scallop_path)]
+        cfg = LongreadConsensusConfig(
+            min_read_support_multi_exon=2,
+            shortread_rescue=rescue_cfg,
+        )
+        records, stats, dropped = build_consensus_for_seqname(
+            "1", str(split_path), cfg, scallop_paths=[str(scallop_path)]
         )
 
         assert records == []
@@ -210,7 +236,7 @@ class TestConsensusBuilding:
         _write_gtf(split_path, lines)
 
         cfg = self._cfg(min_read_support_multi_exon=2)
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert len(records) == 1
         assert records[0]["exons"][0][0] == 1000
@@ -229,7 +255,7 @@ class TestConsensusBuilding:
         _write_gtf(split_path, lines)
 
         cfg = self._cfg(min_read_support_single_exon=4, min_intergenic_gap=500)
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert len(records) == 2
         assert stats["clusters_found"] == 2
@@ -251,9 +277,25 @@ class TestConsensusBuilding:
         _write_gtf(split_path, lines)
 
         cfg = self._cfg(min_read_support_multi_exon=2)
-        records, stats = build_consensus_for_seqname("1", str(split_path), cfg)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
 
         assert len(records) == 2
         gene_ids = {r["gene_id"] for r in records}
         assert len(gene_ids) == 2, "distant models must not share a gene_id"
         assert stats["genes_output"] == 2
+
+    def test_dropped_list_populated_for_rejected_reads(self, tmp_path):
+        # A single low-support read produces a dropped entry.
+        lines = _transcript_block("1", "r1", "+", [(100, 200), (300, 400)])
+        split_path = tmp_path / "1.gtf"
+        _write_gtf(split_path, lines)
+
+        cfg = self._cfg(min_read_support_multi_exon=2)
+        records, stats, dropped = build_consensus_for_seqname("1", str(split_path), cfg)
+
+        assert records == []
+        assert len(dropped) >= 1
+        entry = dropped[0]
+        assert "reason_code" in entry
+        assert "rejection_stage" in entry
+        assert entry["seqname"] == "1"

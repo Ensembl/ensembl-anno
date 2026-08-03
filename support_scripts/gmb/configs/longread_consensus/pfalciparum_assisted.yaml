@@ -1,0 +1,38 @@
+# P. falciparum (GCA_000002765.3) long-read consensus — short-read-assisted mode
+#
+# Same thresholds as pfalciparum_pure but with structure-aware short-read
+# rescue enabled.  Recommended only when Scallop and/or StringTie assemblies
+# from the same (or similar) biological condition are available.
+#
+# M1+S1 is the validated configuration for GCA_000002765.3:
+#   - chr1 experiment showed C (M1+S1) = A (disabled) in downstream GMB output;
+#   - no chimeric locus bridges observed;
+#   - 1 confirmed rescued model on chr1 with validated junction.
+# S1 is disabled by default here (single-exon SR assemblies tend to be noisy);
+# enable explicitly if single-exon long-read rescue is needed.
+
+max_span_length: 45000
+max_intron_length: 3000
+min_intergenic_gap: 500
+collapse_terminal_variation_bp: 100
+splice_site_tolerance_bp: 10
+min_read_support_multi_exon: 2
+min_read_support_single_exon: 4
+suppress_contained_models: true
+
+shortread_rescue:
+  enabled: true
+
+  multi_exon:
+    enabled: true
+    policy: M1
+    junction_tolerance_bp: 10
+    require_both_assemblers: false
+
+  single_exon:
+    enabled: false        # enable explicitly when single-exon rescue is needed
+    policy: S1
+    reciprocal_overlap_min: 0.80
+    boundary_tolerance_bp: 20
+    require_single_exon_sr_model: true
+    require_both_assemblers: false
