@@ -57,7 +57,7 @@ def _tx(tid, strand, *exon_pairs, source="scallop", file_idx=0):
         "strand": strand,
         "exons": list(exon_pairs),
         "source": source,
-        "source_file": f"fake.gtf",
+        "source_file": "fake.gtf",
     }
 
 

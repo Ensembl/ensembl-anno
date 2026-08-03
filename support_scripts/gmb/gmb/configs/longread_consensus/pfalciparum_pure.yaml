@@ -1,0 +1,37 @@
+# P. falciparum (GCA_000002765.3) long-read consensus — pure long-read mode
+#
+# All thresholds derived from the reference annotation
+# (Plasmodium_falciparum.GCA000002765v3.63.gff3.gz) and empirical
+# analysis of the raw Minimap2 GTF for GCA_000002765.3.
+# Do not use for mammals, plants, fungi, or other Apicomplexa without
+# re-deriving thresholds for the target genome.
+#
+# Reference-derived limits (see run report for methodology):
+#   real max transcript span: 32,487 bp
+#   real max intron length:    2,425 bp
+#   real single-exon fraction: ~45.6 %
+
+# Chimera / mis-alignment screening
+max_span_length: 45000       # headroom above reference max (32,487 bp)
+max_intron_length: 3000      # headroom above reference max (2,425 bp)
+
+# Locus clustering
+min_intergenic_gap: 500
+
+# Consensus grouping — 100 bp matches established long-read collapsing practice
+collapse_terminal_variation_bp: 100
+
+# Splice-site tolerance for grouping reads by intron-chain signature only
+# (not used for rescue matching — rescue uses explicit coordinate comparison)
+splice_site_tolerance_bp: 10
+
+# Minimum read support to retain a consensus model
+min_read_support_multi_exon: 2
+min_read_support_single_exon: 4
+
+# Short-read rescue: disabled in pure mode
+shortread_rescue:
+  enabled: false
+
+# Post-consensus containment suppression
+suppress_contained_models: true

@@ -657,15 +657,29 @@ def load_config(path: Optional[Union[str, list]] = None, preset: str = "fungi") 
 
     # Base configuration based on preset
     if preset == "fungi":
-        # Look for configs/ relative to the gmb package root (support_scripts/gmb/)
-        pkg_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        default_yaml = os.path.join(pkg_dir, "configs", "fungi_default.yaml")
-        if os.path.exists(default_yaml):
-            with open(default_yaml) as fh:
-                data = yaml.safe_load(fh) or {}
-            _update_dataclass(cfg, data)
-        else:
-            raise FileNotFoundError(f"Missing default config preset: {default_yaml}")
+        # Resolve fungi_default.yaml from the installed package first (wheel-safe),
+        # then fall back to the source-tree location for uninstalled development use.
+        _pkg_configs = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs"
+        )
+        _src_configs = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "configs",
+        )
+        default_yaml = None
+        for _dir in (_pkg_configs, _src_configs):
+            _candidate = os.path.join(_dir, "fungi_default.yaml")
+            if os.path.exists(_candidate):
+                default_yaml = _candidate
+                break
+        if default_yaml is None:
+            raise FileNotFoundError(
+                "Missing default config preset fungi_default.yaml. "
+                f"Looked in: {_pkg_configs}, {_src_configs}"
+            )
+        with open(default_yaml) as fh:
+            data = yaml.safe_load(fh) or {}
+        _update_dataclass(cfg, data)
 
     # User overrides -- applied in order, so later paths win on any key
     # they also set (see _update_dataclass's deep-merge/list-replace rules,

@@ -61,7 +61,6 @@ import time
 from gmb.pipeline.longread import (
     build_consensus_for_seqname,
     load_longread_consensus_config,
-    load_split_manifest,
     split_by_seqname,
     validate_config,
     validate_split_dir,

@@ -27,7 +27,7 @@ from typing import Optional
 
 from gmb.utils.intervals import reciprocal_overlap
 
-from .config import LongreadConsensusConfig, ShortreadRescueConfig
+from .config import LongreadConsensusConfig
 
 # ---------------------------------------------------------------------------
 # Junction extraction — ordered, no snapping

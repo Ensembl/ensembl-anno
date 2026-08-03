@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "gene-model-builder"
 version = "2.0.0"
 description = "Consensus gene model builder for eukaryotic genomes"
-# Genuinely the lowest supported version, not just the local dev version:
-# the pinned/resolvable dependency versions (pandas, numpy, biopython) all
-# declare Requires-Python >=3.9 already, and CI (.github/workflows/ci.yml)
-# has only ever tested 3.9 and 3.11 -- 3.8 was never actually exercised.
-# See the Python-support note in README.md for the full evidence trail.
-requires-python = ">=3.9"
+# Minimum version is 3.10: the production cluster runs 3.10.20 (conda-forge),
+# all dependencies are compatible, and all modules use `from __future__ import
+# annotations` to allow X | Y union syntax.  3.9 was removed from the CI
+# matrix after confirming it was never exercised in production.
+# See python_compat/ for the full compatibility audit.
+requires-python = ">=3.10"
 dependencies = [
     "pandas>=2.0,<3",
     "pyranges>=0.0.120,<=0.1.4",
@@ -41,12 +41,16 @@ gmb-interpro-resolve = "gmb.cli.interpro_resolve:main"
 [tool.setuptools.packages.find]
 include = ["gmb*"]
 
+[tool.setuptools.package-data]
+"gmb.configs" = ["*.yaml"]
+"gmb.configs.longread_consensus" = ["*.yaml"]
+
 # ---------------------------------------------------------------------------
 # black
 # ---------------------------------------------------------------------------
 [tool.black]
 line-length = 99
-target-version = ["py39"]
+target-version = ["py310"]
 
 # ---------------------------------------------------------------------------
 # isort
@@ -63,7 +67,7 @@ known_first_party = [
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 99
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [
@@ -79,11 +83,11 @@ select = [
 ignore = [
     "E501",   # line too long — handled by black
     "E741",   # ambiguous variable name (common in genomics: l, s, e)
-    "B905",   # zip strict — not available in Python 3.8
+    "B905",   # zip strict — semantics differ from plain zip; explicit is safer
     "SIM108", # ternary — sometimes less readable
-    "UP007",  # use X | Y for union types — not available in 3.8
-    "UP045",  # use X | None — same reason as UP007; Optional[X] is clearer for 3.8 compat
-    "UP022",  # capture_output — requires Python 3.7+ but reads less clearly
+    "UP007",  # Optional[X] / Union[X, Y] kept for readability; X|Y valid in 3.10+ but style choice
+    "UP045",  # Optional[X] kept for readability — same reason as UP007
+    "UP022",  # capture_output — less readable than explicit stdout=/stderr=
     "RUF002", # ambiguous unicode in docstring — prime symbols (′) intentional in genomics
     "RUF003", # ambiguous unicode in comment — same reason
     "SIM102", # nested if — collapsing hurts readability in complex filter logic
@@ -99,6 +103,9 @@ ignore = [
 # check and an explicit `== True` differ for NaN -- an explicit comparison
 # is the safer, intent-revealing choice here, not an oversight.
 "gmb/compare/tool_performance_analysis.py" = ["E712"]
+# __all__ in the longread package __init__ is grouped by logical category (config,
+# io, rescue, reporting) for readability; alphabetical sorting would destroy that.
+"gmb/pipeline/longread/__init__.py" = ["RUF022"]
 
 # ---------------------------------------------------------------------------
 # pytest

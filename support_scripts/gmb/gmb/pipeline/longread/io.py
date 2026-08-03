@@ -64,7 +64,7 @@ def load_transcripts_from_split_file(split_path: str) -> tuple[dict[str, dict], 
                         {"lineno": lineno, "reason": "WRONG_FIELD_COUNT", "line": line[:200]}
                     )
                 continue
-            chrom, _source, feat, start_s, end_s, _score, strand, _frame, attrs = f
+            _chrom, _source, feat, start_s, end_s, _score, strand, _frame, attrs = f
             if feat != "exon":
                 continue
             try:
