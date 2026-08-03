@@ -60,6 +60,7 @@ import time
 
 from gmb.pipeline.longread import (
     build_consensus_for_seqname,
+    list_presets,
     load_longread_consensus_config,
     split_by_seqname,
     validate_config,
@@ -200,6 +201,18 @@ def main(argv=None) -> None:
         sys.exit("ERROR: --input-split-gtf requires --seqname.")
     if args.split_only and not args.input:
         sys.exit("ERROR: --split-only requires --input.")
+
+    # Stage 2 consensus requires an explicit species preset or config file.
+    # The built-in LongreadConsensusConfig defaults are P. falciparum-specific
+    # (max_intron_length=3000, etc.) and must not silently apply to other organisms.
+    if not args.split_only and args.preset is None and args.config is None:
+        available = list_presets()
+        sys.exit(
+            "ERROR: --preset or --config is required for Stage 2 consensus.\n"
+            "The default thresholds are derived from P. falciparum and are not "
+            "appropriate for arbitrary species.\n"
+            f"Available presets: {available or ['none installed']}"
+        )
 
     # --- Load and validate config ---
     try:

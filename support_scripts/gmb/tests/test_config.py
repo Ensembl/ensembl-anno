@@ -83,9 +83,9 @@ class TestYamlOverride:
         with pytest.raises(ValueError, match="Unknown configuration key"):
             cfg = load_config(str(yaml_file))
 
-    def test_missing_file_returns_defaults(self):
-        cfg = load_config("/nonexistent/path.yaml")
-        assert cfg.orf.min_codons == 33
+    def test_missing_file_raises_error(self):
+        with pytest.raises(FileNotFoundError, match="Config file not found"):
+            load_config("/nonexistent/path.yaml")
 
 
 class TestUtrSupportConfig:
@@ -146,6 +146,37 @@ class TestPolicyAlias:
     def test_default_preset_uses_penalize(self):
         cfg = load_config()
         assert cfg.protein_validation.policy == "penalize"
+
+
+class TestProteinValidationConfig:
+    def test_enabled_without_diamond_db_raises(self, tmp_path):
+        yaml_file = tmp_path / "pv.yaml"
+        yaml_file.write_text("protein_validation:\n  enabled: true\n  diamond_db: null\n")
+        with pytest.raises(ValueError, match="diamond_db must be set"):
+            load_config(str(yaml_file))
+
+    def test_enabled_with_diamond_db_is_valid(self, tmp_path):
+        yaml_file = tmp_path / "pv.yaml"
+        yaml_file.write_text(
+            "protein_validation:\n  enabled: true\n  diamond_db: /data/swissprot.dmnd\n"
+        )
+        cfg = load_config(str(yaml_file))
+        assert cfg.protein_validation.enabled is True
+        assert cfg.protein_validation.diamond_db == "/data/swissprot.dmnd"
+
+    def test_disabled_with_no_diamond_db_is_valid(self):
+        cfg = load_config()
+        assert cfg.protein_validation.enabled is False
+        assert cfg.protein_validation.diamond_db is None
+
+    def test_enabled_with_zero_diamond_weight_no_db_is_valid(self, tmp_path):
+        yaml_file = tmp_path / "pv.yaml"
+        yaml_file.write_text(
+            "protein_validation:\n  enabled: true\n  diamond_weight: 0\n" "  psauron_weight: 1.0\n"
+        )
+        cfg = load_config(str(yaml_file))
+        assert cfg.protein_validation.enabled is True
+        assert cfg.protein_validation.diamond_db is None
 
 
 class TestLayeredConfig:
@@ -215,11 +246,11 @@ class TestLayeredConfig:
         with pytest.raises(ValueError, match="Unknown configuration key"):
             load_config([one, two])
 
-    def test_missing_file_in_list_is_skipped_others_still_applied(self, tmp_path):
+    def test_missing_file_in_list_raises_error(self, tmp_path):
         one = self._write(tmp_path, "one.yaml", "orf:\n  min_codons: 50\n")
         missing = str(tmp_path / "does_not_exist.yaml")
-        cfg = load_config([one, missing])
-        assert cfg.orf.min_codons == 50  # first file's override still applied
+        with pytest.raises(FileNotFoundError, match="Config file not found"):
+            load_config([one, missing])
 
     def test_empty_list_and_none_both_use_defaults(self, tmp_path):
         assert load_config([]).orf.min_codons == load_config(None).orf.min_codons == 33
@@ -439,6 +470,234 @@ class TestInterProResolverConfig:
         override.write_text("interpro_review:\n  enabled: true\n")
         with pytest.raises(ValueError, match="interpro_review"):
             load_config(str(override))
+
+
+class TestLayeredPresetArchitecture:
+    """Tests for the standard → preset → user-override hierarchy.
+
+    Parts 2, 3, 12, 13, 14, and 16 of the architecture refactor spec.
+    """
+
+    # ------------------------------------------------------------------
+    # Part 13a: preset resolution
+    # ------------------------------------------------------------------
+
+    def test_list_build_presets_returns_nonempty_list(self):
+        from gmb.pipeline.config import list_build_presets
+
+        presets = list_build_presets()
+        assert isinstance(presets, list)
+        assert len(presets) >= 2, f"Expected at least fungi and apicomplexa, got {presets}"
+        assert "fungi" in presets
+        assert "apicomplexa" in presets
+
+    def test_list_build_presets_excludes_standard(self):
+        from gmb.pipeline.config import list_build_presets
+
+        presets = list_build_presets()
+        assert "standard" not in presets, "standard is the internal base, not a user preset"
+
+    def test_unknown_preset_raises_file_not_found(self):
+        with pytest.raises(FileNotFoundError, match="Unknown preset"):
+            load_config(preset="does_not_exist")
+
+    # ------------------------------------------------------------------
+    # Part 13b: standard-only preset (preset=None)
+    # ------------------------------------------------------------------
+
+    def test_preset_none_loads_standard_only(self):
+        # standard.yaml sets fungal_single_exon_mode: false (neutral).
+        # fungi.yaml sets it true.  preset=None must not load fungi.
+        cfg = load_config(preset=None)
+        assert cfg.scoring.fungal_single_exon_mode is False
+
+    def test_preset_string_none_also_loads_standard_only(self):
+        cfg = load_config(preset="none")
+        assert cfg.scoring.fungal_single_exon_mode is False
+
+    def test_standard_has_permissive_transcript_length(self):
+        cfg = load_config(preset=None)
+        # standard sets 2,000,000 (effectively unlimited); fungi tightens to 20,000
+        assert cfg.transcriptomic_filter.max_transcript_length >= 100_000
+
+    def test_standard_has_permissive_intron_length(self):
+        cfg = load_config(preset=None)
+        assert cfg.transcriptomic_filter.max_intron_length >= 100_000
+
+    def test_standard_has_no_transcript_splitting(self):
+        cfg = load_config(preset=None)
+        assert cfg.transcript_splitting.split_enabled is False
+
+    def test_standard_has_more_isoforms_per_locus(self):
+        cfg_std = load_config(preset=None)
+        cfg_fungi = load_config(preset="fungi")
+        # standard is permissive (5); fungi is compact (3)
+        assert cfg_std.scoring.max_isoforms_per_locus > cfg_fungi.scoring.max_isoforms_per_locus
+
+    # ------------------------------------------------------------------
+    # Part 13c: fungi preset regression (standard + fungi == old fungi_default)
+    # ------------------------------------------------------------------
+
+    def test_fungi_preset_min_codons(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert cfg.orf.min_codons == raw["orf"]["min_codons"]
+
+    def test_fungi_preset_max_transcript_length(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert (
+            cfg.transcriptomic_filter.max_transcript_length
+            == raw["transcriptomic_filter"]["max_transcript_length"]
+        )
+
+    def test_fungi_preset_max_intron_length(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert (
+            cfg.transcriptomic_filter.max_intron_length
+            == raw["transcriptomic_filter"]["max_intron_length"]
+        )
+
+    def test_fungi_preset_split_enabled(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert (
+            cfg.transcript_splitting.split_enabled == raw["transcript_splitting"]["split_enabled"]
+        )
+
+    def test_fungi_preset_backbone_weight(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert cfg.scoring.weights.backbone == raw["scoring"]["weights"]["backbone"]
+
+    def test_fungi_preset_max_isoforms(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert cfg.scoring.max_isoforms_per_locus == raw["scoring"]["max_isoforms_per_locus"]
+
+    def test_fungi_preset_fungal_single_exon_mode(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert cfg.scoring.fungal_single_exon_mode == raw["scoring"]["fungal_single_exon_mode"]
+
+    def test_fungi_preset_utr_caps(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert cfg.utr.max_5p_bp == raw["utr"]["max_5p_bp"]
+        assert cfg.utr.max_3p_bp == raw["utr"]["max_3p_bp"]
+        assert cfg.utr.max_total_bp == raw["utr"]["max_total_bp"]
+
+    def test_fungi_preset_protein_validation_weights(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert cfg.protein_validation.diamond_weight == raw["protein_validation"]["diamond_weight"]
+        assert cfg.protein_validation.psauron_weight == raw["protein_validation"]["psauron_weight"]
+        assert cfg.protein_validation.min_score == raw["protein_validation"]["min_score"]
+        assert cfg.protein_validation.policy == raw["protein_validation"]["policy"]
+
+    def test_fungi_preset_end_tolerance(self):
+        cfg = load_config(preset="fungi")
+        raw = _fungi_default_raw()
+        assert cfg.utr.end_tolerance_bp == raw["utr"]["end_tolerance_bp"]
+
+    # ------------------------------------------------------------------
+    # Part 13d: apicomplexa preset smoke tests
+    # ------------------------------------------------------------------
+
+    def test_apicomplexa_preset_loads(self):
+        cfg = load_config(preset="apicomplexa")
+        assert isinstance(cfg, PipelineConfig)
+
+    def test_apicomplexa_has_tiberius_backbone_label(self):
+        cfg = load_config(preset="apicomplexa")
+        assert cfg.scoring.backbone_label == "Tiberius"
+
+    def test_apicomplexa_has_larger_max_transcript_length_than_fungi(self):
+        cfg_ap = load_config(preset="apicomplexa")
+        cfg_fn = load_config(preset="fungi")
+        assert cfg_ap.transcriptomic_filter.max_transcript_length > (
+            cfg_fn.transcriptomic_filter.max_transcript_length
+        )
+
+    def test_apicomplexa_has_lower_backbone_weight_than_fungi(self):
+        cfg_ap = load_config(preset="apicomplexa")
+        cfg_fn = load_config(preset="fungi")
+        assert cfg_ap.scoring.weights.backbone < cfg_fn.scoring.weights.backbone
+
+    def test_apicomplexa_has_genblast_in_skip_orf(self):
+        cfg = load_config(preset="apicomplexa")
+        assert "GenBlast" in cfg.qc.skip_orf_inference_tracks
+
+    def test_apicomplexa_has_higher_5p_utr_than_fungi(self):
+        cfg_ap = load_config(preset="apicomplexa")
+        cfg_fn = load_config(preset="fungi")
+        assert cfg_ap.utr.max_5p_bp > cfg_fn.utr.max_5p_bp
+
+    def test_apicomplexa_plus_user_override_layers_correctly(self, tmp_path):
+        override = tmp_path / "override.yaml"
+        override.write_text("orf:\n  min_codons: 25\n")
+        cfg = load_config(str(override), preset="apicomplexa")
+        assert cfg.orf.min_codons == 25
+        assert cfg.scoring.backbone_label == "Tiberius"
+
+    # ------------------------------------------------------------------
+    # Part 12: deprecated preset alias
+    # ------------------------------------------------------------------
+
+    def test_fungi_default_alias_emits_deprecation_warning(self):
+        with pytest.warns(DeprecationWarning, match="fungi_default"):
+            cfg = load_config(preset="fungi_default")
+        # Values must be identical to the current fungi preset.
+        cfg_fungi = load_config(preset="fungi")
+        assert cfg.orf.min_codons == cfg_fungi.orf.min_codons
+        assert cfg.scoring.fungal_single_exon_mode == cfg_fungi.scoring.fungal_single_exon_mode
+
+    # ------------------------------------------------------------------
+    # Part 10: dump_config round-trip
+    # ------------------------------------------------------------------
+
+    def test_dump_config_returns_dict(self):
+        from gmb.pipeline.config import dump_config
+
+        cfg = load_config()
+        d = dump_config(cfg)
+        assert isinstance(d, dict)
+        assert "orf" in d
+        assert "scoring" in d
+
+    def test_dump_config_values_match_cfg(self):
+        from gmb.pipeline.config import dump_config
+
+        cfg = load_config(preset="fungi")
+        d = dump_config(cfg)
+        assert d["orf"]["min_codons"] == cfg.orf.min_codons
+        assert d["scoring"]["max_isoforms_per_locus"] == cfg.scoring.max_isoforms_per_locus
+
+    # ------------------------------------------------------------------
+    # Part 17: package layout — bundled presets load outside checkout
+    # ------------------------------------------------------------------
+
+    def test_fungi_preset_loads_via_importlib(self):
+        from importlib.resources import files as pkg_files
+
+        pkg = pkg_files("gmb.configs")
+        text = pkg.joinpath("fungi.yaml").read_text(encoding="utf-8")
+        assert "fungal_single_exon_mode" in text
+
+    def test_standard_preset_loads_via_importlib(self):
+        from importlib.resources import files as pkg_files
+
+        pkg = pkg_files("gmb.configs")
+        text = pkg.joinpath("standard.yaml").read_text(encoding="utf-8")
+        assert "max_isoforms_per_locus" in text
+
+    def test_apicomplexa_preset_loads_via_importlib(self):
+        from importlib.resources import files as pkg_files
+
+        pkg = pkg_files("gmb.configs")
+        text = pkg.joinpath("apicomplexa.yaml").read_text(encoding="utf-8")
+        assert "Tiberius" in text
 
 
 if __name__ == "__main__":

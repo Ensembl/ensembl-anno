@@ -82,7 +82,7 @@ protein_validation:
   enabled: false
   diamond_path: "diamond"
   psauron_path: "psauron"
-  diamond_db: "swissprot.dmnd"
+  # diamond_db must be set explicitly when enabled: true and diamond_weight > 0
   diamond_weight: 0.7
   psauron_weight: 0.3
   min_score: 0.7

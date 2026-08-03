@@ -30,6 +30,8 @@ import sys
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
+import yaml
+
 if TYPE_CHECKING:
     from gmb.pipeline.config import PipelineConfig
 
@@ -38,7 +40,7 @@ import pandas as pd
 import pyranges as pr
 
 from gmb.pipeline.annotate_cds_utrs import annotate_all_transcripts, load_genome
-from gmb.pipeline.config import load_config
+from gmb.pipeline.config import dump_config, list_build_presets, load_config
 from gmb.pipeline.dedup_genes import dedup_genes
 from gmb.pipeline.duplicate_transcript_collapse import collapse_exact_duplicate_transcripts
 from gmb.pipeline.evidence_filter import (
@@ -323,6 +325,26 @@ def compute_utr_end_support(
     return res
 
 
+def _write_resolved_config(cfg, output_dir: str) -> None:
+    """Write the fully-resolved configuration to the output directory.
+
+    Produces two files:
+    - ``resolved_config.yaml`` — human-readable YAML of every setting
+    - ``resolved_config_sha256`` — SHA-256 hex digest of that file
+    """
+    import hashlib
+
+    resolved_path = os.path.join(output_dir, "resolved_config.yaml")
+    sha_path = os.path.join(output_dir, "resolved_config_sha256")
+    data = dump_config(cfg)
+    text = yaml.dump(data, default_flow_style=False, sort_keys=True)
+    with open(resolved_path, "w") as fh:
+        fh.write(text)
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    with open(sha_path, "w") as fh:
+        fh.write(digest + "\n")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_setup_args = parser.add_argument_group("Setup")
@@ -333,7 +355,20 @@ def parse_args():
         "files in order (each later --config overrides earlier ones on the "
         "same keys); a single --config continues to work exactly as before.",
     )
-    parser.add_setup_args.add_argument("--preset", default="fungi", help="Config preset")
+    parser.add_setup_args.add_argument(
+        "--preset",
+        default="fungi",
+        help=(
+            "Clade preset to load before any --config overrides "
+            "(default: 'fungi').  Use --list-presets to see what is "
+            "installed.  Pass 'none' to use the neutral standard base only."
+        ),
+    )
+    parser.add_setup_args.add_argument(
+        "--list-presets",
+        action="store_true",
+        help="Print available clade presets and exit.",
+    )
     parser.add_setup_args.add_argument(
         "--check-deps", action="store_true", help="Check external tool dependencies and exit"
     )
@@ -455,6 +490,15 @@ def main() -> None:
     """
     args = parse_args()
 
+    if args.list_presets:
+        presets = list_build_presets()
+        if presets:
+            for p in presets:
+                print(p)
+        else:
+            print("No presets installed.  Run 'pip install -e .' to install package data.")
+        return
+
     os.makedirs(args.output_dir, exist_ok=True)
     log_file = resolve_log_file(args.output_dir, args.log_file, args.no_log_file)
     setup_logging(log_file=log_file, capture_stdio=log_file is not None)
@@ -473,6 +517,9 @@ def main() -> None:
     # matches on this label) applies correctly regardless of --helixer vs
     # --tiberius.
     config.scoring.backbone_label = backbone_label
+
+    # Write the fully-resolved configuration so runs are reproducible.
+    _write_resolved_config(config, args.output_dir)
 
     if args.check_deps:
         check_dependencies(config.protein_validation)

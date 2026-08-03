@@ -233,7 +233,16 @@ def check_dependencies(val_cfg: ProteinValidationConfig) -> None:
         sys.exit(1)
     print(f"  Detected psauron version: {caps['version'] or 'unknown'}")
 
-    if not os.path.exists(val_cfg.diamond_db) and not os.path.exists(f"{val_cfg.diamond_db}.dmnd"):
+    if val_cfg.diamond_db is None:
+        if val_cfg.diamond_weight > 0:
+            print(
+                "ERROR: protein_validation.diamond_db must be set when diamond_weight > 0.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    elif not os.path.exists(val_cfg.diamond_db) and not os.path.exists(
+        f"{val_cfg.diamond_db}.dmnd"
+    ):
         print(f"ERROR: DIAMOND database '{val_cfg.diamond_db}' not found.", file=sys.stderr)
         sys.exit(1)
 

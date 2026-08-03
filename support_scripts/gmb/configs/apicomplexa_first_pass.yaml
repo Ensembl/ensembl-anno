@@ -1,10 +1,15 @@
 # Apicomplexa first-pass GMB config -- Plasmodium falciparum GCA_000002765.3
 #
+# MIGRATION NOTE: The bundled `--preset apicomplexa` preset (gmb/configs/apicomplexa.yaml)
+# supersedes this file.  Use `gmb-build --preset apicomplexa` instead of
+# `gmb-build --config configs/apicomplexa_first_pass.yaml`.  This file is
+# retained for reference and backward compatibility.
+#
 # This is a DELTA file. It is loaded via `load_config(path, preset="fungi")`,
-# so it is merged on top of fungi_default.yaml (dicts deep-merge, lists
+# so it is merged on top of standard.yaml + fungi.yaml (dicts deep-merge, lists
 # replace entirely, unknown keys raise an error). Only keys that should
 # differ from the fungal preset are listed below; everything else falls
-# through to fungi_default.yaml unchanged. Do not edit fungi_default.yaml.
+# through unchanged.
 #
 # Every number below is grounded in stats computed directly from this
 # genome's own reference annotation

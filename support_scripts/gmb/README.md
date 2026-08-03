@@ -1,81 +1,61 @@
 # Gene Model Builder
 
-A robust, configurable Python pipeline for generating high-quality consensus gene models by integrating transcriptomic assemblies (Scallop, StringTie), *ab initio* predictions (Helixer), and protein alignment evidence (OrthoDB, UniProt).
-
-Originally developed for eukaryotic genomes, the pipeline has been heavily optimised with a "fungal-friendly" configuration preset, handling compact genomes with single-exon genes and short ORFs accurately.
+A configurable Python pipeline for generating consensus eukaryotic gene models by
+integrating transcriptomic assemblies (Scallop, StringTie), *ab initio* predictions
+(Helixer or Tiberius), and protein alignment evidence (OrthoDB, UniProt, GenBlast).
+Optional protein validation (DIAMOND + Psauron) and canonical transcript selection
+are available as post-build steps.
 
 ---
 
-## Features
+## Requirements
 
-*   **Evidence Integration:** Merges and reconciles models from Scallop, StringTie, and Helixer.
-*   **Protein Evidence Support:** Uses OrthoDB and UniProt alignments to confirm models and identify true open reading frames.
-*   **Pre-Genebuild Evidence Filtering:** Radically reduces noise before clustering by filtering out competing fragments, redundant protein alignments, short artifactual Helixer models, and transcriptomic chimeras (e.g., UTR-joined genes).
-*   **Configurable Scoring System:** Selects the best isoform for a locus based on a weighted sum of protein evidence, *ab initio* support, and transcriptomic support.
-*   **Fungal Optimization:** Defaults cater to fungal biology (e.g., lower `min_codons` threshold of 33, `allow_single_exon` enabled, stringent chimera intron length limits).
-*   **100% Python:** No Perl or external script dependencies for FASTA extraction or CDS annotation.
-*   **Comprehensive Output:** Generates GFF3 annotations, cDNA/CDS/Protein FASTA files, and detailed summary metrics (JSON/TSV).
-*   **Annotation Validation:** Built-in scripts to compare generated consensus annotations against community references (e.g., GenBank), with locus-level classification and visualisation tools.
+| Dependency | Version |
+| :--------- | :------ |
+| Python | **≥ 3.10** (production cluster baseline is 3.10.x) |
+| pandas | `>=2.0,<3` (compat-tested to `==3.0.0` on Python ≥ 3.11) |
+| pyranges | `>=0.0.120,<=0.1.4` |
+| biopython | latest |
+| pyyaml | latest |
+| matplotlib | latest (for QC plotting) |
+
+External tools are **optional** — the core pipeline runs without them:
+
+| Tool | Used for |
+| :--- | :------- |
+| DIAMOND | Protein validation (`protein_validation.enabled: true`) |
+| Psauron | Protein-coding score in protein validation |
+| InterProScan | Canonical-choice resolver only — not required for a normal build |
 
 ---
 
 ## Installation
 
-Requirements:
-*   Python 3.9+ (raised from a previously-declared but never actually
-    supported 3.8+: the pinned dependency versions already require 3.9 --
-    `pip show pandas`/`numpy`/`biopython` each report `Requires-Python: >=3.9`
-    -- and CI (`.github/workflows/ci.yml`) has only ever tested 3.9 and 3.11)
-*   `pandas`
-*   `pyranges`
-*   `biopython`
-*   `pyyaml`
-*   `matplotlib` (for QC plotting)
-
 ```bash
-# Option 1: install as an editable package (recommended for development)
 cd support_scripts/gmb
+
+# Recommended: editable install (development)
 pip install -e ".[dev]"
 
-# Option 2: install dependencies only
-pip install pandas pyranges biopython pyyaml matplotlib
+# Or: install from a built wheel
+pip install gene_model_builder-2.0.0-py3-none-any.whl
 ```
+
+Entry points installed: `gmb-build`, `gmb-compare`, `gmb-visualize`,
+`gmb-longread-consensus`, `gmb-canonical-selection`, `gmb-interpro-review`,
+`gmb-interpro-resolve`.
 
 ---
 
-## Usage
+## Quickstart — bundled *Z. tritici* fixture
 
-The canonical way to run GMB is via the Python package CLI:
-
-```bash
-python -m gmb.cli.build   --help   # Gene Model Builder
-python -m gmb.cli.compare --help   # Annotation comparison
-python -m gmb.cli.visualize --help # Disagreement visualisation
-```
-
-After `pip install -e .`, the same commands are available as console scripts:
-
-```bash
-gmb-build     --help
-gmb-compare   --help
-gmb-visualize --help
-```
-
-### Quickstart — bundled *Z. tritici* example data
-
-The repository includes a complete set of example evidence files for *Zymoseptoria tritici*
-(wheat yellow leaf blotch fungus) under `support_scripts/gmb/z_tritici/`, along with a
-pre-built DIAMOND database at `support_scripts/gmb/swissprot.dmnd`.  You can run the
-full pipeline immediately after cloning — no external downloads required.
+The repository includes a pre-subsetted 500 kb fixture under
+`tests/fixtures/z_tritici_region1/` for a fast smoke test (~8 seconds):
 
 ```bash
 cd support_scripts/gmb
 
-# Install Python dependencies
-pip install pandas "pyranges>=0.0.120,<=0.1.4" biopython pyyaml matplotlib
-
-# Fastest smoke-test: pre-subsetted 500 kb region fixture (~8 seconds)
-python -m gmb.cli.build \
+gmb-build \
     --scallop   tests/fixtures/z_tritici_region1/scallop_geneset.gtf \
     --stringtie tests/fixtures/z_tritici_region1/stringtie_geneset.gtf \
     --helixer   tests/fixtures/z_tritici_region1/helixer_remapped.gff3 \
@@ -84,475 +64,245 @@ python -m gmb.cli.build \
     --genome    tests/fixtures/z_tritici_region1/genome.fa \
     --output-dir output_region1/ \
     --gene-prefix ZTRITICI
-
-# Full chromosome 1 using --seqname 1 (~25 min; large OrthoDB file loaded in full)
-python -m gmb.cli.build \
-    --scallop   z_tritici/scallop_geneset.gtf \
-    --stringtie z_tritici/stringtie_geneset.gtf \
-    --helixer   z_tritici/helixer_remapped.gff3 \
-    --orthodb   z_tritici/orthodb_geneset.gtf \
-    --uniprot   z_tritici/uniprot_geneset.gtf \
-    --genome    z_tritici/zymoseptoria_tritici.fa \
-    --assembly-report z_tritici/GCF_000219625.1_MYCGR_v2.0_assembly_report.txt \
-    --output-dir output_seqname1/ \
-    --gene-prefix ZTRITICI \
-    --seqname 1
-
-# Full genome run (all 21 chromosomes, ~15–30 min)
-python -m gmb.cli.build \
-    --scallop   z_tritici/scallop_geneset.gtf \
-    --stringtie z_tritici/stringtie_geneset.gtf \
-    --helixer   z_tritici/helixer_remapped.gff3 \
-    --orthodb   z_tritici/orthodb_geneset.gtf \
-    --uniprot   z_tritici/uniprot_geneset.gtf \
-    --genome    z_tritici/zymoseptoria_tritici.fa \
-    --assembly-report z_tritici/GCF_000219625.1_MYCGR_v2.0_assembly_report.txt \
-    --output-dir output_full/ \
-    --gene-prefix ZTRITICI
 ```
 
-**Outputs in `output_seqname1/`:**
-
-| File | Description |
-| :--- | :--- |
-| `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
-| `cdna.fa` | Spliced transcript nucleotide sequences — one record per mRNA in `consensus.gff3` |
-| `cds.fa` | Coding sequences (absent when no CDS features were predicted) |
-| `prot.fa` | Translated protein sequences — one record per CDS-bearing mRNA in `consensus.gff3` |
-| `summary.json` | Pipeline metrics (gene counts, filtering stats) |
-| `summary.tsv` | Same data in tabular form |
-| `fasta_qc_report.json` | FASTA QC report (written when `--validate-fasta` is used) |
-| `subset_regions.tsv` | Records which regions were selected (when `--seqname` is used) |
-
-> **Note on seqname mapping:** The input GTF/GFF3 files use NCBI/GenBank accession
-> numbers (e.g. `CM001642.1`) while the genome FASTA uses short integer chromosome names
-> (`1`, `2`, …).  The `--assembly-report` flag handles this remapping automatically.
-> Always specify `--seqname` using the *mapped* name (e.g. `--seqname 1`), not the raw
-> accession.
+The fixture has no corresponding full-genome data in this repository; the subset
+fixture is self-contained and sufficient to verify installation.
 
 ---
 
-### Protein validation with bundled DIAMOND database
+## Basic usage
 
-If DIAMOND and Psauron are installed, you can enable the protein validation stage using
-the bundled `swissprot.dmnd` database.  Edit `configs/fungi_default.yaml` (or pass a
-custom config) to add:
+```bash
+gmb-build \
+    --scallop   scallop.gtf \
+    --stringtie stringtie.gtf \
+    --helixer   helixer_remapped.gff3 \
+    --orthodb   orthodb.gtf \
+    --uniprot   uniprot.gtf \
+    --genome    genome.fa \
+    --config    my_species.yaml \
+    --output-dir output/
+```
+
+All evidence files must share coordinate systems with the genome FASTA.
+If sequence names differ (e.g. NCBI accessions vs. short chromosome names),
+pass `--assembly-report` to remap automatically, or `--seqname-map` for a
+custom two-column TSV.
+
+**Subsetting a single chromosome:**
+
+```bash
+gmb-build ... --seqname 1
+```
+
+---
+
+## Configuration
+
+GMB assembles the effective configuration in layers:
+
+```text
+standard.yaml (organism-neutral base, always loaded)
+    → clade preset  (--preset fungi | apicomplexa | none)
+        → user-supplied --config files (in order)
+```
+
+The default preset is `fungi`.  Use `--list-presets` to see what is
+installed.
+
+```bash
+# Apicomplexa preset with local paths layered on top
+gmb-build \
+    --preset apicomplexa \
+    --config local_cluster_paths.yaml \
+    ...
+
+# Standard base only, no clade preset
+gmb-build --preset none --config my_species.yaml ...
+
+# List installed clade presets
+gmb-build --list-presets
+```
+
+**A misspelled or absent `--config` path raises an error immediately** — GMB
+never silently falls back.
+
+Every run writes `resolved_config.yaml` and `resolved_config_sha256` to the
+output directory so runs are reproducible.
+
+Example config files in `configs/`:
+
+| File | Purpose |
+| :--- | :------- |
+| `configs/apicomplexa_first_pass.yaml` | Apicomplexa delta (use `--preset apicomplexa` instead) |
+| `configs/apicomplexa_chr1_protein_validation.example.yaml` | Protein-validation overlay example |
+| `configs/ebi_protein_validation.example.yaml` | EBI cluster protein-validation paths |
+
+For the full layering model, preset descriptions, and config schema see
+**[docs/build_and_configuration.md](docs/build_and_configuration.md)**.
+
+---
+
+## Protein validation
+
+DIAMOND and Psauron must be installed separately — they are **not bundled**.
+The DIAMOND database must also be provided by the user (`swissprot.dmnd` is **not
+included** in the repository or the wheel).
+
+To enable protein validation, set in your config YAML:
 
 ```yaml
 protein_validation:
   enabled: true
-  diamond_db: swissprot.dmnd   # path relative to the gmb/ working directory
-  diamond_weight: 0.7          # combined_score = diamond_weight*DIAMOND + psauron_weight*Psauron
+  diamond_db: /path/to/swissprot.dmnd   # required; no default
+  diamond_weight: 0.7
   psauron_weight: 0.3
   min_score: 0.7
-  policy: penalize              # "drop" | "penalize" (also accepts "penalise")
-  psauron_min_length: 5         # psauron -m/--minimum-length (aa); NOT a model selector --
-                                 # psauron has one bundled model and no model-selection option
-  psauron_use_cpu: false        # psauron -c/--use-cpu; only needs to be true on GPU-less/headless hosts
+  policy: penalize   # "drop" | "penalize" (also accepts "penalise")
 ```
 
-Then run:
+Verify tools are on `$PATH` before a long run:
 
 ```bash
-python -m gmb.cli.build \
-    ... \
-    --config configs/fungi_default.yaml \
-    --seqname 1
+gmb-build --check-deps
 ```
 
-### Layering multiple `--config` files
-
-`--config` may be repeated; later files override earlier ones on any key they
-both set (dicts deep-merge, lists replace entirely -- same rules as a single
-override, applied once per file in order). This avoids duplicating a whole
-tuning file just to add one small overlay -- for example, the bundled
-Apicomplexa chr1 example only needs to add `protein_validation` settings on
-top of the already-established `apicomplexa_first_pass.yaml` tuning:
-
-```bash
-gmb-build \
-    --config configs/apicomplexa_first_pass.yaml \
-    --config configs/apicomplexa_chr1_protein_validation.example.yaml \
-    --seqname 1 \
-    ...
-```
-
-A single `--config path.yaml` continues to work exactly as before. Passing no
-`--config` at all uses `fungi_default.yaml` alone, as always.
-
-To verify that DIAMOND and Psauron are on `$PATH` before running -- this also prints the
-detected Psauron version and fails clearly if the installed binary is missing a flag GMB
-needs (capability detection, not a hard-coded version check):
-
-```bash
-python -m gmb.cli.build --check-deps
-```
-
-Per-transcript DIAMOND/Psauron results (hit ID, coverage, bitscore, Psauron score, combined
-`protein_coding_score`) are written to `protein_validation.tsv` alongside the other outputs.
-
-> **CI note:** Protein validation is skipped in CI by default.  To run it locally, set
-> `RUN_EXTERNAL_TOOLS=1` before running pytest (see [Testing](#testing) below).
+Per-transcript DIAMOND/Psauron results are written to `protein_validation.tsv` in
+the output directory.
 
 ---
 
-### Long-read consensus preprocessing (optional `--minimap2` evidence)
+## Long-read consensus preprocessing
 
-Raw long-read (e.g. Minimap2) transcript alignments are typically far too large and noisy
-to feed into `gmb.cli.build` directly. `gmb.cli.longread_consensus` collapses them into a
-smaller, deduplicated consensus track first:
+Raw Minimap2 per-read GTF alignments are too noisy to use directly as `--minimap2`
+evidence. Collapse them first with `gmb-longread-consensus`:
 
 ```bash
-python -m gmb.cli.longread_consensus \
-    --input raw_minimap2.gtf \
+# A species preset or --config is required for Stage 2 consensus
+gmb-longread-consensus \
+    --input     raw_minimap2.gtf \
     --output-dir longread_consensus_out/ \
-    --seqname 1
+    --preset    pfalciparum_pure
 ```
 
-This writes `minimap2_consensus.gtf` (source label `Minimap2Consensus`) that can then be
-passed to `gmb.cli.build --minimap2 longread_consensus_out/minimap2_consensus.gtf`. See the
-module docstring in `gmb/pipeline/longread_consensus.py` for the clustering/support-
-filtering rules applied.
+This writes `minimap2_consensus.gtf` (source label `Minimap2Consensus`) that can
+then be passed to `gmb-build --minimap2 longread_consensus_out/minimap2_consensus.gtf`.
 
----
-
-### Duplicate transcript collapse (automatic, within `gmb.cli.build`)
-
-Because clustering happens at the exon level (see
-`gmb/pipeline/duplicate_transcript_collapse.py` for the full root-cause explanation), a
-single transcript occasionally gets reconstructed as two structurally-identical "isoforms"
-of one gene. GMB automatically collapses transcripts proven identical in exon/CDS
-coordinates, CDS phase, and translated protein sequence (never genuinely distinct
-isoforms) after gene-level deduplication, and writes a `collapsed_duplicate_transcripts.tsv`
-log whenever any collapse occurs. This is on by default
-(`duplicate_transcript_collapse.collapse_exact_duplicates: true`); see
-`DuplicateTranscriptCollapseConfig` in `gmb/pipeline/config.py` for the tunable rules.
-
----
-
-### Canonical transcript selection (standalone, post-build)
-
-For genes with multiple surviving isoforms, `gmb.cli.canonical_selection` is a standalone,
-non-destructive reporting step that ranks isoforms and picks one representative canonical
-transcript per gene, reading a completed build's own output files (never mutating them):
+Available presets:
 
 ```bash
-python -m gmb.cli.canonical_selection \
-    --consensus-gff3 output/consensus.gff3 \
-    --evidence-attribution output/evidence_attribution.tsv \
-    --protein-validation output/protein_validation.tsv \
-    --output-dir output/canonical_selection/
+gmb-longread-consensus --help   # lists available presets
+```
+
+See **[docs/longread_consensus.md](docs/longread_consensus.md)** for the full
+config schema, preset descriptions, short-read rescue modes, and cluster
+(Slurm array) usage.
+
+---
+
+## Canonical transcript selection
+
+For multi-isoform genes, `gmb-canonical-selection` is a non-destructive post-build
+step that ranks isoforms and picks one representative per gene:
+
+```bash
+gmb-canonical-selection \
+    --consensus-gff3        output/consensus.gff3 \
+    --evidence-attribution  output/evidence_attribution.tsv \
+    --protein-validation    output/protein_validation.tsv \
+    --output-dir            output/canonical_selection/
 ```
 
 Writes `canonical_transcripts.tsv`, `transcript_ranking.tsv`, and
-`canonical_selection_summary.json`. Selection uses a deterministic priority order (complete
-ORF, then protein-validation support, independent evidence-source count, GMB score, CDS
-length, transcript ID) -- see `_rank_key` in `gmb/pipeline/canonical_selection.py`. The
-reported `canonical_total_score` is the continuous weighted score for interpreting *how
-much better* the winner is, not what picked it.
+`canonical_selection_summary.json`. Selection uses a deterministic priority order
+(complete ORF → protein-validation support → biological evidence-class breadth → GMB
+score → CDS length → transcript ID). The `canonical_total_score` is continuous and
+reflects *how much better* the winner is, not *what picked it*.
 
-Optional protein-domain evidence (Pfam/InterPro, via `gmb/pipeline/domain_evidence.py`) can
-feed into canonical scoring but is **disabled by default and not yet biologically
-validated** -- it is plumbed through end-to-end (config → scorer → report) as a TBC
-placeholder for future work, and never penalises a transcript for having zero domain hits.
+See **[docs/canonical_selection.md](docs/canonical_selection.md)**.
 
 ---
 
-### InterProScan resolver for ambiguous canonical choices (optional second stage)
+## InterProScan resolver (optional second stage)
 
-Disabled by default (`canonical_selection.interpro_resolver.enabled: false`) --
-a first-pass GMB build completes exactly the same whether or not this section
-of config exists. For the small subset of genes whose canonical choice GMB
-could not make confidently, `gmb-interpro-review` prepares one batched
-InterProScan input and `gmb-interpro-resolve` turns completed InterProScan
-output into a review report, and -- when passed the build's
-`canonical_transcripts.tsv`/`consensus.gff3` -- a full attribution trail:
+For the small subset of genes where GMB could not choose confidently,
+`gmb-interpro-review` + `gmb-interpro-resolve` provides a second-stage canonical
+resolver backed by InterProScan domain evidence. InterProScan is **never required**
+for a normal build.
 
-```bash
-gmb-interpro-review \
-    --canonical-transcripts output/canonical_selection/canonical_transcripts.tsv \
-    --transcript-ranking    output/canonical_selection/transcript_ranking.tsv \
-    --protein-validation    output/protein_validation.tsv \
-    --prot-fa               output/prot.fa \
-    --config                my_config.yaml \
-    --output-dir            output/interpro_review
-
-# ...get InterProScan output: Mode B (default) runs it externally (Docker
-# locally, Slurm+Singularity on a cluster); Mode A (run_interproscan: true)
-# has GMB launch it itself via Nextflow, fully parameterised, no hardcoded
-# Docker/Slurm/paths...
-
-gmb-interpro-resolve \
-    --manifest             output/interpro_review/interpro_review_manifest.tsv \
-    --interpro-jsonl        results.faa.jsonl \
-    --config                my_config.yaml \
-    --canonical-transcripts output/canonical_selection/canonical_transcripts.tsv \
-    --consensus-gff3        output/consensus.gff3 \
-    --output-dir            output/interpro_review
-```
-
-InterProScan is **never required** for GMB to complete and never triggers a second
-DIAMOND/Psauron pass. The resolver applies a conservative, safeguarded replacement
-policy (ten specific `INTERPRO_*` reason codes; structural/protein-validation-override
-safeguards; `apply_replacements: false` for report-only mode) rather than blindly
-trusting every domain-architecture comparison -- and it **never modifies
-`consensus.gff3`/`canonical_transcripts.tsv` in place**: a replaced canonical only
-ever appears in the new `canonical_decisions.tsv` and
-`consensus.final_canonical_annotated.gff3` files. This is a canonical-choice
-resolver only, **not** a geneset QC or domain-coverage tool.
-
-See **[docs/interpro_resolver.md](docs/interpro_resolver.md)** for the full config
-schema, the ambiguity policy, the evidence model and replacement/safeguard rules,
-caching rules, local Docker and cluster Slurm/Singularity execution examples
-(both consumed-externally and GMB-launched), known limitations, and the list of
-cluster requirements still to be confirmed.
+See **[docs/interpro_resolver.md](docs/interpro_resolver.md)** for the full
+config schema, replacement policy, and cluster execution examples.
 
 ---
 
-### Compare and validate the output
+## Outputs
 
-After building the consensus annotation, compare it against the bundled Ensembl Fungi
-reference:
+All output files are written to `--output-dir`.
 
-```bash
-python -m gmb.cli.compare \
-    --consensus output_seqname1/consensus.gff3 \
-    --reference z_tritici/ensembl_fungi_reference.gff3 \
-    --assembly-report z_tritici/GCF_000219625.1_MYCGR_v2.0_assembly_report.txt \
-    --seqname 1 \
-    --output-dir compare_seqname1/ \
-    --scallop   z_tritici/scallop_geneset.gtf \
-    --stringtie z_tritici/stringtie_geneset.gtf \
-    --helixer   z_tritici/helixer_remapped.gff3 \
-    --orthodb   z_tritici/orthodb_geneset.gtf \
-    --uniprot   z_tritici/uniprot_geneset.gtf
-```
+| File | Description |
+| :--- | :---------- |
+| `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
+| `cdna.fa` | Spliced transcript sequences — one record per mRNA |
+| `cds.fa` | Coding sequences (absent when no CDS features were predicted) |
+| `prot.fa` | Translated proteins — one record per CDS-bearing mRNA |
+| `summary.json` | Pipeline metrics (gene counts, filtering statistics) |
+| `summary.tsv` | Same data in tabular form |
+| `evidence_attribution.tsv` | Per-transcript evidence source and score provenance |
+| `protein_validation.tsv` | Per-transcript DIAMOND/Psauron results (when enabled) |
+| `collapsed_duplicate_transcripts.tsv` | Log of exact-duplicate collapses (when any occur) |
+| `fasta_qc_report.json` | FASTA QC report (when `--validate-fasta` is used) |
+| `subset_regions.tsv` | Regions selected (when `--seqname` / `--region` is used) |
 
-This produces per-locus classifications (`Exact_Match`, `Partial_Match`,
-`Structural_Mismatch`, `Missed`, `Novel`) plus sensitivity metrics and locus plots.
+Every `>id` in `prot.fa` and `cdna.fa` maps to exactly one `mRNA` row in
+`consensus.gff3`. See **[docs/output_contracts.md](docs/output_contracts.md)** for
+the complete output contract.
 
----
-
-### Troubleshooting
-
-**"No features found on seqname X"**
-> Your evidence files likely use different chromosome/contig names from the genome FASTA.
-> Pass `--assembly-report` to remap NCBI accessions to chromosome numbers, or provide a
-> custom two-column TSV with `--seqname-map from_name,to_name`.
-
-**Pipeline produces 0 genes**
-> Check that `--helixer` points to `helixer_remapped.gff3` (not `helixer_geneset.gff3`).
-> The raw Helixer output uses NCBI accessions; the remapped file uses short chr names.
-
-**ImportError on pyranges**
-> Install a compatible version: `pip install "pyranges>=0.0.120,<=0.1.4"`.  The pipeline
-> does not support pyranges ≥ 0.2.
-
----
-
-### Inputs expected
-
-The pipeline expects GFF3/GTF files for the evidence tracks (Scallop, StringTie, Helixer, OrthoDB, UniProt) and a standard FASTA file for the genome. All evidence intervals must share coordinate systems with the genome FASTA (use `--assembly-report` if seq-names differ).
-
-### Outputs produced
-
-All output files are generated in the specified `--output-dir` (e.g., `output/`). See the **Main Pipeline** section below for a breakdown.
-
-### Main Pipeline
+**FASTA QC:**
 
 ```bash
-python -m gmb.cli.build \
-    --scallop scallop_annotation.gtf \
-    --stringtie stringtie_annotation.gtf \
-    --helixer helixer_remapped.gff3 \
-    --orthodb orthodb_annotation.gtf \
-    --uniprot uniprot_annotation.gtf \
-    --genome genome.fa \
-    --config config.yaml \
-    --output-dir output/
-```
-
-**Output Files (`output/`):**
-*   `consensus_genes.gff3`: Final structural annotation with CDS and UTR features.
-*   `cdna.fa`: Spliced transcript sequences.
-*   `cds.fa`: Coding sequences.
-*   `prot.fa`: Translated protein sequences.
-*   `report.json` / `report.tsv`: Detailed metrics on retained/filtered evidence and final gene counts.
-
-### Configuration (`configs/fungi_default.yaml`)
-
-The pipeline behaviour is deeply customisable via the YAML configuration file. The default configuration uses the `fungi_default.yaml` preset, which explicitly locks in rules optimised for fungal genes, but the merging logic allows overriding specific keys.
-
-Key configurable areas:
-*   `orf.min_codons`: Minimum ORF length (default 33 for fungi).
-*   `protein_filter`: Thresholds for dropping fragmented or poorly supported protein alignments. **OrthoDB filters**: now configurable via `min_alignment_coverage`, `min_percent_identity`, and `min_bitscore` here.
-*   `transcriptomic_filter`: Thresholds for identifying artificially merged transcript models (e.g., max intron length).
-*   `backbone_filter`: Rules for filtering unreliable *ab initio* backbone models (Helixer or Tiberius, whichever is loaded; legacy key `helixer_filter` still accepted with a deprecation warning).
-*   `scoring`: Weights determining how isoforms are selected (e.g., prioritizing protein support/configurable thresholds for keeping the ab initio backbone -- `weights.backbone`, `keep_backbone_without_support`; legacy keys `weights.helixer`/`keep_helixer_without_support` still accepted with a deprecation warning).
-*   `protein_validation`: Enable a batch validation stage (`enabled: true`) that writes translated candidate models to a FASTA, runs DIAMOND and Psauron, and injects a derived `protein_coding_score` back into the candidate gating logic.
-*   `utr`: Thresholds and criteria for keeping or trimming Untranslated Regions. Features robust "end support" validation (`require_end_support: true`), allowing you to configure exactly which evidence assemblies must agree on a transcript's start/end coordinates (`end_support_sources`), with a distance tolerance (`end_tolerance_bp`). If the transcript edges lack multi-source agreement or protein validation (depending on `end_support_mode` policy), they can fallback to `drop_utr`, `hard_cap` to a hardcoded base definition, or `drop_transcript` fully based on `fallback_policy_when_unsupported`.
-
-**Config Merge Rules:**
-Dicts deep-merge, lists replace entirely, unknown keys raise an error to catch typos.
-
-### How prot.fa and cdna.fa are generated
-
-Both FASTA files are derived from the **post-processed** `consensus.gff3` and are guaranteed to be consistent with it.
-
-**`cdna.fa`**
-- One record per `mRNA` feature in `consensus.gff3`.
-- Sequence is the spliced cDNA: exonic genomic sequence concatenated in 5′→3′ transcript order, reverse-complemented for minus-strand transcripts.
-- FASTA header: `>{transcript_id}` (matches the `ID=` attribute of the mRNA row).
-
-**`prot.fa`**
-- One record per `mRNA` that has at least one `CDS` child in `consensus.gff3`.
-- Sequence is the translated protein from the CDS interval(s). Terminal stop codons are stripped.
-- FASTA header: `>{transcript_id}` (same stable ID as the mRNA row).
-- UTR-only transcripts (no CDS rows) are excluded from `prot.fa` but still appear in `cdna.fa`.
-
-**ID guarantee**
-Every `>{id}` in `prot.fa` and `cdna.fa` maps to exactly one `mRNA` row in `consensus.gff3`. No transcript appears in the FASTA files unless it survived all GFF post-processing steps (structural validation, deduplication).
-
-**FASTA QC**
-
-Run the standalone QC tool to verify output integrity:
-
-```bash
-# Coverage checks only
+# Coverage only
 python -m gmb.pipeline.fasta_qc output/
 
-# Coverage + sequence correctness (reconstructs from genome)
+# Coverage + sequence reconstruction (requires genome FASTA)
 python -m gmb.pipeline.fasta_qc output/ --genome genome.fa
-
-# Or via the pipeline with --validate-fasta
-python -m gmb.cli.build ... --validate-fasta
 ```
-
-This writes `fasta_qc_report.json` summarising:
-- transcript/protein/cDNA record counts
-- missing or extra FASTA records (relative to GFF)
-- duplicate headers
-- protein and cDNA sequence reconstruction mismatches (when `--genome` is supplied)
-
-### Output Validation & Comparison
-
-Use `gmb.cli.compare` to evaluate your consensus against a reference (like GenBank).
-
-```bash
-python -m gmb.cli.compare \
-    --consensus output/consensus_genes.gff3 \
-    --reference GenBank_annotation.gff3.gz \
-    --assembly-report assembly_report.txt \
-    --output-dir validation/ \
-    --plots-per-category 3 \
-    --scallop scallop_annotation.gtf \
-    --stringtie stringtie_annotation.gtf \
-    --helixer helixer_remapped.gff3 \
-    --orthodb orthodb_annotation.gtf \
-    --uniprot uniprot_annotation.gtf
-```
-
-This generates:
-*   Locus-level classifications (`Exact_Match`, `Partial_Match`, `Structural_Mismatch`, `Missed`, `Novel`).
-*   Sensitivity metrics and tabular reports.
-*   Visual plots of representative loci comparing all evidence tracks side-by-side.
-
----
-
-## Project Structure
-
-The codebase is organised as a proper Python package (`gmb/`) with clear
-separation between pipeline logic, comparison tools, shared utilities, and CLI
-entry points.
-
-```
-gmb/                         # Installable Python package
-  __init__.py                # Package root (__version__ = "2.0.0")
-  pipeline/                  # Core pipeline modules
-    builder.py               # Main orchestrator (15-step pipeline)
-    config.py                # YAML config loading & dataclass hierarchy
-    evidence_filter.py       # Noise removal (fragments, chimeras, etc.)
-    scoring.py               # Isoform scoring & selection
-    annotate_cds_utrs.py     # ORF/CDS/UTR derivation
-    fasta_export.py          # Strand-aware FASTA extraction
-    fasta_qc.py              # FASTA QC checks
-    gff3_validate.py         # GFF3 structural validation
-    dedup_genes.py           # Gene deduplication
-    protein_validation.py    # DIAMOND + Psauron scoring
-    reporting.py             # Summary metrics (JSON/TSV)
-    subset_utils.py          # Region/seqname subsetting
-  compare/                   # Annotation comparison tools
-    compare_annotations.py   # Consensus vs reference classification
-    visualize_disagreements.py  # Locus-level diagnostic plots
-    validate_annotation.py   # Standalone annotation validator
-  utils/                     # Shared helpers (no duplicated code)
-    intervals.py             # Interval overlap & merge functions
-    fasta.py                 # Genome loading, FASTA I/O
-    gff.py                   # GFF3 parsing utilities
-    io.py                    # Directory helpers
-    logging.py               # Logging setup
-  cli/                       # CLI entry points (installed via pip)
-    build.py                 # python -m gmb.cli.build / gmb-build
-    compare.py               # python -m gmb.cli.compare / gmb-compare
-    visualize.py             # python -m gmb.cli.visualize / gmb-visualize
-tools/                       # Optional helper utilities
-  remap_helixer.py           # Remap Helixer GFF3 seq IDs via assembly report
-  retranslate_from_gff3.py   # Re-translate all CDS from consensus GFF3
-  audit_duplicate_transcripts.py  # Preview duplicate-collapse decisions on a build
-```
-
----
-
-## Optional Tools
-
-Helper scripts live in `tools/` and are not required for normal pipeline use:
-
-| Script | Purpose |
-| :----- | :------ |
-| `tools/remap_helixer.py` | Remap Helixer GFF3 sequence IDs using an NCBI assembly report |
-| `tools/retranslate_from_gff3.py` | Re-translate all CDS from a consensus GFF3 + genome |
-| `tools/audit_duplicate_transcripts.py` | Preview what duplicate-collapse would do on a completed build (reads its output files; does not re-run the build) |
 
 ---
 
 ## Testing
 
-The pipeline ships with a pytest test suite covering unit logic, synthetic integration,
-and a real-data subset integration test using the bundled *Z. tritici* example data.
-
 ```bash
 cd support_scripts/gmb
 
 # Install dev dependencies
-pip install pytest
+pip install -e ".[dev]"
 
-# Run all fast tests (~30 s)
-pytest tests/ -q
+# All fast tests (~30 s)
+pytest tests/ -q -m "not integration"
 
-# Run only integration tests (includes the z_tritici seqname-1 subset, ~2 min)
-pytest tests/ -m integration -v
+# Integration tests on the bundled z_tritici region fixture (~8 s)
+pytest tests/test_z_tritici_subset.py -v -m integration
 
-# Run external-tool tests (requires DIAMOND + Psauron on $PATH)
+# Protein validation tests (requires DIAMOND + Psauron on $PATH)
 RUN_EXTERNAL_TOOLS=1 pytest tests/ -m external_tools -v
 ```
 
 Key test modules:
 
-| Module | What it tests |
-| :--- | :--- |
-| `tests/test_integration.py` | End-to-end run on a tiny synthetic 501 bp dataset |
-| `tests/test_z_tritici_subset.py` | Real-data smoke test on bundled *Z. tritici* chr 1 |
-| `tests/test_scoring.py` | Isoform scoring and selection logic |
-| `tests/test_evidence_filter.py` | Chimera / protein / Helixer filtering logic |
-| `tests/test_annotate_cds_utrs.py` | ORF finding, CDS boundary derivation |
-| `tests/test_fasta_export.py` | Strand-aware FASTA sequence extraction |
-| `tests/test_config.py` | YAML config loading and preset merging |
-| `tests/test_compare_annotations.py` | Locus classification logic |
+| Module | What it covers |
+| :----- | :------------- |
+| `tests/test_z_tritici_subset.py` | End-to-end on the bundled region fixture; golden regression |
+| `tests/test_integration.py` | Synthetic 501 bp dataset |
+| `tests/test_scoring.py` | Isoform scoring and selection |
+| `tests/test_evidence_filter.py` | Chimera / protein / backbone filtering |
+| `tests/test_annotate_cds_utrs.py` | ORF finding and CDS derivation |
+| `tests/test_config.py` | YAML config loading, preset merging, validation |
+| `tests/test_longread_rescue.py` | Long-read consensus + short-read rescue |
+| `tests/test_canonical_selection.py` | Canonical transcript ranking and selection |
 | `tests/test_protein_validation.py` | Protein scoring (skipped without external tools) |
 
-**Golden regression fixtures** (optional, generated once and stored under
-`tests/fixtures/expected/`) enable exact locus-level regression testing on the
-*Z. tritici* chr-1 subset.  Generate or refresh them with:
+Regenerate golden regression fixtures after intentional output changes:
 
 ```bash
 python tests/generate_golden_fixtures.py
@@ -560,117 +310,86 @@ python tests/generate_golden_fixtures.py
 
 ---
 
-## Pipeline Logic Diagram
+## Project structure
 
-1. **Load Transcriptomics** (Scallop, StringTie)
-2. **Load Ab Initio** (Helixer)
-3. **Load Protein Aligns** (OrthoDB, UniProt)
-4. **Pre-Genebuild Filtering**:
-   * *Drop fragmented proteins (competing with better models).*
-   * *Drop spurious Helixer models (single-exon, no start/stop, low support).*
-   * *Drop transcriptomic chimeras (massive introns).*
-5. **Transcript Splitting** *(optional, config-driven)*: Split mega-transcripts into local segments.
-6. **Cluster Loci**: Group overlapping evidence using PyRanges.
-7. **Score & Select**: Pick top isoforms based on configurable weightings.
-8. **Annotate**: Deduce CDS/UTRs for selected models via longest-ORF discovery.
-9. **Export**: Write GFF3 and FASTA sets.
-10. **Report**: Write summary metrics.
+```
+gmb/                           # Installable Python package
+  __init__.py                  # Package root (__version__ = "2.0.0")
+  configs/                     # Bundled preset YAML files (package data)
+    standard.yaml              # Organism-neutral base (always loaded)
+    fungi.yaml                 # Fungal overrides over standard
+    apicomplexa.yaml           # Apicomplexa overrides over standard
+    longread_consensus/
+      pfalciparum_pure.yaml
+      pfalciparum_assisted.yaml
+  pipeline/                    # Core pipeline logic
+    builder.py                 # Main orchestrator (15-step pipeline)
+    config.py                  # YAML config loading & dataclass hierarchy
+    evidence_filter.py         # Noise removal (fragments, chimeras, etc.)
+    scoring.py                 # Isoform scoring & selection
+    annotate_cds_utrs.py       # ORF/CDS/UTR derivation
+    fasta_export.py            # Strand-aware FASTA extraction
+    fasta_qc.py                # FASTA QC checks
+    gff3_validate.py           # GFF3 structural validation
+    dedup_genes.py             # Gene deduplication
+    protein_validation.py      # DIAMOND + Psauron scoring
+    canonical_evidence.py      # Evidence-class vocabulary
+    canonical_selection.py     # Canonical transcript selector
+    reporting.py               # Summary metrics (JSON/TSV)
+    subset_utils.py            # Region/seqname subsetting
+    longread/                  # Long-read consensus collapsing
+      config.py                # LongreadConsensusConfig + preset loading
+      consensus.py             # Read collapsing and grouping
+      rescue.py                # Short-read-assisted rescue policies
+      io.py                    # GTF I/O and split-by-seqname
+      reporting.py             # Run manifest + summary outputs
+  compare/                     # Annotation comparison tools
+    compare_annotations.py
+    visualize_disagreements.py
+    validate_annotation.py
+  utils/                       # Shared helpers
+    intervals.py
+    fasta.py
+    gff.py
+    io.py
+    logging.py
+  cli/                         # CLI entry points (installed by pip)
+    build.py
+    compare.py
+    visualize.py
+    longread_consensus.py
+    canonical_selection.py
+    interpro_review.py
+    interpro_resolve.py
+configs/                       # User-facing example config files (not installed)
+  apicomplexa_first_pass.yaml
+  apicomplexa_chr1_protein_validation.example.yaml
+  ebi_protein_validation.example.yaml
+docs/                          # Detailed documentation
+  build_and_configuration.md
+  longread_consensus.md
+  canonical_selection.md
+  output_contracts.md
+  interpro_resolver.md
+tests/                         # pytest suite
+  fixtures/
+    z_tritici_region1/         # Bundled 500 kb real-data fixture
+tools/                         # Optional standalone helper scripts
+  remap_helixer.py
+  retranslate_from_gff3.py
+  audit_duplicate_transcripts.py
+```
 
 ---
 
-## Transcript Splitting
+## Supported dependency versions
 
-### Why it exists
+| Package    | Base (`requirements.txt`)   | Compat (`requirements-compat.txt`) |
+| :--------- | :-------------------------- | :--------------------------------- |
+| pandas     | `>=2.0,<3`                  | `==3.0.0` (requires Python ≥ 3.11) |
+| pyranges   | `>=0.0.120,<=0.1.4`         | `==0.1.4`                          |
+| biopython  | latest                      | latest                             |
+| pyyaml     | latest                      | latest                             |
+| matplotlib | latest                      | latest                             |
 
-Transcriptome assemblers (especially StringTie `--merge`) can produce pathological
-"mega-transcripts" — merged super-loci like `MSTRG.1.*` spanning tens or hundreds
-of kb. Without Helixer evidence, the validation step drops most of these, causing
-extremely low gene counts. Transcript splitting breaks them into multiple local
-candidate segments using exon geometry, so downstream clustering and selection
-operate on realistic segments rather than discarding entire evidence tracks.
-
-### How to enable
-
-In your config YAML (or via override):
-
-```yaml
-transcript_splitting:
-  split_enabled: true       # enable splitting
-  split_gap_bp: 3000        # gap threshold (default = max_intron_length)
-  split_on_large_exon_bp: 15000  # drop transcripts with any exon > this
-  max_segments_per_transcript: 50  # safety: drop transcript if exceeding this
-```
-
-Set `split_enabled: false` (the default for `fungi_default.yaml`) to disable.
-
-All thresholds are config-driven — no hard-coded species constants.
-
----
-
-## Supported Dependency Versions
-
-| Package    | Base (`requirements.txt`)  | Compat target (`requirements-compat.txt`) |
-| :--------- | :------------------------- | :---------------------------------------- |
-| pandas     | `>=2.0,<3`                 | `==3.0.0`                                 |
-| pyranges   | `>=0.0.120,<=0.1.4`        | `==0.1.4`                                 |
-| biopython  | latest                     | latest                                    |
-| pyyaml     | latest                     | latest                                    |
-| matplotlib | latest                     | latest                                    |
-
-CI runs both the default and compat environments. pandas 3.0.0 requires
-Python >=3.11 (the compat job's `python-version` is already set to
-`'3.11'` to match); the full non-integration test suite has been verified
-to pass under this exact combination (`pip install -r
-requirements-compat.txt` then `pytest tests/ -m "not integration"`).
-
----
-
-## Fast Test Mode
-
-All three main commands (`gmb.cli.build`, `gmb.cli.compare`, `gmb.cli.visualize`) support consistent CLI flags for quick, reproducible testing on subsets:
-
-### Region-based subsetting
-
-```bash
-# Run builder on a single chromosome
-python -m gmb.cli.build ... --seqname '1'
-
-# Run builder on a specific region
-python -m gmb.cli.build ... --region '1:100000-200000'
-
-# Use a file with multiple regions
-python -m gmb.cli.build ... --regions-file my_regions.txt
-```
-
-### Locus-based random sampling
-
-```bash
-# Compare on 50 random loci (reproducible with --seed)
-python -m gmb.cli.compare ... --sample-loci 50 --seed 42
-
-# Sample from reference genes only
-python -m gmb.cli.compare ... --sample-loci 50 --sample-from reference
-
-# Visualise 10 random structural mismatches
-python -m gmb.cli.visualize ... --sample-loci 10 \
-    --sample-from-category Structural_Mismatch
-```
-
-### Seqname mapping
-
-Mapping is applied **before** subsetting, so region names reference the mapped seqnames:
-
-```bash
-# Map GenBank accessions to chromosome numbers, then subset chr 1
-python -m gmb.cli.compare ... \
-    --assembly-report assembly_report.txt \
-    --seqname '1'
-
-# Custom mapping (TSV: from_seqname → to_seqname), overrides assembly-report
-python -m gmb.cli.build ... \
-    --seqname-map custom_mapping.tsv \
-    --region '1:100000-200000'
-```
-
-When subsetting is active, a `subset_regions.tsv` manifest is written to the output directory recording the selected regions and random seed.
-
+CI runs both environments on Python 3.10 and 3.11 (and 3.13 for unit tests).

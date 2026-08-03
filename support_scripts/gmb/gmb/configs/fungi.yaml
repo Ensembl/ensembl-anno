@@ -1,0 +1,66 @@
+# GMB fungi preset — overrides for compact-genome ascomycete / basidiomycete
+# gene models, layered on top of standard.yaml.
+#
+# Only settings that differ from the neutral standard are listed here.
+# All other values fall through to standard.yaml unchanged.
+#
+# Every number below reflects biology observed in fungi:
+#   - Short introns (median ~60 bp; 3,000 bp covers virtually all real introns)
+#   - Compact transcripts (median span ~1.5 kb; 20,000 bp caps chimeras)
+#   - Many single-exon genes requiring relaxed single-exon logic
+#   - Backbone (Helixer) is the dominant signal; higher weight than default
+#   - Low isoform complexity per locus (typically 1-3)
+#
+# Validated against the bundled Z. tritici region fixture and the full
+# Z. tritici genome.  Do not change thresholds here without re-validating.
+
+orf:
+  # Fungal genomes carry many real short-CDS genes; 33 codons keeps them.
+  min_codons: 33
+
+transcriptomic_filter:
+  # Fungal transcripts rarely exceed 20 kb; removes chimeric joins.
+  max_transcript_length: 20000
+  # Fungal introns rarely exceed 3 kb; tighter than the neutral 1 Mbp default.
+  max_intron_length: 3000
+
+transcript_splitting:
+  # Enabled: short introns make chimeric mega-transcripts common in fungi.
+  split_enabled: true
+  # Mirror max_intron_length as the split gap threshold.
+  split_gap_bp: 3000
+  # Cap individual exons at 50 kb before splitting.
+  split_on_large_exon_bp: 50000
+
+scoring:
+  weights:
+    # Helixer is well-trained on fungi; higher weight than the neutral base.
+    backbone: 3.1
+  # Reduced from standard 1.0: in fungi, multi-source agreement is a modest
+  # rather than strong signal (transcriptomic and backbone often agree even
+  # for borderline models).
+  multi_source_bonus: 0.5
+  # Fungi have low isoform complexity; rarely more than 3 per locus.
+  max_isoforms_per_locus: 3
+  min_alternate_score: 2.5
+  # Special single-exon handling for organisms with many genuine single-exon
+  # genes; controls protein-support requirements in evidence scoring.
+  fungal_single_exon_mode: true
+  # For a transcript supported by only one source, require protein support.
+  require_protein_support_for_single_source: true
+
+protein_validation:
+  # Tuned weights for SwissProt-trained models on fungal proteins.
+  diamond_weight: 0.7
+  psauron_weight: 0.3
+  min_score: 0.7
+  # Penalize rather than drop: preserves models that may lack DB coverage.
+  policy: penalize
+
+utr:
+  # Fungal UTRs are shorter than in most other eukaryotes.
+  max_5p_bp: 2000
+  max_3p_bp: 3000
+  max_total_bp: 5000
+  # Tighter boundary-wobble tolerance for compact UTRs.
+  end_tolerance_bp: 30

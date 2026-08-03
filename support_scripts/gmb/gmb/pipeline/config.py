@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """Configuration system for Gene Model Builder.
 
-Loads pipeline parameters from a YAML file with fungal defaults.
-All clade- or species-specific behaviour is controlled via config,
-never hard-coded in pipeline logic.
+Loads pipeline parameters in layers:
+
+    standard.yaml (always-on organism-neutral base)
+        → optional clade/workflow preset  (--preset fungi | apicomplexa | ...)
+            → user-supplied --config files (in order, each later file wins)
 
 Usage:
-    from gmb.pipeline.config import load_config
-    cfg = load_config()                                  # fungal defaults
-    cfg = load_config("my_config.yaml")                  # custom overrides
-    cfg = load_config(["base.yaml", "overlay.yaml"])      # layered overrides
-                                                           # (overlay.yaml wins)
+    from gmb.pipeline.config import load_config, list_build_presets
+    cfg = load_config()                         # standard + fungi (default)
+    cfg = load_config(preset="apicomplexa")     # standard + apicomplexa
+    cfg = load_config(preset=None)              # standard only
+    cfg = load_config("my.yaml")                # standard + fungi + my.yaml
+    cfg = load_config(["a.yaml", "b.yaml"])     # layered overrides (b wins)
+    list_build_presets()                        # ["apicomplexa", "fungi", ...]
 """
 
 import os
 import warnings
 from dataclasses import dataclass, field
+from importlib.resources import files as _pkg_files
 from typing import Optional, Union
 
 import yaml
@@ -128,7 +133,7 @@ class ProteinValidationConfig:
     enabled: bool = False
     diamond_path: str = "diamond"
     psauron_path: str = "psauron"
-    diamond_db: str = "swissprot.dmnd"
+    diamond_db: Optional[str] = None
     # Psauron uses one bundled model checkpoint and exposes no model-
     # selection option; -m specifies minimum protein length, not a model.
     psauron_min_length: int = 5  # psauron -m/--minimum-length (aa), psauron's own default
@@ -139,6 +144,14 @@ class ProteinValidationConfig:
     policy: str = "drop"  # 'drop' or 'penalize' (also accepts 'penalise')
     diamond_min_query_coverage: float = 0.0  # 0-100; additional gate before counting a hit
     diamond_min_target_coverage: float = 0.0  # 0-100; additional gate before counting a hit
+
+    def __post_init__(self) -> None:
+        if self.enabled and self.diamond_weight > 0 and self.diamond_db is None:
+            raise ValueError(
+                "protein_validation.diamond_db must be set when enabled=true and "
+                "diamond_weight > 0.  Set diamond_db to the path of your DIAMOND "
+                "database (e.g. swissprot.dmnd)."
+            )
 
 
 @dataclass
@@ -540,6 +553,48 @@ class PipelineConfig:
 # Loaders
 # ---------------------------------------------------------------------------
 
+# Preset names that have been renamed; load_config emits DeprecationWarning
+# and remaps automatically so existing --preset arguments keep working.
+_DEPRECATED_PRESET_NAMES: dict[str, str] = {
+    "fungi_default": "fungi",
+}
+
+
+def list_build_presets() -> list[str]:
+    """Return available clade preset names for gmb-build.
+
+    Returns every .yaml file in the ``gmb.configs`` package directory
+    whose name is not ``standard`` (which is the internal always-on base,
+    not a user-selectable clade preset).  Returns ``[]`` if the package
+    data is not installed.
+    """
+    try:
+        pkg = _pkg_files("gmb.configs")
+        return sorted(
+            p.name.removesuffix(".yaml")
+            for p in pkg.iterdir()
+            if p.name.endswith(".yaml") and p.name != "standard.yaml"
+        )
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+
+
+def _load_bundled_config_yaml(name: str) -> dict:
+    """Load a bundled YAML from gmb.configs by base name (no extension).
+
+    Raises FileNotFoundError when the file is missing from the installed
+    package -- callers translate this into a user-visible error.
+    """
+    try:
+        text = _pkg_files("gmb.configs").joinpath(f"{name}.yaml").read_text(encoding="utf-8")
+        return yaml.safe_load(text) or {}
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"Bundled config '{name}.yaml' not found in gmb.configs package.  "
+            "Run 'pip install -e .' to ensure package data is installed."
+        ) from None
+
+
 # Deprecated config-key aliases, scoped by the *containing* dataclass's type
 # name (so an old name is only ever remapped within the section it actually
 # belonged to). Each entry exists because a "generalise backbone naming"
@@ -626,71 +681,92 @@ def _validate_dataclass(dc):
                 _validate_dataclass(val)
 
 
-def load_config(path: Optional[Union[str, list]] = None, preset: str = "fungi") -> PipelineConfig:
-    """Load pipeline configuration.
+def load_config(
+    path: Optional[Union[str, list]] = None,
+    preset: Optional[str] = "fungi",
+) -> "PipelineConfig":
+    """Load pipeline configuration in layers.
+
+    The effective configuration is assembled as:
+
+        standard.yaml  (always-on organism-neutral base)
+            → clade/workflow preset YAML  (when preset is not None)
+                → user-supplied override files  (in order, last wins)
 
     Parameters
     ----------
     path : str, list of str, or None
-        One or more paths to YAML override files, applied in order on top
-        of the preset default -- each later file deep-merges its dicts
-        on top of the previous state and replaces (never concatenates)
-        any list-valued key it sets, so the last file to set a given key
-        always wins. A single string is accepted for backward
-        compatibility and is equivalent to a one-element list. `None`
-        (or an empty list) applies no override, matching pre-existing
-        behaviour with no `--config` supplied.
+        One or more YAML override files applied on top of the preset.
+        Each file deep-merges its dicts and replaces list-valued keys.
+        A single string is treated as a one-element list for backward
+        compatibility.  Missing files raise ``FileNotFoundError``.
+    preset : str or None
+        Clade preset name.  Available presets are returned by
+        ``list_build_presets()``.  ``None`` (or ``"none"``) loads
+        ``standard.yaml`` only, with no clade overlay.  Defaults to
+        ``"fungi"`` for backward compatibility.
 
-        Missing files are silently skipped -- this matches the
-        pre-existing single-path behaviour (see
-        ``test_missing_file_returns_defaults``) rather than introducing
-        a new failure mode for the (already-existing) single-file case;
-        it applies uniformly to every path in the list.
-    preset : str
-        Preset name ('fungi' uses configs/fungi_default.yaml).
+        The deprecated name ``"fungi_default"`` is accepted with a
+        ``DeprecationWarning`` and silently remapped to ``"fungi"``.
 
     Returns
     -------
     PipelineConfig
     """
-    cfg = PipelineConfig(preset=preset)
+    # Normalise preset: None / "none" / "" all mean "standard only".
+    if preset in (None, "none", ""):
+        preset = None
 
-    # Base configuration based on preset
-    if preset == "fungi":
-        # Resolve fungi_default.yaml from the installed package first (wheel-safe),
-        # then fall back to the source-tree location for uninstalled development use.
-        _pkg_configs = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs"
+    # Remap deprecated preset names.
+    if preset in _DEPRECATED_PRESET_NAMES:
+        new_name = _DEPRECATED_PRESET_NAMES[preset]
+        warnings.warn(
+            f"Preset '{preset}' is deprecated; use '{new_name}' instead.  "
+            "This alias will be removed in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        _src_configs = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "configs",
-        )
-        default_yaml = None
-        for _dir in (_pkg_configs, _src_configs):
-            _candidate = os.path.join(_dir, "fungi_default.yaml")
-            if os.path.exists(_candidate):
-                default_yaml = _candidate
-                break
-        if default_yaml is None:
+        preset = new_name
+
+    cfg = PipelineConfig(preset=preset or "none")
+
+    # Layer 1 — standard.yaml: organism-neutral base (always loaded).
+    _update_dataclass(cfg, _load_bundled_config_yaml("standard"))
+
+    # Layer 2 — clade preset: organism-specific overrides (optional).
+    if preset is not None:
+        available = list_build_presets()
+        if preset not in available:
             raise FileNotFoundError(
-                "Missing default config preset fungi_default.yaml. "
-                f"Looked in: {_pkg_configs}, {_src_configs}"
+                f"Unknown preset '{preset}'.  "
+                f"Available presets: {available or ['none installed']}.\n"
+                "Use --list-presets to see what is installed."
             )
-        with open(default_yaml) as fh:
+        _update_dataclass(cfg, _load_bundled_config_yaml(preset))
+
+    # Layer 3 — user overrides: applied in order (later files win on shared keys).
+    paths = [path] if isinstance(path, str) else (path or [])
+    for override_path in paths:
+        if override_path is None:
+            continue
+        if not os.path.exists(override_path):
+            raise FileNotFoundError(f"Config file not found: {override_path}")
+        with open(override_path) as fh:
             data = yaml.safe_load(fh) or {}
         _update_dataclass(cfg, data)
 
-    # User overrides -- applied in order, so later paths win on any key
-    # they also set (see _update_dataclass's deep-merge/list-replace rules,
-    # which already give the right per-key semantics with no extra logic
-    # needed here: each file's dict just updates whatever it names).
-    paths = [path] if isinstance(path, str) else (path or [])
-    for override_path in paths:
-        if override_path is not None and os.path.exists(override_path):
-            with open(override_path) as fh:
-                data = yaml.safe_load(fh) or {}
-            _update_dataclass(cfg, data)
-
     _validate_dataclass(cfg)
     return cfg
+
+
+def dump_config(cfg: "PipelineConfig") -> dict:
+    """Serialise a PipelineConfig to a plain dict (for YAML output).
+
+    Uses ``dataclasses.asdict`` so nested dataclasses are recursively
+    converted.  The result can be round-tripped through ``yaml.safe_dump``
+    and then ``load_config`` (as a user override file), provided the
+    ``preset`` top-level key is stripped first.
+    """
+    from dataclasses import asdict
+
+    return asdict(cfg)

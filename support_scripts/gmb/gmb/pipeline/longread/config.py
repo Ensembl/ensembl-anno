@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import os
 from dataclasses import dataclass, field
+from importlib.resources import files as _pkg_files
 from typing import Optional
 
 import yaml
@@ -198,9 +199,8 @@ def load_longread_consensus_config(
     raw: dict = {}
 
     if preset is not None:
-        preset_path = _resolve_preset(preset)
-        with open(preset_path) as fh:
-            raw = yaml.safe_load(fh) or {}
+        _resolve_preset(preset)  # validates name; raises FileNotFoundError if unknown
+        raw = _load_preset_yaml(preset)
 
     if path is not None:
         if not os.path.exists(path):
@@ -346,53 +346,38 @@ def _validate_rescue(
 # Preset resolution
 # ---------------------------------------------------------------------------
 
-_PRESETS_DIR = None  # resolved lazily — see _resolve_preset
+_PRESETS_PKG = "gmb.configs.longread_consensus"
 
 
-def _get_presets_dir() -> str:
-    """Return the longread_consensus presets directory, wheel-safe.
+def _load_preset_yaml(name: str) -> dict:
+    """Load a preset YAML by name from the installed package resources."""
+    pkg = _pkg_files(_PRESETS_PKG)
+    for candidate in (f"{name}.yaml", name):
+        try:
+            text = pkg.joinpath(candidate).read_text(encoding="utf-8")
+            return yaml.safe_load(text) or {}
+        except FileNotFoundError:
+            continue
+    raise FileNotFoundError(f"Preset '{name}' not found.  Available: {list_presets()}")
 
-    Presets are packaged under ``gmb/configs/longread_consensus/``.  During
-    uninstalled development they live in the source-tree
-    ``configs/longread_consensus/`` directory three levels above this file.
-    The installed location is checked first so that a wheel install is never
-    shadowed by a stale source checkout.
-    """
-    # Installed location (works in editable installs and wheel installs)
-    pkg_location = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "configs", "longread_consensus")
-    )
-    if os.path.isdir(pkg_location):
-        return pkg_location
-    # Uninstalled source-tree fallback (three levels up from gmb/pipeline/longread/)
-    src_location = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..", "configs", "longread_consensus")
-    )
-    return src_location
+
+def list_presets() -> list[str]:
+    """Return the names of all installed longread_consensus presets."""
+    try:
+        pkg = _pkg_files(_PRESETS_PKG)
+        return sorted(
+            p.name.removesuffix(".yaml") for p in pkg.iterdir() if p.name.endswith(".yaml")
+        )
+    except (FileNotFoundError, NotADirectoryError):
+        return []
 
 
 def _resolve_preset(name: str) -> str:
-    """Resolve a preset name to an absolute YAML path."""
-    presets_dir = _get_presets_dir()
-    candidates = [
-        os.path.join(presets_dir, f"{name}.yaml"),
-        os.path.join(presets_dir, f"{name}"),
-    ]
-    for p in candidates:
-        p = os.path.normpath(p)
-        if os.path.exists(p):
-            return p
-    raise FileNotFoundError(
-        f"Preset '{name}' not found.  Looked in {os.path.normpath(presets_dir)}.  "
-        f"Available: {_list_presets()}"
-    )
-
-
-def _list_presets() -> list[str]:
-    presets_dir = os.path.normpath(_get_presets_dir())
-    if not os.path.isdir(presets_dir):
-        return []
-    return sorted(os.path.splitext(f)[0] for f in os.listdir(presets_dir) if f.endswith(".yaml"))
+    """Resolve a preset name — raises FileNotFoundError if unknown."""
+    available = list_presets()
+    if name not in available:
+        raise FileNotFoundError(f"Preset '{name}' not found.  Available: {available}")
+    return name
 
 
 def _deep_merge(base: dict, override: dict) -> None:

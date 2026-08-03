@@ -25,6 +25,7 @@ from .config import (
     MultiExonRescueConfig,
     ShortreadRescueConfig,
     SingleExonRescueConfig,
+    list_presets,
     load_longread_consensus_config,
     validate_config,
 )
@@ -62,6 +63,7 @@ __all__ = [
     "ShortreadRescueConfig",
     "MultiExonRescueConfig",
     "SingleExonRescueConfig",
+    "list_presets",
     "load_longread_consensus_config",
     "validate_config",
     # consensus
