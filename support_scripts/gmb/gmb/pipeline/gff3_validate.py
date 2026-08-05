@@ -53,6 +53,27 @@ def _intersect_with_union(union_intervals: list[tuple[int, int]], row: dict) -> 
     return results
 
 
+def _intersect_intervals(
+    union_a: list[tuple[int, int]], union_b: list[tuple[int, int]]
+) -> list[tuple[int, int]]:
+    """Return the intersection of two sorted, non-overlapping interval lists."""
+    result = []
+    i = j = 0
+    while i < len(union_a) and j < len(union_b):
+        s = max(union_a[i][0], union_b[j][0])
+        e = min(union_a[i][1], union_b[j][1])
+        if s < e:
+            result.append((s, e))
+        if union_a[i][1] < union_b[j][1]:
+            i += 1
+        elif union_a[i][1] > union_b[j][1]:
+            j += 1
+        else:
+            i += 1
+            j += 1
+    return result
+
+
 def validate_transcript(
     mrna_row: dict,
     exon_rows: list[dict],
@@ -298,10 +319,39 @@ def trim_utrs(
     def _total_bp(rows):
         return sum(r["End"] - r["Start"] for r in rows)
 
-    def _hard_cap(rows, max_bp):
-        """Trim UTR rows to a hard cap on total bp, trimming from the distal end."""
+    def _hard_cap(rows, max_bp, from_high_end=False):
+        """Trim UTR rows to max_bp, keeping the CDS-proximal portion.
+
+        Parameters
+        ----------
+        rows : list of dict
+            UTR feature rows, expected sorted ascending by Start.
+        max_bp : int
+            Maximum total bp to retain.
+        from_high_end : bool
+            When True, keep rows from the HIGH coordinate end (proximal for UTRs
+            that lie at lower genomic coordinates than the CDS, e.g. 5' UTR on
+            the + strand or 3' UTR on the - strand).  When False (default), keep
+            from the LOW end (proximal for UTRs at higher coords than the CDS).
+        """
         if max_bp <= 0 or not rows:
             return []
+        if from_high_end:
+            remaining = max_bp
+            result = []
+            for r in reversed(rows):
+                seg_len = r["End"] - r["Start"]
+                if remaining <= 0:
+                    break
+                if seg_len <= remaining:
+                    result.append(r)
+                    remaining -= seg_len
+                else:
+                    trimmed = dict(r)
+                    trimmed["Start"] = trimmed["End"] - remaining
+                    result.append(trimmed)
+                    remaining = 0
+            return list(reversed(result))
         remaining = max_bp
         result = []
         for r in rows:
@@ -317,6 +367,19 @@ def trim_utrs(
                 result.append(trimmed)
                 remaining = 0
         return result
+
+    # Determine which end of each UTR is proximal to the CDS so that hard caps
+    # always trim the distal (far-from-CDS) side.
+    # A UTR that lies entirely to the LEFT of the CDS (max UTR coord <= CDS min)
+    # has its proximal end at the HIGH coordinate → iterate from the high end.
+    five_p_from_high = False
+    three_p_from_high = False
+    if cds_rows:
+        cds_min = min(r["Start"] for r in cds_rows)
+        if utr_5p_rows and max(r["End"] for r in utr_5p_rows) <= cds_min:
+            five_p_from_high = True
+        if utr_3p_rows and max(r["End"] for r in utr_3p_rows) <= cds_min:
+            three_p_from_high = True
 
     utr_5p_bp = _total_bp(utr_5p_rows)
     utr_3p_bp = _total_bp(utr_3p_rows)
@@ -336,18 +399,18 @@ def trim_utrs(
     out_3p = list(utr_3p_rows)
 
     if _total_bp(out_5p) > config.max_5p_bp:
-        out_5p = _hard_cap(out_5p, config.max_5p_bp)
+        out_5p = _hard_cap(out_5p, config.max_5p_bp, from_high_end=five_p_from_high)
         was_trimmed = True
     if _total_bp(out_3p) > config.max_3p_bp:
-        out_3p = _hard_cap(out_3p, config.max_3p_bp)
+        out_3p = _hard_cap(out_3p, config.max_3p_bp, from_high_end=three_p_from_high)
         was_trimmed = True
 
     total = _total_bp(out_5p) + _total_bp(out_3p)
     if total > config.max_total_bp:
-        # Proportionally reduce
+        # Proportionally reduce, keeping the CDS-proximal portion in both UTRs
         ratio = config.max_total_bp / total
-        out_5p = _hard_cap(out_5p, int(_total_bp(out_5p) * ratio))
-        out_3p = _hard_cap(out_3p, int(_total_bp(out_3p) * ratio))
+        out_5p = _hard_cap(out_5p, int(_total_bp(out_5p) * ratio), from_high_end=five_p_from_high)
+        out_3p = _hard_cap(out_3p, int(_total_bp(out_3p) * ratio), from_high_end=three_p_from_high)
         was_trimmed = True
 
     if (
@@ -360,8 +423,8 @@ def trim_utrs(
             if (_total_bp(out_5p) + _total_bp(out_3p)) > 0
             else 0
         )
-        out_5p = _hard_cap(out_5p, int(_total_bp(out_5p) * ratio))
-        out_3p = _hard_cap(out_3p, int(_total_bp(out_3p) * ratio))
+        out_5p = _hard_cap(out_5p, int(_total_bp(out_5p) * ratio), from_high_end=five_p_from_high)
+        out_3p = _hard_cap(out_3p, int(_total_bp(out_3p) * ratio), from_high_end=three_p_from_high)
         was_trimmed = True
 
     return out_5p, out_3p, was_trimmed
@@ -448,6 +511,9 @@ def validate_and_fix_gff3(
             if utr_len > stats["max_utr_length_observed"]:
                 stats["max_utr_length_observed"] = utr_len
 
+            exon_intervals = [(r["Start"], r["End"]) for r in exon_rows]
+            exon_union = _merge_intervals(exon_intervals)
+
             # UTR trimming (applied regardless of validation mode)
             if cds_rows and (utr_5p or utr_3p):
                 utr_5p, utr_3p, was_trimmed = trim_utrs(
@@ -456,10 +522,28 @@ def validate_and_fix_gff3(
                 if was_trimmed:
                     stats["utrs_trimmed"] += 1
                     stats["transcripts_trimmed_utr"] += 1
+                    # Rebuild exon_rows so union(exons) = union(CDS + trimmed UTRs).
+                    # Intersect the new coverage with the pre-trim exon union so that
+                    # intron boundaries are preserved and distal exonic bases that are
+                    # no longer covered by any UTR or CDS feature are removed.
+                    covered = _merge_intervals(
+                        [(r["Start"], r["End"]) for r in cds_rows + utr_5p + utr_3p]
+                    )
+                    new_exon_intervals = _intersect_intervals(exon_union, covered)
+                    if new_exon_intervals and exon_rows:
+                        template = exon_rows[0]
+                        parent_id = template.get("Parent", "")
+                        exon_rows = [
+                            {
+                                **template,
+                                "Start": s,
+                                "End": e,
+                                "ID": f"{parent_id}.exon{i + 1}",
+                            }
+                            for i, (s, e) in enumerate(new_exon_intervals)
+                        ]
+                        exon_union = new_exon_intervals
                 utr_rows = utr_5p + utr_3p
-
-            exon_intervals = [(r["Start"], r["End"]) for r in exon_rows]
-            exon_union = _merge_intervals(exon_intervals)
 
             # Feature outside exons policy (trim CDS/UTRs to exon boundaries)
             policy = getattr(val_cfg, "feature_outside_exons_policy", "drop")
@@ -572,6 +656,12 @@ def validate_and_fix_gff3(
 
                     if val_cfg.log_violations:
                         print(f"  Fixed {tid}: {'; '.join(violations)}")
+
+            # Sync mRNA span to its (possibly rebuilt) children
+            all_children = exon_rows + cds_rows + utr_5p + utr_3p
+            if all_children:
+                mrna_row["Start"] = min(r["Start"] for r in all_children)
+                mrna_row["End"] = max(r["End"] for r in all_children)
 
             valid_mrna_rows.append(mrna_row)
             # Rebuild children list
