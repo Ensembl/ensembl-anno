@@ -661,8 +661,13 @@ def run_canonical_selection(
 
 
 def _write_annotated_gff3(input_gff3: str, canonical_ids: set[str], output_path: str) -> None:
-    """Write a COPY of ``input_gff3`` with `canonical=1`/`canonical=0` added
-    to each mRNA row's attributes. The source file is never modified."""
+    """Write a COPY of ``input_gff3`` with ``tag=Ensembl_canonical`` on
+    canonical mRNA rows. Non-canonical mRNAs are left unmodified — no
+    ``canonical=0`` is added (matching Ensembl GFF3 convention).
+
+    If an mRNA already has a ``tag`` attribute, ``Ensembl_canonical`` is
+    appended (comma-separated) if not already present. The source file
+    is never modified."""
     with open(input_gff3) as fh_in, open(output_path, "w") as fh_out:
         for line in fh_in:
             if line.startswith("#") or not line.strip():
@@ -678,9 +683,24 @@ def _write_annotated_gff3(input_gff3: str, canonical_ids: set[str], output_path:
                 if kv.startswith("ID="):
                     tid = kv[3:]
                     break
-            flag = "1" if tid in canonical_ids else "0"
-            sep = "" if attrs.endswith(";") else ";"
-            parts[8] = f"{attrs}{sep}canonical={flag}"
+            if tid not in canonical_ids:
+                fh_out.write(line)
+                continue
+            kv_pairs = attrs.split(";")
+            tag_idx = None
+            for i, kv in enumerate(kv_pairs):
+                if kv.startswith("tag="):
+                    tag_idx = i
+                    break
+            if tag_idx is not None:
+                existing = kv_pairs[tag_idx][4:]
+                vals = [v.strip() for v in existing.split(",")]
+                if "Ensembl_canonical" not in vals:
+                    vals.append("Ensembl_canonical")
+                kv_pairs[tag_idx] = f"tag={','.join(vals)}"
+            else:
+                kv_pairs.append("tag=Ensembl_canonical")
+            parts[8] = ";".join(kv_pairs)
             fh_out.write("\t".join(parts) + "\n")
 
 

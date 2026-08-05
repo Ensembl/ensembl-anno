@@ -220,7 +220,7 @@ class TestZTriticiRegion1:
     def test_required_output_files_exist(self, region1_output):
         """All mandatory output files must be present."""
         output_dir, _ = region1_output
-        for fname in ("consensus.gff3", "cdna.fa", "prot.fa", "summary.json", "summary.tsv"):
+        for fname in ("consensus.gff3", "cdna.fa", "cds.fa", "prot.fa", "summary.json", "summary.tsv"):
             assert (output_dir / fname).exists(), f"Missing required output: {fname}"
 
     def test_nonzero_gene_count(self, region1_output):

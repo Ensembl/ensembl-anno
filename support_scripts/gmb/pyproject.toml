@@ -37,6 +37,7 @@ gmb-longread-consensus = "gmb.cli.longread_consensus:main"
 gmb-canonical-selection = "gmb.cli.canonical_selection:main"
 gmb-interpro-review = "gmb.cli.interpro_review:main"
 gmb-interpro-resolve = "gmb.cli.interpro_resolve:main"
+gmb-finalise = "gmb.cli.finalise:main"
 
 [tool.setuptools.packages.find]
 include = ["gmb*"]

@@ -159,6 +159,7 @@ def run_sequence_checks(
     cdna_records: dict[str, str],
     genome: dict[str, str],
     max_checks: int = 0,
+    cds_records: dict[str, str] | None = None,
 ) -> dict:
     """Part A2: sequence correctness checks.
 
@@ -166,12 +167,15 @@ def run_sequence_checks(
     ----------
     max_checks : int
         Max transcripts to check. 0 = check all.
+    cds_records : dict or None
+        If provided, CDS nucleotide sequences are also checked.
     """
     transcripts = gff_data["transcripts"]
     cds_tids = gff_data["cds_transcript_ids"]
 
     protein_mismatches = []
     cdna_mismatches = []
+    cds_mismatches = []
     internal_stops = []
     frame_issues = []
 
@@ -212,61 +216,80 @@ def run_sequence_checks(
                     }
                 )
 
-        # --- Protein check ---
-        if tid in prot_records and cds_intervals:
-            # Reconstruct CDS sequence from genome
-            # Concatenate in ascending genomic order, then RC for minus strand.
-            # RC(X+Y)==RC(Y)+RC(X): ascending order correctly places the
-            # highest-coordinate (5') exon first after RC for minus-strand CDS.
+        # --- CDS / Protein check ---
+        if cds_intervals:
             cds_parts = [chrom_seq[s:e] for s, e in sorted(cds_intervals)]
             cds_nuc = "".join(cds_parts)
             if strand == "-":
                 cds_nuc = reverse_complement(cds_nuc)
 
-            expected_protein = translate(cds_nuc)
-            if expected_protein.endswith("*"):
-                expected_protein = expected_protein[:-1]
+            # CDS nucleotide check
+            if cds_records and tid in cds_records:
+                observed_cds = cds_records[tid]
+                if cds_nuc != observed_cds:
+                    mismatch_pos = next(
+                        (i for i, (a, b) in enumerate(zip(cds_nuc, observed_cds)) if a != b),
+                        min(len(cds_nuc), len(observed_cds)),
+                    )
+                    cds_mismatches.append(
+                        {
+                            "transcript_id": tid,
+                            "expected_length": len(cds_nuc),
+                            "observed_length": len(observed_cds),
+                            "first_mismatch_pos": mismatch_pos,
+                        }
+                    )
 
-            observed_protein = prot_records[tid]
+            # Protein check
+            if tid in prot_records:
+                expected_protein = translate(cds_nuc)
+                if expected_protein.endswith("*"):
+                    expected_protein = expected_protein[:-1]
 
-            # Check for internal stops
-            if "*" in observed_protein:
-                internal_stops.append(
-                    {
-                        "transcript_id": tid,
-                        "stop_positions": [i for i, c in enumerate(observed_protein) if c == "*"],
-                    }
-                )
+                observed_protein = prot_records[tid]
 
-            if expected_protein != observed_protein:
-                mismatch_pos = next(
-                    (
-                        i
-                        for i, (a, b) in enumerate(zip(expected_protein, observed_protein))
-                        if a != b
-                    ),
-                    min(len(expected_protein), len(observed_protein)),
-                )
-                protein_mismatches.append(
-                    {
-                        "transcript_id": tid,
-                        "expected_length": len(expected_protein),
-                        "observed_length": len(observed_protein),
-                        "first_mismatch_pos": mismatch_pos,
-                        "strand": strand,
-                    }
-                )
+                if "*" in observed_protein:
+                    internal_stops.append(
+                        {
+                            "transcript_id": tid,
+                            "stop_positions": [
+                                i for i, c in enumerate(observed_protein) if c == "*"
+                            ],
+                        }
+                    )
 
-    return {
+                if expected_protein != observed_protein:
+                    mismatch_pos = next(
+                        (
+                            i
+                            for i, (a, b) in enumerate(zip(expected_protein, observed_protein))
+                            if a != b
+                        ),
+                        min(len(expected_protein), len(observed_protein)),
+                    )
+                    protein_mismatches.append(
+                        {
+                            "transcript_id": tid,
+                            "expected_length": len(expected_protein),
+                            "observed_length": len(observed_protein),
+                            "first_mismatch_pos": mismatch_pos,
+                            "strand": strand,
+                        }
+                    )
+
+    result = {
         "transcripts_checked": len(tids_to_check),
         "protein_mismatches": protein_mismatches[:50],
         "protein_mismatches_total": len(protein_mismatches),
         "cdna_mismatches": cdna_mismatches[:50],
         "cdna_mismatches_total": len(cdna_mismatches),
+        "cds_mismatches": cds_mismatches[:50],
+        "cds_mismatches_total": len(cds_mismatches),
         "internal_stops": internal_stops[:50],
         "internal_stops_total": len(internal_stops),
         "frame_issues": frame_issues[:50],
     }
+    return result
 
 
 def validate_fasta(
@@ -292,6 +315,7 @@ def validate_fasta(
     gff3_path = os.path.join(output_dir, "consensus.gff3")
     prot_path = os.path.join(output_dir, "prot.fa")
     cdna_path = os.path.join(output_dir, "cdna.fa")
+    cds_path = os.path.join(output_dir, "cds.fa")
 
     if not os.path.exists(gff3_path):
         return {"error": f"consensus.gff3 not found in {output_dir}"}
@@ -300,29 +324,70 @@ def validate_fasta(
     gff_data = parse_gff3(gff3_path)
     prot_ids = parse_fasta_ids(prot_path)
     cdna_ids = parse_fasta_ids(cdna_path)
+    cds_ids = parse_fasta_ids(cds_path) if os.path.exists(cds_path) else []
 
     # A1: Coverage checks
     report = run_coverage_checks(gff_data, prot_ids, cdna_ids)
+
+    # CDS coverage checks (if cds.fa exists)
+    if os.path.exists(cds_path):
+        cds_id_set = set(cds_ids)
+        cds_tids = gff_data["cds_transcript_ids"]
+        missing_cds = sorted(cds_tids - cds_id_set)
+        extra_cds = sorted(cds_id_set - set(gff_data["transcripts"].keys()))
+        cds_dupes = {k: v for k, v in Counter(cds_ids).items() if v > 1}
+        report["n_cds_records"] = len(cds_ids)
+        report["missing_cds"] = missing_cds[:50]
+        report["missing_cds_total"] = len(missing_cds)
+        report["extra_cds"] = extra_cds[:50]
+        report["extra_cds_total"] = len(extra_cds)
+        report["duplicate_cds_headers"] = dict(list(cds_dupes.items())[:50])
 
     # A2: Sequence checks (if genome provided)
     if genome_path and os.path.exists(genome_path):
         genome = load_genome(genome_path)
         prot_records = parse_fasta_records(prot_path)
         cdna_records = parse_fasta_records(cdna_path)
+        cds_recs = parse_fasta_records(cds_path) if os.path.exists(cds_path) else None
         seq_report = run_sequence_checks(
-            gff_data, prot_records, cdna_records, genome, max_seq_checks
+            gff_data, prot_records, cdna_records, genome, max_seq_checks, cds_recs
         )
         report["sequence_checks"] = seq_report
 
-    # Determine pass/fail
-    report["pass"] = (
-        report["missing_proteins_total"] == 0
-        and report["extra_proteins_total"] == 0
-        and report["missing_cdna_total"] == 0
-        and report["extra_cdna_total"] == 0
-        and len(report["duplicate_prot_headers"]) == 0
-        and len(report["duplicate_cdna_headers"]) == 0
-    )
+    # Determine pass/fail — any non-zero check count is a failure.
+    failed_checks = []
+    if report["missing_proteins_total"] > 0:
+        failed_checks.append("missing_proteins")
+    if report["extra_proteins_total"] > 0:
+        failed_checks.append("extra_proteins")
+    if report["missing_cdna_total"] > 0:
+        failed_checks.append("missing_cdna")
+    if report["extra_cdna_total"] > 0:
+        failed_checks.append("extra_cdna")
+    if report["duplicate_prot_headers"]:
+        failed_checks.append("duplicate_prot_headers")
+    if report["duplicate_cdna_headers"]:
+        failed_checks.append("duplicate_cdna_headers")
+    if report.get("missing_cds_total", 0) > 0:
+        failed_checks.append("missing_cds")
+    if report.get("extra_cds_total", 0) > 0:
+        failed_checks.append("extra_cds")
+    if report.get("duplicate_cds_headers"):
+        failed_checks.append("duplicate_cds_headers")
+
+    if "sequence_checks" in report:
+        sc = report["sequence_checks"]
+        if sc.get("cdna_mismatches_total", 0) > 0:
+            failed_checks.append("cdna_mismatches")
+        if sc.get("cds_mismatches_total", 0) > 0:
+            failed_checks.append("cds_mismatches")
+        if sc.get("protein_mismatches_total", 0) > 0:
+            failed_checks.append("protein_mismatches")
+        if sc.get("internal_stops_total", 0) > 0:
+            failed_checks.append("internal_stops")
+
+    report["pass"] = len(failed_checks) == 0
+    report["failed_checks"] = failed_checks
 
     return report
 

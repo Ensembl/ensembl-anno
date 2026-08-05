@@ -468,11 +468,11 @@ class TestFileIOAndGff3Annotation:
 
         # Original untouched
         assert gff3.read_text() == original_text
-        # Copy has the canonical flag
+        # Copy has the Ensembl canonical tag
         annotated = out_path.read_text()
-        assert "canonical=1" in annotated
+        assert "tag=Ensembl_canonical" in annotated
         mrna_line = [l for l in annotated.splitlines() if "\tmRNA\t" in l][0]
-        assert mrna_line.endswith("canonical=1")
+        assert "tag=Ensembl_canonical" in mrna_line
 
 
 class TestRunEndToEndSummaryFields:

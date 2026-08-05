@@ -39,7 +39,13 @@ import numpy as np
 import pandas as pd
 import pyranges as pr
 
-from gmb.pipeline.annotate_cds_utrs import annotate_all_transcripts, load_genome
+from gmb.pipeline.annotate_cds_utrs import (
+    annotate_all_transcripts,
+    build_spliced_seq,
+    load_genome,
+    reverse_complement,
+    translate,
+)
 from gmb.pipeline.config import dump_config, list_build_presets, load_config
 from gmb.pipeline.dedup_genes import dedup_genes
 from gmb.pipeline.duplicate_transcript_collapse import collapse_exact_duplicate_transcripts
@@ -62,6 +68,84 @@ from gmb.pipeline.subset_utils import (
     write_subset_manifest,
 )
 from gmb.utils.logging import resolve_log_file, setup_logging
+
+
+def regenerate_final_fasta(
+    gff_rows: list[dict],
+    genome_dict: dict[str, str],
+    output_dir: str,
+) -> dict[str, int]:
+    """Derive cdna.fa, cds.fa, and prot.fa from the final GFF3 rows.
+
+    Must be called AFTER all post-processing (validation, dedup, collapse)
+    so that the FASTA sequences match the final GFF3 exon/CDS coordinates.
+    Coordinates in *gff_rows* must be 0-based half-open (internal convention).
+    Terminal stop codons are excluded from prot.fa (standard Ensembl convention).
+    """
+    from collections import defaultdict as _dd
+
+    from gmb.utils.fasta import write_seq
+
+    children: dict[str, list[dict]] = _dd(list)
+    mrnas: dict[str, dict] = {}
+    for r in gff_rows:
+        feat = r.get("Feature", "")
+        if feat == "mRNA":
+            mrnas[r["ID"]] = r
+        elif r.get("Parent"):
+            children[r["Parent"]].append(r)
+
+    stats = {"cdna": 0, "cds": 0, "prot": 0}
+    cdna_path = os.path.join(output_dir, "cdna.fa")
+    cds_path = os.path.join(output_dir, "cds.fa")
+    prot_path = os.path.join(output_dir, "prot.fa")
+
+    with (
+        open(cdna_path, "w") as cdna_fh,
+        open(cds_path, "w") as cds_fh,
+        open(prot_path, "w") as prot_fh,
+    ):
+        for tid in sorted(mrnas):
+            m = mrnas[tid]
+            chrom = m["Chromosome"]
+            strand = m["Strand"]
+            if chrom not in genome_dict:
+                continue
+            chrom_seq = genome_dict[chrom]
+            kids = children.get(tid, [])
+
+            exon_ivs = sorted([(r["Start"], r["End"]) for r in kids if r["Feature"] == "exon"])
+            cds_ivs = sorted([(r["Start"], r["End"]) for r in kids if r["Feature"] == "CDS"])
+
+            if exon_ivs:
+                cdna = build_spliced_seq(exon_ivs, strand, chrom_seq)
+                cdna_fh.write(f">{tid}\n")
+                write_seq(cdna_fh, cdna)
+                stats["cdna"] += 1
+
+            if cds_ivs:
+                cds_parts = [chrom_seq[s:e] for s, e in cds_ivs]
+                cds_nuc = "".join(cds_parts)
+                if strand == "-":
+                    cds_nuc = reverse_complement(cds_nuc)
+
+                cds_fh.write(f">{tid}\n")
+                write_seq(cds_fh, cds_nuc)
+                stats["cds"] += 1
+
+                protein = translate(cds_nuc)
+                if protein.endswith("*"):
+                    protein = protein[:-1]
+
+                prot_fh.write(f">{tid}\n")
+                write_seq(prot_fh, protein)
+                stats["prot"] += 1
+
+    print(
+        f"  Final FASTA: {stats['cdna']} cDNA, {stats['cds']} CDS, "
+        f"{stats['prot']} protein records"
+    )
+    return stats
 
 
 def compute_cds_phases(cds_intervals: list, strand: str) -> list:
@@ -1025,16 +1109,7 @@ def main() -> None:
     final_gene_count = sum(1 for r in selected_gff_rows if r.get("Feature") == "gene")
     stats["total_loci"] = final_gene_count
 
-    # Reconcile FASTA with post-processed GFF rows.
-    # validate_and_fix_gff3 / dedup_genes may have dropped transcripts after
-    # FASTA entries were collected, so filter to surviving mRNA IDs only.
     surviving_tids = {r["ID"] for r in selected_gff_rows if r.get("Feature") == "mRNA"}
-    selected_cdna_fa = [
-        rec for rec in selected_cdna_fa if rec.split("\n", 1)[0].lstrip(">") in surviving_tids
-    ]
-    selected_prot_fa = [
-        rec for rec in selected_prot_fa if rec.split("\n", 1)[0].lstrip(">") in surviving_tids
-    ]
 
     gff3_path = os.path.join(args.output_dir, "consensus.gff3")
     out_df = pd.DataFrame(selected_gff_rows)
@@ -1064,13 +1139,8 @@ def main() -> None:
         with open(gff3_path, "w") as fh:
             fh.write("##gff-version 3\n")
 
-    with open(os.path.join(args.output_dir, "cdna.fa"), "w") as fh:
-        if selected_cdna_fa:
-            fh.write("\n".join(selected_cdna_fa) + "\n")
-
-    with open(os.path.join(args.output_dir, "prot.fa"), "w") as fh:
-        if selected_prot_fa:
-            fh.write("\n".join(selected_prot_fa) + "\n")
+    print("  Regenerating final FASTA from post-processed GFF3...")
+    regenerate_final_fasta(selected_gff_rows, genome_dict, args.output_dir)
 
     # --- Evidence attribution TSV ---
     evidence_rows = []
@@ -1272,7 +1342,9 @@ def main() -> None:
         with open(report_path, "w") as fh:
             json.dump(qc_report, fh, indent=2)
         if not qc_report.get("pass", False):
-            print("WARNING: FASTA QC checks failed. See fasta_qc_report.json for details.")
+            failed = qc_report.get("failed_checks", [])
+            print(f"ERROR: FASTA QC failed: {', '.join(failed)}")
+            sys.exit(1)
 
     print("Done!")
 
