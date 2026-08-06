@@ -183,6 +183,40 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     log_file.unlink(missing_ok=True)
     cat_file.unlink(missing_ok=True)
 
+# Function to find the repeat class based on the mappings
+def get_repeat_type(repeat_type:str)-> str:
+    """Get the repeat type based on the provided repeat_type string.
+
+    Args:
+        repeat_type (str): The repeat type string to match against the mappings.
+
+    Returns:
+        str: The corresponding repeat type description if a match is found, 
+        otherwise "Unknown".
+    """
+    mappings = {
+    r'^Low_Comp': 'Low complexity regions',
+    r'^LINE': 'Type I Transposons/LINE',
+    r'^SINE': 'Type I Transposons/SINE',
+    r'^DNA': 'Type II Transposons',
+    r'^LTR': 'LTRs',
+    r'^Other': 'Other repeats',
+    r'^Satelli': 'Satellite repeats',
+    r'^Simple': 'Simple repeats',
+    r'^Tandem': 'Tandem repeats',
+    r'^TRF': 'Tandem repeats',
+    r'^Waterman': 'Waterman',
+    r'^Recon': 'Recon',
+    r'^Tet_repeat': 'Tetraodon repeats',
+    r'^MaskRegion': 'Mask region',
+    r'^dust': 'Dust',
+    r'^Unknown': 'Unknown',
+    r'RNA$': 'RNA repeats'
+    }
+    for pattern, description in mappings.items():
+        if re.match(pattern, repeat_type):
+            return description
+    return "Unknown"  # Default if no match is found
 
 def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
     output_file: Path,
@@ -219,6 +253,7 @@ def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
                 strand = results[8]
                 repeat_name = results[9]
                 repeat_class = results[10]
+                repeat_type = get_repeat_type(results[10])
                 if strand == "+":
                     repeat_start = results[11]
                     repeat_end = results[12]
@@ -228,9 +263,9 @@ def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
                     strand = "-"
                 gtf_line = (
                     f"{region_name}\tRepeatMasker\trepeat\t{start}\t{end}\t.\t"
-                    f"{strand}\t.\trepeat_id{repeat_count}; "
+                    f"{strand}\t.\trepeat_id\t{repeat_count}; "
                     f'repeat_name "{repeat_name}"; repeat_class "{repeat_class}"; '
-                    f'repeat_start "{repeat_start}"; '
+                    f'repeat_type "{repeat_type}"; repeat_start "{repeat_start}"; '
                     f'repeat_end "{repeat_end}"; score "{score}";\n'
                 )
                 repeatmasker_out.write(gtf_line)
@@ -273,6 +308,7 @@ def parse_args():
         default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
         help="Bedtools executable path",
     )
+
     return parser.parse_args()
 
 

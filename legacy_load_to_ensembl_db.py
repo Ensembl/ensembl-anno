@@ -40,6 +40,7 @@ def _load_gtf_to_db(  # pylint: disable=too-many-arguments, too-many-locals
     genome_file: Path,
     db_details: dict[str, Any],
     db_loading_dir: Path,
+    run_repeatmasker_analysis: int,
     num_threads: int,
 ) -> None:
     """Load a GTF file into the Ensembl database."""
@@ -62,6 +63,7 @@ def _load_gtf_to_db(  # pylint: disable=too-many-arguments, too-many-locals
 
     generic_load_records_to_ensembl_db(
         make_single_transcript_genes,
+        run_repeatmasker_analysis,
         db_loading_script,
         genome_file,
         db_details,
@@ -73,7 +75,7 @@ def _load_gtf_to_db(  # pylint: disable=too-many-arguments, too-many-locals
     )
 
 
-def load_results_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-positional-arguments
+def load_results_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     main_script_dir: Path,
     make_single_transcript_genes: bool,
     genome_file: Path,
@@ -100,78 +102,18 @@ def load_results_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-
         "db_loading",
     )
     analyses = (
-        (
-            "annotation_output",
-            "main geneset",
-            "gene",
-            "ensembl",
-            200,
-        ),
-        (
-            "rfam_output",
-            "Rfam-based sncRNA genes",
-            "gene",
-            "ncrna",
-            500,
-        ),
-        (
-            "trnascan_output",
-            "tRNAScan-SE tRNA genes",
-            "gene",
-            "ncrna",
-            500,
-        ),
-        (
-            "dust_output",
-            "Dust repeats",
-            "single_line_feature",
-            "dust",
-            500,
-        ),
-        (
-            "red_output",
-            "Red repeats",
-            "single_line_feature",
-            "repeatdetector",
-            500,
-        ),
-        (
-            "trf_output",
-            "TRF repeats",
-            "single_line_feature",
-            "trf",
-            500,
-        ),
-        (
-            "repeatmasker_output",
-            "RepeatMasker repeats",
-            "single_line_feature",
-            repeatmasker_analysis,
-            500,
-        ),
-        (
-            "cpg_output",
-            "CpG islands",
-            "single_line_feature",
-            "cpg",
-            500,
-        ),
-        (
-            "eponine_output",
-            "Eponine features",
-            "single_line_feature",
-            "eponine",
-            500,
-        ),
+        ("annotation_output", "main geneset", "gene", "ensembl", 200, 0),
+        ("rfam_output", "Rfam-based sncRNA genes", "gene", "ncrna", 500, 0),
+        ("trnascan_output", "tRNAScan-SE tRNA genes", "gene", "ncrna", 500, 0),
+        ("dust_output", "Dust repeats", "single_line_feature", "dust", 500, 0),
+        ("red_output", "Red repeats", "single_line_feature", "repeatdetector", 500, 0),
+        ("trf_output", "TRF repeats", "single_line_feature", "trf", 500, 0),
+        ("repeatmasker_output", "RepeatMasker repeats", "single_line_feature", repeatmasker_analysis, 500, 1), #pylint: disable=line-too-long
+        ("cpg_output", "CpG islands", "single_line_feature", "cpg", 500, 0),
+        ("eponine_output", "Eponine features", "single_line_feature", "eponine", 500, 0),
     )
 
-    for (
-        output_dir,
-        description,
-        load_type,
-        analysis_name,
-        batch_size,
-    ) in analyses:
+    for output_dir, description, load_type, analysis_name, batch_size, run_repeatmasker_analysis in analyses: #pylint: disable=line-too-long
         _load_gtf_to_db(
             gtf_file=(main_output_dir / output_dir / "annotation.gtf"),
             description=description,
@@ -184,6 +126,7 @@ def load_results_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-
             db_details=db_details,
             db_loading_dir=db_loading_dir,
             num_threads=num_threads,
+            run_repeatmasker_analysis=run_repeatmasker_analysis,
         )
 
     logger.info("Finished loading records to db")
@@ -191,6 +134,7 @@ def load_results_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-
 
 def generic_load_records_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     make_single_transcript_genes: bool,
+    run_repeatmasker_analysis: int,
     db_loading_script: Path,
     genome_file: Path,
     db_details: dict[str, Any],
@@ -225,6 +169,7 @@ def generic_load_records_to_ensembl_db(  # pylint: disable=too-many-arguments, t
                     db_loading_dir,
                     load_type,
                     analysis_name,
+                    run_repeatmasker_analysis,
                     record_batch,
                 ),
             )
@@ -243,6 +188,7 @@ def multiprocess_load_records_to_ensembl_db(  # pylint: disable=too-many-argumen
     output_dir: Path,
     load_type: str,
     analysis_name: str,
+    run_repeatmasker_analysis: int,
     record_batch: list[str],
 ) -> None:
     """Load a single GTF batch into the Ensembl database."""
@@ -279,6 +225,8 @@ def multiprocess_load_records_to_ensembl_db(  # pylint: disable=too-many-argumen
         analysis_name,
         "-load_type",
         load_type,
+        "-run_repeatmasker_analysis",
+        str(run_repeatmasker_analysis),
     ]
 
     if load_type == "gene" and analysis_name == "ensembl":
