@@ -15,8 +15,9 @@
 """
 Set of discriminant functions that can recognize structural and compositional features
 such as CpG islands, promoter regions and first splice-donor sites.
-Davuluri RV, Grosse I, Zhang MQ: Computational identification of promoters and
-first exons in the human genome. Nat Genet. 2001, 29(4):412-417. [PMID: 11726928]
+References
+----------
+:cite:`cpg`
 """
 __all__ = ["run_cpg"]
 
@@ -28,10 +29,9 @@ from os import PathLike
 from pathlib import Path
 import re
 import subprocess
-from tempfile import TemporaryDirectory
 from typing import List, Union
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -44,7 +44,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_cpg(
+def run_cpg(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-branches
     genome_file: PathLike,
     output_dir: Path,
     cpg_bin: Path = Path("cpg_lh"),
@@ -52,6 +52,7 @@ def run_cpg(
     cpg_min_gc_content: int = 50,
     cpg_min_oe: float = 0.6,
     num_threads: int = 1,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Run CpG islands on genomic slices
@@ -70,6 +71,8 @@ def run_cpg(
         :type cpg_min_oe: float
         :param num_threads: int, number of threads.
         :type num_threads: int
+        :param bedtools_bin: Bedtools executable path.
+        :type bedtools_bin: str
 
         :return: None
         :rtype: None
@@ -88,7 +91,9 @@ def run_cpg(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
+    slice_ids_per_region = get_slice_id(
+        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
+    )  # pylint:disable=line-too-long
     logger.info("Running CpG")
     pool = multiprocessing.Pool(int(num_threads))  # pylint:disable=consider-using-with
     for slice_id in slice_ids_per_region:
@@ -102,6 +107,7 @@ def run_cpg(
                 cpg_min_length,
                 cpg_min_gc_content,
                 cpg_min_oe,
+                bedtools_bin,
             ),
         )
 
@@ -112,7 +118,7 @@ def run_cpg(
         gtf_file.unlink()
 
 
-def _multiprocess_cpg(
+def _multiprocess_cpg(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-positional-arguments
     cpg_bin: Path,
     slice_id: List[str],
     genome_file: Path,
@@ -120,6 +126,7 @@ def _multiprocess_cpg(
     cpg_min_length: int = 400,
     cpg_min_gc_content: int = 50,
     cpg_min_oe: float = 0.6,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Annotation of CpG islands on multiprocess on genomic slices
@@ -131,6 +138,7 @@ def _multiprocess_cpg(
         cpg_min_length : Min length of CpG islands
         cpg_min_gc_content : Min GC frequency percentage
         cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
+        bedtools_bin: Bedtools executable path.
     """
     region_name, start, end = slice_id
     logger.info(
@@ -139,7 +147,7 @@ def _multiprocess_cpg(
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, cpg_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, cpg_dir, bedtools_bin)
     slice_name = f"{region_name}.rs{start}.re{end}"
     # with TemporaryDirectory(dir=cpg_dir) as tmpdirname:
     slice_file = cpg_dir / f"{slice_name}.fa"
@@ -162,7 +170,7 @@ def _multiprocess_cpg(
     output_file.unlink()
 
 
-def _create_cpg_gtf(
+def _create_cpg_gtf(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-positional-arguments
     output_file: Path,
     region_results: Path,
     region_name: str,
@@ -182,9 +190,10 @@ def _create_cpg_gtf(
         cpg_min_gc_content : Min GC frequency percentage
         cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
     """
-    with open(output_file, "r", encoding="utf8") as cpg_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as cpg_out:
+    with (
+        open(output_file, "r", encoding="utf8") as cpg_in,
+        open(region_results, "w+", encoding="utf8") as cpg_out,
+    ):
         feature_count = 1
         for line in cpg_in:
             result_match = re.search(r"^" + region_name, line)
@@ -220,7 +229,9 @@ def parse_args():
     parser.add_argument("--output_dir", required=True, help="Output directory path")
     parser.add_argument("--cpg_bin", default="cpg_lh", help="CpG executable path")
     parser.add_argument("--cpg_min_length", type=int, default=400, help="Min length of CpG islands")
-    parser.add_argument("--cpg_min_gc_content", type=int, default=50, help="Min GC frequency percentage")
+    parser.add_argument(
+        "--cpg_min_gc_content", type=int, default=50, help="Min GC frequency percentage"
+    )  # pylint:disable=line-too-long
     parser.add_argument(
         "--cpg_min_oe",
         type=float,
@@ -228,6 +239,11 @@ def parse_args():
         help="Min ratio of the observed to expected number of CpG (CpGo/e)",
     )
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
 
 
@@ -252,6 +268,7 @@ def main():
         args.cpg_min_gc_content,
         args.cpg_min_oe,
         args.num_threads,
+        args.bedtools_bin,
     )
 
 

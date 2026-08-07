@@ -77,5 +77,6 @@ class TestDust(unittest.TestCase):
         self.assertTrue(pool.closed)
         self.assertTrue(pool.joined)
 
+
 if __name__ == "__main__":
     unittest.main()

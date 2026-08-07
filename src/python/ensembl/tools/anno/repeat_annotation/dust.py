@@ -16,8 +16,9 @@
 DustMasker is a program that identifies and masks out low complexity
 parts of a genome using a new and improved DUST algorithm.
 
-Morgulis A, Gertz EM, Schaffer AA, Agarwala R. A Fast and Symmetric
-DUST Implementation to Mask Low-Complexity DNA Sequences.
+References
+----------
+:cite:`dust`
 """
 __all__ = ["run_dust"]
 
@@ -34,7 +35,7 @@ from typing import List
 import argparse
 
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -52,6 +53,7 @@ def run_dust(
     output_dir: Path,
     dust_bin: Path = Path("dustmasker"),
     num_threads: int = 1,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Run Dust on genomic slices with mutiprocessing
@@ -63,7 +65,9 @@ def run_dust(
         :type dust_bin: Path, default dustmasker
         :param num_threads: Number of threads.
         :type num_threads: int, default 1
-                
+        :param bedtools_bin: Bedtools executable path.
+        :type bedtools_bin: str, default "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools"#pylint:disable=line-too-long
+
         :return: None
         :rtype: None
     """
@@ -82,7 +86,9 @@ def run_dust(
             return
     logger.info("Creating list of genomic slices")
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
-    slice_ids_per_region = get_slice_id(seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000)
+    slice_ids_per_region = get_slice_id(
+        seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
+    )  # pylint:disable=line-too-long
     dust_cmd = [dust_bin, "-in"]
     pool = multiprocessing.Pool(num_threads)  # pylint: disable=consider-using-with
     for slice_id in slice_ids_per_region:
@@ -93,6 +99,7 @@ def run_dust(
                 slice_id,
                 dust_dir,
                 genome_file,
+                bedtools_bin,
             ),
         )
     pool.close()
@@ -107,6 +114,7 @@ def _multiprocess_dust(  # pylint: disable=too-many-locals
     slice_id: List[str],
     dust_dir: Path,
     genome_file: Path,
+    bedtools_bin: str,
 ) -> None:
     """
     Run Dust on multiprocess on genomic slices
@@ -123,7 +131,7 @@ def _multiprocess_dust(  # pylint: disable=too-many-locals
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, dust_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, dust_dir, bedtools_bin)
     slice_name = f"{region_name}.rs{start}.re{end}"
     with tempfile.TemporaryDirectory(dir=dust_dir) as tmpdirname:
         slice_file = dust_dir / tmpdirname / f"{slice_name}.fa"
@@ -153,9 +161,10 @@ def _create_dust_gtf(
         region_results : GTF file with the results per region.
         region_name :Coordinates of genomic slice.
     """
-    with open(output_file, "r", encoding="utf8") as dust_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as dust_out:
+    with (
+        open(output_file, "r", encoding="utf8") as dust_in,
+        open(region_results, "w+", encoding="utf8") as dust_out,
+    ):
         repeat_count = 1
         for line in dust_in:
             result_match = re.search(r"(\d+)\ - (\d+)", line)
@@ -163,12 +172,11 @@ def _create_dust_gtf(
                 start = int(result_match.group(1)) + 1
                 end = int(result_match.group(2)) + 1
                 gtf_line = (
-                    f"{region_name}\tDust\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'
+                    f"{region_name}\tDust\trepeat\t{start}\t"
+                    f'{end}\t.\t+\t.\trepeat_id "{repeat_count}";\n'  # pylint:disable=line-too-long
                 )
                 dust_out.write(gtf_line)
                 repeat_count += 1
-
-
 
 
 def parse_args():
@@ -181,10 +189,14 @@ def parse_args():
         default="dustmasker",
         help="Dust executable path",
     )
+    parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
     parser.add_argument(
-        "--num_threads", type=int, default=1, help="Number of threads"
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
     )
     return parser.parse_args()
+
 
 def main():
     """Dust's entry-point."""
@@ -204,7 +216,9 @@ def main():
         args.output_dir,
         args.dust_bin,
         args.num_threads,
+        args.bedtools_bin,
     )
+
 
 if __name__ == "__main__":
     main()

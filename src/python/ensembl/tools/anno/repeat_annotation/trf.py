@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-    Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
-    Benson G. Tandem repeats finder: a program to analyze DNA sequences.
-    Nucleic Acids Res. 1999; 27(2):573–580. doi:10.1093/nar/27.2.573
+Tandem Repeats Finder is a program to locate and display tandem repeats in DNA sequences.
+References
+----------
+:cite:`trf`
 """
 __all__ = ["run_trf"]
 
@@ -32,7 +33,7 @@ import tempfile
 from typing import List
 
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,
@@ -45,7 +46,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_trf(
+def run_trf(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     genome_file: PathLike,
     output_dir: Path,
     num_threads: int = 1,
@@ -57,6 +58,7 @@ def run_trf(
     pi: int = 10,
     minscore: int = 40,
     maxperiod: int = 500,
+    bedtools_bin: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Executes TRF on genomic slices
@@ -82,7 +84,9 @@ def run_trf(
             :type minscore: int, default 40
             :param maxperiod: Maximum period size to report.
             :type maxperiod: int, default 500
-                    
+            :param bedtools_path: Bedtools executable path.
+            :type bedtools_path: str, default "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools"#pylint:disable=line-too-long
+
             :return: None
             :rtype: None
     """
@@ -103,11 +107,10 @@ def run_trf(
     seq_region_to_length = get_seq_region_length(genome_file, 5000)
     slice_ids_per_region = get_slice_id(
         seq_region_to_length, slice_size=1000000, overlap=0, min_length=5000
-    )
+    )  # pylint:disable=line-too-long
     trf_output_extension = (
-        f".{match_score}.{mismatch_score}.{delta}."
-        f"{pm}.{pi}.{minscore}.{maxperiod}.dat"
-    )
+        f".{match_score}.{mismatch_score}.{delta}." f"{pm}.{pi}.{minscore}.{maxperiod}.dat"
+    )  # pylint:disable=line-too-long
     trf_cmd = [
         trf_bin,
         None,
@@ -122,17 +125,12 @@ def run_trf(
         "-h",
     ]
     logger.info("Running TRF")
-    pool = multiprocessing.Pool(num_threads)#pylint:disable=consider-using-with
+    pool = multiprocessing.Pool(num_threads)  # pylint:disable=consider-using-with
+    logger.info("sono quiii")
     for slice_id in slice_ids_per_region:
         pool.apply_async(
             _multiprocess_trf,
-            args=(
-                trf_cmd,
-                slice_id,
-                trf_dir,
-                trf_output_extension,
-                genome_file,
-            ),
+            args=(trf_cmd, slice_id, trf_dir, trf_output_extension, genome_file, bedtools_bin),
         )
     pool.close()
     pool.join()
@@ -141,12 +139,13 @@ def run_trf(
         gtf_file.unlink()
 
 
-def _multiprocess_trf(
+def _multiprocess_trf(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     trf_cmd: List[str],
     slice_id: List[str],
     trf_dir: Path,
     trf_output_extension: Path,
-    genome_file:Path,
+    genome_file: Path,
+    bedtools_bin: str,
 ) -> None:
     """
     Run TRF on multiprocess on genomic slices
@@ -164,27 +163,31 @@ def _multiprocess_trf(
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, trf_dir)
+    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, trf_dir, bedtools_bin)
     slice_name = f"{region_name}.rs{start}.re{end}"
+    logger.info("slice_file %s", slice_name)
     with tempfile.TemporaryDirectory(dir=trf_dir) as tmpdirname:
-        slice_file = trf_dir / tmpdirname / f"{slice_name}.fa"
+        tmpdir = Path(tmpdirname)
+        slice_file = tmpdir / f"{slice_name}.fa"
+        logger.info("slice FILE %s", tmpdir)
+        # slice_file = trf_dir / tmpdirname / f"{slice_name}.fa"
         with open(slice_file, "w+", encoding="utf8") as region_out:
             region_out.write(f">{region_name}\n{seq}\n")
         region_results = trf_dir / f"{slice_name}.trf.gtf"
         # TRF writes to the current dir, so swtich to the output dir for it
-        # os.chdir(str(trf_output_dir))
+        # os.chdir(str(trf_dir))
         output_file = Path(f"{slice_file}{trf_output_extension}")
         trf_cmd = trf_cmd.copy()
         trf_cmd[1] = str(slice_file)
         logger.info("trf_cmd: %s", trf_cmd)
         # with open(trf_output_file_path, "w+") as trf_out:
-        subprocess.run(trf_cmd, cwd=trf_dir / tmpdirname)#pylint:disable=subprocess-run-check
+        subprocess.run(trf_cmd, cwd=trf_dir / tmpdirname)  # pylint:disable=subprocess-run-check
         _create_trf_gtf(output_file, region_results, region_name)
         slice_file.unlink()
         output_file.unlink()
 
 
-def _create_trf_gtf(
+def _create_trf_gtf(  # pylint:disable=too-many-locals, too-many-branches
     output_file: Path,
     region_results: Path,
     region_name: str,
@@ -209,9 +212,10 @@ def _create_trf_gtf(
        region_results : GTF file with results per region.
        region_name : Coordinates of genomic slice.
     """
-    with open(output_file, "r", encoding="utf8") as trf_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as trf_out:
+    with (
+        open(output_file, "r", encoding="utf8") as trf_in,
+        open(region_results, "w+", encoding="utf8") as trf_out,
+    ):
         repeat_count = 1
         for line in trf_in:
             result_match = re.search(r"^\d+", line)
@@ -227,34 +231,41 @@ def _create_trf_gtf(
                 score = float(results[7])
                 repeat_consensus = results[13]
                 if (  # pylint: disable=too-many-boolean-expressions
-                    score < 50
-                    and percent_matches >= 80
-                    and copy_number > 2
-                    and period < 10
+                    score < 50 and percent_matches >= 80 and copy_number > 2 and period < 10
                 ) or (copy_number >= 2 and percent_matches >= 70 and score >= 50):
                     gtf_line = (
                         f"{region_name}\tTRF\trepeat\t{start}\t{end}\t.\t+\t.\t"
                         f'repeat_id "{repeat_count}"; score "{score}"; '
                         f'repeat_consensus "{repeat_consensus}";\n'
                     )
+                    logger.info(gtf_line)
                     trf_out.write(gtf_line)
                     repeat_count += 1
+
 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="TRF's arguments")
     parser.add_argument("--genome_file", required=True, help="Genome file path")
     parser.add_argument("--output_dir", required=True, help="Output directory path")
-    parser.add_argument("--trf_bin", default="trf", help="TRF executable path")
+    parser.add_argument("--trf_bin", default="/opt/linuxbrew/bin/trf", help="TRF executable path")
     parser.add_argument("--match_score", type=int, default=2, help="Matching weight")
     parser.add_argument("--mismatch_score", type=int, default=5, help="Mismatching penalty")
     parser.add_argument("--delta", type=int, default=7, help="Indel penalty")
     parser.add_argument("--pm", type=int, default=80, help="Match probability")
     parser.add_argument("--pi", type=int, default=10, help="Indel probability")
-    parser.add_argument("--minscore", type=int, default=40, help="Minimum alignment score to report")
+    parser.add_argument(
+        "--minscore", type=int, default=40, help="Minimum alignment score to report"
+    )  # pylint:disable=line-too-long
     parser.add_argument("--maxperiod", type=int, default=500, help="Maximum period size to report")
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--bedtools_bin",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
+
 
 def main():
     """TRF's entry-point."""
@@ -281,7 +292,9 @@ def main():
         args.pi,
         args.minscore,
         args.maxperiod,
+        args.bedtools_bin,
     )
+
 
 if __name__ == "__main__":
     main()

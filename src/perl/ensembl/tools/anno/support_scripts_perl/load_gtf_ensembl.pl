@@ -56,6 +56,7 @@ my $non_coding_biotype;
 my $compute_translations;
 my $load_type;
 my $make_single_transcript_genes = 0;
+my $run_repeatmasker_analysis = 0;
 
 GetOptions( 'host|dbhost|h=s'       => \$host,
             'port|dbport|P=s'       => \$port,
@@ -76,7 +77,8 @@ GetOptions( 'host|dbhost|h=s'       => \$host,
             'non_coding_biotype=s' => \$non_coding_biotype,
             'load_type=s' => \$load_type,
             'analysis_name=s' => \$analysis_name,
-            'make_single_transcript_genes!' => \$make_single_transcript_genes);
+            'make_single_transcript_genes!' => \$make_single_transcript_genes,
+            'run_repeatmasker_analysis!' => \$run_repeatmasker_analysis);
 
 if (!(-e $gtf_file)) {
   die "Could not open the GTF file, path used: ".$gtf_file;
@@ -117,7 +119,7 @@ my $analysis = new Bio::EnsEMBL::Analysis(-logic_name => $analysis_name,
 
 if($load_type eq 'gene') {
   load_genes($dba,$gtf_file,$slice_hash,$analysis,%strand_conversion);
-} elsif($load_type eq 'single_line_feature' and ($analysis_name eq 'dust' or $analysis_name eq 'repeatdetector' or $analysis_name eq 'trf')) {
+} elsif($load_type eq 'single_line_feature' and ($analysis_name eq 'dust' or $analysis_name eq 'repeatdetector' or $analysis_name eq 'trf' or $run_repeatmasker_analysis)) {
   load_repeats($dba,$gtf_file,$slice_hash,$analysis,%strand_conversion);
 } elsif($load_type eq 'single_line_feature' and ($analysis_name eq 'cpg' or $analysis_name eq 'eponine')) {
   load_simple_features($dba,$gtf_file,$slice_hash,$analysis,%strand_conversion);
@@ -357,6 +359,7 @@ sub load_repeats {
   my $repeat_types = { trf => 'Tandem repeats',
                        dust => 'Dust',
                        repeatdetector => 'repeatdetector',
+                       #'repeatmask_repbase%' => 'repeatmasker',
                      };
   my $repeat_features = [];
   my $features_by_region = {};
@@ -380,7 +383,18 @@ sub load_repeats {
     }
 
     my $attributes = set_attributes($eles[8]);
+    my $repeat_name = $analysis->logic_name;
+    if($attributes->{'repeat_name'}) {
+      $repeat_name = $attributes->{'repeat_name'};
+    }
+    my $repeat_class = $analysis->logic_name;
+    if($attributes->{'repeat_class'}) {
+      $repeat_class = $attributes->{'repeat_class'};
+    }
     my $repeat_type = $repeat_types->{$analysis->logic_name};
+    if($attributes->{'repeat_type'}) {
+      $repeat_type = $attributes->{'repeat_type'};
+    }
     my $repeat_consensus_seq = 'N';
     if($attributes->{'repeat_consensus'}) {
       $repeat_consensus_seq = $attributes->{'repeat_consensus'};
@@ -390,7 +404,7 @@ sub load_repeats {
       $repeat_score = $attributes->{'score'};
     }
     my $feature_factory = Bio::EnsEMBL::Analysis::Tools::FeatureFactory->new();
-    my $repeat_consensus = $feature_factory->create_repeat_consensus($analysis->logic_name,$analysis->logic_name, $repeat_type, $repeat_consensus_seq);
+    my $repeat_consensus = $feature_factory->create_repeat_consensus($repeat_name,$repeat_class, $repeat_type, $repeat_consensus_seq);
     my $repeat_feature = $feature_factory->create_repeat_feature($gtf_start, $gtf_end, 1, $repeat_score, 1,($gtf_end - $gtf_start + 1),$repeat_consensus);
 
     if($features_by_region->{$gtf_region}) {

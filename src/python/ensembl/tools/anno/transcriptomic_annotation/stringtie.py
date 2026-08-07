@@ -17,8 +17,9 @@
 StringTie is a fast and highly efficient assembler of RNA-Seq alignments into potential transcripts.
 It uses a novel network flow algorithm as well as an optional de novo assembly step to assemble and
 quantitate full-length transcripts representing multiple splice variants for each gene locus.
-Pertea M, Pertea GM, Antonescu CM, Chang TC, Mendell JT & Salzberg SL. StringTie enables improved 
-reconstruction of a transcriptome from RNA-seq reads Nature Biotechnology 2015, doi:10.1038/nbt.3122
+References
+----------
+:cite:`stringtie`
 """
 
 __all__ = ["run_stringtie"]
@@ -30,7 +31,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
     check_gtf_content,

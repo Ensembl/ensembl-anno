@@ -15,9 +15,10 @@
 """
 Red is the first repeat-detection tool capable of labeling its training data
 and training itself automatically on an entire genome.
-Girgis, H.Z. Red: an intelligent, rapid, accurate tool for detecting repeats
-de-novo on the genomic scale. BMC Bioinformatics 16, 227 (2015).
-https://doi.org/10.1186/s12859-015-0654-5
+
+References
+----------
+:cite:`red`
 """
 __all__ = ["run_red"]
 
@@ -29,7 +30,7 @@ import re
 import subprocess
 
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     create_dir,
 )
@@ -91,7 +92,7 @@ def run_red(
             sym_link_genome_cmd,
         )
         # subprocess.run(["ln", "-s", genome_file, red_genome_dir])
-        red_genome_file.symlink_to(genome_file)
+        red_genome_file.symlink_to(genome_file)  # .resolve()
     try:
         if red_genome_file.exists():
             logger.info("Running Red")
@@ -107,7 +108,7 @@ def run_red(
                 ],
                 check=True,
             )
-    except:#pylint:disable=bare-except
+    except:  # pylint:disable=bare-except
         logger.error(
             "Could not find the genome file in the Red genome dir or sym link \
             to the original file. Path expected:\n%s",
@@ -125,9 +126,10 @@ def _create_red_gtf(repeat_coords_file: Path, output_file: Path):
         repeat_coords_file: Coordinates for repeats.
         output_file : GTF file with the final results.
     """
-    with open(repeat_coords_file, "r", encoding="utf8") as red_in, open(
-        output_file, "w+", encoding="utf8"
-    ) as red_out:
+    with (
+        open(repeat_coords_file, "r", encoding="utf8") as red_in,
+        open(output_file, "w+", encoding="utf8") as red_out,
+    ):
         for repeat_id, line in enumerate(red_in, start=1):
             result_match = re.search(r"^\>(.+)\:(\d+)\-(\d+)", line)
             if result_match:
@@ -136,7 +138,8 @@ def _create_red_gtf(repeat_coords_file: Path, output_file: Path):
                 start = int(result_match.group(2)) + 1
                 end = int(result_match.group(3)) + 1
                 gtf_line = (
-                    f"{region_name}\tRed\trepeat\t{start}\t" f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'
+                    f"{region_name}\tRed\trepeat\t{start}\t"
+                    f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'  # pylint:disable=line-too-long
                 )
                 red_out.write(gtf_line)
 

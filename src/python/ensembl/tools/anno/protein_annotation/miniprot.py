@@ -1,4 +1,3 @@
-
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -17,6 +16,14 @@
 """
 Miniprot aligns protein sequences to genomic DNA to recover spliced,
 protein-to-genome alignments useful for gene annotation.
+The Miniprot workflow is used to generate a GTF file from protein-to-genome
+alignments. The workflow consists of the following steps:
+1. Index the masked genome using Miniprot.
+2. Align the protein dataset to the indexed genome using Miniprot.
+
+References
+----------
+:cite:`miniprot`
 """
 
 __all__ = ["run_miniprot"]
@@ -34,7 +41,7 @@ from typing import List, Union, cast
 import numpy as np
 from numpy.typing import NDArray
 
-from src.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
     check_gtf_content,
     create_dir,
@@ -43,7 +50,7 @@ from src.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_miniprot(  # pylint: disable=too-many-arguments
+def run_miniprot(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     masked_genome: Path,
     output_dir: Path,
     protein_dataset: Path,
@@ -63,12 +70,12 @@ def run_miniprot(  # pylint: disable=too-many-arguments
     if protein_set == "uniprot":
         miniprot_dir = create_dir(
             output_dir,
-            "miniprot_output/uniprot_output",
+            "miniprot_uniprot_output",
         )
     else:
         miniprot_dir = create_dir(
             output_dir,
-            "miniprot_output/orthodb_output",
+            "miniprot_orthodb_output",
         )
 
     initial_output_file = miniprot_dir / "initial_annotation.gff"
@@ -152,7 +159,7 @@ def generate_miniprot_gtf(miniprot_dir: str) -> None:
                 )
 
 
-def convert_miniprot_gff_to_gtf(
+def convert_miniprot_gff_to_gtf(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
     input_file: Union[str, Path],
     output_file: Union[str, Path],
 ) -> None:
@@ -166,18 +173,14 @@ def convert_miniprot_gff_to_gtf(
 
     with open(output_file, "w", encoding="utf-8") as file_out:
         for block in blocks:
-            nblock_lines: List[str] = [
-                line for line in block.split("\n") if line
-            ]
+            nblock_lines: List[str] = [line for line in block.split("\n") if line]
 
             if not nblock_lines:
                 continue
 
             header_line = nblock_lines[0]
 
-            nblock_list: List[List[str]] = [
-                line.split("\t") for line in nblock_lines[1:]
-            ]
+            nblock_list: List[List[str]] = [line.split("\t") for line in nblock_lines[1:]]
 
             nblock: NDArray[np.object_] = cast(
                 NDArray[np.object_],
@@ -213,10 +216,7 @@ def convert_miniprot_gff_to_gtf(
                 "transcript",
             )
 
-            nblock[1:nrows, 2] = [
-                value.replace("CDS", "exon")
-                for value in nblock[1:nrows, 2]
-            ]
+            nblock[1:nrows, 2] = [value.replace("CDS", "exon") for value in nblock[1:nrows, 2]]
 
             target_info = [
                 value.replace("Target=", "")
@@ -227,19 +227,13 @@ def convert_miniprot_gff_to_gtf(
                 if "Target" in value
             ][0]
 
-            gene_transcript = (
-                f'gene_id "{target_info}"; '
-                f'transcript_id "{target_info}";'
-            )
+            gene_transcript = f'gene_id "{target_info}"; ' f'transcript_id "{target_info}";'
 
             for index in range(nrows):
                 if index == 0:
                     nblock[index, 8] = gene_transcript
                 else:
-                    nblock[index, 8] = (
-                        f'{gene_transcript} '
-                        f'exon_number "{index}";'
-                    )
+                    nblock[index, 8] = f"{gene_transcript} " f'exon_number "{index}";'
 
             if nblock[nrows - 1, 2] == "stop_codon":
                 if nblock[0, 6] == "-":
@@ -293,9 +287,7 @@ def run_miniprot_index(
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
 
-    parser = argparse.ArgumentParser(
-        description="Miniprot arguments"
-    )
+    parser = argparse.ArgumentParser(description="Miniprot arguments")
 
     parser.add_argument(
         "--masked_genome_file",

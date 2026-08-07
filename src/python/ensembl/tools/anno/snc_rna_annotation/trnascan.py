@@ -15,9 +15,10 @@
 """
 tRNAscan-SE identifies 99-100% of transfer RNA genes in DNA sequence while
 giving less than one false positive per 15 gigabases.
-Lowe TM, Eddy SR: tRNAscan-SE: a program for improved detection of transfer
-RNA genes in genomic sequence.
-Nucleic Acids Res. 1997, 25(5):955-64. [PMID: 9023104]
+References
+----------
+:cite:`trnascan`
+
 """
 __all__ = ["run_trnascan"]
 
@@ -31,9 +32,8 @@ import re
 import subprocess
 from typing import List
 
-from src.python.ensembl.tools.anno.utils._utils import (
+from ensembl.tools.anno.utils._utils import (
     check_exe,
-    check_file,
     create_dir,
     check_gtf_content,
     get_seq_region_length,
@@ -45,12 +45,13 @@ from src.python.ensembl.tools.anno.utils._utils import (
 logger = logging.getLogger(__name__)
 
 
-def run_trnascan(
+def run_trnascan(  # pylint:disable=too-many-arguments,too-many-positional-arguments
     genome_file: PathLike,
     output_dir: Path,
     trnascan_bin: Path = Path("tRNAscan-SE"),
     trnascan_filter: Path = Path("EukHighConfidenceFilter"),
     num_threads: int = 1,
+    bedtools_path: str = "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",  # pylint:disable=line-too-long
 ) -> None:
     """
     Executes tRNAscan-SE on genomic slices
@@ -64,6 +65,8 @@ def run_trnascan(
         :type trnascan_filter: Path, default EukHighConfidenceFilter
         :param num_threads: int, number of threads.
         :type num_threads: int, default 1
+        :param bedtools_path: Bedtools executable path.
+        :type bedtools_path: str, default "/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools"#pylint:disable=line-too-long
 
         :return: None
         :rtype: None
@@ -107,6 +110,7 @@ def run_trnascan(
                 genome_file,
                 trnascan_filter,
                 trnascan_dir,
+                bedtools_path,
             ),
         )
 
@@ -117,12 +121,13 @@ def run_trnascan(
         gtf_file.unlink()
 
 
-def _multiprocess_trnascan(
+def _multiprocess_trnascan(  # pylint: disable=too-many-locals, too-many-arguments, too-many-positional-arguments
     trnascan_cmd: List[str],
     slice_id: List[str],
     genome_file: Path,
     trnascan_filter: Path,
     trnascan_dir: Path,
+    bedtools_path: str,
 ) -> None:
     """
     Run tRNAscan-SE on multiprocess on genomic slices
@@ -140,7 +145,9 @@ def _multiprocess_trnascan(
         start,
         end,
     )
-    seq = get_sequence(region_name, int(start), int(end), 1, genome_file, trnascan_dir)
+    seq = get_sequence(
+        region_name, int(start), int(end), 1, genome_file, trnascan_dir, bedtools_path
+    )  # pylint:disable=line-too-long
     slice_name = f"{region_name}.rs{start}.re{end}"
     slice_file = trnascan_dir / f"{slice_name}.fa"
     with open(slice_file, "w+", encoding="utf8") as region_out:
@@ -216,9 +223,10 @@ def _create_trnascan_gtf(region_results: Path, filter_output_file: Path, region_
     col13: Features - special gene features that may include gene set categorization,
     number of introns, possible pseudogenes, possible truncation, or base-pair mismatches
     """
-    with open(filter_output_file, "r", encoding="utf8") as trna_in, open(
-        region_results, "w+", encoding="utf8"
-    ) as trna_out:
+    with (
+        open(filter_output_file, "r", encoding="utf8") as trna_in,
+        open(region_results, "w+", encoding="utf8") as trna_out,
+    ):
         gene_counter = 1
         for line in trna_in:
             result_match = re.search(r"^" + region_name, line)
@@ -254,11 +262,16 @@ def parse_args():
     parser.add_argument("--trnascan_bin", default="tRNAscan-SE", help="tRNAscan-SE executable path")
     parser.add_argument(
         "--trnascan_filter",
-        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/EukHighConfidenceFilter",  # pylint:disable=line-too-long
         help="tRNAscan-SE filter path",
     )
     parser.add_argument("--output_dir", required=True, help="Output directory path")
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--bedtools_path",
+        default="/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools",
+        help="Bedtools executable path",
+    )
     return parser.parse_args()
 
 
@@ -281,6 +294,7 @@ def main():
         args.trnascan_bin,
         Path(args.trnascan_filter),
         args.num_threads,
+        args.bedtools_path,
     )
 
 
