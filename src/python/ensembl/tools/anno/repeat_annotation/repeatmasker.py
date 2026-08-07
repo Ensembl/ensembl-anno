@@ -27,21 +27,19 @@ import argparse
 import logging
 import logging.config
 import multiprocessing
-from os import PathLike
-from pathlib import Path
 import re
 import subprocess
-from typing import List
-
+from os import PathLike
+from pathlib import Path
 
 from ensembl.tools.anno.utils._utils import (
     check_exe,
-    create_dir,
     check_gtf_content,
+    create_dir,
     get_seq_region_length,
+    get_sequence,
     get_slice_id,
     slice_output_to_gtf,
-    get_sequence,
 )
 
 logger = logging.getLogger("__name__")
@@ -134,8 +132,8 @@ def run_repeatmasker(  # pylint:disable=too-many-arguments, too-many-positional-
 
 
 def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
-    repeatmasker_cmd: List[str],
-    slice_id: List[str],
+    repeatmasker_cmd: list[str],
+    slice_id: list[str],
     genome_file: Path,
     repeatmasker_dir: Path,
     bedtools_bin: str,
@@ -183,40 +181,42 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     log_file.unlink(missing_ok=True)
     cat_file.unlink(missing_ok=True)
 
+
 # Function to find the repeat class based on the mappings
-def get_repeat_type(repeat_type:str)-> str:
+def get_repeat_type(repeat_type: str) -> str:
     """Get the repeat type based on the provided repeat_type string.
 
     Args:
         repeat_type (str): The repeat type string to match against the mappings.
 
     Returns:
-        str: The corresponding repeat type description if a match is found, 
+        str: The corresponding repeat type description if a match is found,
         otherwise "Unknown".
     """
     mappings = {
-    r'^Low_Comp': 'Low complexity regions',
-    r'^LINE': 'Type I Transposons/LINE',
-    r'^SINE': 'Type I Transposons/SINE',
-    r'^DNA': 'Type II Transposons',
-    r'^LTR': 'LTRs',
-    r'^Other': 'Other repeats',
-    r'^Satelli': 'Satellite repeats',
-    r'^Simple': 'Simple repeats',
-    r'^Tandem': 'Tandem repeats',
-    r'^TRF': 'Tandem repeats',
-    r'^Waterman': 'Waterman',
-    r'^Recon': 'Recon',
-    r'^Tet_repeat': 'Tetraodon repeats',
-    r'^MaskRegion': 'Mask region',
-    r'^dust': 'Dust',
-    r'^Unknown': 'Unknown',
-    r'RNA$': 'RNA repeats'
+        r"^Low_Comp": "Low complexity regions",
+        r"^LINE": "Type I Transposons/LINE",
+        r"^SINE": "Type I Transposons/SINE",
+        r"^DNA": "Type II Transposons",
+        r"^LTR": "LTRs",
+        r"^Other": "Other repeats",
+        r"^Satelli": "Satellite repeats",
+        r"^Simple": "Simple repeats",
+        r"^Tandem": "Tandem repeats",
+        r"^TRF": "Tandem repeats",
+        r"^Waterman": "Waterman",
+        r"^Recon": "Recon",
+        r"^Tet_repeat": "Tetraodon repeats",
+        r"^MaskRegion": "Mask region",
+        r"^dust": "Dust",
+        r"^Unknown": "Unknown",
+        r"RNA$": "RNA repeats",
     }
     for pattern, description in mappings.items():
         if re.match(pattern, repeat_type):
             return description
     return "Unknown"  # Default if no match is found
+
 
 def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
     output_file: Path,

@@ -13,14 +13,14 @@
 # limitations under the License.
 """Subsample FASTQ files by read count or percentage."""
 import argparse
-import os
-import re
-import random
-import multiprocessing
 import gzip
+import multiprocessing
+import os
+import random
+import re
 
 
-def subsample(#pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements, too-many-nested-blocks
+def subsample(  # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements, too-many-nested-blocks
     fastq_files,
     output_files,
     subsample_read_limit,
@@ -78,7 +78,7 @@ def subsample(#pylint: disable=too-many-arguments, too-many-locals, too-many-bra
 
     random_indices = {}
 
-    rand_list = random.sample(range(0, range_limit - 1), sampling_size)
+    rand_list = random.sample(range(range_limit - 1), sampling_size)
     for idx in rand_list:
         random_indices[idx * 4] = 1
 
@@ -120,7 +120,7 @@ def print_subsample(fastq_file, output_file, random_indices, compressed):
     if compressed:
         file_in = gzip.open(fastq_file, "rt")
     else:
-        file_in =open(fastq_file, encoding="utf-8")
+        file_in = open(fastq_file, encoding="utf-8")
 
     file_out = open(output_file, "w+")
 
@@ -216,9 +216,7 @@ if __name__ == "__main__":
         raise OSError(f"Fastq file does not exist. Path checked: {fastq_file}")
 
     if fastq_file_pair and not os.path.exists(fastq_file_pair):
-        raise OSError(
-            f"Paired fastq file does not exist. Path checked: {fastq_file_pair}"
-        )
+        raise OSError(f"Paired fastq file does not exist. Path checked: {fastq_file_pair}")
     if not output_file:
         output_file = fastq_file + ".sub"
         print("No output file designated. Will write to:")

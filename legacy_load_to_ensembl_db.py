@@ -17,12 +17,13 @@ Script to load annotation results into an Ensembl database.
 """
 
 import logging
-from multiprocessing import Pool
-from pathlib import Path
 import re
 import subprocess
 import tempfile
+from multiprocessing import Pool
+from pathlib import Path
 from typing import Any
+
 from src.python.ensembl.tools.anno.utils import _utils
 
 logger = logging.getLogger(__name__)
@@ -108,12 +109,26 @@ def load_results_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-
         ("dust_output", "Dust repeats", "single_line_feature", "dust", 500, 0),
         ("red_output", "Red repeats", "single_line_feature", "repeatdetector", 500, 0),
         ("trf_output", "TRF repeats", "single_line_feature", "trf", 500, 0),
-        ("repeatmasker_output", "RepeatMasker repeats", "single_line_feature", repeatmasker_analysis, 500, 1), #pylint: disable=line-too-long
+        (
+            "repeatmasker_output",
+            "RepeatMasker repeats",
+            "single_line_feature",
+            repeatmasker_analysis,
+            500,
+            1,
+        ),  # pylint: disable=line-too-long
         ("cpg_output", "CpG islands", "single_line_feature", "cpg", 500, 0),
         ("eponine_output", "Eponine features", "single_line_feature", "eponine", 500, 0),
     )
 
-    for output_dir, description, load_type, analysis_name, batch_size, run_repeatmasker_analysis in analyses: #pylint: disable=line-too-long
+    for (
+        output_dir,
+        description,
+        load_type,
+        analysis_name,
+        batch_size,
+        run_repeatmasker_analysis,
+    ) in analyses:  # pylint: disable=line-too-long
         _load_gtf_to_db(
             gtf_file=(main_output_dir / output_dir / "annotation.gtf"),
             description=description,
