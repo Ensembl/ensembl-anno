@@ -7,31 +7,27 @@ configured via command line arguments, and the script will
 automatically check for the necessary input data and tools before
 running each analysis. The results can also be loaded into an
 Ensembl database if desired."""
+import argparse
+import logging.config
 import os
 import pathlib
-import logging.config
-import argparse
 from pathlib import Path
-
-# import genebuild modules
-from src.python.ensembl.tools.anno.utils import _utils
-from src.python.ensembl.tools.anno.repeat_annotation import red
-from src.python.ensembl.tools.anno.repeat_annotation import dust
-from src.python.ensembl.tools.anno.repeat_annotation import trf
-from src.python.ensembl.tools.anno.repeat_annotation import repeatmasker
-from src.python.ensembl.tools.anno.simple_feature_annotation import cpg
-from src.python.ensembl.tools.anno.simple_feature_annotation import eponine
-from src.python.ensembl.tools.anno.snc_rna_annotation import cmsearch
-from src.python.ensembl.tools.anno.snc_rna_annotation import trnascan
-from src.python.ensembl.tools.anno.transcriptomic_annotation import minimap
-from src.python.ensembl.tools.anno.transcriptomic_annotation import scallop
-from src.python.ensembl.tools.anno.transcriptomic_annotation import star
-from src.python.ensembl.tools.anno.transcriptomic_annotation import stringtie
-from src.python.ensembl.tools.anno.protein_annotation import genblast
-from src.python.ensembl.tools.anno.protein_annotation import miniprot
 
 import legacy_finalisation
 import legacy_load_to_ensembl_db
+from src.python.ensembl.tools.anno.protein_annotation import genblast, miniprot
+from src.python.ensembl.tools.anno.repeat_annotation import dust, red, repeatmasker, trf
+from src.python.ensembl.tools.anno.simple_feature_annotation import cpg, eponine
+from src.python.ensembl.tools.anno.snc_rna_annotation import cmsearch, trnascan
+from src.python.ensembl.tools.anno.transcriptomic_annotation import (
+    minimap,
+    scallop,
+    star,
+    stringtie,
+)
+
+# import genebuild modules
+from src.python.ensembl.tools.anno.utils import _utils
 
 logger = logging.getLogger(__name__)
 config = legacy_finalisation.load_json(Path(os.environ["ENSCODE"]) / "ensembl-anno" / "conf" / "config.json")
@@ -56,6 +52,14 @@ def optional_path(
     or return None if the value is None."""
 
     return Path(value) if value else None
+
+
+def directory_has_files(directory: Path | None) -> bool:
+    """Return True when a directory exists and contains at least one fastq file."""
+
+    if directory is None or not directory.exists():
+        return False
+    return any(path for pattern in ("*.fastq", "*.fq") for path in directory.rglob(pattern))
 
 
 def configure_analysis_flags(  # pylint: disable=too-many-arguments, too-many-branches, too-many-locals, too-many-positional-arguments
@@ -592,9 +596,7 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     max_reads_per_sample = args.max_reads_per_sample
     minimap2_path = optional_path(args.minimap2_path) or config["minimap2"]["software"]
     paftools_path = optional_path(args.paftools_path) or config["paftools"]["software"]
-    long_read_fastq_dir = args.long_read_fastq_dir
-    # Check if directory exists and is empty
-    # long_read_fastq_dir = None if not any(long_read_fastq_dir.iterdir()) else long_read_fastq_dir
+    long_read_fastq_dir = optional_path(args.long_read_fastq_dir)
     run_augustus = args.run_augustus
     augustus_path = optional_path(args.augustus_path) or config["augustus"]["software"]
     stringtie_path = optional_path(args.stringtie_path) or config["stringtie"]["software"]
@@ -629,6 +631,16 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     logger.info("Logger initialised")
 
     logger.info("Working directory is set as: %s", work_dir)
+
+    if long_read_fastq_dir is not None:
+        if not long_read_fastq_dir.exists():
+            raise FileNotFoundError(f"Long read FASTQ directory does not exist: {long_read_fastq_dir}")
+        if not directory_has_files(long_read_fastq_dir):
+            logger.info(
+                "Long read FASTQ directory %s has no .fastq or .fq files; skipping minimap2",
+                long_read_fastq_dir,
+            )
+            long_read_fastq_dir = None
 
     # Validate paths and files
     if not os.path.exists(work_dir):
