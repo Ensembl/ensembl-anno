@@ -1,0 +1,800 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ensembl.tools.anno.transcriptomic_annotation.augustus &#8212; ensembl-anno 0.1.0 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../../_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="../../../../../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/ensembl/tools/anno/transcriptomic_annotation/augustus';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://ensembl.github.io/ensembl-anno/_modules/ensembl/tools/anno/transcriptomic_annotation/augustus.html" />
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1" />
+  
+    
+    <script src="../../../../../_static/searchtools.js"></script>
+    <script src="../../../../../_static/language_data.js"></script>
+    <script src="../../../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../../../_static/ebang.png" class="logo__image only-light" alt=""/>
+    <img src="../../../../../_static/ebang.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">Ensembl Anno</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../configuration.html">
+    Configuration
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../pipeline.html">
+    Pipeline
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../wrapper.html">
+    Wrapper
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../examples.html">
+    Examples
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../../../../analyses/index.html">
+    Analysis Modules
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-internal" href="../../../../../references.html">
+    References
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../installation.html">
+    Installation
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../configuration.html">
+    Configuration
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../pipeline.html">
+    Pipeline
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../wrapper.html">
+    Wrapper
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../examples.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../analyses/index.html">
+    Analysis Modules
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../references.html">
+    References
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">ensembl.tools.anno.transcriptomic_annotation.augustus</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for ensembl.tools.anno.transcriptomic_annotation.augustus</h1><div class="highlight"><pre>
+<span></span><span class="c1"># pylint: skip-file</span>
+<span class="c1"># start gene g1 #pylint: disable=line-too-long</span>
+<span class="c1"># 1       AUGUSTUS        gene    1       33908   1       +       .       g1</span>
+<span class="c1"># 1       AUGUSTUS        transcript      1       33908   .       +       .       g1.t1</span>
+<span class="c1"># 1       AUGUSTUS        CDS     3291    3585    .       +       2       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        exon    3291    3585    .       +       .       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        CDS     11377   11510   .       +       1       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        exon    11377   11510   .       +       .       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        CDS     30726   30871   .       +       2       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        exon    30726   30871   .       +       .       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        CDS     32975   33502   .       +       0       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        exon    32975   33908   .       +       .       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        stop_codon      33500   33502   .       +       0       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># 1       AUGUSTUS        tts     33908   33908   .       +       .       transcript_id &quot;g1.t1&quot;; gene_id &quot;g1&quot;;</span>
+<span class="c1"># protein sequence = [GGRGEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEKKEKKEEEEEEEEEEEEEEEK</span>
+<span class="c1"># EEGEGMEGRDIMGIRGKQKQPRKQPELSSSFPTFLLTQKTPYCPESIKLLLILRNNIQTIVFYKGPKGVINDWRKFKLESEDGDSIPPSKKEILRQMS</span>
+<span class="c1"># SPQSRDDSKERMSRKMSIQEYELIHQDKEDESCLRKYRRQCMQDMHQKLSFGPRYGFVYELETGEQFLETIEKEQKVTTIVVNIYEDGVRGCDALNSS</span>
+<span class="c1"># LACLAVEYPMVKFCKIKASNTGAGDRFSTDVLPTLLVYKGGELISNFISVAEQFAEEFFAVDVESFLNEYGLLPEREIHDLEQTNMEDEDIE]</span>
+<span class="c1"># Evidence for and against this transcript:</span>
+<span class="c1"># % of transcript supported by hints (any source): 0</span>
+<span class="c1"># CDS exons: 0/4</span>
+<span class="c1"># CDS introns: 0/4</span>
+<span class="c1"># 5&#39;UTR exons and introns: 0/0</span>
+<span class="c1"># 3&#39;UTR exons and introns: 0/1</span>
+<span class="c1"># hint groups fully obeyed: 0</span>
+<span class="c1"># incompatible hint groups: 0</span>
+<span class="c1"># end gene g1</span>
+<span class="c1">###</span>
+
+
+<div class="viewcode-block" id="augustus_output_to_gtf">
+<a class="viewcode-back" href="../../../../../analyses/augustus.html#ensembl.tools.anno.transcriptomic_annotation.augustus.augustus_output_to_gtf">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">augustus_output_to_gtf</span><span class="p">(</span><span class="n">augustus_output_dir</span><span class="p">,</span> <span class="n">augustus_genome_dir</span><span class="p">):</span>
+
+    <span class="n">gtf_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">augustus_output_dir</span><span class="p">,</span> <span class="s2">&quot;annotation.gtf&quot;</span><span class="p">)</span>
+    <span class="n">gtf_out</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">gtf_file_path</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span>
+    <span class="n">record_count</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">for</span> <span class="n">gff_file_path</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">augustus_genome_dir</span> <span class="o">+</span> <span class="s2">&quot;/*.aug&quot;</span><span class="p">):</span>
+        <span class="n">gff_file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">gff_file_path</span><span class="p">)</span>
+        <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\.rs(\d+)\.re(\d+)\.&quot;</span><span class="p">,</span> <span class="n">gff_file_name</span><span class="p">)</span>
+        <span class="n">start_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="n">exon_number</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">current_exon_hints_total</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">current_exon_hints_match</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">current_intron_hints_total</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">current_intron_hints_match</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">current_record</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">gff_in</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">gff_file_path</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="n">gff_in</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="k">while</span> <span class="n">line</span><span class="p">:</span>
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;# CDS exons\: (\d+)\/(\d+)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">current_exon_hints_match</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">current_exon_hints_total</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+            <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;# CDS introns\: (\d+)\/(\d+)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                <span class="n">current_introns_hints_match</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">current_introns_hints_total</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;# end gene&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">output_line</span> <span class="ow">in</span> <span class="n">current_record</span><span class="p">:</span>
+                    <span class="n">gtf_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">output_line</span><span class="p">)</span>
+                <span class="n">current_record</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">current_exon_hints_total</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">current_exon_hints_match</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">current_intron_hints_total</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">current_intron_hints_match</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">record_count</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">exon_number</span> <span class="o">=</span> <span class="mi">1</span>
+
+            <span class="n">values</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
+                <span class="ow">and</span> <span class="n">values</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;AUGUSTUS&quot;</span>
+                <span class="ow">and</span> <span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;transcript&quot;</span> <span class="ow">or</span> <span class="n">values</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;exon&quot;</span><span class="p">)</span>
+            <span class="p">):</span>
+                <span class="n">values</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span> <span class="o">+</span> <span class="p">(</span><span class="n">start_offset</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+                <span class="n">values</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span> <span class="o">+</span> <span class="p">(</span><span class="n">start_offset</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+                <span class="n">values</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="s1">&#39;gene_id &quot;aug&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">record_count</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;&quot;; transcript_id &quot;aug&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">record_count</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;&quot;;&#39;</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">values</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;exon&quot;</span><span class="p">:</span>
+                    <span class="n">values</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39; exon_number &quot;&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">exon_number</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;&quot;;&#39;</span>
+                    <span class="n">exon_number</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">values</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="n">current_record</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+
+            <span class="n">line</span> <span class="o">=</span> <span class="n">gff_in</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="n">gff_in</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">gtf_out</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="run_augustus_predict">
+<a class="viewcode-back" href="../../../../../analyses/augustus.html#ensembl.tools.anno.transcriptomic_annotation.augustus.run_augustus_predict">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_augustus_predict</span><span class="p">(</span><span class="n">augustus_path</span><span class="p">,</span> <span class="n">main_output_dir</span><span class="p">,</span> <span class="n">masked_genome_file</span><span class="p">,</span> <span class="n">num_threads</span><span class="p">):</span>
+
+    <span class="n">min_seq_length</span> <span class="o">=</span> <span class="mi">1000</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">augustus_path</span><span class="p">:</span>
+        <span class="n">augustus_path</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;augustus&quot;</span><span class="p">][</span><span class="s2">&quot;software&quot;</span><span class="p">]</span>
+
+    <span class="n">bam2hints_path</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;augustus&quot;</span><span class="p">][</span><span class="s2">&quot;bam2hints_path&quot;</span><span class="p">]</span>
+    <span class="n">bam2wig_path</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;augustus&quot;</span><span class="p">][</span><span class="s2">&quot;bam2wig_path&quot;</span><span class="p">]</span>
+    <span class="n">wig2hints_path</span> <span class="o">=</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;augustus&quot;</span><span class="p">][</span><span class="s2">&quot;wig2hints_path&quot;</span><span class="p">]</span>
+    <span class="n">utils</span><span class="o">.</span><span class="n">check_exe</span><span class="p">(</span><span class="n">augustus_path</span><span class="p">)</span>
+
+    <span class="c1"># Run bam2hints, bam2wig, wig2hints, then combine the hints into a single file</span>
+    <span class="c1"># Multiprocess with all three steps in the MP as that would be fastest</span>
+
+    <span class="n">augustus_dir</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">create_dir</span><span class="p">(</span><span class="n">main_output_dir</span><span class="p">,</span> <span class="s2">&quot;augustus_output&quot;</span><span class="p">)</span>
+    <span class="n">augustus_hints_dir</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">create_dir</span><span class="p">(</span><span class="n">augustus_dir</span><span class="p">,</span> <span class="s2">&quot;hints&quot;</span><span class="p">)</span>
+    <span class="n">augustus_genome_dir</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">create_dir</span><span class="p">(</span><span class="n">augustus_dir</span><span class="p">,</span> <span class="s2">&quot;genome_dir&quot;</span><span class="p">)</span>
+    <span class="n">augustus_evidence_dir</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">create_dir</span><span class="p">(</span><span class="n">augustus_dir</span><span class="p">,</span> <span class="s2">&quot;evidence&quot;</span><span class="p">)</span>
+    <span class="n">augustus_hints_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">augustus_evidence_dir</span><span class="p">,</span> <span class="s2">&quot;augustus_hints.gff&quot;</span><span class="p">)</span>
+    <span class="n">star_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">main_output_dir</span><span class="p">,</span> <span class="s2">&quot;star_output&quot;</span><span class="p">)</span>
+    <span class="n">minimap2_output_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">main_output_dir</span><span class="p">,</span> <span class="s2">&quot;minimap2_output&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">star_dir</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Found a Star output dir, generating hints from any .sj.tab files&quot;</span><span class="p">)</span>
+        <span class="n">generate_hints</span><span class="p">(</span>
+            <span class="n">bam2hints_path</span><span class="p">,</span>
+            <span class="n">bam2wig_path</span><span class="p">,</span>
+            <span class="n">wig2hints_path</span><span class="p">,</span>
+            <span class="n">augustus_hints_dir</span><span class="p">,</span>
+            <span class="n">star_dir</span><span class="p">,</span>
+            <span class="n">num_threads</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">hints_out</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">augustus_hints_file</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">gff_file</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">augustus_hints_dir</span> <span class="o">+</span> <span class="s2">&quot;/*.bam.hints.gff&quot;</span><span class="p">):</span>
+            <span class="n">gff_in</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">gff_file</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span>
+            <span class="n">line</span> <span class="o">=</span> <span class="n">gff_in</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+            <span class="k">while</span> <span class="n">line</span><span class="p">:</span>
+                <span class="n">hints_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="n">line</span> <span class="o">=</span> <span class="n">gff_in</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+            <span class="n">gff_in</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">hints_out</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="n">seq_region_lengths</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">get_seq_region_lengths</span><span class="p">(</span><span class="n">genome_file</span><span class="p">,</span> <span class="mi">5000</span><span class="p">)</span>
+    <span class="n">slice_ids</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">create_slice_ids</span><span class="p">(</span><span class="n">seq_region_lengths</span><span class="p">,</span> <span class="mi">1000000</span><span class="p">,</span> <span class="mi">100000</span><span class="p">,</span> <span class="mi">5000</span><span class="p">)</span>
+
+    <span class="n">generic_augustus_cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">augustus_path</span><span class="p">,</span>
+        <span class="s2">&quot;--species=human&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;--UTR=on&quot;</span><span class="p">,</span>
+        <span class="p">(</span>
+            <span class="s2">&quot;--extrinsicCfgFile=&quot;</span> <span class="o">+</span> <span class="s2">&quot;/hps/nobackup2/production/ensembl/jma/src/Augustus/&quot;</span>
+            <span class="s2">&quot;config/extrinsic/extrinsic.M.RM.E.W.P.cfg&quot;</span>
+        <span class="p">),</span>
+    <span class="p">]</span>
+
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">num_threads</span><span class="p">))</span>
+    <span class="n">tasks</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">slice_id</span> <span class="ow">in</span> <span class="n">slice_ids</span><span class="p">:</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+            <span class="n">multiprocess_augustus_id</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">generic_augustus_cmd</span><span class="p">,</span>
+                <span class="n">slice_id</span><span class="p">,</span>
+                <span class="n">masked_genome_file</span><span class="p">,</span>
+                <span class="n">augustus_hints_file</span><span class="p">,</span>
+                <span class="n">augustus_genome_dir</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+
+    <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+
+    <span class="n">augustus_output_to_gtf</span><span class="p">(</span><span class="n">augustus_dir</span><span class="p">,</span> <span class="n">augustus_genome_dir</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="generate_hints">
+<a class="viewcode-back" href="../../../../../analyses/augustus.html#ensembl.tools.anno.transcriptomic_annotation.augustus.generate_hints">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">generate_hints</span><span class="p">(</span>
+    <span class="n">bam2hints_path</span><span class="p">,</span>
+    <span class="n">bam2wig_path</span><span class="p">,</span>
+    <span class="n">wig2hints_path</span><span class="p">,</span>
+    <span class="n">augustus_hints_dir</span><span class="p">,</span>
+    <span class="n">star_dir</span><span class="p">,</span>
+    <span class="n">num_threads</span><span class="p">,</span>
+<span class="p">):</span>
+
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">Pool</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">num_threads</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">bam_file</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">star_dir</span> <span class="o">+</span> <span class="s2">&quot;/*.bam&quot;</span><span class="p">):</span>
+        <span class="n">pool</span><span class="o">.</span><span class="n">apply_async</span><span class="p">(</span>
+            <span class="n">multiprocess_augustus_hints</span><span class="p">,</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">(</span>
+                <span class="n">bam2hints_path</span><span class="p">,</span>
+                <span class="n">bam2wig_path</span><span class="p">,</span>
+                <span class="n">wig2hints_path</span><span class="p">,</span>
+                <span class="n">bam_file</span><span class="p">,</span>
+                <span class="n">augustus_hints_dir</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">)</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">pool</span><span class="o">.</span><span class="n">join</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="multiprocess_augustus_hints">
+<a class="viewcode-back" href="../../../../../analyses/augustus.html#ensembl.tools.anno.transcriptomic_annotation.augustus.multiprocess_augustus_hints">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">multiprocess_augustus_hints</span><span class="p">(</span><span class="n">bam2hints_path</span><span class="p">,</span> <span class="n">bam2wig_path</span><span class="p">,</span> <span class="n">wig2hints_path</span><span class="p">,</span> <span class="n">bam_file</span><span class="p">,</span> <span class="n">augustus_hints_dir</span><span class="p">):</span>
+    <span class="n">bam_file_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">bam_file</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Processing &quot;</span> <span class="o">+</span> <span class="n">bam_file_name</span> <span class="o">+</span> <span class="s2">&quot; for Augustus hints&quot;</span><span class="p">)</span>
+
+    <span class="n">bam2hints_file_name</span> <span class="o">=</span> <span class="n">bam_file_name</span> <span class="o">+</span> <span class="s2">&quot;.hints.gff&quot;</span>
+    <span class="n">bam2hints_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">augustus_hints_dir</span><span class="p">,</span> <span class="n">bam2hints_file_name</span><span class="p">)</span>
+    <span class="n">bam2hints_cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">bam2hints_path</span><span class="p">,</span>
+        <span class="p">(</span><span class="s2">&quot;--in=&quot;</span> <span class="o">+</span> <span class="n">bam_file</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;--out=&quot;</span> <span class="o">+</span> <span class="n">bam2hints_file_path</span><span class="p">),</span>
+        <span class="s2">&quot;--maxintronlen=100000&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;bam2hints command:</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">bam2hints_cmd</span><span class="p">))</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">bam2hints_cmd</span><span class="p">)</span></div>
+
+
+
+<span class="c1">#  bam2wig_cmd = [bam2wig_path,&#39;-D&#39;,augustus_hints_dir,bam_file]</span>
+<span class="c1">#  print(&quot;bam2wig command:\n&quot; + &#39; &#39;.join(bam2wig_cmd))</span>
+<span class="c1">#  subprocess.run(bam2wig_cmd)</span>
+
+
+<span class="c1"># wig2hints is odd in that it runs directly off STDIN and then just prints to STDOUT,</span>
+<span class="c1"># so the code below is implemented in steps as it&#39;s not good practice to use pipes and</span>
+<span class="c1"># redirects in a subprocess command</span>
+<span class="c1">#  wig_file_name = re.sub(&#39;.bam&#39;,&#39;.wig&#39;,bam_file_name)</span>
+<span class="c1">#  wig_file_path = os.path.join(augustus_hints_dir,wig_file_name)</span>
+<span class="c1">#  wig_hints_file_name = (wig_file_name + &#39;.hints.gff&#39;)</span>
+<span class="c1">#  wig_hints_file_path =  os.path.join(augustus_hints_dir,wig_hints_file_name)</span>
+<span class="c1">#  print(&quot;Writing wig file info to hints file:\n&quot; + wig_hints_file_name)</span>
+<span class="c1">#  wig2hints_out = open(wig_hints_file_path,&#39;w+&#39;)</span>
+<span class="c1">#  wigcat = subprocess.Popen((&#39;cat&#39;,wig_file_path), stdout=subprocess.PIPE)</span>
+<span class="c1">#  subprocess.run(wig2hints_path, stdin=wigcat.stdout, stdout=wig2hints_out)</span>
+<span class="c1">#  wig2hints_out.close()</span>
+
+
+<div class="viewcode-block" id="multiprocess_augustus_id">
+<a class="viewcode-back" href="../../../../../analyses/augustus.html#ensembl.tools.anno.transcriptomic_annotation.augustus.multiprocess_augustus_id">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">multiprocess_augustus_id</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">slice_id</span><span class="p">,</span> <span class="n">genome_file</span><span class="p">,</span> <span class="n">hints_file</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">):</span>
+
+    <span class="n">region</span> <span class="o">=</span> <span class="n">slice_id</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">slice_id</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="n">slice_id</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">seq</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">get_sequence</span><span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">genome_file</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">)</span>
+
+    <span class="n">region_fasta_file_name</span> <span class="o">=</span> <span class="n">region</span> <span class="o">+</span> <span class="s2">&quot;.rs&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">start</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.re&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">end</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;.fa&quot;</span>
+    <span class="n">region_fasta_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="n">region_fasta_file_name</span><span class="p">)</span>
+    <span class="n">region_augustus_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="p">(</span><span class="n">region_fasta_file_name</span> <span class="o">+</span> <span class="s2">&quot;.aug&quot;</span><span class="p">))</span>
+
+    <span class="n">region_fasta_out</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">region_fasta_file_path</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span>
+    <span class="n">region_fasta_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;&gt;&quot;</span> <span class="o">+</span> <span class="n">region</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="n">seq</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">region_fasta_out</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="n">region_hints_file</span> <span class="o">=</span> <span class="n">create_slice_hints_file</span><span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">hints_file</span><span class="p">,</span> <span class="n">region_fasta_file_path</span><span class="p">)</span>
+
+    <span class="n">aug_out</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">region_augustus_file_path</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span>
+
+    <span class="n">augustus_forward</span> <span class="o">=</span> <span class="n">cmd</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">augustus_forward</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s2">&quot;--hintsfile=&quot;</span> <span class="o">+</span> <span class="n">region_hints_file</span><span class="p">))</span>
+    <span class="n">augustus_forward</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;--strand=forward&quot;</span><span class="p">)</span>
+    <span class="n">augustus_forward</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">region_fasta_file_path</span><span class="p">)</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">augustus_forward</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">aug_out</span><span class="p">)</span>
+
+    <span class="n">augustus_backward</span> <span class="o">=</span> <span class="n">cmd</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">augustus_backward</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s2">&quot;--hintsfile=&quot;</span> <span class="o">+</span> <span class="n">region_hints_file</span><span class="p">))</span>
+    <span class="n">augustus_backward</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;--strand=backward&quot;</span><span class="p">)</span>
+    <span class="n">augustus_backward</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">region_fasta_file_path</span><span class="p">)</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">augustus_backward</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">aug_out</span><span class="p">)</span>
+
+    <span class="n">aug_out</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="create_slice_hints_file">
+<a class="viewcode-back" href="../../../../../analyses/augustus.html#ensembl.tools.anno.transcriptomic_annotation.augustus.create_slice_hints_file">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">create_slice_hints_file</span><span class="p">(</span><span class="n">region</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">hints_file</span><span class="p">,</span> <span class="n">region_fasta_file_path</span><span class="p">):</span>
+
+    <span class="c1"># Note this is trying to be memory and file efficient at the cost of speed</span>
+    <span class="c1"># So files are only created as needed and the hints are</span>
+    <span class="c1"># being read line by line as written as needed</span>
+    <span class="c1"># This comes with the downside of being slow, but it&#39;s</span>
+    <span class="c1"># only a very small amount of time relative</span>
+    <span class="c1"># to how slow the step is in total. Given that this step</span>
+    <span class="c1"># in general eats up a low of memory, saving as much</span>
+    <span class="c1"># as possible here is not a bad thing even if it&#39;s adding</span>
+    <span class="c1"># in an overhead by continuously reading the hints file</span>
+
+    <span class="n">region_hints_file_path</span> <span class="o">=</span> <span class="n">region_fasta_file_path</span> <span class="o">+</span> <span class="s2">&quot;.gff&quot;</span>
+    <span class="n">hints_in</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">hints_file</span><span class="p">)</span>
+    <span class="n">hints_out</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">region_hints_file_path</span><span class="p">,</span> <span class="s2">&quot;w+&quot;</span><span class="p">)</span>
+    <span class="n">hint_line</span> <span class="o">=</span> <span class="n">hints_in</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+    <span class="k">while</span> <span class="n">hint_line</span><span class="p">:</span>
+        <span class="n">hint_line_values</span> <span class="o">=</span> <span class="n">hint_line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">hint_line_values</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span><span class="p">:</span>
+            <span class="n">hint_line</span> <span class="o">=</span> <span class="n">hints_in</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+            <span class="k">continue</span>
+
+        <span class="n">hint_region</span> <span class="o">=</span> <span class="n">hint_line_values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">hint_region_start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hint_line_values</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+        <span class="n">hint_region_end</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hint_line_values</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">hint_region</span> <span class="o">==</span> <span class="n">region</span> <span class="ow">and</span> <span class="n">hint_region_start</span> <span class="o">&gt;=</span> <span class="n">start</span> <span class="ow">and</span> <span class="n">hint_region_end</span> <span class="o">&lt;=</span> <span class="n">end</span><span class="p">:</span>
+            <span class="n">hint_line_values</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">hint_line_values</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span> <span class="o">-</span> <span class="p">(</span><span class="n">start</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="n">hint_line_values</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">hint_line_values</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span> <span class="o">-</span> <span class="p">(</span><span class="n">start</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="n">hints_out</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">hint_line_values</span><span class="p">))</span>
+
+        <span class="n">hint_line</span> <span class="o">=</span> <span class="n">hints_in</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+    <span class="n">hints_in</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">hints_out</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">region_hints_file_path</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright [2016-2026] EMBL-European Bioinformatics Institute.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.20.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
