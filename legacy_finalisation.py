@@ -188,15 +188,15 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
 
     scallop_annotation_raw = main_output_dir / "scallop_output" / "annotation.gtf"
 
-    transcript_selector_script = main_script_dir / "support_scripts_perl" / "select_best_transcripts.pl"
+    transcript_selector_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "select_best_transcripts.pl"
 
-    finalise_geneset_script = main_script_dir / "support_scripts_perl" / "finalise_geneset.pl"
+    finalise_geneset_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "finalise_geneset.pl"
 
-    clean_geneset_script = main_script_dir / "support_scripts_perl" / "clean_geneset.pl"
+    clean_geneset_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "clean_geneset.pl"
 
-    clean_utrs_script = main_script_dir / "support_scripts_perl" / "clean_utrs_and_lncRNAs.pl"
+    clean_utrs_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "clean_utrs_and_lncRNAs.pl"
 
-    gtf_to_seq_script = main_script_dir / "support_scripts_perl" / "gtf_to_seq.pl"
+    gtf_to_seq_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "gtf_to_seq.pl"
 
     transcriptomic_annotation_raw = final_annotation_dir / "transcriptomic_raw.gtf"
 
