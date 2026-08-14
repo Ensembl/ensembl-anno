@@ -96,7 +96,16 @@ def load_results_to_ensembl_db(  # pylint: disable=too-many-arguments, too-many-
         num_threads: Number of threads to use for loading.
         repeatmasker_analysis: Name of the RepeatMasker analysis to use in the database.
     """
-    db_loading_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" / "anno" / "support_scripts_perl" / "load_gtf_ensembl.pl"
+    db_loading_script = (
+        main_script_dir
+        / "src"
+        / "perl"
+        / "ensembl"
+        / "tools"
+        / "anno"
+        / "support_scripts_perl"
+        / "load_gtf_ensembl.pl"
+    )
 
     db_loading_dir = _utils.create_dir(
         main_output_dir,

@@ -1,21 +1,21 @@
 # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements, line-too-long, too-many-lines, too-many-public-methods, too-many-instance-attributes, subprocess-run-check,consider-using-with
 """Legacy finalisation module"""
 
-import logging
 import json
+import logging
 import multiprocessing
-from multiprocessing.pool import AsyncResult
 import os
-from pathlib import Path
 import re
-import subprocess
 import shutil
-from typing import Any, Dict, Union, cast
+import subprocess
+from multiprocessing.pool import AsyncResult
+from pathlib import Path
+from typing import Any, cast
 
 from src.python.ensembl.tools.anno.utils._utils import (
     check_file,
-    create_dir,
     check_gtf_content,
+    create_dir,
     get_seq_region_lengths,
     split_protein_file,
 )
@@ -23,7 +23,7 @@ from src.python.ensembl.tools.anno.utils._utils import (
 # Use same config path layout as monolithic script
 
 
-def load_json(path: Union[str, Path]) -> Dict[str, Any]:
+def load_json(path: str | Path) -> dict[str, Any]:
     """Load a JSON file and return its contents as a dictionary.
 
     Args:
@@ -40,7 +40,7 @@ def load_json(path: Union[str, Path]) -> Dict[str, Any]:
 config = load_json(Path(os.environ["ENSCODE"]) / "ensembl-anno" / "conf" / "config.json")
 
 
-def file_ok(path: Union[str, Path], min_size: int = 1) -> bool:
+def file_ok(path: str | Path, min_size: int = 1) -> bool:
     """Check if a file exists, is a file, and is above a minimum size.
     Args:
         path (Union[str, Path]): The path to the file to check.
@@ -52,7 +52,7 @@ def file_ok(path: Union[str, Path], min_size: int = 1) -> bool:
     return path.exists() and path.is_file() and path.stat().st_size >= min_size
 
 
-def gtf_ok(path: Union[str, Path]) -> bool:
+def gtf_ok(path: str | Path) -> bool:
     """Check if a GTF file exists, is a file, and contains at least one transcript.
     Args:
         path (Union[str, Path]): The path to the GTF file to check.
@@ -68,7 +68,7 @@ def gtf_ok(path: Union[str, Path]) -> bool:
         return False
 
 
-def skip_if_exists(desc: str, path: Union[str, Path], check_fn=file_ok) -> bool:
+def skip_if_exists(desc: str, path: str | Path, check_fn=file_ok) -> bool:
     """Skip a step if a file already exists and passes a given check function.
     Args:
         desc (str): A description of the file being checked, used for logging purposes.
@@ -188,15 +188,60 @@ def run_finalise_geneset(  # pylint: disable=too-many-arguments, too-many-positi
 
     scallop_annotation_raw = main_output_dir / "scallop_output" / "annotation.gtf"
 
-    transcript_selector_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "select_best_transcripts.pl"
+    transcript_selector_script = (
+        main_script_dir
+        / "src"
+        / "perl"
+        / "ensembl"
+        / "tools"
+        / "anno"
+        / "support_scripts_perl"
+        / "select_best_transcripts.pl"
+    )
 
-    finalise_geneset_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "finalise_geneset.pl"
+    finalise_geneset_script = (
+        main_script_dir
+        / "src"
+        / "perl"
+        / "ensembl"
+        / "tools"
+        / "anno"
+        / "support_scripts_perl"
+        / "finalise_geneset.pl"
+    )
 
-    clean_geneset_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "clean_geneset.pl"
+    clean_geneset_script = (
+        main_script_dir
+        / "src"
+        / "perl"
+        / "ensembl"
+        / "tools"
+        / "anno"
+        / "support_scripts_perl"
+        / "clean_geneset.pl"
+    )
 
-    clean_utrs_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "clean_utrs_and_lncRNAs.pl"
+    clean_utrs_script = (
+        main_script_dir
+        / "src"
+        / "perl"
+        / "ensembl"
+        / "tools"
+        / "anno"
+        / "support_scripts_perl"
+        / "clean_utrs_and_lncRNAs.pl"
+    )
 
-    gtf_to_seq_script = main_script_dir / "src" / "perl" / "ensembl" / "tools" /"anno" / "support_scripts_perl" / "gtf_to_seq.pl"
+    gtf_to_seq_script = (
+        main_script_dir
+        / "src"
+        / "perl"
+        / "ensembl"
+        / "tools"
+        / "anno"
+        / "support_scripts_perl"
+        / "gtf_to_seq.pl"
+    )
 
     transcriptomic_annotation_raw = final_annotation_dir / "transcriptomic_raw.gtf"
 
@@ -1041,7 +1086,7 @@ def update_gtf_genes(
 
     output_lines = []
 
-    for gene_id in parsed_gtf_genes.keys():
+    for gene_id in parsed_gtf_genes:
         transcript_ids = parsed_gtf_genes[gene_id].keys()
         for transcript_id in transcript_ids:
             # if transcript_id not in combined_results:
@@ -1099,26 +1144,18 @@ def update_gtf_genes(
             # removes single coding exon genes with no real
             # support or for multi-exon lncRNAs that are less than 200bp long
             if single_cds_exon_transcript == 1 and validation_type == "relaxed":
-                if diamond_e_value is not None:
-                    transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
+                if (
+                    diamond_e_value is not None
+                    or (
+                        rnasamba_coding_potential == "coding"
+                        and cpc2_coding_potential == "coding"
+                        and peptide_length >= min_single_exon_pep_length
                     )
-                elif (
-                    rnasamba_coding_potential == "coding"
-                    and cpc2_coding_potential == "coding"
-                    and peptide_length >= min_single_exon_pep_length
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
+                    or (
+                        (rnasamba_coding_potential == "coding" or cpc2_coding_potential == "coding")
+                        and peptide_length >= min_single_exon_pep_length
+                        and max_coding_probability >= min_single_source_probability
                     )
-                elif (
-                    (rnasamba_coding_potential == "coding" or cpc2_coding_potential == "coding")
-                    and peptide_length >= min_single_exon_pep_length
-                    and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
                         '; biotype "' + biotype + '";',
@@ -1128,16 +1165,14 @@ def update_gtf_genes(
                 else:
                     continue
             elif single_cds_exon_transcript == 1 and validation_type == "moderate":
-                if diamond_e_value is not None and peptide_length >= min_single_exon_pep_length:
-                    transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
-                    )
-                elif (
-                    (rnasamba_coding_potential == "coding" and cpc2_coding_potential == "coding")
+                if (
+                    diamond_e_value is not None
                     and peptide_length >= min_single_exon_pep_length
-                    and avg_coding_probability >= min_single_exon_probability
+                    or (
+                        (rnasamba_coding_potential == "coding" and cpc2_coding_potential == "coding")
+                        and peptide_length >= min_single_exon_pep_length
+                        and avg_coding_probability >= min_single_exon_probability
+                    )
                 ):
                     transcript_line = re.sub(
                         '; biotype "' + biotype + '";',
@@ -1147,26 +1182,18 @@ def update_gtf_genes(
                 else:
                     continue
             else:
-                if diamond_e_value is not None:
-                    transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
+                if (
+                    diamond_e_value is not None
+                    or (
+                        rnasamba_coding_potential == "coding"
+                        and cpc2_coding_potential == "coding"
+                        and peptide_length >= min_multi_exon_pep_length
                     )
-                elif (
-                    rnasamba_coding_potential == "coding"
-                    and cpc2_coding_potential == "coding"
-                    and peptide_length >= min_multi_exon_pep_length
-                ):
-                    transcript_line = re.sub(
-                        '; biotype "' + biotype + '";',
-                        '; biotype "protein_coding";',
-                        transcript_line,
+                    or (
+                        (rnasamba_coding_potential == "coding" or cpc2_coding_potential == "coding")
+                        and peptide_length >= min_multi_exon_pep_length
+                        and max_coding_probability >= min_single_source_probability
                     )
-                elif (
-                    (rnasamba_coding_potential == "coding" or cpc2_coding_potential == "coding")
-                    and peptide_length >= min_multi_exon_pep_length
-                    and max_coding_probability >= min_single_source_probability
                 ):
                     transcript_line = re.sub(
                         '; biotype "' + biotype + '";',
@@ -1601,11 +1628,7 @@ def merge_finalise_output_files(
                     if feature_type == "transcript":
                         transcript_id_counter += 1
 
-                    if not current_gene_id:
-                        gene_id_counter += 1
-                        current_gene_id = gene_id
-
-                    elif gene_id != current_gene_id:
+                    if not current_gene_id or gene_id != current_gene_id:
                         gene_id_counter += 1
                         current_gene_id = gene_id
 
