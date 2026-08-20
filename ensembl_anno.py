@@ -2250,14 +2250,15 @@ def run_minimap2_align(
                 "--cs",
                 "--secondary=no",
                 "-ax",
-                "splice",
+                "splice:hq",
                 "-u",
-                "b",
+                "f",
                 minimap2_index_file,
                 fastq_file_path,
                 "-o",
                 sam_file,
-            ]
+            ],
+            check=True
         )
         logger.info("Creating bed file from SAM")
         subprocess.run([paftools_path, "splice2bed", sam_file], stdout=bed_file_out)
