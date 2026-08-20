@@ -243,3 +243,94 @@ class TestSameGeneOverlapThreshold:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestProteinAlignmentAttribution:
+    """Protein alignments are supporting evidence, not candidate models.
+
+    Regression tests for the defect where OrthoDB/GenBlast support was
+    computed and used (scoring bonus + retention gates) but never recorded,
+    so ``evidence_attribution.tsv`` reported zero protein-alignment support
+    for every transcript.
+    """
+
+    def _locus(self):
+        return _make_locus_df(
+            [
+                _make_model("tx1", "Tiberius", exons=[(100, 400), (600, 900)]),
+                _make_model("tx2", "Scallop", exons=[(100, 400), (600, 900)]),
+            ]
+        )
+
+    def test_protein_sources_recorded_on_selected_model(self, config):
+        genes = select_isoforms(
+            self._locus(),
+            config,
+            {"tx1"},
+            None,
+            protein_support_sources={"tx1": {"OrthoDB", "GenBlast"}},
+        )
+        models = [m for g in genes for m in g]
+        assert models, "expected at least one selected model"
+        assert models[0]["protein_evidence"] == "GenBlast,OrthoDB"
+
+    def test_protein_sources_absent_when_unsupported(self, config):
+        genes = select_isoforms(self._locus(), config, set(), None)
+        models = [m for g in genes for m in g]
+        assert models
+        assert models[0]["protein_evidence"] == ""
+
+    def test_protein_sources_union_across_merged_structures(self, config):
+        """Models merged on an identical intron chain pool their support."""
+        genes = select_isoforms(
+            self._locus(),
+            config,
+            {"tx1", "tx2"},
+            None,
+            protein_support_sources={"tx1": {"OrthoDB"}, "tx2": {"GenBlast"}},
+        )
+        models = [m for g in genes for m in g]
+        assert models
+        assert models[0]["protein_evidence"] == "GenBlast,OrthoDB"
+
+    def test_protein_sources_do_not_enter_combined_evidence(self, config):
+        """Attribution must not leak into the named-source set used for scoring."""
+        genes = select_isoforms(
+            self._locus(),
+            config,
+            {"tx1"},
+            None,
+            protein_support_sources={"tx1": {"OrthoDB", "GenBlast"}},
+        )
+        models = [m for g in genes for m in g]
+        assert models
+        combined = models[0]["combined_evidence"]
+        assert "OrthoDB" not in combined
+        assert "GenBlast" not in combined
+        assert set(combined.split(",")) == {"Scallop", "Tiberius"}
+
+    def test_attribution_does_not_change_score(self, config):
+        """Recording protein sources must be selection-neutral."""
+        without = select_isoforms(self._locus(), config, {"tx1"}, None)
+        with_attr = select_isoforms(
+            self._locus(),
+            config,
+            {"tx1"},
+            None,
+            protein_support_sources={"tx1": {"OrthoDB", "GenBlast"}},
+        )
+        m_without = [m for g in without for m in g]
+        m_with = [m for g in with_attr for m in g]
+        assert len(m_without) == len(m_with)
+        for a, b in zip(m_without, m_with):
+            assert a["id"] == b["id"]
+            assert a["score"] == b["score"]
+            assert a["combined_evidence"] == b["combined_evidence"]
+
+    def test_omitting_mapping_is_backward_compatible(self, config):
+        """The parameter is optional; existing call sites keep working."""
+        genes = select_isoforms(self._locus(), config, {"tx1"})
+        models = [m for g in genes for m in g]
+        assert models
+        assert models[0]["protein_evidence"] == ""
+        assert models[0]["protein_support"] is True

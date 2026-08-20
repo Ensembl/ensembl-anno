@@ -67,6 +67,7 @@ from gmb.pipeline.subset_utils import (
     subset_df_by_regions,
     write_subset_manifest,
 )
+from gmb.utils.intervals import same_strand_overlap_ids
 from gmb.utils.logging import resolve_log_file, setup_logging
 
 
@@ -781,13 +782,28 @@ def main() -> None:
             candidate_exons["transcript_id"].map(validation_scores).fillna(0.0)
         )
 
+    # Protein-alignment support. `protein_supported_tids` is the boolean signal
+    # that drives scoring (protein_overlap_bonus) and the retention gates in
+    # select_isoforms. `protein_support_sources` records WHICH track supplied
+    # that support, using the identical overlap criterion, purely so the support
+    # can be reported in evidence_attribution.tsv -- previously this information
+    # was computed and used but never surfaced anywhere.
+    # Support requires the alignment to be on the SAME STRAND as the candidate.
+    # A plain `pr_tx.overlap(pr_prot)` silently matches antisense alignments
+    # because pyranges reports every read_gtf-loaded track as unstranded (see
+    # gmb.utils.intervals.same_strand_overlap_ids for the mechanism).
     protein_supported_tids = set()
+    protein_support_sources: dict[str, set[str]] = defaultdict(set)
     if not prot_exons_filt.empty and not candidate_exons.empty:
-        pr_tx = pr.PyRanges(candidate_exons)
-        pr_prot = pr.PyRanges(prot_exons_filt)
-        ovl = pr_tx.overlap(pr_prot)
-        if not ovl.df.empty:
-            protein_supported_tids.update(ovl.df["transcript_id"].unique())
+        protein_supported_tids = same_strand_overlap_ids(candidate_exons, prot_exons_filt)
+        # Same criterion, per protein track, so attribution can name the source.
+        for prot_label in prot_exons_filt["Source"].astype(str).unique():
+            track_df = prot_exons_filt[prot_exons_filt["Source"].astype(str) == prot_label]
+            if track_df.empty:
+                continue
+            for supported_tid in same_strand_overlap_ids(candidate_exons, track_df):
+                protein_support_sources[supported_tid].add(prot_label)
+    stats["protein_supported_candidates"] = len(protein_supported_tids)
 
     print("Clustering loci...")
     pr_candidates = pr.PyRanges(candidate_exons)
@@ -808,7 +824,13 @@ def main() -> None:
     gene_counter = 1
 
     for _cid, locus_df in cluster_df.groupby("Cluster"):
-        genes = select_isoforms(locus_df, config, protein_supported_tids, genome_dict)
+        genes = select_isoforms(
+            locus_df,
+            config,
+            protein_supported_tids,
+            genome_dict,
+            protein_support_sources=protein_support_sources,
+        )
         if not genes:
             continue
 
@@ -924,6 +946,7 @@ def main() -> None:
                     "ID": new_tid,
                     "Parent": gene_id,
                     "Evidence": model.get("combined_evidence", ""),
+                    "ProteinEvidence": model.get("protein_evidence", ""),
                     "gmb_score": model.get("score"),
                 }
 
@@ -1127,6 +1150,12 @@ def main() -> None:
                 if "Evidence" in r and pd.notna(r["Evidence"]) and r["Evidence"] != "":
                     attr += f";Evidence={r['Evidence']}"
                 if (
+                    "ProteinEvidence" in r
+                    and pd.notna(r["ProteinEvidence"])
+                    and r["ProteinEvidence"] != ""
+                ):
+                    attr += f";ProteinEvidence={r['ProteinEvidence']}"
+                if (
                     "CollapsedFrom" in r
                     and pd.notna(r["CollapsedFrom"])
                     and r["CollapsedFrom"] != ""
@@ -1156,7 +1185,13 @@ def main() -> None:
 
     # Extract original models to map UTR support metadata
     for _cid, locus_df in cluster_df.groupby("Cluster"):
-        genes = select_isoforms(locus_df, config, protein_supported_tids, genome_dict)
+        genes = select_isoforms(
+            locus_df,
+            config,
+            protein_supported_tids,
+            genome_dict,
+            protein_support_sources=protein_support_sources,
+        )
         if genes:
             for g in genes:
                 for _idx, _m in enumerate(g):
@@ -1196,11 +1231,18 @@ def main() -> None:
         )
 
         evidence_sources = m.get("Evidence", "")
+        # Protein-alignment tracks that support this transcript. These are
+        # supporting evidence, never candidate models, so they are reported in
+        # their own column rather than folded into evidence_sources (which
+        # names the tracks the structure was BUILT from).
+        protein_alignment_sources = m.get("ProteinEvidence", "")
 
         row_dict = {
             "gene_id": gene_id,
             "transcript_id": tid,
             "evidence_sources": evidence_sources,
+            "protein_alignment_sources": protein_alignment_sources,
+            "has_protein_alignment_support": bool(protein_alignment_sources),
             "exon_count": len(exon_rows),
             "cds_bp": cds_bp,
             "utr_5p_bp": utr5_bp,

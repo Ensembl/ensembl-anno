@@ -127,6 +127,7 @@ def select_isoforms(
     config: PipelineConfig,
     protein_supported_tids: set[str],
     genome: dict[str, str] | None = None,
+    protein_support_sources: dict[str, set[str]] | None = None,
 ) -> list[list[dict]]:
     """Score and select isoforms for a single locus.
 
@@ -137,6 +138,16 @@ def select_isoforms(
     config : PipelineConfig
     protein_supported_tids : set of str
     genome : dict or None
+    protein_support_sources : dict or None
+        Optional ``{candidate_transcript_id: {"OrthoDB", "GenBlast", ...}}``
+        naming *which* protein-alignment tracks support each candidate.  This
+        is attribution metadata only: it is recorded on the selected model as
+        ``protein_evidence`` so the build can report it, and it deliberately
+        does NOT enter ``sources`` / ``combined_evidence``.  Protein alignments
+        are supporting evidence, not candidate models, so folding them into the
+        named-source set would change the base weight and multi-source bonus in
+        :func:`score_model` and therefore change which model wins.  The
+        selection-affecting signal remains the boolean *protein_supported_tids*.
 
     Returns
     -------
@@ -158,6 +169,9 @@ def select_isoforms(
                 "strand": grp["Strand"].iloc[0],
                 "intron_chain": chain,
                 "protein_support": tid in protein_supported_tids,
+                "protein_sources": set(
+                    (protein_support_sources or {}).get(tid, ())
+                ),
                 "df": grp,
                 "start": grp["Start"].min(),
                 "end": grp["End"].max(),
@@ -190,11 +204,14 @@ def select_isoforms(
             merged[key] = {
                 "sources": set(),
                 "protein_support": False,
+                "protein_sources": set(),
                 "rep": m,
                 "score": 0.0,
             }
         s = merged[key]
         s["sources"].add(m["source"])
+        # Attribution only -- kept out of s["sources"] on purpose (see docstring).
+        s["protein_sources"].update(m.get("protein_sources", ()))
         if m["protein_support"]:
             s["protein_support"] = True
             if not s["rep"]["protein_support"]:
@@ -207,6 +224,9 @@ def select_isoforms(
     for _key, s in merged.items():
         rep = s["rep"]
         rep["combined_evidence"] = ",".join(sorted(s["sources"]))
+        # Protein-alignment attribution: union across every model merged into
+        # this structure, recorded separately from combined_evidence.
+        rep["protein_evidence"] = ",".join(sorted(s["protein_sources"]))
         if s["protein_support"]:
             rep["protein_support"] = True
         s["score"] = score_model(rep, config, protein_supported_tids, genome)
