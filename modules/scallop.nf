@@ -4,31 +4,25 @@ process SCALLOP {
         mode: 'copy'
 
 
-    // TODO change
     input:
-    tuple val(meta), path(input_file)
+    tuple val(meta), path(bam)
  
     output:
-    tuple val(meta), path("${meta.id}_trimmed.fastq"),          emit: trimmed_reads
-    path "versions.yml",                                        emit: versions
+    tuple val(meta), path("${meta}.scallop.gtf"),          emit: scallop_gtf
+    path "versions.yml",                                   emit: versions
 
     script:
     """
-    echo "A output" > ${meta.id}_A.txt
+    scallop -i ${bam} -o ${meta}.scallop.gtf --min_flank_length 10
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    echo 'scallop' > versions.yml
+    scallop --version >> versions.yml
     """
 
     stub:
     """
-    touch ${meta.id}_A.txt
+    touch ${meta}.scallop.gtf
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    touch versions.yml
     """
 }

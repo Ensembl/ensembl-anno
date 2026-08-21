@@ -6,29 +6,34 @@ process MINIMAP2 {
 
     // TODO change
     input:
-    tuple val(meta), path(input_file)
+    tuple val(meta), path(fastq)
+    path(index)
  
     output:
-    tuple val(meta), path("${meta.id}_trimmed.fastq"),          emit: trimmed_reads
-    path "versions.yml",                                        emit: versions
+    tuple val(meta), path("${meta}.sam"),          emit: sam
+    path "versions.yml",                              emit: versions
 
     script:
     """
-    echo "A output" > ${meta.id}_A.txt
+    minimap2 \
+    -G ${params.max_intron_length} \
+    -t ${params.n_threads}
+    --cs \
+    --secondary=no \
+    -ax splice \
+    -u b \
+    ${index} \
+    ${fastq} \
+    -o ${meta}.sam
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    echo 'minimap2 ' > versions.yml
+    minimap2 --version >> versions.yml
     """
 
     stub:
     """
-    touch ${meta.id}_A.txt
+    touch ${meta}.sam
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    touch versions.yml
     """
 }

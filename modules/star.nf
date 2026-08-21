@@ -3,32 +3,42 @@ process STAR {
     publishDir "${params.outdir}/star",
         mode: 'copy'
 
-
-    // TODO change
     input:
-    tuple val(meta), path(input_file)
+    tuple val(meta), path(fastqs)
+    path(index)
  
     output:
-    tuple val(meta), path("${meta.id}_trimmed.fastq"),          emit: trimmed_reads
-    path "versions.yml",                                        emit: versions
+    tuple val(meta), path("${meta}Aligned.out.sam"),          emit: sam
+    tuple val(meta), path("${meta}SJ.out.tab"),               emit: junctions
+    path "versions.yml",                                      emit: versions
 
     script:
+    gzip_args = ''
+    if (fastqs[0].endsWith('.gz')){
+        gzip_args = '--readFilesCommand gunzip -c'
+    }
     """
-    echo "A output" > ${meta.id}_A.txt
+    STAR \
+        --outFilterIntronMotifs RemoveNoncanonicalUnannotated \
+        --outSAMstrandField intronMotif \
+        --runThreadN ${params.n_threads} \
+        --twopassMode Basic \
+        --runMode alignReads \
+        --genomeDir ${index} \
+        --readFilesIn ${fastqs.join(",")} ${gzip_args}\ 
+        --outFileNamePrefix ${meta} \
+        --outSAMtype SAM \
+        --alignIntronMax ${params.star_max_intron_length} 
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    echo 'STAR ' > versions.yml
+    STAR --version >> versions.yml
     """
 
     stub:
     """
-    touch ${meta.id}_A.txt
+    touch ${meta}Aligned.out.sam
+    touch ${meta}SJ.out.tab
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    touch versions.yml
     """
 }

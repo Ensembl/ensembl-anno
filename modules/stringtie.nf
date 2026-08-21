@@ -3,32 +3,30 @@ process STRINGTIE {
     publishDir "${params.outdir}/stringtie",
         mode: 'copy'
 
-
-    // TODO change
     input:
-    tuple val(meta), path(input_file)
+    tuple val(meta), path(bam)
  
     output:
-    tuple val(meta), path("${meta.id}_trimmed.fastq"),          emit: trimmed_reads
+    tuple val(meta), path("${meta}.stringtie.gtf"),               emit: trimmed_reads
     path "versions.yml",                                        emit: versions
 
     script:
     """
-    echo "A output" > ${meta.id}_A.txt
+    stringtie ${bam} \
+    -o ${meta}.stringtie.gtf \
+    -p ${params.n_threads} \
+    -t \  # disable trimming of predicted transcripts based on coverage
+    -a 15  # minimum anchor length for junctions
+ 
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    echo 'stringtie' > versions.yml
+    stringtie --version >> versions.yml
     """
 
     stub:
     """
-    touch ${meta.id}_A.txt
+    touch ${meta}.stringtie.gtf
 
-    cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
-        tool_a: 1.0.0
-    END_VERSIONS
+    touch versions.yml
     """
 }
