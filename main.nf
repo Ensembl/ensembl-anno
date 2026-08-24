@@ -1,5 +1,7 @@
 #!/usr/bin/env nextflow
 
+include { TRANSCRIPTOMICS_ANNOTATION } from './subworkflows/transcriptomic_annotation.nf'
+
 nextflow.enable.dsl = 2
 
 nextflow.enable.strict = true
@@ -58,8 +60,17 @@ workflow {
     // Mix together the short and long reads
     // Downstream we use the length of the list of fastqs in the channel to determine if we are handling se or pe data
     short_read_ch = short_paired_read_ch.mix(short_single_read_ch)
-    short_read_ch.view()
-    reverse(short_read_ch)
+    //short_read_ch.view()
+
+    // ToDo update these - just take random dir for stub testing currently
+    fasta_ch = channel.fromPath(params.fasta)
+    long_reads_ch = channel.fromPath(params.long_reads + '/*.fastq').map { 
+        file ->      // this converts a channel with structure [sampleName.fq] to [sampleName, [sampleName.fq]] 
+    tuple(file.baseName.split('\\.')[0], [file]) 
+    }
+    long_reads_ch.view()
+
+    TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_reads_ch, fasta_ch)
 
 
     // TODO populate :)

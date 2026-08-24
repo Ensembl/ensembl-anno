@@ -5,7 +5,7 @@ process STRINGTIE_MERGE {
 
 
     input:
-    tuple val(meta), path(gtf)
+    path(gtf)
     val toolname
  
     output:

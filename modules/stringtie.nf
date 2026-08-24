@@ -7,7 +7,7 @@ process STRINGTIE {
     tuple val(meta), path(bam)
  
     output:
-    tuple val(meta), path("${meta}.stringtie.gtf"),               emit: trimmed_reads
+    tuple val(meta), path("${meta}.stringtie.gtf"),               emit: stringtie_gtf
     path "versions.yml",                                        emit: versions
 
     script:
