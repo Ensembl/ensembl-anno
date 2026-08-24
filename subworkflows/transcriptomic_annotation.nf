@@ -1,4 +1,4 @@
-
+include { CALCULATE_GENOMESAINDEXNBASES} from '../modules/calculate_genomeSAindexNBases.nf'
 include { STAR_INDEX } from '../modules/star_index.nf'
 include { TRIMGALORE } from '../modules/trimgalore.nf'
 include { STAR } from '../modules/star.nf'
@@ -10,6 +10,7 @@ include { STRINGTIE_MERGE as MERGE_STRINGTIE_GTFS } from '../modules/stringtie_m
 include { MINIMAP2_INDEX } from '../modules/minimap2_index.nf'
 include { MINIMAP2 } from '../modules/minimap2.nf'
 include { PAFTOOLS } from '../modules/paftools.nf'
+include { LONG_READ_BEDS_TO_GTF } from '../modules/long_read_beds_to_gtf.nf'
 
 workflow TRANSCRIPTOMICS_ANNOTATION {
     take:
@@ -22,7 +23,8 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
     // make STAR index
     // It is neccessary to run collect() to convert a queue channel to a value channel
     // Otherwise the index is consumed after the first fastq is aligned and the rest are skipped
-    STAR_INDEX(genome_fasta)
+    CALCULATE_GENOMESAINDEXNBASES(genome_fasta)
+    STAR_INDEX(genome_fasta, CALCULATE_GENOMESAINDEXNBASES.out.genomeSAindexNbases)
     star_index_ch = STAR_INDEX.out.index.collect()
 
     // ToDo split up input files (in channels)
@@ -65,6 +67,11 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
 
     MINIMAP2(long_reads, minimap2_index_ch)
     PAFTOOLS(MINIMAP2.out.sam)
+    paftools_bed_ch = PAFTOOLS.out.bed.map {
+        bed -> bed[1]
+    }.collect()
+    LONG_READ_BEDS_TO_GTF(paftools_bed_ch)
+
 
     // Combine outputs into single gtf
     // TODO: Does this work? Not sure if we actually want this
@@ -75,6 +82,6 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
     // ToDo update this once python package is in place
     scallop_gtf  = MERGE_SCALLOP_GTFS.out.merged_gtf
     stringtie_gtf = MERGE_STRINGTIE_GTFS.out.merged_gtf
-    long_reads_bed = PAFTOOLS.out.bed     
+    long_reads_gtf = LONG_READ_BEDS_TO_GTF.out.gtf    
 
 }

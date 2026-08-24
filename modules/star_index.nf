@@ -6,6 +6,7 @@ process STAR_INDEX {
 
     input:
     path(genome_fasta)
+    val(genomeSAindexNbases)
  
     output:
     path("star"),                              emit: index
@@ -21,7 +22,7 @@ process STAR_INDEX {
     --runMode genomeGenerate \
     --outFileNamePrefix star/ \
     --genomeDir star \
-    --genomeSAindexNbases str(index_bases) \ #TODO fix this
+    --genomeSAindexNbases ${genomeSAindexNbases} \ #TODO fix this
     --genomeFastaFiles ${genome_fasta}
 
 
