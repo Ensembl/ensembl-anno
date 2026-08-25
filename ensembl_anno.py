@@ -548,8 +548,8 @@ def run_trnascan_regions(
     logger.info(trnascan_filter_path)
     utils.check_exe(trnascan_path)
     logger.info(trnascan_path)
-    # check_exe(trnascan_filter_path)
-    check_file(trnascan_filter_path)
+    utils.check_exe(trnascan_filter_path)
+    #check_file(trnascan_filter_path)
     logger.info(trnascan_filter_path)
 
     trnascan_output_dir = utils.create_dir(main_output_dir, "trnascan_output")
