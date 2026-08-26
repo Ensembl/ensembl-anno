@@ -11,6 +11,7 @@ include { MINIMAP2_INDEX } from '../modules/minimap2_index.nf'
 include { MINIMAP2 } from '../modules/minimap2.nf'
 include { PAFTOOLS } from '../modules/paftools.nf'
 include { LONG_READ_BEDS_TO_GTF } from '../modules/long_read_beds_to_gtf.nf'
+include { CHECK_TRANSCRIPTOMIC_OUTPUT } from '../modules/check_transcriptomic_output.nf'
 
 workflow TRANSCRIPTOMICS_ANNOTATION {
     take:
@@ -20,18 +21,31 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
 
     main:
 
-    // make STAR index
-    // It is neccessary to run collect() to convert a queue channel to a value channel
-    // Otherwise the index is consumed after the first fastq is aligned and the rest are skipped
-    CALCULATE_GENOMESAINDEXNBASES(genome_fasta)
-    STAR_INDEX(genome_fasta, CALCULATE_GENOMESAINDEXNBASES.out.genomeSAindexNbases)
-    star_index_ch = STAR_INDEX.out.index.collect()
+    // Decide whether to make star and minimap2 indexes based on whether short and long read dirs were provided:
+    star_index_ch = channel.empty()
+    minimap2_index_ch = channel.empty()
+
+    if (params.short_read_dir != null){
+        CALCULATE_GENOMESAINDEXNBASES(genome_fasta)
+        STAR_INDEX(genome_fasta, CALCULATE_GENOMESAINDEXNBASES.out.genomeSAindexNbases)
+        
+        // It is neccessary to run collect() to convert a queue channel to a value channel
+        // Otherwise the index is consumed after the first fastq is aligned and the rest are skipped
+        star_index_ch = STAR_INDEX.out.index.collect()
+    }   
+    if (params.long_read_dir != null){
+        MINIMAP2_INDEX(genome_fasta)
+
+        // It is neccessary to run collect() to convert a queue channel to a value channel
+        // Otherwise the index is consumed after the first fastq is aligned and the rest are skipped
+        minimap2_index_ch = MINIMAP2_INDEX.out.index.collect()
+    }
 
     // ToDo split up input files (in channels)
-    // ToDo add logic to handle if short and or long reads not available
 
     // Short reads pipeline
-    // Trim and align reads in a splice aware manner
+    // This will only run if the short reads channel has been populated with fastqs
+    // If short_reads is an empty channel we skip from here to the long reads pipeline
     if (params.trim_reads){
         TRIMGALORE(short_reads)
         STAR(TRIMGALORE.out.trimmed_reads, star_index_ch)
@@ -41,7 +55,6 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
 
     SAMTOOLS(STAR.out.sam)
 
-    // Two alternative models for building transcript models
     SCALLOP(SAMTOOLS.out.bam)
     STRINGTIE(SAMTOOLS.out.bam)
 
@@ -57,14 +70,9 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
     MERGE_SCALLOP_GTFS(scallop_gtf_ch, channel.value('scallop') )
     MERGE_STRINGTIE_GTFS(stringtie_gtf_ch, channel.value('stringtie') )
 
-
     // Long reads pipeline
-    // Use minimap2 to align long reads
-    // It is neccessary to run collect() to convert a queue channel to a value channel
-    // Otherwise the index is consumed after the first fastq is aligned and the rest are skipped
-    MINIMAP2_INDEX(genome_fasta)
-    minimap2_index_ch = MINIMAP2_INDEX.out.index.collect()
-
+    // This will only run if the short reads channel has been populated with fastqs
+    // If long_reads is an empty channel we skip from here to the end
     MINIMAP2(long_reads, minimap2_index_ch)
     PAFTOOLS(MINIMAP2.out.sam)
     paftools_bed_ch = PAFTOOLS.out.bed.map {
@@ -72,14 +80,14 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
     }.collect()
     LONG_READ_BEDS_TO_GTF(paftools_bed_ch)
 
+    gtf_ch = MERGE_SCALLOP_GTFS.out.merged_gtf
+            .concat((MERGE_STRINGTIE_GTFS.out.merged_gtf)
+            .concat(LONG_READ_BEDS_TO_GTF.out.gtf))
+            .collect()
 
-    // Combine outputs into single gtf
-    // TODO: Does this work? Not sure if we actually want this
-    // transcriptomics_gtf = MINIMAP2.out.gtf
-    //     .concat(SCALLOP.out.gtf.concat(STRINGTIE.out.gtf))
+    CHECK_TRANSCRIPTOMIC_OUTPUT(gtf_ch)
 
     emit:
-    // ToDo update this once python package is in place
     scallop_gtf  = MERGE_SCALLOP_GTFS.out.merged_gtf
     stringtie_gtf = MERGE_STRINGTIE_GTFS.out.merged_gtf
     long_reads_gtf = LONG_READ_BEDS_TO_GTF.out.gtf    
