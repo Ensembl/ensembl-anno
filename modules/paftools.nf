@@ -1,4 +1,5 @@
 process PAFTOOLS {
+    label 'process_medium'
 
     publishDir "${params.outdir}/paftools",
         mode: 'copy'
@@ -15,7 +16,7 @@ process PAFTOOLS {
     paftools.js splice2bed ${sam} > ${meta}.bed
 
     echo 'paftools.js ' > versions.yml
-    paftools version  >> versions.yml
+    paftools.js version  >> versions.yml
     """
 
     stub:

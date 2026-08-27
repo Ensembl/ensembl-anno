@@ -1,4 +1,5 @@
 process STRINGTIE {
+    label 'process_medium'
 
     publishDir "${params.outdir}/stringtie",
         mode: 'copy'
@@ -15,8 +16,7 @@ process STRINGTIE {
     stringtie ${bam} \
     -o ${meta}.stringtie.gtf \
     -p ${params.n_threads} \
-    -t \  # disable trimming of predicted transcripts based on coverage
-    -a 15  # minimum anchor length for junctions
+    -t -a 15   # disable trimming of predicted transcripts based on coverage + minimum anchor length for junctions
  
 
     echo 'stringtie' > versions.yml

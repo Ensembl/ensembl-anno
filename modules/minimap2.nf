@@ -1,10 +1,9 @@
 process MINIMAP2 {
+    label 'process_high'
 
     publishDir "${params.outdir}/minimap2",
         mode: 'copy'
 
-
-    // TODO change
     input:
     tuple val(meta), path(fastq)
     path(index)
@@ -17,7 +16,7 @@ process MINIMAP2 {
     """
     minimap2 \
     -G ${params.max_intron_length} \
-    -t ${params.n_threads}
+    -t ${params.n_threads} \
     --cs \
     --secondary=no \
     -ax splice \

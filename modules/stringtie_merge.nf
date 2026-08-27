@@ -1,6 +1,7 @@
 process STRINGTIE_MERGE {
+    label 'process_medium'
 
-    publishDir "${params.outdir}/merged_gtfs",
+    publishDir "${params.outdir}/merged_short_read_gtfs",
         mode: 'copy'
 
 

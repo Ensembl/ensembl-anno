@@ -1,4 +1,5 @@
 process SAMTOOLS {
+    label 'process_high'
 
     publishDir "${params.outdir}/samtools",
         mode: 'copy'
@@ -12,7 +13,7 @@ process SAMTOOLS {
 
     script:
     """
-    samtools sort -@ ${params.n_threads} -o ${params.meta}Aligned.out.bam ${sam}
+    samtools sort -@ ${params.n_threads} -o ${meta}Aligned.out.bam ${sam}
 
     samtools --version >> versions.yml
     """

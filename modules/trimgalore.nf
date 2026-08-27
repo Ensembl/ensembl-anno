@@ -1,4 +1,5 @@
 process TRIMGALORE {
+    label 'process_low'
 
     publishDir "${params.outdir}/trim_galore",
         mode: 'copy'

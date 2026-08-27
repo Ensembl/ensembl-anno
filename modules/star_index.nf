@@ -1,8 +1,8 @@
 process STAR_INDEX {
+    label 'process_high'
 
-    publishDir "${params.outdir}/star",
+    publishDir "${params.outdir}/star_index",
         mode: 'copy'
-
 
     input:
     path(genome_fasta)
@@ -14,16 +14,14 @@ process STAR_INDEX {
 
     script:
     """
-    # TODO make a much smaller python package containing utility function to get genome size
-    # and call it here or in another process
-
     STAR \
     --runThreadN ${params.n_threads} \
     --runMode genomeGenerate \
     --outFileNamePrefix star/ \
     --genomeDir star \
-    --genomeSAindexNbases ${genomeSAindexNbases} \ #TODO fix this
-    --genomeFastaFiles ${genome_fasta}
+    --genomeFastaFiles ${genome_fasta} \
+    --genomeSAindexNbases ${genomeSAindexNbases}
+    
 
 
     echo 'STAR ' > versions.yml

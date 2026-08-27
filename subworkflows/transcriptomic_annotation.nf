@@ -41,8 +41,6 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
         minimap2_index_ch = MINIMAP2_INDEX.out.index.collect()
     }
 
-    // ToDo split up input files (in channels)
-
     // Short reads pipeline
     // This will only run if the short reads channel has been populated with fastqs
     // If short_reads is an empty channel we skip from here to the long reads pipeline

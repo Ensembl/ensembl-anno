@@ -1,4 +1,5 @@
 process STAR {
+    label 'process_high'
 
     publishDir "${params.outdir}/star",
         mode: 'copy'
@@ -14,7 +15,7 @@ process STAR {
 
     script:
     gzip_args = ''
-    if (fastqs[0].endsWith('.gz')){
+    if (fastqs.join(",").endsWith('.gz')){
         gzip_args = '--readFilesCommand gunzip -c'
     }
     """
@@ -25,10 +26,10 @@ process STAR {
         --twopassMode Basic \
         --runMode alignReads \
         --genomeDir ${index} \
-        --readFilesIn ${fastqs.join(",")} ${gzip_args}\ 
-        --outFileNamePrefix ${meta} \
+        --readFilesIn ${fastqs.join(",")} \
+        ${gzip_args} --outFileNamePrefix ${meta} \
         --outSAMtype SAM \
-        --alignIntronMax ${params.star_max_intron_length} 
+        --alignIntronMax ${params.max_intron_length} 
 
     echo 'STAR ' > versions.yml
     STAR --version >> versions.yml

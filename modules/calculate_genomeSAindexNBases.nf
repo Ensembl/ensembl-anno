@@ -1,5 +1,9 @@
 process CALCULATE_GENOMESAINDEXNBASES {
 
+    publishDir "${params.outdir}/star_index",
+        mode: 'copy'
+    label 'process_light'
+
     input:
     path(genome_fasta)
  
@@ -8,7 +12,7 @@ process CALCULATE_GENOMESAINDEXNBASES {
 
     script:
     """
-    python bin/src/python/ensembl/tools/anno/nextflow_utils/calculate_star_index_bases.py \
+    python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/calculate_genomeSAindexNbases.py \
     --genome_file ${genome_fasta}
     """
 

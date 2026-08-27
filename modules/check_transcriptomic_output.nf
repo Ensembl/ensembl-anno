@@ -1,4 +1,8 @@
 process CHECK_TRANSCRIPTOMIC_OUTPUT {
+    label 'process_low'
+
+    publishDir "${params.outdir}/check_transcriptomic_gtfs",
+        mode: 'copy'
 
     input:
     path(gtf)
@@ -10,7 +14,7 @@ process CHECK_TRANSCRIPTOMIC_OUTPUT {
 
     script:
     """
-    python bin/src/python/ensembl/tools/anno/nextflow_utils/beds_to_gtf.py \
+    python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/check_transcriptomic_output.py \
         --gtfs ${gtf} \
         --min_lines ${params.min_total_transcriptomic_gtf_lines} \
         --logfile transcript_output_checks.log \

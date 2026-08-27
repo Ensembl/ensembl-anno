@@ -1,4 +1,5 @@
 process SCALLOP {
+    label 'process_medium'
 
     publishDir "${params.outdir}/scallop",
         mode: 'copy'

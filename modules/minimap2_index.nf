@@ -1,4 +1,5 @@
 process MINIMAP2_INDEX {
+    label 'process_high'
 
     publishDir "${params.outdir}/minimap2_index",
         mode: 'copy'
