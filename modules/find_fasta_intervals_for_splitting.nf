@@ -1,6 +1,6 @@
-process CALCULATE_GENOMESAINDEXNBASES {
+process FIND_FASTA_INTERVALS {
 
-    publishDir "${params.outdir}/star_index",
+    publishDir "${params.outdir}/fasta_intervals",
         mode: 'copy'
     label 'process_light'
 
@@ -8,17 +8,17 @@ process CALCULATE_GENOMESAINDEXNBASES {
     path(genome_fasta)
  
     output:
-    stdout emit: genomeSAindexNbases
+    path('*.bed'), emit:beds
 
     script:
     """
     python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/fasta_operations.py \
-    --calculate_genomeSAindexNbases --genome_file ${genome_fasta} --min_seq_length 0 --maximum_index_bases 14
+    --splitFasta --genome_file ${genome_fasta} --min_seq_length 5000 --slice_size 10000000
     """
 
     stub:
     """
-    echo 14
+    touch chr1_1_2.bed
     """
 
 }

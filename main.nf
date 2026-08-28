@@ -1,6 +1,7 @@
 #!/usr/bin/env nextflow
 
 include { TRANSCRIPTOMICS_ANNOTATION } from './subworkflows/transcriptomic_annotation.nf'
+include { SPLIT_FASTA } from './subworkflows/split_fasta.nf'
 
 nextflow.enable.dsl = 2
 
@@ -74,8 +75,8 @@ workflow {
 
     fasta_ch = channel.fromPath(params.fasta)
 
-
-    TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
+    SPLIT_FASTA(fasta_ch)
+    // TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
 
 
     // TODO populate :)
