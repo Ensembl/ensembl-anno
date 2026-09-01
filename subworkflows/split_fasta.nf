@@ -14,8 +14,8 @@ workflow SPLIT_FASTA {
     
     BEDTOOLS(fasta.collect(), interval_bed_ch)
 
+
     emit:
-    split_fasta = BEDTOOLS.out.fasta_slice
-    split_fasta_dir = BEDTOOLS.out.fasta_dir
+    BEDTOOLS.out.fasta_slice
 
 }

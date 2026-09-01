@@ -9,13 +9,12 @@ process BEDTOOLS {
     tuple val(coords), path(bed)
  
     output:
-    tuple val(coords), path("${coords}.fa"),               emit: fasta_slice
-    path('fasta_dir'),                                     emit: sliced_fasta_dir               
+    tuple val(coords), path("${coords}.fa"),               emit: fasta_slice             
     path "versions.yml",                                        emit: versions
 
     script:
     """
-    bedtools getfasta -fi ${fasta} -bed ${bed} > fasta_dir/${coords}.fa
+    bedtools getfasta -fi ${fasta} -bed ${bed} > ${coords}.fa
 
     bedtools --version >> versions.yml
     """
@@ -23,6 +22,7 @@ process BEDTOOLS {
     stub:
     """
     touch ${coords}.fa
+
 
     touch versions.yml
     """

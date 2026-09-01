@@ -1,7 +1,7 @@
 process MAKE_GTF {
     label 'process_low'
 
-    publishDir "${params.outdir}/red_gtf",
+    publishDir "${params.outdir}/sliced_gtfs",
         mode: 'copy'
 
     input:
@@ -16,17 +16,17 @@ process MAKE_GTF {
     """
     python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/make_gtf.py \
     --input_file ${input_file} \
-    --output_gtf ${tool}.gtf \
-    --coords ${coords} \
+    --output_gtf ${tool}_${coords}.gtf \
+    --region_name ${coords} \
     --${tool}
 
-    Red --version >> versions.yml
+
     """
 
     stub:
     """
     touch tool.gtf
-    touch versions.yml
+
     """
 
 }

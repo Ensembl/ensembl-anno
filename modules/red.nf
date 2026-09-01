@@ -25,6 +25,8 @@ process RED {
     cp ${fasta} input_genome_dir/ #TODO make sure this doesn't persist
     
     Red -gnm input_genome_dir -msk red_masked_genome_dir -rpt red_repeats_dir
+
+    Red -v > versions.yml
     """
 
     stub:

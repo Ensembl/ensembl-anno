@@ -5,7 +5,7 @@ process DUST {
         mode: 'copy'
 
     input:
-    tuple val(coords), path(sliced_fasta)
+    tuple val(coords), path(sliced_fastas)
  
     output:
     tuple val(coords), path('*.dust'),          emit: dust_repeats
@@ -13,7 +13,7 @@ process DUST {
 
     script:
     """
-    dustmasker -in ${sliced_fasta} -out ${coords}.dust
+    dustmasker -in ${sliced_fastas} -out ${coords}.dust
     dustmasker -version-full >> versions.yml
     """
 

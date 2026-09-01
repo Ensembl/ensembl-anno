@@ -1,4 +1,6 @@
 import argparse
+from pathlib import Path
+import re
 
 def create_red_gtf(repeat_coords_file: Path, output_file: Path):
     """
