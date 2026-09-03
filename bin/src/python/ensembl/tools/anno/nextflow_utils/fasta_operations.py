@@ -111,7 +111,7 @@ def write_fasta_intervals_to_bed(args):
     
         start -= 1 
 
-        bed_file = f"{seq_region}.{start}.{end}.1.bed"
+        bed_file = f"{seq_region}:{start}-{end}.1.bed"
         with open(bed_file, 'w') as bed_handle:
             bed_handle.write(f"{seq_region}\t{start}\t{end}\n")
 

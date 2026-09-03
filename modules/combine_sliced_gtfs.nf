@@ -23,7 +23,8 @@ process COMBINE_SLICED_GTFS {
 
     stub:
     """
-    touch annotation.gtf
+    mkdir tool
+    touch tool/annotation.gtf
     """
 
 }

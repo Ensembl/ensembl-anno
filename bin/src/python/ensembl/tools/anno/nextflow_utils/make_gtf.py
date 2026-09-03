@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 import re
+from typing import Union
 
 def create_red_gtf(repeat_coords_file: Path, output_file: Path):
     """
@@ -198,6 +199,98 @@ def create_trf_gtf(  # pylint:disable=too-many-locals, too-many-branches
                     trf_out.write(gtf_line)
                     repeat_count += 1
 
+
+def create_cpg_gtf(  # pylint:disable=too-many-arguments, too-many-locals, too-many-branches, too-many-positional-arguments
+    input_file: Path,
+    output_gtf: Path,
+    region_name: str,
+    cpg_min_length: int = 400,
+    cpg_min_gc_content: int = 50,
+    cpg_min_oe: float = 0.6,
+) -> None:
+    """
+    Read the fasta file and save the content in gtf format
+    All the genomic slices are collected in a single gtf output
+    Args:
+        input_file : GTF file with final results.
+        output_gtf : GTF file with the results per region.
+        region_name :Coordinates of genomic slice.
+        cpg_dir : Output dir.
+        cpg_min_length : Min length of CpG islands
+        cpg_min_gc_content : Min GC frequency percentage
+        cpg_min_oe :  Min ratio of the observed to expected number of CpG (CpGo/e)
+    """
+    with (
+        open(input_file, "r", encoding="utf8") as cpg_in,
+        open(output_gtf, "w+", encoding="utf8") as cpg_out,
+    ):
+        feature_count = 1
+        for line in cpg_in:
+            result_match = re.search(r"^" + region_name, line)
+            if result_match:
+                results = line.split()
+                start = int(results[1])
+                end = int(results[2])
+                length = end - start + 1
+                score = float(results[3])
+                gc_content = float(results[6])
+                oe_score_str = results[7]
+                oe_score: Union[float, int]
+                if oe_score_str in ("-", "inf"):
+                    oe_score = 0
+                else:
+                    oe_score = float(oe_score_str)
+                if (
+                    int(length) >= int(cpg_min_length)
+                    and gc_content >= int(cpg_min_gc_content)
+                    and oe_score >= float(cpg_min_oe)
+                ):
+                    gtf_line = (
+                        f"{region_name}\tCpG\tsimple_feature\t{start}\t"
+                        f'{end}\t.\t+\t.\tfeature_id "{feature_count}"; score "{score}";\n'
+                    )
+                    cpg_out.write(gtf_line)
+
+def create_eponine_gtf(
+    input_file: Path,
+    output_gtf: Path,
+    region_name: str,
+) -> None:
+    """
+    Read the fasta file and save the content in gtf format
+    All the genomic slices are collected in a single gtf output
+    Args:
+        input_file: GTF file with final results.
+        output_gtf: GTF file with the results per region.
+        region_name: Coordinates of genomic slice.
+    """
+    with (
+        open(input_file, "r", encoding="utf8") as eponine_in,
+        open(output_gtf, "w+", encoding="utf8") as eponine_out,
+    ):
+        feature_count = 1
+        for line in eponine_in:
+            result_match = re.search(r"^" + region_name, line)
+            if result_match:
+                results = line.split()
+                start = int(results[3])
+                end = int(results[4])
+                score = float(results[5])
+                strand = results[6]
+                print(results)
+                # There's a one base offset on the reverse strand
+                if strand == "-":
+                    start -= 1
+                    end -= 1
+
+                gtf_line = (
+                    f"{region_name}\tEponine\tsimple_feature\t"
+                    f"{start}\t{end}\t.\t{strand}\t.\t"
+                    f'feature_id "{feature_count}"; score "{score}";\n'
+                )
+                eponine_out.write(gtf_line)
+                feature_count += 1
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
     parser.add_argument("--input_file", help="Path to input to convert to gtf")
@@ -207,6 +300,9 @@ def parse_args():
     parser.add_argument("--dust", action='store_true', help="convert red output to gtf")
     parser.add_argument("--repeatmasker", action='store_true', help="convert red output to gtf")
     parser.add_argument("--trf", action='store_true', help="convert trf output to gtf")
+    parser.add_argument("--cpg", action='store_true', help="convert cpg output to gtf")
+    parser.add_argument("--eponine", action='store_true', help="convert eponine output to gtf")
+
     args = parser.parse_args()
     return args
     
@@ -224,4 +320,10 @@ if __name__ == "__main__":
     
     if args.trf:
         create_trf_gtf(args.input_file, args.output_gtf, args.region_name)
+
+    if args.cpg:
+        create_cpg_gtf(args.input_file, args.output_gtf, args.region_name)
+
+    if args.eponine:
+        create_eponine_gtf(args.input_file, args.output_gtf, args.region_name)
     

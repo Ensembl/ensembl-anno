@@ -3,6 +3,7 @@
 include { TRANSCRIPTOMICS_ANNOTATION } from './subworkflows/transcriptomic_annotation.nf'
 include { SPLIT_FASTA } from './subworkflows/split_fasta.nf'
 include { REPEATS } from './subworkflows/repeats.nf'
+include { SIMPLE_FEATURE_ANNOTATION } from './subworkflows/simple_feature_annotation.nf'
 
 nextflow.enable.dsl = 2
 
@@ -79,6 +80,7 @@ workflow {
     sliced_fastas = SPLIT_FASTA(fasta_ch)
     sliced_fastas.view()
     REPEATS(fasta_ch, sliced_fastas)
+    SIMPLE_FEATURE_ANNOTATION(sliced_fastas)
     // TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
 
 

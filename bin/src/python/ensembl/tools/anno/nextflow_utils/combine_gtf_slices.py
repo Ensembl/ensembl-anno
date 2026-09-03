@@ -61,8 +61,8 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
             # start_offset = int(match.group(1))
 
             # Here is my temporary fix - we should plan to replace this!!!
-            # Under the new naming scheme the 3rd field is the start coordinate for a slice
-            start_offset = input_file.split('.')[2] 
+            # Under the new naming scheme the filename is chr:start-end'.1.bed'. Therefore...
+            start_offset = input_file.split(':')[1].split("-")[0]
             try: 
                 start_offset = int(start_offset)
             except:

@@ -13,13 +13,14 @@ process MAKE_GTF {
 
 
     script:
+    def region_name = coords.split(':')[0]
     """
     mkdir ${tool[0]}
 
     python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/make_gtf.py \
     --input_file ${input_file.join(' ')} \
     --output_gtf ${tool[0]}/${tool[0]}_${coords}.gtf \
-    --region_name ${coords} \
+    --region_name ${region_name} \
     --${tool[0]}
 
 
@@ -27,7 +28,8 @@ process MAKE_GTF {
 
     stub:
     """
-    touch tool.gtf
+    mkdir tool
+    touch tool/tool.gtf
 
     """
 
