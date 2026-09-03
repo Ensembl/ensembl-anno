@@ -11,7 +11,7 @@ process RED {
     path('red_masked_genome_dir/'),          emit: red_masked_genome_dir
     path('red_repeats_dir/'),                emit: red_repeats_dir
     path('red_masked_genome_dir/*.msk'),     emit: red_masked_genome_files
-    tuple val('whole_genome'), path('red_repeats_dir/*.rpt'),           emit: red_repeats_files
+    tuple val('annotation'), path('red_repeats_dir/*.rpt'),           emit: red_repeats_files
     path "versions.yml",                     emit: versions
 
     script:

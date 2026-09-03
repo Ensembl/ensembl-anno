@@ -8,12 +8,12 @@ process TRF {
     tuple val(coords), path(sliced_fasta)
  
     output:
-    tuple val(coords), path('*.trf.gtf'),          emit: trf_repeats
+    tuple val(coords), path('*.dat'),          emit: trf_repeats
     path "versions.yml",                     emit: versions
 
     script:
     """
-    trf ${sliced_fasta} \
+    bash -c 'trf ${sliced_fasta} \
         ${params.match_score} \
         ${params.mismatch_score} \
         ${params.delta} \
@@ -21,14 +21,14 @@ process TRF {
         ${params.pi} \
         ${params.minscore} \
         ${params.maxperiod} \
-        -d -h
+        -d -h' || echo 'processed $? TRs'
 
     trf -v >> versions.yml
     """
 
     stub:
     """
-    touch coords.trf.gtf
+    touch coords.dat
     touch versions.yml
     """
 }

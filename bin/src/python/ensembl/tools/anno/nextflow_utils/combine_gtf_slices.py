@@ -8,8 +8,8 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
     output_gtf: Path,
     sliced_gtf_list: List,
     feature_id_label: str = "",
-    new_id_prefix: str = "",
     unique_ids: bool = True,
+    tool: str = ""
 ) -> None:
     """
     Collect all the gtf files per file extension and
@@ -32,6 +32,10 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
     feature type.
     """
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
+    new_id_prefix = ""
+    if tool == "repeatmasker":
+        print("new_id_prefix set")
+        new_id_prefix == "repeatmask"
     # Initialise gene and feature counter
     gene_counter = 1
     feature_counter = 1
@@ -45,12 +49,32 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
             if os.stat(input_file).st_size == 0:
                 print("File is empty, will skip %s", input_file)
                 continue
-            match = re.search(r"\.rs(\d+)\.re(\d+)\.", input_file)
-            assert match is not None
-            start_offset = int(match.group(1))
+
+            # I've replaced the original search logic here with logic to strip the start coordinates out of the 
+            # filename. This is pretty dirty - I've done this as a temporary measure. In the long term maybe we
+            # could look at gtf parsing and operations across all of our repositories and build something more
+            # robust.
+
+            # This is what was originally here. It doesn't work because the filenames are now slightly different
+            # match = re.search(r"\.rs(\d+)\.re(\d+)\.", input_file)
+            # assert match is not None
+            # start_offset = int(match.group(1))
+
+            # Here is my temporary fix - we should plan to replace this!!!
+            # Under the new naming scheme the 3rd field is the start coordinate for a slice
+            start_offset = input_file.split('.')[2] 
+            try: 
+                start_offset = int(start_offset)
+            except:
+                raise ValueError(f"Filenames are not as expected - the third field in the filename should be the " \
+                "slice start coordinate but instead it is {start_offset}. The filename was {input_file}. This shouldn't " \
+                "happen, exiting.")
+            
             with open(input_file, "r", encoding="utf8") as gtf_in:
                 for line in gtf_in:
                     values = line.split("\t")
+                    print(str(len(values)))
+                    print(str((values[2] in feature_types)))
                     if len(values) == 9 and (values[2] in feature_types) and unique_ids:
                         # each slice start from 0 so we need to add the
                         # offset to get the real coordinates
@@ -154,6 +178,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
     parser.add_argument("--sliced_gtfs", nargs = '+', help="Path to input to convert to gtf")
     parser.add_argument("--output_gtf", help="Path to output logfile recording status of each gtf")
+    parser.add_argument("--tool")
     args = parser.parse_args()
     return args
     
@@ -161,4 +186,5 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     slice_output_to_gtf(output_gtf = args.output_gtf, 
-                        sliced_gtf_list=args.sliced_gtfs)
+                        sliced_gtf_list=args.sliced_gtfs,
+                        tool = args.tool)

@@ -1,5 +1,5 @@
 process REPEATMASKER {
-    label 'process_medium'
+    label 'process_high'
     label 'repeats'
 
     publishDir "${params.outdir}/repeatmasker",
@@ -9,7 +9,7 @@ process REPEATMASKER {
     tuple val(coords), path(sliced_fasta)
  
     output:
-    tuple val(coords), path('*.out'),          emit: repeatmasker_repeats
+    tuple val(coords), path('*/*.out'),          emit: repeatmasker_repeats
     path "versions.yml",                     emit: versions
 
     script:

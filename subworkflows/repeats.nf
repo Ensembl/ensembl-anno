@@ -24,25 +24,25 @@ workflow REPEATS {
     trf_ch = channel.of('trf')
 
     RED(fasta)
-    MAKE_RED_GTF(red_ch, RED.out.red_repeats_files)
+    MAKE_RED_GTF(red_ch.collect(), RED.out.red_repeats_files)
 
     DUST(sliced_fasta)
-    MAKE_DUST_GTF(dust_ch, DUST.out.dust_repeats)
-    COMBINE_DUST_GTFS(dust_ch, MAKE_DUST_GTF.out.gtf.collect())
+    MAKE_DUST_GTF(dust_ch.collect(), DUST.out.dust_repeats)
+    COMBINE_DUST_GTFS(dust_ch.collect(), MAKE_DUST_GTF.out.gtf.collect())
 
-    // REPEATMASKER(sliced_fasta)
-    // MAKE_REPEATMASKER_GTF(repeatmasker_ch, REPEATMASKER.out.repeatmasker_repeats)
-    // COMBINE_REPEATMASKER_GTFS(repeatmasker_ch, MAKE_REPEATMASKER_GTF.out.gtf.collect())
+    REPEATMASKER(sliced_fasta)
+    MAKE_REPEATMASKER_GTF(repeatmasker_ch.collect(), REPEATMASKER.out.repeatmasker_repeats)
+    COMBINE_REPEATMASKER_GTFS(repeatmasker_ch.collect(), MAKE_REPEATMASKER_GTF.out.gtf.collect())
 
-    // TRF(sliced_fasta)
-    // MAKE_TRF_GTF(trf_ch, TRF.out.trf_repeats)
-    // COMBINE_TRF_GTFS(trf_ch, MAKE_TRF_GTF.out.gtf.collect())
+    TRF(sliced_fasta)
+    MAKE_TRF_GTF(trf_ch.collect(), TRF.out.trf_repeats)
+    COMBINE_TRF_GTFS(trf_ch.collect(), MAKE_TRF_GTF.out.gtf.collect())
 
     emit:
     red_gtf  = MAKE_RED_GTF.out.gtf
     dust_gtf = COMBINE_DUST_GTFS.out.gtf
-    // trf_gtf = COMBINE_TRF_GTFS.out.gtf
-    // repeatmasker_gtf = COMBINE_REPEATMASKER_GTFS.out.gtf
+    trf_gtf = COMBINE_TRF_GTFS.out.gtf
+    repeatmasker_gtf = COMBINE_REPEATMASKER_GTFS.out.gtf
 
 
 }
