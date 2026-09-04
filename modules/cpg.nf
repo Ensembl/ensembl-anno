@@ -1,5 +1,5 @@
 process CPG {
-    label 'process_high'
+    label 'process_medium'
 
     publishDir "${params.outdir}/cpg",
         mode: 'copy'
@@ -10,7 +10,7 @@ process CPG {
     output:
     tuple val(coords), path('*.cpg'),          emit: cpgs
     // skipping version file, no version info output by tool
-    
+
     script:
     """
     cpg_lh ${sliced_fastas} > ${coords}.cpg

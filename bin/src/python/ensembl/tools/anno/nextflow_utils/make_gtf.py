@@ -291,6 +291,62 @@ def create_eponine_gtf(
                 eponine_out.write(gtf_line)
                 feature_count += 1
 
+
+def create_trnascan_gtf(input_file: Path, output_gtf: Path,  region_name: str) -> None:
+    """
+    Read the fasta file and save the content in gtf format
+    All the genomic slices are collected in a single gtf output
+    Args:
+        output_gtf : GTF file with the results per region.
+        filter_file : GTF file with the filtered results per region.
+        region_name :Coordinates of genomic slice.
+
+    tRNAscan-SE output format:
+    col0: GtRNAdb Gene Symbol - gene ID in corresponding genome
+    col1: tRNAscan-SE ID - tRNA ID in tRNAscan-SE prediction results
+    col2-3: Locus - Genomic coordinates of predicted gene
+    col4: Isotype (from Anticodon) - tRNA isotype determined by anticodon
+    col5: Anticodon - anticodon of predicted tRNA gene
+    col6-7: Intron boundaries
+    col8: General tRNA Model Score - covariance model bit score from tRNAscan-SE results
+    col9: Best Isotype Model - best matching (highest scoring) isotype determined
+    by isotype-specific covariance model classification
+    col10-11-12: Anticodon and Isotype Model Agreement - consistency between anticodon
+    from predicted gene sequence and best isotype model
+    col13: Features - special gene features that may include gene set categorization,
+    number of introns, possible pseudogenes, possible truncation, or base-pair mismatches
+    """
+    with (
+        open(input_file, "r", encoding="utf8") as trna_in,
+        open(output_gtf, "w+", encoding="utf8") as trna_out,
+    ):
+        gene_counter = 1
+        for line in trna_in:
+            result_match = re.search(r"^" + region_name, line)
+            if result_match:
+                results = line.split()
+                start = int(results[2])
+                end = int(results[3])
+                strand = "+"
+                if start > end:
+                    strand = "-"
+                    start, end = end, start
+                biotype = "tRNA" if re.search(r"high confidence set", line) else "tRNA_pseudogene"
+                transcript_string = (
+                    f"{region_name}\ttRNAscan\ttranscript\t{start}\t{end}\t.\t"
+                    f'{strand}\t.\tgene_id "{gene_counter}"; transcript_id '
+                    f'"{gene_counter}"; biotype "{biotype}";\n'
+                )
+                exon_string = (
+                    f"{region_name}\ttRNAscan\texon\t{start}\t{end}\t.\t"
+                    f'{strand}\t.\tgene_id "{gene_counter}"; transcript_id '
+                    f'"{gene_counter}"; exon_number "1"; biotype "{biotype}";\n'
+                )
+                trna_out.write(transcript_string)
+                trna_out.write(exon_string)
+                trna_out.flush()
+                gene_counter += 1
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
     parser.add_argument("--input_file", help="Path to input to convert to gtf")
@@ -302,7 +358,7 @@ def parse_args():
     parser.add_argument("--trf", action='store_true', help="convert trf output to gtf")
     parser.add_argument("--cpg", action='store_true', help="convert cpg output to gtf")
     parser.add_argument("--eponine", action='store_true', help="convert eponine output to gtf")
-
+    parser.add_argument("--trnascan", action = 'store_true', help="convert trnascan output to gtf")
     args = parser.parse_args()
     return args
     
@@ -326,4 +382,7 @@ if __name__ == "__main__":
 
     if args.eponine:
         create_eponine_gtf(args.input_file, args.output_gtf, args.region_name)
+
+    if args.trnascan:
+        create_trnascan_gtf(args.input_file, args.output_gtf, args.region_name)
     
