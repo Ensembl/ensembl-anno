@@ -9,7 +9,7 @@ process CMSEARCH {
     path(rfam_models)
  
     output:
-    tuple val(coords), path('*.cpg'),          emit: cpgs
+    tuple val(coords), path('*.tblout'),          emit: tblout
     //skip versions file as no version info provided by cmsearch
 
     script:
@@ -18,7 +18,7 @@ process CMSEARCH {
         --cpu ${params.n_threads} \
         --nohmmonly \
         --cut_ga \
-        --tblout", ${coords}.tblout \
+        --tblout ${coords}.tblout \
         ${rfam_models} ${sliced_fastas}
     """
 

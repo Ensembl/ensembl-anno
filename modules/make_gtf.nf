@@ -5,23 +5,31 @@ process MAKE_GTF {
         mode: 'copy'
 
     input:
-    val tool
+    tuple val(tool), path(rfam_seed), path(rfam_selected_model)
     tuple val(coords), path(input_file)
+
  
     output:
-    path('*/*.gtf'),       emit: gtf
+    tuple val(coords), path('*/*.gtf'),        optional:true, emit: gtf
+    tuple val(coords), path('*/*.bed'),       optional:true, emit: bed
 
 
     script:
     def region_name = coords.split(':')[0]
+    cmsearch_args = ''
+    if (tool == "cmsearch"){
+        cmsearch_args = " --rfam_seed_descriptions ${rfam_seed} \
+        --rfam_selected_models_file ${rfam_selected_model} \
+        --output_bed ${tool}/${tool}_${coords}.bed"
+    }
     """
-    mkdir ${tool[0]}
+    mkdir ${tool}
 
     python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/make_gtf.py \
     --input_file ${input_file.join(' ')} \
-    --output_gtf ${tool[0]}/${tool[0]}_${coords}.gtf \
+    --output_gtf ${tool}/${tool}_${coords}.gtf \
     --region_name ${region_name} \
-    --${tool[0]}
+    --${tool} ${cmsearch_args}
 
 
     """

@@ -5,7 +5,7 @@ process COMBINE_SLICED_GTFS {
         mode: 'copy'
 
     input:
-    val tool
+    tuple val(tool), path(rfam_seed), path(rfam_selected_model)
     path(sliced_gtfs)
  
     output:
@@ -13,11 +13,11 @@ process COMBINE_SLICED_GTFS {
 
     script:
     """
-    mkdir ${tool[0]}
+    mkdir ${tool}
     python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/combine_gtf_slices.py \
     --sliced_gtfs ${sliced_gtfs} \
-    --output_gtf ${tool[0]}/${tool[0]}_annotation.gtf \
-    --tool ${tool[0]}
+    --output_gtf ${tool}/${tool}_annotation.gtf \
+    --tool ${tool}
 
     """
 

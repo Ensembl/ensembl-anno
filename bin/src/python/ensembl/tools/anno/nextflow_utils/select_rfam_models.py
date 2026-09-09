@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     write_rfam_selected_models_file(args.rfam_accession_file,
                                     args.rfam_cm_db,
-                                    args.rfam_selected_model_file)
+                                    args.rfam_selected_models_file)
 
 
 

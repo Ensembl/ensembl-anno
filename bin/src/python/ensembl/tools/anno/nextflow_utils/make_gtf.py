@@ -1,7 +1,8 @@
 import argparse
 from pathlib import Path
+from os import PathLike
 import re
-from typing import Union
+from typing import Union, Dict, List, Any
 
 def create_red_gtf(repeat_coords_file: Path, output_file: Path):
     """
@@ -277,7 +278,6 @@ def create_eponine_gtf(
                 end = int(results[4])
                 score = float(results[5])
                 strand = results[6]
-                print(results)
                 # There's a one base offset on the reverse strand
                 if strand == "-":
                     start -= 1
@@ -347,11 +347,374 @@ def create_trnascan_gtf(input_file: Path, output_gtf: Path,  region_name: str) -
                 trna_out.flush()
                 gene_counter += 1
 
+
+def get_rfam_seed_descriptions(rfam_seeds_file: PathLike) -> Dict[str, Dict[str, Any]]:
+    """Get Rfam seed description
+
+    Args:
+        rfam_seeds_file (PathLike): File of Rfam seeds
+
+    Returns:
+        dict: List of Rfam seeds with description,name, type
+    """
+    descriptions: Dict[str, Dict[str, Any]] = {}
+    rfam_seeds = []
+    domain = ""
+    # NOTE: for some reason the decoder breaks on the seeds file,
+    # so I have made this ignore errors
+    with open(rfam_seeds_file, encoding="utf-8", errors="ignore") as rfam_seeds_in:
+        rfam_seeds = rfam_seeds_in.read().splitlines()
+
+    for seed in rfam_seeds:
+        matches = re.findall(r"^\#=GF (AC|DE|ID|TP)\s+(.+)", seed)
+
+        if matches:
+            key, value = matches[0]
+            if key == "AC":
+                domain = value
+                descriptions[domain] = {}
+            elif key == "DE":
+                assert domain is not None, "Domain should not be None at this point."
+                descriptions[domain]["description"] = value
+            elif key == "ID":
+                assert domain is not None, "Domain should not be None at this point."
+                descriptions[domain]["name"] = value
+            elif key == "TP":
+                assert domain is not None, "Domain should not be None at this point."
+                descriptions[domain]["type"] = value
+    return descriptions
+
+
+def extract_rfam_metrics(rfam_selected_models: PathLike) -> Dict[str, Dict[str, Any]]:
+    """Get name, description, length, max length, threshold of each Rfam model.
+
+    Args:
+        rfam_selected_models_file : Path for Rfam models.
+
+    Returns:
+        parsed_cm_data: Rfam metrics.
+    """
+    with open(rfam_selected_models, "r", encoding="utf-8") as rfam_cm_in:
+        rfam_models = rfam_cm_in.read().split("//\n")
+        parsed_cm_data: Dict[str, Dict[str, Any]] = {}
+        for model in rfam_models:
+            model_name_match = re.search(r"NAME\s+(\S+)", model)
+            match_infernal = re.search(r"INFERNAL", model)
+            if model_name_match and match_infernal:
+                model_name = model_name_match.group(1)
+                parsed_cm_data[model_name] = {}
+                parse_regex = {
+                    r"^NAME\s+(\S+)": "-name",
+                    r"^DESC\s+(\S+)": "-description",
+                    r"^CLEN\s+(\d+)": "-length",
+                    r"^W\s+(\d+)": "-maxlength",
+                    r"^ACC\s+(\S+)": "-accession",
+                    r"^GA\s+(\d+)": "-threshold",
+                }
+                for line in model.split("\n"):
+                    for pattern, value_type in parse_regex.items():
+                        match = re.search(pattern, line)
+                        if match:
+                            parsed_cm_data[model_name][value_type] = match.group(1)
+                            continue
+
+    return parsed_cm_data
+
+def parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, Any]]:
+    """Parse cmsearch output
+    col 0 Target Name : This is the name of the target sequence or sequence
+    region that matched the query.
+    col 2 Query name : This is the name of the query sequence or model that
+    was used for the search.
+    col 3 Accession : This usually refers to a unique identifier for the
+    target sequence.
+    col 5 Query Start : The position where the match starts on the query
+    sequence.
+    col 6 Query End : The position where the match ends on the query
+    sequence.
+    col 7 Target Start : The position where the match starts on the
+    target sequence.
+    col 8 Target End : The position where the match ends on the target
+    sequence.
+    col 9 Strand : Indicates the orientation of the match on the target
+    sequence.
+            It could be + for the forward strand or - for the reverse strand.
+    col 14 Hit Score : The score assigned to this match. Higher scores
+    generally indicate better matches.
+    col 15 E-value : This is a statistical measure of the number of hits
+    one can expect to see when searching a database of a particular size.
+
+    Args:
+        region_tblout : Cmsearch output for the region name.
+        region_name : Region name.
+
+    Returns:
+        Formatted cmsearch output
+    """
+
+    with open(region_tblout, "r", encoding="utf-8") as rfam_tbl_in:
+        rfam_tbl_data = rfam_tbl_in.read()
+
+    results = []
+    for line in rfam_tbl_data.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        # Must start with region_name exactly
+        if not re.match(rf"^{re.escape(region_name)}\b", line):
+            continue
+        hit = line.split()
+        if len(hit) < 16:
+            continue
+        results.append(
+            {
+                "accession": hit[3],
+                "start": hit[7],
+                "end": hit[8],
+                "strand": 1 if hit[9] == "+" else -1,
+                "query_name": hit[2],
+                "score": hit[14],
+            }
+        )
+    return results
+
+
+def remove_rfam_overlap(  # pylint: disable=too-many-locals, too-many-branches
+    parsed_tbl_data: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Remove Rfam mdoels overlapping and with a lower score.
+
+    Args:
+        parsed_tbl_data : Cmsearch output
+
+    Returns:
+        Final Rfam models
+    """
+    excluded_structures = {}
+    chosen_structures: List[Dict[str, Any]] = []
+    for structure_x in parsed_tbl_data:
+        chosen_structure = structure_x
+        structure_x_start = int(structure_x["start"])
+        structure_x_end = int(structure_x["end"])
+        structure_x_score = float(structure_x["score"])
+        structure_x_accession = structure_x["accession"]
+        structure_x_string = (
+            f"{structure_x_start}:{structure_x_end}:{structure_x_score}:{structure_x_accession}"
+        )
+        for structure_y in parsed_tbl_data:
+            structure_y_start = int(structure_y["start"])
+            structure_y_end = int(structure_y["end"])
+            structure_y_score = float(structure_y["score"])
+            structure_y_accession = structure_y["accession"]
+            structure_y_string = (
+                f"{structure_y_start}:{structure_y_end}:{structure_y_score}:{structure_y_accession}"
+            )
+            if structure_y_string in excluded_structures:
+                continue
+            if structure_x_start <= structure_y_end and structure_x_end >= structure_y_start:
+                if structure_x_score < structure_y_score:
+                    chosen_structure = structure_y
+                    excluded_structures[structure_x_string] = 1
+                else:
+                    excluded_structures[structure_y_string] = 1
+        chosen_structures.append(chosen_structure)
+    return chosen_structures
+
+
+def filter_rfam_results(
+    unfiltered_tbl_data: List[Dict[str, Any]], cm_models: Dict[str, Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Filter Rfam models according to type and a set of thresholds.
+
+    Args:
+        unfiltered_tbl_data : Unfiltered Rfam output.
+        cm_models : Rfam models.
+
+    Returns:
+        filtered_results: List of filtered models
+    """
+    filtered_results: List[Dict[str, Any]] = []
+    thresholds = {
+        "LSU_rRNA_eukarya": 1700,
+        "SSU_rRNA_eukarya": 1600,
+        "5_8S_rRNA": 85,
+        "5S_rRNA": 75,
+    }
+    for structure in unfiltered_tbl_data:
+        query = structure["query_name"]
+        if query in ["LSU_rRNA_archaea", "LSU_rRNA_bacteria"]:
+            threshold = cm_models.get(str(query), {}).get("-threshold")
+        else:
+            threshold = thresholds.get(str(query), cm_models.get(str(query), {}).get("-threshold"))
+        if threshold is not None and float(structure["score"]) >= float(threshold):
+            filtered_results.append(structure)
+    return filtered_results
+
+
+def create_cmsearch_gtf(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
+    filtered_results: List[Dict[str, Any]],
+    cm_models: Dict[str, Dict[str, Any]],
+    seed_descriptions: Dict[str, Dict[str, Any]],
+    region_name: str,
+    output_gtf: Path,
+    output_bed: Path,
+) -> None:
+    """Convert RFam output per single region in gtf format
+
+    Args:
+        filtered_results : Filtered Rfam results without overlapping.
+        cm_models :  Rfam database.
+        seed_descriptions : Rfam seed file.
+        region_name : Slice name.
+        output_gtf : Rfam output file.
+        genome_file : Genome file.
+        rfam_dir : Output file.
+        rnafold_bin: RNAfold software path.
+    """
+    if not filtered_results:
+        return
+
+    biotype_type_mapping = {
+        r"snRNA; snoRNA; scaRNA": "scaRNA",
+        r"snRNA; snoRNA": "snoRNA",
+        r"snRNA": "snRNA",
+        r"rRNA;": "rRNA",
+        r"antisense;": "antisense",
+        r"antitoxin;": "antitoxin",
+        r"ribozyme;": "ribozyme",
+    }
+    biotype_name_mapping = {
+        r"Vault": "Vault_RNA",
+        r"Y_RNA": "Y_RNA",
+        r"^RNaseP": "RNase_P_RNA",
+        r"^RNase_M": "RNase_MRP_RNA",
+    }
+    with open(output_gtf, "w+", encoding="utf-8") as rfam_gtf_out:
+        with open(output_bed, "w+", encoding="utf-8") as rfam_bed_out:
+            gene_counter = 1
+            for structure in filtered_results:
+                query = structure["query_name"]
+                accession = structure["accession"]
+                if query in cm_models:
+                    model = cm_models[query]  # pylint: disable=unused-variable
+                    description = seed_descriptions.get(accession, {})
+                    rfam_type = description.get("type", "misc_RNA")
+                    domain = structure["query_name"]
+                    # padding = model["-length"]
+                    gtf_strand = structure["strand"]
+                    rnafold_strand = structure["strand"]
+                    if gtf_strand == 1:
+                        start = structure["start"]
+                        end = structure["end"]
+                        gtf_strand = "+"
+                    else:
+                        start = structure["end"]
+                        end = structure["start"]
+                        # score = structure["score"]
+                        gtf_strand = "-"
+                        rnafold_strand = -1
+
+                    biotype = "misc_RNA"
+                    # Flag to track if a match is found
+                    match_found = False
+                    # Check each pattern and update biotype if a match is found
+                    for pattern, mapped_biotype in biotype_type_mapping.items():
+                        if re.search(pattern, str(rfam_type)):
+                            biotype = mapped_biotype
+                            match_found = True
+                            break  # Break out of the loop once a match is found
+                    # If no match is found, check matches in biotype_name_mapping
+                    if not match_found:
+                        # Check each pattern and update biotype if a match is found
+                        for pattern, mapped_biotype in biotype_name_mapping.items():
+                            if re.search(pattern, domain):
+                                biotype = mapped_biotype
+                                match_found = True
+                                break  # Break out of the loop once a match is found
+
+                    transcript_string = (
+                        region_name
+                        + "\tRfam\ttranscript\t"
+                        + str(start)
+                        + "\t"
+                        + str(end)
+                        + "\t.\t"
+                        + gtf_strand
+                        + "\t.\t"
+                        + 'gene_id "'
+                        + str(gene_counter)
+                        + '"; transcript_id "'
+                        + str(gene_counter)
+                        + '"; biotype "'
+                        + biotype  # pylint: disable=undefined-loop-variable
+                        + '";\n'
+                    )
+                    exon_string = (
+                        region_name
+                        + "\tRfam\texon\t"
+                        + str(start)
+                        + "\t"
+                        + str(end)
+                        + "\t.\t"
+                        + gtf_strand
+                        + "\t.\t"
+                        + 'gene_id "'
+                        + str(gene_counter)
+                        + '"; transcript_id "'
+                        + str(gene_counter)
+                        + '"; exon_number "1"; biotype "'
+                        + biotype  # pylint: disable=undefined-loop-variable
+                        + '";\n'
+                    )
+                    bed_string = (
+                        region_name
+                        + "\t"
+                        + str(start)
+                        + "\t"
+                        + str(end)
+                        + "\t"
+                        + str(gene_counter)
+                        +" \t.\t"
+                        + gtf_strand
+                        + '\n'
+                    )
+
+                    rfam_gtf_out.write(transcript_string)
+                    rfam_gtf_out.write(exon_string)
+                    rfam_bed_out.write(bed_string)
+                    gene_counter += 1
+
+
+def orchestrate_cmsearch_gtf(input_file: Path, 
+                             output_gtf: Path,  
+                             region_name: str,
+                             rfam_seed_descriptions: Path,
+                             rfam_selected_models_file: Path,
+                             output_bed: Path):
+    
+    seed_descriptions = get_rfam_seed_descriptions(rfam_seed_descriptions)
+    cm_models = extract_rfam_metrics(rfam_selected_models_file)
+    initial_table_results = parse_rfam_tblout(input_file, region_name)
+    unique_table_results = remove_rfam_overlap(initial_table_results)
+    filtered_table_results = filter_rfam_results(unique_table_results, cm_models)
+
+    create_cmsearch_gtf(filtered_results=filtered_table_results,
+                        cm_models=cm_models,
+                        seed_descriptions=seed_descriptions,
+                        region_name=region_name,
+                        output_gtf=output_gtf,
+                        output_bed=output_bed
+                        )
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
     parser.add_argument("--input_file", help="Path to input to convert to gtf")
     parser.add_argument("--output_gtf", help="Path to output logfile recording status of each gtf")
-    parser.add_argument("--region_name", default = None, help= "Optional region name field")
+    parser.add_argument("--region_name", default = None, help="Optional region name field")
+    parser.add_argument("--rfam_seed_descriptions", default=None, help="path to rfam seed description file (only required for cmsearch)")
+    parser.add_argument("--rfam_selected_models_file", default=None, help="path to rfam selected model file (only required for cmsearch)")
+    parser.add_argument("--output_bed", default=None, help="path to output bedfile (only required for cmsearch)")
     parser.add_argument("--red", action='store_true', help="convert red output to gtf")
     parser.add_argument("--dust", action='store_true', help="convert red output to gtf")
     parser.add_argument("--repeatmasker", action='store_true', help="convert red output to gtf")
@@ -359,6 +722,7 @@ def parse_args():
     parser.add_argument("--cpg", action='store_true', help="convert cpg output to gtf")
     parser.add_argument("--eponine", action='store_true', help="convert eponine output to gtf")
     parser.add_argument("--trnascan", action = 'store_true', help="convert trnascan output to gtf")
+    parser.add_argument("--cmsearch", action='store_true', help="convert cmsearch/rfam output to gtf")
     args = parser.parse_args()
     return args
     
@@ -385,4 +749,11 @@ if __name__ == "__main__":
 
     if args.trnascan:
         create_trnascan_gtf(args.input_file, args.output_gtf, args.region_name)
-    
+
+    if args.cmsearch:
+        orchestrate_cmsearch_gtf(input_file = args.input_file, 
+                                 output_gtf = args.output_gtf,  
+                                 region_name = args.region_name,
+                                 rfam_seed_descriptions = args.rfam_seed_descriptions,
+                                 rfam_selected_models_file = args.rfam_selected_models_file,
+                                 output_bed = args.output_bed)

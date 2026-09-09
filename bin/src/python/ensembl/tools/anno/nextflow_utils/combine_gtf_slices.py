@@ -94,7 +94,7 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                             full_transcript_id_string = match_gene_type.group(3)
                             current_transcript_id = match_gene_type.group(4)
                             # Example key KS8000.rs1.re1000000.1
-                            gene_id_slice = input_file.name + "." + str(current_gene_id)
+                            gene_id_slice = input_file + "." + str(current_gene_id)
                             # Example key KS8000.rs1.re1000000.1.transcript.1
                             transcript_id_slice = gene_id_slice + "." + str(current_transcript_id)
                             # If there is no existing entry, the gene key will be added

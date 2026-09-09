@@ -8,12 +8,12 @@ process TRNASCAN {
     tuple val(coords), path(sliced_fastas)
  
     output:
-    tuple val(coords), path('*.trna'),          emit: trna
-    tuple val(coords), path('*.ss'),            emit: ss
-    path('tRNAscan_output/*.out'),              emit: filter_out
-    path('tRNAscan_output/*.log'),              emit: log
-    path('tRNAscan_output/*.ss'),               emit: ss
-    path('versions.yml'),                       emit: versions
+    tuple val(coords), path('*.trna'),                             emit: trna
+    tuple val(coords), path('*.ss'),                               emit: ss
+    tuple val(coords), path('tRNAscan_output/*.out'),              emit: filter_out
+    path('tRNAscan_output/*.log'),                                 emit: log
+    path('tRNAscan_output/*.ss'),                                  emit: euk_conf_ss
+    path('versions.yml'),                                          emit: versions
 
     script:
     """

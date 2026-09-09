@@ -13,7 +13,10 @@ process FIND_FASTA_INTERVALS {
     script:
     """
     python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/fasta_operations.py \
-    --splitFasta --genome_file ${genome_fasta} --min_seq_length 5000 --slice_size 1000000
+    --splitFasta \
+    --genome_file ${genome_fasta} \
+    --min_seq_length ${params.min_seq_length} \
+    --slice_size ${params.slice_size}
     """
 
     stub:

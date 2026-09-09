@@ -4,6 +4,7 @@ include { TRANSCRIPTOMICS_ANNOTATION } from './subworkflows/transcriptomic_annot
 include { SPLIT_FASTA } from './subworkflows/split_fasta.nf'
 include { REPEATS } from './subworkflows/repeats.nf'
 include { SIMPLE_FEATURE_ANNOTATION } from './subworkflows/simple_feature_annotation.nf'
+include { SMALL_NCRNA_ANNOTATION } from './subworkflows/small_ncRNA_annotation.nf'
 
 nextflow.enable.dsl = 2
 
@@ -39,7 +40,7 @@ def generate_short_reads_ch(short_read_dir) {
     tuple(file.baseName.split('\\.')[0], [file]) 
     }
 
-    // Mix together the short and long reads
+    // Mix together the single and paired end reads
     // Downstream we use the length of the list of fastqs in the channel to determine if we are handling se or pe data
     def short_read_ch = short_paired_read_ch.mix(short_single_read_ch)
     return short_read_ch
@@ -61,28 +62,33 @@ def generate_long_reads_ch(long_read_dir){
 
 workflow {
 
-
-    // ToDo work out where all this logic should live
-
+    // Set up reads channels for the transcriptomics pipeline
+    // First short reads:
     short_read_ch = channel.empty()
     if (params.short_read_dir != null){
         short_read_ch = generate_short_reads_ch(params.short_read_dir)
 
     }
 
+    // Then long reads:
     long_read_ch = channel.empty()
     if (params.long_read_dir != null){
         long_read_ch = generate_long_reads_ch(params.long_read_dir)
     }
 
+    // Initialise a fasta channel (containing the unsliced fasta)
     fasta_ch = channel.fromPath(params.fasta)
 
+    // Run transcriptomics pipeline:
+    TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
+
+    // All other pipelines take a sliced fasta as input. First slice up the fasta:
     sliced_fastas = SPLIT_FASTA(fasta_ch)
     sliced_fastas.view()
+
+    // All other pipelines:
     REPEATS(fasta_ch, sliced_fastas)
     SIMPLE_FEATURE_ANNOTATION(sliced_fastas)
-    // TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
+    SMALL_NCRNA_ANNOTATION(fasta_ch, sliced_fastas)
 
-
-    // TODO populate :)
 }

@@ -12,16 +12,17 @@ workflow SIMPLE_FEATURE_ANNOTATION {
     main:
 
     // tool channels
-    cpg_ch = channel.of('cpg').collect()
-    eponine_ch = channel.of('eponine').collect()
+    //cpg_ch = channel.of('cpg').collect()
+    cpg_ch =channel.of(tuple('cpg', file('optional1'), file('optional2'))).collect()
+    eponine_ch = channel.of(tuple('eponine'), file('optional1'), file('optional2')).collect()
 
     CPG(sliced_fasta)
     MAKE_CPG_GTF(cpg_ch, CPG.out.cpgs)
-    COMBINE_CPG_GTFS(cpg_ch, MAKE_CPG_GTF.out.gtf.collect())
+    COMBINE_CPG_GTFS(cpg_ch, MAKE_CPG_GTF.out.gtf.map{it -> it[1]}.collect())
 
     EPONINE(sliced_fasta)
     MAKE_EPONINE_GTF(eponine_ch, EPONINE.out.epo)
-    COMBINE_EPONINE_GTFS(eponine_ch, MAKE_EPONINE_GTF.out.gtf.collect())
+    COMBINE_EPONINE_GTFS(eponine_ch, MAKE_EPONINE_GTF.out.gtf.map{it -> it[1]}.collect())
 
     emit:
     cpg_gtf  = MAKE_CPG_GTF.out.gtf
