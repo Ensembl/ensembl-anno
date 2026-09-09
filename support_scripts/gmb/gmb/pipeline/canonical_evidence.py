@@ -109,6 +109,92 @@ _SOURCE_TO_CLASS = {
 }
 
 
+class EvidenceRoles:
+    """Resolve a named evidence source to its evidence role.
+
+    Selection logic must never test literal tool names. This resolver is the one
+    place that maps a source label to a role, combining the operator's configured
+    labels with the built-in defaults in ``_SOURCE_TO_CLASS`` for sources the
+    configuration does not mention.
+
+    Roles are the vocabulary already defined by this module:
+    ``backbone``, ``short_read_transcriptomic``, ``long_read_transcriptomic``,
+    ``protein_alignment`` (and ``protein_validation``, which is not a track).
+    """
+
+    __slots__ = ("backbone", "shortread", "longread", "protein_alignment")
+
+    def __init__(self, backbone_label=None, shortread_labels=None,
+                 longread_label=None, protein_alignment_labels=None):
+        def norm(v):
+            if v is None:
+                return set()
+            if isinstance(v, str):
+                v = [v]
+            return {str(x).strip().lower() for x in v if str(x).strip()}
+
+        self.backbone = norm(backbone_label)
+        self.shortread = norm(shortread_labels)
+        self.longread = norm(longread_label)
+        self.protein_alignment = norm(protein_alignment_labels)
+
+    @classmethod
+    def from_config(cls, scoring_config):
+        """Build from a ScoringConfig (or anything exposing the label fields)."""
+        return cls(
+            backbone_label=getattr(scoring_config, "backbone_label", None),
+            shortread_labels=getattr(scoring_config, "shortread_labels", None),
+            longread_label=getattr(scoring_config, "longread_label", None),
+            protein_alignment_labels=getattr(
+                scoring_config, "protein_alignment_labels", None),
+        )
+
+    def role_of(self, source):
+        """Evidence role for one source label, or EVIDENCE_CLASS_OTHER."""
+        name = str(source or "").strip().lower()
+        if not name:
+            return EVIDENCE_CLASS_OTHER
+        if name in self.backbone:
+            return EVIDENCE_CLASS_BACKBONE
+        if name in self.shortread:
+            return EVIDENCE_CLASS_SHORT_READ
+        if name in self.longread:
+            return EVIDENCE_CLASS_LONG_READ
+        if name in self.protein_alignment:
+            return EVIDENCE_CLASS_PROTEIN_ALIGNMENT
+        return _SOURCE_TO_CLASS.get(name, EVIDENCE_CLASS_OTHER)
+
+    def roles_of(self, sources):
+        return {self.role_of(s) for s in sources}
+
+    def is_backbone(self, source):
+        return self.role_of(source) == EVIDENCE_CLASS_BACKBONE
+
+    def is_shortread(self, source):
+        return self.role_of(source) == EVIDENCE_CLASS_SHORT_READ
+
+    def is_longread(self, source):
+        return self.role_of(source) == EVIDENCE_CLASS_LONG_READ
+
+    def is_assembled_transcript(self, source):
+        """Short- or long-read assembled transcript evidence."""
+        return self.role_of(source) in (
+            EVIDENCE_CLASS_SHORT_READ, EVIDENCE_CLASS_LONG_READ)
+
+    def known_roles(self):
+        """Roles this configuration can actually produce from its own labels."""
+        out = set()
+        if self.backbone:
+            out.add(EVIDENCE_CLASS_BACKBONE)
+        if self.shortread:
+            out.add(EVIDENCE_CLASS_SHORT_READ)
+        if self.longread:
+            out.add(EVIDENCE_CLASS_LONG_READ)
+        if self.protein_alignment:
+            out.add(EVIDENCE_CLASS_PROTEIN_ALIGNMENT)
+        return out
+
+
 def named_source_evidence_classes(
     evidence_sources: Optional[str], backbone_label: str = "Helixer"
 ) -> tuple[set, set]:

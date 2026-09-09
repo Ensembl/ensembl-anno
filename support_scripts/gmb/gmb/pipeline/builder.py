@@ -67,7 +67,7 @@ from gmb.pipeline.subset_utils import (
     subset_df_by_regions,
     write_subset_manifest,
 )
-from gmb.utils.intervals import same_strand_overlap_ids
+from gmb.utils.intervals import cds_span_compatible_ids, same_strand_overlap_ids
 from gmb.utils.logging import resolve_log_file, setup_logging
 
 
@@ -805,6 +805,48 @@ def main() -> None:
                 protein_support_sources[supported_tid].add(prot_label)
     stats["protein_supported_candidates"] = len(protein_supported_tids)
 
+    # CDS-span-compatible protein support: the stronger signal used when
+    # scoring.protein_support_mode == "cds_span_compatible". Computed here
+    # because it needs the ORF annotations produced above.
+    protein_cds_span_tids: set[str] = set()
+    if not prot_exons_filt.empty and not candidate_exons.empty:
+        cand_spans = {
+            tid: (str(g["Chromosome"].iloc[0]), str(g["Strand"].iloc[0]),
+                  int(g["Start"].min()), int(g["End"].max()))
+            for tid, g in candidate_exons.groupby("transcript_id")
+        }
+        prot_spans = {
+            tid: (str(g["Chromosome"].iloc[0]), str(g["Strand"].iloc[0]),
+                  int(g["Start"].min()), int(g["End"].max()))
+            for tid, g in prot_exons_filt.groupby("transcript_id")
+        }
+        with_cds = {tid for tid, ann in annotations.items() if ann and ann.get("cds")}
+        protein_cds_span_tids = cds_span_compatible_ids(cand_spans, prot_spans, with_cds)
+    stats["protein_cds_span_compatible_candidates"] = len(protein_cds_span_tids)
+
+    # Per-candidate CDS and canonical-intron status, for backbone intron rescue.
+    candidate_cds = {tid: (ann.get("cds") or []) for tid, ann in annotations.items()}
+    canonical_intron_tids: set[str] = set()
+    if getattr(config.scoring, "backbone_intron_rescue", False):
+        from gmb.pipeline.annotate_cds_utrs import check_splice_sites
+
+        for tid, grp in candidate_exons.groupby("transcript_id"):
+            chrom = str(grp["Chromosome"].iloc[0])
+            if chrom not in genome_dict:
+                continue
+            exons = sorted(zip(grp["Start"].astype(int), grp["End"].astype(int)))
+            if len(exons) < 2:
+                continue
+            splice = check_splice_sites(exons, str(grp["Strand"].iloc[0]), genome_dict[chrom])
+            if splice and all(x["class"] == "canonical" for x in splice):
+                canonical_intron_tids.add(tid)
+        stats["canonical_intron_candidates"] = len(canonical_intron_tids)
+    print(
+        f"  Protein support: {len(protein_supported_tids)} positional, "
+        f"{len(protein_cds_span_tids)} CDS-span compatible "
+        f"(mode={getattr(config.scoring, 'protein_support_mode', 'positional')})"
+    )
+
     print("Clustering loci...")
     pr_candidates = pr.PyRanges(candidate_exons)
     clustered = pr_candidates.cluster(slack=0, count=True)
@@ -830,6 +872,9 @@ def main() -> None:
             protein_supported_tids,
             genome_dict,
             protein_support_sources=protein_support_sources,
+            protein_cds_span_tids=protein_cds_span_tids,
+            candidate_cds=candidate_cds,
+            canonical_intron_tids=canonical_intron_tids,
         )
         if not genes:
             continue
@@ -947,6 +992,14 @@ def main() -> None:
                     "Parent": gene_id,
                     "Evidence": model.get("combined_evidence", ""),
                     "ProteinEvidence": model.get("protein_evidence", ""),
+                    "StructuralSupport": model.get("structural_support_sources", ""),
+                    "NStructuralSupport": model.get("n_structural_support_sources", ""),
+                    "BackboneShortreadAgreement": model.get(
+                        "backbone_shortread_agreement", ""),
+                    "ProteinSupportStrength": model.get("protein_support_strength", ""),
+                    "LongreadStructuralRole": model.get("longread_structural_role", ""),
+                    "BackboneIntronRescue": model.get("backbone_intron_rescue", ""),
+                    "SelectionReason": model.get("selection_reason", ""),
                     "gmb_score": model.get("score"),
                 }
 
@@ -1191,6 +1244,9 @@ def main() -> None:
             protein_supported_tids,
             genome_dict,
             protein_support_sources=protein_support_sources,
+            protein_cds_span_tids=protein_cds_span_tids,
+            candidate_cds=candidate_cds,
+            canonical_intron_tids=canonical_intron_tids,
         )
         if genes:
             for g in genes:
@@ -1242,7 +1298,13 @@ def main() -> None:
             "transcript_id": tid,
             "evidence_sources": evidence_sources,
             "protein_alignment_sources": protein_alignment_sources,
-            "has_protein_alignment_support": bool(protein_alignment_sources),
+            "protein_support_strength": m.get("ProteinSupportStrength", ""),
+            "structural_support_sources": m.get("StructuralSupport", ""),
+            "n_structural_support_sources": m.get("NStructuralSupport", ""),
+            "backbone_shortread_agreement": m.get("BackboneShortreadAgreement", ""),
+            "longread_structural_role": m.get("LongreadStructuralRole", ""),
+            "backbone_intron_rescue": m.get("BackboneIntronRescue", ""),
+            "selection_reason": m.get("SelectionReason", ""),
             "exon_count": len(exon_rows),
             "cds_bp": cds_bp,
             "utr_5p_bp": utr5_bp,

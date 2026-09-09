@@ -127,6 +127,49 @@ class ScoringConfig:
     # not necessarily "Helixer".
     backbone_label: str = "Helixer"
 
+    # ---- evidence-aware ranking (all default to legacy behaviour) ----
+    # Rank candidates first by how many *independent* structural sources
+    # produced the identical intron chain, before falling back to the numeric
+    # score. Corroboration between an ab initio backbone and an assembled
+    # transcript is far stronger evidence than either alone; the legacy
+    # multi_source_bonus only nudges the score and is routinely outweighed by
+    # raw source weights.
+    structural_corroboration: bool = False
+    # Which protein-alignment signal is allowed to act as the strong
+    # support/retention signal:
+    #   "positional"          -- any same-strand overlap (legacy)
+    #   "cds_span_compatible" -- the alignment must fall inside the candidate's
+    #                            transcript span and the candidate must have a CDS
+    # Positional support is retained for attribution in both modes.
+    protein_support_mode: str = "positional"
+    # Prevent long-read-derived candidates from taking primary structural
+    # priority at a locus that already has a credible multi-exon candidate from
+    # another source. Long-read models stay eligible where they are the only
+    # candidate, or where every credible candidate is single-exon.
+    longread_structural_guard: bool = False
+    # Backbone intron rescue. Ab initio backbones systematically under-call
+    # introns, emitting one long coding exon where the gene is spliced. Where an
+    # assembled transcript at the same locus shows a spliced CDS with canonical
+    # introns that recovers MORE coding sequence than the collapsed backbone
+    # model and contains most of it, the assembly is the direct observation and
+    # takes structural priority; it is also exempt from the single-source protein
+    # retention gate, since the backbone independently agrees the locus is coding.
+    backbone_intron_rescue: bool = False
+
+    # ---- evidence roles ----
+    # Selection logic operates on roles, never on literal tool names. These
+    # labels map the tracks actually loaded onto the roles in
+    # gmb.pipeline.canonical_evidence; unlisted sources fall back to that
+    # module's built-in mapping.
+    #   backbone_label          -> backbone
+    #   shortread_labels        -> short_read_transcriptomic
+    #   longread_label          -> long_read_transcriptomic
+    #   protein_alignment_labels-> protein_alignment
+    longread_label: str = "Minimap2"
+    shortread_labels: list = field(default_factory=lambda: ["Scallop", "StringTie"])
+    protein_alignment_labels: list = field(
+        default_factory=lambda: ["OrthoDB", "GenBlast", "UniProt"])
+
 
 @dataclass
 class ProteinValidationConfig:
@@ -670,6 +713,73 @@ def _update_dataclass(dc, d: dict, path_prefix: str = ""):
     return dc
 
 
+def validate_selection_policy(cfg) -> list:
+    """Check the selection policy for contradictory or inert configuration.
+
+    Returns a list of warning strings; raises ValueError only for genuinely
+    ambiguous configuration (a source assigned to two roles). Configurations
+    that are merely ineffective warn rather than fail, so a run is never blocked
+    by an evidence track simply being absent.
+    """
+    scfg = cfg.scoring
+    warnings_out = []
+
+    def as_set(v):
+        if v is None:
+            return set()
+        if isinstance(v, str):
+            v = [v]
+        return {str(x).strip().lower() for x in v if str(x).strip()}
+
+    roles = {
+        "backbone_label": as_set(getattr(scfg, "backbone_label", None)),
+        "shortread_labels": as_set(getattr(scfg, "shortread_labels", None)),
+        "longread_label": as_set(getattr(scfg, "longread_label", None)),
+        "protein_alignment_labels": as_set(
+            getattr(scfg, "protein_alignment_labels", None)),
+    }
+    # A source in two roles is ambiguous: selection logic would treat the same
+    # track as both, so fail rather than pick one silently.
+    names = list(roles)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            clash = roles[a] & roles[b]
+            if clash:
+                raise ValueError(
+                    f"Evidence source(s) {sorted(clash)} assigned to two roles "
+                    f"({a} and {b}). Each source must have exactly one role."
+                )
+
+    if getattr(scfg, "backbone_intron_rescue", False):
+        if not roles["backbone_label"]:
+            warnings_out.append(
+                "scoring.backbone_intron_rescue is enabled but no backbone_label "
+                "is configured; the rule can never fire.")
+        if not roles["shortread_labels"]:
+            warnings_out.append(
+                "scoring.backbone_intron_rescue is enabled but no shortread_labels "
+                "are configured; the rule can never fire.")
+    if getattr(scfg, "longread_structural_guard", False) and not roles["longread_label"]:
+        warnings_out.append(
+            "scoring.longread_structural_guard is enabled but no longread_label is "
+            "configured; the guard can never fire.")
+    if getattr(scfg, "structural_corroboration", False):
+        n_structural = sum(bool(roles[k]) for k in
+                           ("backbone_label", "shortread_labels", "longread_label"))
+        if n_structural < 2:
+            warnings_out.append(
+                "scoring.structural_corroboration is enabled but fewer than two "
+                "structural evidence roles are configured; no corroboration is "
+                "possible and ranking falls back to the numeric score.")
+    mode = getattr(scfg, "protein_support_mode", "positional")
+    if mode not in ("positional", "cds_span_compatible"):
+        raise ValueError(
+            f"scoring.protein_support_mode must be 'positional' or "
+            f"'cds_span_compatible', got {mode!r}."
+        )
+    return warnings_out
+
+
 def _validate_dataclass(dc):
     """Recursively run __post_init__ validation on all dataclasses after manual updates."""
     if hasattr(dc, "__post_init__"):
@@ -756,6 +866,8 @@ def load_config(
         _update_dataclass(cfg, data)
 
     _validate_dataclass(cfg)
+    for msg in validate_selection_policy(cfg):
+        warnings.warn(msg, stacklevel=2)
     return cfg
 
 

@@ -74,6 +74,66 @@ def same_strand_overlap_ids(
     return hits
 
 
+def cds_span_compatible_ids(
+    candidate_spans: dict,
+    protein_spans: dict,
+    candidates_with_cds: set,
+) -> set:
+    """Candidates whose protein support is **CDS-span compatible**.
+
+    A candidate qualifies when at least one same-strand protein alignment lies
+    entirely inside the candidate's transcript span, and the candidate itself
+    has a coding sequence.  This is a stronger statement than bare positional
+    overlap: the aligned protein is contained by, rather than merely touching,
+    the model it is being counted as evidence for.
+
+    Parameters
+    ----------
+    candidate_spans : dict
+        ``{id: (chrom, strand, start, end)}`` for candidate transcripts.
+    protein_spans : dict
+        ``{id: (chrom, strand, start, end)}`` for filtered protein alignments.
+    candidates_with_cds : set
+        Ids of candidates that have a CDS; candidates outside this set can never
+        qualify, since there is no coding structure for the alignment to support.
+
+    Returns
+    -------
+    set
+        Ids from *candidate_spans* meeting the criterion.
+    """
+    import bisect
+    from collections import defaultdict
+
+    by_cs = defaultdict(list)
+    for chrom, strand, start, end in protein_spans.values():
+        if strand in VALID_STRANDS:
+            by_cs[(chrom, strand)].append((start, end))
+
+    starts_index = {}
+    for key, spans in by_cs.items():
+        spans.sort()
+        starts_index[key] = ([s for s, _e in spans], spans)
+
+    hits = set()
+    for cid, (chrom, strand, c_start, c_end) in candidate_spans.items():
+        if cid not in candidates_with_cds or strand not in VALID_STRANDS:
+            continue
+        idx = starts_index.get((chrom, strand))
+        if idx is None:
+            continue
+        starts, spans = idx
+        # Any protein alignment contained in [c_start, c_end] must start at or
+        # after c_start; scan forward until its start passes c_end.
+        i = bisect.bisect_left(starts, c_start)
+        while i < len(spans) and spans[i][0] <= c_end:
+            if spans[i][1] <= c_end:
+                hits.add(cid)
+                break
+            i += 1
+    return hits
+
+
 def merge_intervals(intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """Merge overlapping intervals into a disjoint set."""
     if not intervals:
