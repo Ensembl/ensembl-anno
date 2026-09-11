@@ -5,6 +5,7 @@ include { SPLIT_FASTA } from './subworkflows/split_fasta.nf'
 include { REPEATS } from './subworkflows/repeats.nf'
 include { SIMPLE_FEATURE_ANNOTATION } from './subworkflows/simple_feature_annotation.nf'
 include { SMALL_NCRNA_ANNOTATION } from './subworkflows/small_ncRNA_annotation.nf'
+include { PROTEINS } from './subworkflows/proteins.nf'
 
 nextflow.enable.dsl = 2
 
@@ -80,15 +81,28 @@ workflow {
     fasta_ch = channel.fromPath(params.fasta)
 
     // Run transcriptomics pipeline:
-    TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
+    // TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
 
-    // All other pipelines take a sliced fasta as input. First slice up the fasta:
+    // Several pipelines take a sliced fasta as input. First slice up the fasta:
     sliced_fastas = SPLIT_FASTA(fasta_ch)
     sliced_fastas.view()
 
-    // All other pipelines:
+    // All pipelines that require a sliced fasta
     REPEATS(fasta_ch, sliced_fastas)
-    SIMPLE_FEATURE_ANNOTATION(sliced_fastas)
-    SMALL_NCRNA_ANNOTATION(fasta_ch, sliced_fastas)
+    // SIMPLE_FEATURE_ANNOTATION(sliced_fastas)
+    // SMALL_NCRNA_ANNOTATION(fasta_ch, sliced_fastas)
+
+    orthodb_ch = channel.fromPath(params.orthodb).map{
+        it -> tuple('orthodb', it)
+    }
+    uniprot_ch = channel.fromPath(params.uniprot).map{
+        it -> tuple('uniprot', it)
+    }
+    protein_db_ch = orthodb_ch.concat(uniprot_ch)
+
+
+    // Finally, the protein pipeline
+    PROTEINS(REPEATS.out.red_masked_genome, protein_db_ch)
+
 
 }

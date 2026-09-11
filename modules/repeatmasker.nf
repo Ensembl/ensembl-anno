@@ -31,7 +31,8 @@ process REPEATMASKER {
 
     stub:
     """
-    touch coords.out
+    mkdir repeatmasker_out
+    touch repeatmasker_out/coords.out
     touch versions.yml
     """
 }

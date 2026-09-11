@@ -40,6 +40,8 @@ workflow REPEATS {
 
     emit:
     red_gtf  = MAKE_RED_GTF.out.gtf
+    red_masked_genome = RED.out.red_masked_genome_files
+    
     dust_gtf = COMBINE_DUST_GTFS.out.gtf
     trf_gtf = COMBINE_TRF_GTFS.out.gtf
     repeatmasker_gtf = COMBINE_REPEATMASKER_GTFS.out.gtf

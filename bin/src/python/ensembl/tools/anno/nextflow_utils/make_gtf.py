@@ -706,6 +706,24 @@ def orchestrate_cmsearch_gtf(input_file: Path,
                         output_bed=output_bed
                         )
 
+def _convert_genblast_gff_to_gtf(gff_file: Path, gtf_file: Path) -> str:
+    """
+    Convert the content of gtf file in gff format
+    gff_file: Path for the gff file
+    """
+    gtf_string = ""
+    with open(gff_file, "r", encoding="utf8") as file_in:
+        for line in file_in:
+            results = line.split()
+            if len(results) == 9:
+                results[2] = "exon" if results[2] == "coding_exon" else results[2]
+                attributes = _set_genblast_attributes(str(results[8]), str(results[2]))
+                results[8] = attributes
+                converted_line = "\t".join(results)
+                gtf_string += converted_line + "\n"
+
+    with open(gtf_file, "w", encoding="utf8") as file_out:
+        file_out.write(gtf_string)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
@@ -723,6 +741,7 @@ def parse_args():
     parser.add_argument("--eponine", action='store_true', help="convert eponine output to gtf")
     parser.add_argument("--trnascan", action = 'store_true', help="convert trnascan output to gtf")
     parser.add_argument("--cmsearch", action='store_true', help="convert cmsearch/rfam output to gtf")
+    parser.add_argument("--genblast", action='store_true', help="convert genblast gff to gtf")
     args = parser.parse_args()
     return args
     
@@ -757,3 +776,7 @@ if __name__ == "__main__":
                                  rfam_seed_descriptions = args.rfam_seed_descriptions,
                                  rfam_selected_models_file = args.rfam_selected_models_file,
                                  output_bed = args.output_bed)
+
+    if args.genblast:
+        create_genblast_gtf(gff_file =args.input_file, 
+                            gtf_file = args.output_gtf)

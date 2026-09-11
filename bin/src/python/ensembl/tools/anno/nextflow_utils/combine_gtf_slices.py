@@ -4,6 +4,14 @@ from typing import List
 from pathlib import Path
 import re
 
+
+def generate_genblast_gtf(sliced_gtf_list, output_gtf):
+    with open(output_gtf, "w+", encoding="utf8") as file_out:
+        for sliced_gtf in sliced_gtf_list:
+            with open(sliced_gtf, "r") as file_in:
+                gtf_string = file_in.read()
+                file_out.write(gtf_string)
+
 def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statements, too-many-locals
     output_gtf: Path,
     sliced_gtf_list: List,
@@ -31,6 +39,9 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
     unique_ids : If True assign unique ids for the same
     feature type.
     """
+    if tool == 'genblast':
+        generate_genblast_gtf(sliced_gtf_list, output_gtf)
+        return 'genblast gtfs combined'
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
     new_id_prefix = ""
     if tool == "repeatmasker":
@@ -185,6 +196,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+
     slice_output_to_gtf(output_gtf = args.output_gtf, 
                         sliced_gtf_list=args.sliced_gtfs,
                         tool = args.tool)
