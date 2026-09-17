@@ -2,7 +2,9 @@ import argparse
 from pathlib import Path
 from os import PathLike
 import re
-from typing import Union, Dict, List, Any
+from typing import Union, Dict, List, Any, cast
+import numpy as np
+from numpy.typing import NDArray
 
 def create_red_gtf(repeat_coords_file: Path, output_file: Path):
     """
@@ -706,7 +708,7 @@ def orchestrate_cmsearch_gtf(input_file: Path,
                         output_bed=output_bed
                         )
 
-def _convert_genblast_gff_to_gtf(gff_file: Path, gtf_file: Path) -> str:
+def _convert_genblast_gff_to_gtf(gff_file: Path) -> str:
     """
     Convert the content of gtf file in gff format
     gff_file: Path for the gff file
@@ -721,9 +723,151 @@ def _convert_genblast_gff_to_gtf(gff_file: Path, gtf_file: Path) -> str:
                 results[8] = attributes
                 converted_line = "\t".join(results)
                 gtf_string += converted_line + "\n"
+    return gtf_string
+
+
+def set_genblast_attributes(attributes: str, feature_type: str) -> str:
+    """
+    Given the list of attributes in the genblast output,
+    define the new attributes for the gtf file.
+    attributes: GenBlast attribute list
+    feature_type: transcript or exon
+    Example genBlast output #pylint: disable=line-too-long, trailing-whitespace
+    1       genBlastG       transcript      131128674       131137049       252.729 -       .       ID=259447-R1-1-A1;Name=259447;PID=84.65;Coverage=94.22;Note=PID:84.65-Cover:94.22
+    1       genBlastG       coding_exon     131137031       131137049       .       -       .       ID=259447-R1-1-A1-E1;Parent=259447-R1-1-A1
+    1       genBlastG       coding_exon     131136260       131136333       .       -       .       ID=259447-R1-1-A1-E2;Parent=259447-R1-1-A1
+    1       genBlastG       coding_exon     131128674       131130245       .       -       .       ID=259447-R1-1-A1-E3;Parent=259447-R1-1-A1
+    """
+    converted_attributes = ""
+    split_attributes = attributes.split(";")
+    if feature_type == "transcript":
+        match = re.search(r"Name\=(.+)$", split_attributes[1])
+        assert match
+        name = match.group(1)
+        converted_attributes = f'gene_id "{name}"; transcript_id "{name}";'
+    elif feature_type == "exon":
+        match = re.search(r"\-E(\d+);Parent\=(.+)\-R\d+\-\d+\-", attributes)
+        assert match
+        exon_rank = match.group(1)
+        name = match.group(2)
+        converted_attributes = f'gene_id "{name}"; transcript_id "{name}"; exon_number "{exon_rank}";'  # pylint:disable=line-too-long
+
+    return converted_attributes
+
+def create_genblast_gtf(gff_file: Path, gtf_file: Path) -> str:
+    """
+    Convert the content of gtf file in gff format
+    gff_file: Path for the gff file
+    """
+    gtf_string = ""
+    with open(gff_file, "r", encoding="utf8") as file_in:
+        for line in file_in:
+            results = line.split()
+            if len(results) == 9:
+                results[2] = "exon" if results[2] == "coding_exon" else results[2]
+                attributes = set_genblast_attributes(str(results[8]), str(results[2]))
+                results[8] = attributes
+                converted_line = "\t".join(results)
+                gtf_string += converted_line + "\n"
 
     with open(gtf_file, "w", encoding="utf8") as file_out:
         file_out.write(gtf_string)
+
+
+def create_miniprot_gtf(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    input_file: Union[str, Path],
+    output_file: Union[str, Path],
+) -> None:
+    """Convert Miniprot GFF output into GTF format."""
+
+    input_file = Path(input_file)
+    output_file = Path(output_file)
+
+    with open(input_file, "r", encoding="utf-8") as input_handle:
+        blocks = input_handle.read().split("\n#")
+
+    with open(output_file, "w", encoding="utf-8") as file_out:
+        for block in blocks:
+            nblock_lines: List[str] = [line for line in block.split("\n") if line]
+
+            if not nblock_lines:
+                continue
+
+            header_line = nblock_lines[0]
+
+            nblock_list: List[List[str]] = [line.split("\t") for line in nblock_lines[1:]]
+
+            nblock: NDArray[np.object_] = cast(
+                NDArray[np.object_],
+                np.array(
+                    nblock_list,
+                    dtype=object,
+                ),
+            )
+
+            if "fs:i:" in header_line:
+                match_fs = re.search(
+                    r"fs:i:(\d+)",
+                    header_line,
+                )
+                if match_fs and int(match_fs.group(1)) != 0:
+                    continue
+
+            if "st:i:" in header_line:
+                match_st = re.search(
+                    r"st:i:(\d+)",
+                    header_line,
+                )
+                if match_st and int(match_st.group(1)) != 0:
+                    continue
+
+            if nblock.shape[0] == 0:
+                continue
+
+            nrows = nblock.shape[0]
+
+            nblock[0, 2] = nblock[0, 2].replace(
+                "mRNA",
+                "transcript",
+            )
+
+            nblock[1:nrows, 2] = [value.replace("CDS", "exon") for value in nblock[1:nrows, 2]]
+
+            target_info = [
+                value.replace("Target=", "")
+                for value in re.split(
+                    r";|\s",
+                    str(nblock[0, 8]),
+                )
+                if "Target" in value
+            ][0]
+
+            gene_transcript = f'gene_id "{target_info}"; ' f'transcript_id "{target_info}";'
+
+            for index in range(nrows):
+                if index == 0:
+                    nblock[index, 8] = gene_transcript
+                else:
+                    nblock[index, 8] = f"{gene_transcript} " f'exon_number "{index}";'
+
+            if nblock[nrows - 1, 2] == "stop_codon":
+                if nblock[0, 6] == "-":
+                    nblock[nrows - 2, 3] = nblock[
+                        nrows - 1,
+                        3,
+                    ]
+                    nblock = nblock[:-1]
+
+                if nblock[0, 6] == "+":
+                    nblock[nrows - 2, 4] = nblock[
+                        nrows - 1,
+                        4,
+                    ]
+                    nblock = nblock[:-1]
+
+            for element in nblock:
+                file_out.write("%s\n" % "\t".join(element))
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
@@ -742,6 +886,8 @@ def parse_args():
     parser.add_argument("--trnascan", action = 'store_true', help="convert trnascan output to gtf")
     parser.add_argument("--cmsearch", action='store_true', help="convert cmsearch/rfam output to gtf")
     parser.add_argument("--genblast", action='store_true', help="convert genblast gff to gtf")
+    parser.add_argument("--miniprot", action='store_true', help="convert miniprot gff to gtf")
+
     args = parser.parse_args()
     return args
     
@@ -780,3 +926,7 @@ if __name__ == "__main__":
     if args.genblast:
         create_genblast_gtf(gff_file =args.input_file, 
                             gtf_file = args.output_gtf)
+
+    if args.miniprot:
+        create_miniprot_gtf(input_file =args.input_file, 
+                            output_file = args.output_gtf)

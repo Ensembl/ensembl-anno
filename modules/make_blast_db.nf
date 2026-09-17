@@ -11,7 +11,7 @@ process MAKE_BLAST_DB {
     output:
     tuple val(masked_fasta.name), path("fasta_db"),             emit: fasta_db          
     path "versions.yml",         emit: versions
-    path "fasta_db/${masked_fasta.name}.ndb" //only purpose of this is to ensure makeblastdb actually runs
+    //path "fasta_db/${masked_fasta.name}.ndb" //only purpose of this is to ensure makeblastdb actually runs
 
     script:
     """

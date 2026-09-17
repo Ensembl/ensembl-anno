@@ -81,16 +81,16 @@ workflow {
     fasta_ch = channel.fromPath(params.fasta)
 
     // Run transcriptomics pipeline:
-    // TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
+    //TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
 
     // Several pipelines take a sliced fasta as input. First slice up the fasta:
     sliced_fastas = SPLIT_FASTA(fasta_ch)
-    sliced_fastas.view()
+    //sliced_fastas.view()
 
     // All pipelines that require a sliced fasta
     REPEATS(fasta_ch, sliced_fastas)
-    // SIMPLE_FEATURE_ANNOTATION(sliced_fastas)
-    // SMALL_NCRNA_ANNOTATION(fasta_ch, sliced_fastas)
+    //SIMPLE_FEATURE_ANNOTATION(sliced_fastas)
+    //SMALL_NCRNA_ANNOTATION(fasta_ch, sliced_fastas)
 
     orthodb_ch = channel.fromPath(params.orthodb).map{
         it -> tuple('orthodb', it)
@@ -100,9 +100,10 @@ workflow {
     }
     protein_db_ch = orthodb_ch.concat(uniprot_ch)
 
+    genblast_alignscore = channel.fromPath(params.genblast_alignscore)
 
     // Finally, the protein pipeline
-    PROTEINS(REPEATS.out.red_masked_genome, protein_db_ch)
+    PROTEINS(REPEATS.out.red_masked_genome, protein_db_ch, genblast_alignscore)
 
 
 }

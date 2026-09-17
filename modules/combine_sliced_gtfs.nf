@@ -19,6 +19,7 @@ process COMBINE_SLICED_GTFS {
     --output_gtf ${tool}/${tool}_annotation.gtf \
     --tool ${tool}
 
+
     """
 
     stub:

@@ -7,7 +7,7 @@ import os
 
 
 
-def split_protein_file(protein_dataset: Path,  protein_source,  batch_size: int = 20) -> List:
+def split_protein_file(protein_dataset: Path,  protein_source,  batch_size: int = 200) -> List:
     """
     The protein dataset file is split by a number of sequence
     equals to the batch_size
