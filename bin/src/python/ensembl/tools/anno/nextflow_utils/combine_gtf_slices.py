@@ -42,7 +42,7 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
     """
     if "genblast" in tool or "miniprot" in tool:
         generate_protein_gtf(sliced_gtf_list, output_gtf)
-        return "genblast gtfs combined"
+        return None
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
     new_id_prefix = ""
     if tool == "repeatmasker":
