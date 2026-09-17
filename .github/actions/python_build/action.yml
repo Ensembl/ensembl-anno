@@ -41,6 +41,6 @@ runs:
         if [ -n "${{ inputs.tags }}" ]; then
           pip install ".${{ inputs.tags }}"
         else
-          pip install bin
+          pip install .
         fi
       shell: bash

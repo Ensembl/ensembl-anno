@@ -73,31 +73,14 @@ docs = [
 homepage = "https://www.ensembl.org"
 repository = "https://github.com/Ensembl/ensembl-anno"
 
-# The following would provide a command line executable called `sample`
-# which executes the function `main` from this package when invoked.
-[project.scripts]  # Optional
-#ensembl-anno = "ensembl.anno.ensembl_anno:main"
-run_repeatmasker = "ensembl.tools.anno.repeat_annotation.repeatmasker:main"
-run_trf = "ensembl.tools.anno.repeat_annotation.trf:main"
-run_dust = "ensembl.tools.anno.repeat_annotation.dust:main"
-run_red = "ensembl.tools.anno.repeat_annotation.red:main"
-run_eponine = "ensembl.tools.anno.simple_feature_annotation.eponine:main"
-run_cpg = "ensembl.tools.anno.simple_feature_annotation.cpg:main"
-run_trnascan = "ensembl.tools.anno.snc_rna_annotation.trnascan:main"
-run_cmsearch = "ensembl.tools.anno.snc_rna_annotation.cmsearch:main"
-run_genblast = "ensembl.tools.anno.protein_annotation.genblast:main"
-run_miniprot = "ensembl.tools.anno.protein_annotation.miniprot:main"
-run_star = "ensembl.tools.anno.transcriptomic_annotation.star:main"
-run_minimap2 = "ensembl.tools.anno.transcriptomic_annotation.minimap:main"
-run_stringtie = "ensembl.tools.anno.transcriptomic_annotation.stringtie:main"
-run_scallop = "ensembl.tools.anno.transcriptomic_annotation.scallop:main"
+
 # This is configuration specific to the `setuptools` build backend.
 # If you are using a different build backend, you will need to change this.
 [tool.setuptools]
 # If there are data files included in your packages that need to be
 # installed, specify them here.
 #package-data = {"ensembl-anno" = ["data"]}
-package-dir = {"" = "src/python"}
+package-dir = {"" = "bin/src/python"}
 
 [build-system]
 build-backend = "setuptools.build_meta"
@@ -107,7 +90,7 @@ requires = ["setuptools", "setuptools-scm", "wheel"]
 
 [tool.setuptools.packages.find]
 #where = ["src/python/ensembl/tools/anno"]  # list of folders that contain the packages (["."] by default)
-where = ["src/python"]
+where = ["bin/src/python"]
 
 [tool.black]
 line-length = 110
