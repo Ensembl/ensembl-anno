@@ -706,7 +706,6 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     # Repeat analyses
     #################################
     if analysis_flags["run_masking"]:
-
         if red_path is None:
             raise ValueError("--red_path is required when masking is enabled")
         logger.info("Running masking via Red")
@@ -780,7 +779,6 @@ def main() -> None:  # pylint: disable=too-many-locals, too-many-branches, too-m
     #################################
     if analysis_flags["run_cmsearch"]:
         if rfam_accessions_file is None:
-
             raise ValueError("--rfam_accessions_file is required when cmsearch analysis is enabled")
         logger.info("Annotating sncRNAs")
         logger.info("run_cmsearch genome file %s", genome_file)

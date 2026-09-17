@@ -275,9 +275,9 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                                         transcript_id_count_gene_id[gene_id_slice]
                                     )  # pylint:disable=line-too-long
                                 )
-                                gene_transcript_id_collection[transcript_id_slice] = (
-                                    new_transcript_id  # pylint:disable=line-too-long
-                                )
+                                gene_transcript_id_collection[
+                                    transcript_id_slice
+                                ] = new_transcript_id  # pylint:disable=line-too-long
                                 transcript_id_count_gene_id[gene_id_slice] += 1
                             else:
                                 # If a transcript of the same set is already present,

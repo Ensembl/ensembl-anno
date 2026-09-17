@@ -154,7 +154,6 @@ def print_subsample(fastq_file, output_file, random_indices, compressed):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--fastq_file", help="Path to the fastq file", required=True)
     parser.add_argument("--fastq_file_pair", help="Path to the paired file if it exists", required=False)
