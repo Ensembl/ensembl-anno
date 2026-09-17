@@ -34,28 +34,28 @@ jobs:
       - name: Install package and documentation dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[docs]"
+          pip install -e ".[bin/docs]"
       - name: Generate analysis documentation
         run: |
-            python docs/generate_analysis_rst.py
+            python bin/docs/generate_analysis_rst.py
       - name: Build HTML documentation
         run: |
           sphinx-build \
             -b html \
-            docs/source \
-            docs/build/html
+            bin/docs/source \
+            bin/docs/build/html
 
       - name: Check links
         run: |
           sphinx-build \
             -b linkcheck \
-            docs/source \
-            docs/build/linkcheck
+            bin/docs/source \
+            bin/docs/build/linkcheck
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: docs/build/html
+          path: bin/docs/build/html
 
 
       - name: Publish documentation
@@ -64,5 +64,5 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: docs/build/html
+          publish_dir: bin/docs/build/html
           force_orphan: true  
