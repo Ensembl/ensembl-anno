@@ -16,6 +16,7 @@ workflow PROTEINS {
     masked_fasta
     proteins
     genblast_alignscore
+    protein_params
 
     main:
 
@@ -28,7 +29,10 @@ workflow PROTEINS {
         files.collect { file -> tuple(val, file.baseName, file) }
     }.take(10)
     
-    GENBLAST(MAKE_BLAST_DB.out.fasta_db.collect(), split_proteins_with_ids, genblast_alignscore.collect())
+    GENBLAST(MAKE_BLAST_DB.out.fasta_db.collect(), 
+             split_proteins_with_ids, 
+             genblast_alignscore.collect(),
+             protein_params)
     
     genblast_ch = channel.of(tuple('genblast', file('optional1'), file('optional2'))).collect()
     MAKE_GENBLAST_GTF(genblast_ch, GENBLAST.out.gff)
@@ -58,24 +62,6 @@ workflow PROTEINS {
 
     MAKE_MINIPROT_GTF(miniprot_ch, MINIPROT.out.gff)
 
-    // miniprot_branched_gtf_ch = MAKE_MINIPROT_GTF.out.gtf.branch{
-    //     it ->
-    //         orthodb: it[0].startsWith('orthodb')
-    //             return it[1]
-
-    //         uniprot: it[0].startsWith('uniprot')
-    //             return it[1]
-
-    // }
-    // miniprot_orthodb_ch = channel.of(tuple('miniprot_orthodb', file('optional1'), file('optional2'))).collect()
-    // miniprot_uniprot_ch = channel.of(tuple('miniprot_uniprot', file('optional1'), file('optional2'))).collect()
-
-    // COMBINE_ORTHODB_MINIPROT_GTFS(miniprot_orthodb_ch, miniprot_branched_gtf_ch.orthodb.collect())
-    // COMBINE_UNIPROT_MINIPROT_GTFS(miniprot_uniprot_ch, miniprot_branched_gtf_ch.uniprot.collect())
-
-    // miniprot_annot_gtf = COMBINE_ORTHODB_MINIPROT_GTFS.out.gtf.concat(
-    //     COMBINE_UNIPROT_MINIPROT_GTFS.out.gtf
-    // )
     emit:
     genblast_gtf  = genblast_annot_gtf
     miniprot_gtf = MAKE_MINIPROT_GTF.out.gtf

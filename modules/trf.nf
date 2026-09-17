@@ -6,6 +6,7 @@ process TRF {
 
     input:
     tuple val(coords), path(sliced_fasta)
+    val(repeats_params)
  
     output:
     tuple val(coords), path('*.dat'),          emit: trf_repeats
@@ -14,13 +15,13 @@ process TRF {
     script:
     """
     bash -c 'trf ${sliced_fasta} \
-        ${params.match_score} \
-        ${params.mismatch_score} \
-        ${params.delta} \
-        ${params.pm} \
-        ${params.pi} \
-        ${params.minscore} \
-        ${params.maxperiod} \
+        ${repeats_params.match_score} \
+        ${repeats_params.mismatch_score} \
+        ${repeats_params.delta} \
+        ${repeats_params.pm} \
+        ${repeats_params.pi} \
+        ${repeats_params.minscore} \
+        ${repeats_params.maxperiod} \
         -d -h' || echo 'processed $? TRs'
 
     trf -v >> versions.yml

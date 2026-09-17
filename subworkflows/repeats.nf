@@ -14,6 +14,7 @@ workflow REPEATS {
     take:
     fasta
     sliced_fasta
+    repeats_params
 
     main:
 
@@ -30,11 +31,11 @@ workflow REPEATS {
     MAKE_DUST_GTF(dust_ch.collect(), DUST.out.dust_repeats)
     COMBINE_DUST_GTFS(dust_ch.collect(), MAKE_DUST_GTF.out.gtf.map{it -> it[1]}.collect())
 
-    REPEATMASKER(sliced_fasta)
+    REPEATMASKER(sliced_fasta, repeats_params)
     MAKE_REPEATMASKER_GTF(repeatmasker_ch.collect(), REPEATMASKER.out.repeatmasker_repeats)
     COMBINE_REPEATMASKER_GTFS(repeatmasker_ch.collect(), MAKE_REPEATMASKER_GTF.out.gtf.map{it -> it[1]}.collect())
 
-    TRF(sliced_fasta)
+    TRF(sliced_fasta, repeats_params)
     MAKE_TRF_GTF(trf_ch.collect(), TRF.out.trf_repeats)
     COMBINE_TRF_GTFS(trf_ch.collect(), MAKE_TRF_GTF.out.gtf.map{it -> it[1]}.collect())
 

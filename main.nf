@@ -1,17 +1,15 @@
 #!/usr/bin/env nextflow
 
-include { TRANSCRIPTOMICS_ANNOTATION } from './subworkflows/transcriptomic_annotation.nf'
-include { SPLIT_FASTA } from './subworkflows/split_fasta.nf'
-include { REPEATS } from './subworkflows/repeats.nf'
-include { SIMPLE_FEATURE_ANNOTATION } from './subworkflows/simple_feature_annotation.nf'
-include { SMALL_NCRNA_ANNOTATION } from './subworkflows/small_ncRNA_annotation.nf'
-include { PROTEINS } from './subworkflows/proteins.nf'
+include { ANNOTATION } from './workflows/annotation.nf'
 
 nextflow.enable.dsl = 2
 
 nextflow.enable.strict = true
 
 def generate_short_reads_ch(short_read_dir) {
+    // This function generates a channel of short read fastqs
+    // The channel has the structure [basename, [fastq1, optional_fastq2]]
+
     // The logic that follows enables the pipeline to be able to handle both paired and single ended short reads
     // First strip any trailing / from the path to the directory containing the short read fastqs
     def short_read_dir_str = short_read_dir.replaceAll('/$', '')
@@ -22,7 +20,9 @@ def generate_short_reads_ch(short_read_dir) {
         short_read_dir_str + '/*_{1,2,R1,R2}.{fq,fastq}{.gz,}', 
         size: 2,  // paired reads only
         checkIfExists: true
-    )
+    ).map{
+        it -> [[id: it[0]], it[1]]
+    }
 
     // Now make a channel containing the single end read fastqs. This is a bit more complex.
     // We end up with a channel with the following structure [ sampleName, [sampleName.fq]]
@@ -38,7 +38,7 @@ def generate_short_reads_ch(short_read_dir) {
             !file.baseName.split('\\.')[0].endsWith('_2')
     }
     .map { file ->      // this converts a channel with structure [sampleName.fq] to [sampleName, [sampleName.fq]] 
-    tuple(file.baseName.split('\\.')[0], [file]) 
+    tuple([id: file.baseName.split('\\.')[0]], [file]) 
     }
 
     // Mix together the single and paired end reads
@@ -48,13 +48,16 @@ def generate_short_reads_ch(short_read_dir) {
 }
 
 def generate_long_reads_ch(long_read_dir){
+    // This function generates a channel of long read fastqs
+    // The channel has the structure [basename, [fastq]]
+
     def long_reads_ch = channel.fromPath(long_read_dir + '/*.fastq')   
     .mix(channel.fromPath(long_read_dir + '/*.fq'))
     .mix(channel.fromPath(long_read_dir + '/*.fastq.gz'))
     .mix(channel.fromPath(long_read_dir + '/*.fq.gz'))
     .map { 
         file ->      // this converts a channel with structure [sampleName.fq] to [sampleName, [sampleName.fq]] 
-    tuple(file.baseName.split('\\.')[0], [file]) 
+    tuple([id: file.baseName.split('\\.')[0]], [file]) 
     }
     return long_reads_ch
 
@@ -80,30 +83,77 @@ workflow {
     // Initialise a fasta channel (containing the unsliced fasta)
     fasta_ch = channel.fromPath(params.fasta)
 
-    // Run transcriptomics pipeline:
-    //TRANSCRIPTOMICS_ANNOTATION(short_read_ch, long_read_ch, fasta_ch)
-
-    // Several pipelines take a sliced fasta as input. First slice up the fasta:
-    sliced_fastas = SPLIT_FASTA(fasta_ch)
-    //sliced_fastas.view()
-
-    // All pipelines that require a sliced fasta
-    REPEATS(fasta_ch, sliced_fastas)
-    //SIMPLE_FEATURE_ANNOTATION(sliced_fastas)
-    //SMALL_NCRNA_ANNOTATION(fasta_ch, sliced_fastas)
-
+    // Set up a channel containing protein fastas
     orthodb_ch = channel.fromPath(params.orthodb).map{
         it -> tuple('orthodb', it)
     }
     uniprot_ch = channel.fromPath(params.uniprot).map{
         it -> tuple('uniprot', it)
     }
-    protein_db_ch = orthodb_ch.concat(uniprot_ch)
-
-    genblast_alignscore = channel.fromPath(params.genblast_alignscore)
-
-    // Finally, the protein pipeline
-    PROTEINS(REPEATS.out.red_masked_genome, protein_db_ch, genblast_alignscore)
+    protein_ch = orthodb_ch.concat(uniprot_ch)
 
 
+
+    // Now initialise param channels:
+
+    fasta_slicing_param_ch = channel.value([
+        slice_size: params.slice_size,
+        min_seq_length: params.min_seq_length
+    ])
+
+    transcriptomics_param_ch = channel.value([
+        max_intron_length: params.max_intron_length,
+        min_total_transcriptomic_gtf_lines: params.min_total_transcriptomic_gtf_lines
+    ])
+
+    simple_features_param_ch = channel.value([
+        eponine_bin: params.eponine_bin,
+        eponine_threshold: params.eponine_threshold
+    ])
+
+    repeats_param_ch = channel.value([
+        library: params.library,
+        species: params.species,
+        match_score: params.match_score,
+        mismatch_score: params.mismatch_score,
+        delta: params.delta,
+        pm: params.pm,
+        pi: params.pi,
+        minscore: params.minscore,
+        maxperiod: params.maxperiod
+    ])
+
+
+    // rfam files
+    rfam_accession_file_ch = channel.fromPath(params.rfam_accession_file).collect()
+    rfam_cm_db_ch = channel.fromPath(params.rfam_cm_db).collect()
+    rfam_seeds_file_ch = channel.fromPath(params.rfam_seeds_file).collect()
+    
+    // This file is required to run genblast
+    genblast_alignscore = channel.fromPath(params.genblast_alignscore).collect()
+
+
+    protein_param_ch = channel.value([
+        max_intron_length: params.max_intron_length
+    ])
+
+    short_read_ch.view()
+    long_read_ch.view()
+
+    // Run annotation
+    ANNOTATION( fasta_ch,
+                short_read_ch,
+                long_read_ch,
+                protein_ch,
+
+                fasta_slicing_param_ch,
+                transcriptomics_param_ch,
+                simple_features_param_ch,
+                repeats_param_ch,
+                protein_param_ch,
+
+                rfam_accession_file_ch,
+                rfam_cm_db_ch,
+                rfam_seeds_file_ch,
+                genblast_alignscore)
 }

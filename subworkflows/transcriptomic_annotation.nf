@@ -15,15 +15,17 @@ include { CHECK_TRANSCRIPTOMIC_OUTPUT } from '../modules/check_transcriptomic_ou
 
 workflow TRANSCRIPTOMICS_ANNOTATION {
     take:
-    short_reads  // channel: [ val(meta), [path(read1), path(read2)] ]
-    long_reads   // channel: [ val(meta), path(input_file) ]
-    genome_fasta // channel: [fasta_path]
+    short_reads  // [ val(meta), [path(read1), path(read2)] ]
+    long_reads   // [ val(meta), path(input_file) ]
+    genome_fasta // [ fasta_path ]
+    transcriptomics_params // [param1: x]
 
     main:
 
     // Decide whether to make star and minimap2 indexes based on whether short and long read dirs were provided:
     star_index_ch = channel.empty()
     minimap2_index_ch = channel.empty()
+    transcriptomics_params.view()
 
     if (params.short_read_dir != null){
         CALCULATE_GENOMESAINDEXNBASES(genome_fasta)
@@ -46,9 +48,9 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
     // If short_reads is an empty channel we skip from here to the long reads pipeline
     if (params.trim_reads){
         TRIMGALORE(short_reads)
-        STAR(TRIMGALORE.out.trimmed_reads, star_index_ch)
+        STAR(TRIMGALORE.out.trimmed_reads, star_index_ch, transcriptomics_params.collect())
     } else {
-        STAR(short_reads, star_index_ch)
+        STAR(short_reads, star_index_ch, transcriptomics_params.collect())
     }
 
     SAMTOOLS(STAR.out.sam)
@@ -71,7 +73,7 @@ workflow TRANSCRIPTOMICS_ANNOTATION {
     // Long reads pipeline
     // This will only run if the short reads channel has been populated with fastqs
     // If long_reads is an empty channel we skip from here to the end
-    MINIMAP2(long_reads, minimap2_index_ch)
+    MINIMAP2(long_reads, minimap2_index_ch, transcriptomics_params)
     PAFTOOLS(MINIMAP2.out.sam)
     paftools_bed_ch = PAFTOOLS.out.bed.map {
         bed -> bed[1]

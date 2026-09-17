@@ -13,18 +13,26 @@ workflow SMALL_NCRNA_ANNOTATION {
     take:
     fasta
     sliced_fasta
+    rfam_accession_file
+    rfam_cm_db
+    rfam_seeds_file
 
     main:
 
-    rfam_accession_file_ch = channel.fromPath(params.rfam_accession_file)
-    rfam_cm_db_ch = channel.fromPath(params.rfam_cm_db)
+
     
-    SELECT_RFAM_MODELS(rfam_accession_file_ch, rfam_cm_db_ch)
+    SELECT_RFAM_MODELS(rfam_accession_file, rfam_cm_db)
     CMSEARCH(sliced_fasta, SELECT_RFAM_MODELS.out.rfam_models.collect())
-    
-    cmsearch_ch = channel.of(tuple('cmsearch', file(params.rfam_seeds_file))).combine(
+
+    cmsearch_ch = rfam_seeds_file.map({
+        it -> tuple('cmsearch', it)
+    }).combine(
         SELECT_RFAM_MODELS.out.rfam_models
     ).collect()
+    
+    // cmsearch_ch = channel.of(tuple('cmsearch', rfam_seeds_file)).combine(
+    //     SELECT_RFAM_MODELS.out.rfam_models
+    // ).collect()
     MAKE_CMSEARCH_GTF(cmsearch_ch, CMSEARCH.out.tblout)
 
     // This could be further optimised. It is a bit inefficient that we search

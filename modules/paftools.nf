@@ -8,12 +8,12 @@ process PAFTOOLS {
     tuple val(meta), path(sam)
  
     output:
-    tuple val(meta), path("${meta}.bed"),          emit: bed
+    tuple val(meta), path("${meta.id}.bed"),          emit: bed
     path "versions.yml",                              emit: versions
 
     script:
     """
-    paftools.js splice2bed ${sam} > ${meta}.bed
+    paftools.js splice2bed ${sam} > ${meta.id}.bed
 
     echo 'paftools.js ' > versions.yml
     paftools.js version  >> versions.yml
@@ -21,7 +21,7 @@ process PAFTOOLS {
 
     stub:
     """
-    touch ${meta}.bed
+    touch ${meta.id}.bed
 
     touch versions.yml
     """

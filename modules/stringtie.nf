@@ -8,13 +8,13 @@ process STRINGTIE {
     tuple val(meta), path(bam)
  
     output:
-    tuple val(meta), path("${meta}.stringtie.gtf"),               emit: stringtie_gtf
+    tuple val(meta), path("${meta.id}.stringtie.gtf"),               emit: stringtie_gtf
     path "versions.yml",                                        emit: versions
 
     script:
     """
     stringtie ${bam} \
-    -o ${meta}.stringtie.gtf \
+    -o ${meta.id}.stringtie.gtf \
     -p ${params.n_threads} \
     -t -a 15   # disable trimming of predicted transcripts based on coverage + minimum anchor length for junctions
  
@@ -25,7 +25,7 @@ process STRINGTIE {
 
     stub:
     """
-    touch ${meta}.stringtie.gtf
+    touch ${meta.id}.stringtie.gtf
 
     touch versions.yml
     """

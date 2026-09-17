@@ -7,6 +7,7 @@ process REPEATMASKER {
 
     input:
     tuple val(coords), path(sliced_fasta)
+    val(repeats_params)
  
     output:
     tuple val(coords), path('*/*.out'),          emit: repeatmasker_repeats
@@ -14,14 +15,14 @@ process REPEATMASKER {
 
     script:
     def args = ''
-    if (params.library==null){
-        def species = params.species
+    if (repeats_params.library==null){
+        def species = repeats_params.species
         if (species == null){
             species = 'homo'
         }
         args = ' --species ' + species
     } else {
-        args = ' --lib ' + params.library
+        args = ' --lib ' + repeats_params.library
     }
     """
     mkdir repeatmasker_out

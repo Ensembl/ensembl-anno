@@ -9,12 +9,12 @@ process SCALLOP {
     tuple val(meta), path(bam)
  
     output:
-    tuple val(meta), path("${meta}.scallop.gtf"),          emit: scallop_gtf
+    tuple val(meta), path("${meta.id}.scallop.gtf"),          emit: scallop_gtf
     path "versions.yml",                                   emit: versions
 
     script:
     """
-    scallop -i ${bam} -o ${meta}.scallop.gtf --min_flank_length 10
+    scallop -i ${bam} -o ${meta.id}.scallop.gtf --min_flank_length 10
 
     echo 'scallop' > versions.yml
     scallop --version >> versions.yml
@@ -22,7 +22,7 @@ process SCALLOP {
 
     stub:
     """
-    touch ${meta}.scallop.gtf
+    touch ${meta.id}.scallop.gtf
 
     touch versions.yml
     """

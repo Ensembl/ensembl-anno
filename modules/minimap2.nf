@@ -7,15 +7,16 @@ process MINIMAP2 {
     input:
     tuple val(meta), path(fastq)
     path(index)
+    val(transcriptomics_params)
  
     output:
-    tuple val(meta), path("${meta}.sam"),          emit: sam
+    tuple val(meta), path("${meta.id}.sam"),          emit: sam
     path "versions.yml",                              emit: versions
 
     script:
     """
     minimap2 \
-    -G ${params.max_intron_length} \
+    -G ${transcriptomics_params.max_intron_length} \
     -t ${params.n_threads} \
     --cs \
     --secondary=no \
@@ -23,7 +24,7 @@ process MINIMAP2 {
     -u b \
     ${index} \
     ${fastq} \
-    -o ${meta}.sam
+    -o ${meta.id}.sam
 
     echo 'minimap2 ' > versions.yml
     minimap2 --version >> versions.yml
@@ -31,7 +32,7 @@ process MINIMAP2 {
 
     stub:
     """
-    touch ${meta}.sam
+    touch ${meta.id}.sam
 
     touch versions.yml
     """

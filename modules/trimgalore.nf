@@ -8,14 +8,12 @@ process TRIMGALORE {
     tuple val(meta), path(input_fastq)
 
     output:
-    tuple val(meta), path("${meta}_trimmed.fq.gz"),    emit: trimmed_reads
+    tuple val(meta), path("${meta.id}_trimmed.fq.gz"),    emit: trimmed_reads
     path "versions.yml",                               emit: versions
 
     script:
-    paired_args = ''
-    if (input_fastq.size == 2){
-        paired_args = ' --paired'
-    }
+    def fastqs = input_fastq instanceof List ? input_fastq : [input_fastq]
+    def paired_args = fastqs.size() == 2 ? ' --paired' : ''
     """
     # TODO test this - trim_galore is funny with filenames
     # TODO decide what to do about args
@@ -26,7 +24,7 @@ process TRIMGALORE {
 
     stub:
     """
-    touch ${meta}_trimmed.fq.gz
+    touch ${meta.id}_trimmed.fq.gz
     touch versions.yml
     """
 }

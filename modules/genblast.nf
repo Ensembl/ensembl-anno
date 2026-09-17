@@ -8,6 +8,7 @@ process GENBLAST {
     tuple val(masked_fasta_filename), path(fasta_db)
     tuple val(protein_source), val(slice_id), path(protein_slice)
     path(alignscores)
+    val(protein_params)
  
     output:
     tuple val("${protein_source}_${slice_id}"), path('*.gff'),  emit: gff
@@ -19,7 +20,7 @@ process GENBLAST {
         -t ${fasta_db}/${masked_fasta_filename} \
         -g T -pid -r 1 -P blast -gff -e 1e-1 -c 0.8 \
         -W 3 -softmask -scodon 50 -i 30 -x 10 -n 30 \
-        -d ${params.max_intron_length} \
+        -d ${protein_params.max_intron_length} \
         -o ${protein_slice} || echo "genblast finished"
 
     """

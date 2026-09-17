@@ -6,6 +6,7 @@ process EPONINE {
 
     input:
     tuple val(coords), path(sliced_fastas)
+    val(simple_features_params)
  
     output:
     tuple val(coords), path('*.epo'),          emit: epo
@@ -13,8 +14,8 @@ process EPONINE {
 
     script:
     """
-    ${params.java_bin} -jar ${params.eponine_bin} \
-        -threshold ${params.eponine_threshold} \
+    java -jar ${simple_features_params.eponine_bin} \
+        -threshold ${simple_features_params.eponine_threshold} \
         -seq ${sliced_fastas} >> ${coords}.epo
     """
 

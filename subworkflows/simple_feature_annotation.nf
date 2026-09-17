@@ -8,11 +8,11 @@ include { COMBINE_SLICED_GTFS as COMBINE_EPONINE_GTFS} from '../modules/combine_
 workflow SIMPLE_FEATURE_ANNOTATION {
     take:
     sliced_fasta
+    simple_features_params
 
     main:
 
     // tool channels
-    //cpg_ch = channel.of('cpg').collect()
     cpg_ch =channel.of(tuple('cpg', file('optional1'), file('optional2'))).collect()
     eponine_ch = channel.of(tuple('eponine'), file('optional1'), file('optional2')).collect()
 
@@ -20,7 +20,7 @@ workflow SIMPLE_FEATURE_ANNOTATION {
     MAKE_CPG_GTF(cpg_ch, CPG.out.cpgs)
     COMBINE_CPG_GTFS(cpg_ch, MAKE_CPG_GTF.out.gtf.map{it -> it[1]}.collect())
 
-    EPONINE(sliced_fasta)
+    EPONINE(sliced_fasta, simple_features_params)
     MAKE_EPONINE_GTF(eponine_ch, EPONINE.out.epo)
     COMBINE_EPONINE_GTFS(eponine_ch, MAKE_EPONINE_GTF.out.gtf.map{it -> it[1]}.collect())
 

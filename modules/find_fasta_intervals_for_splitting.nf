@@ -6,6 +6,7 @@ process FIND_FASTA_INTERVALS {
 
     input:
     path(genome_fasta)
+    val(slicing_params)
  
     output:
     path('*.bed'), emit:beds
@@ -15,8 +16,8 @@ process FIND_FASTA_INTERVALS {
     python ${params.projectdir}/bin/src/python/ensembl/tools/anno/nextflow_utils/fasta_operations.py \
     --splitFasta \
     --genome_file ${genome_fasta} \
-    --min_seq_length ${params.min_seq_length} \
-    --slice_size ${params.slice_size}
+    --min_seq_length ${slicing_params.min_seq_length} \
+    --slice_size ${slicing_params.slice_size}
     """
 
     stub:
