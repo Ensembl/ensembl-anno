@@ -39,7 +39,7 @@ jobs:
 
       - name: Run pylint
         run: |
-          pylint --rcfile pyproject.toml src/python/ensembl/tools/anno
+          pylint --rcfile pyproject.toml bin/src/python/ensembl/tools/anno
           pylint --rcfile pyproject.toml tests
 
   mypy:
@@ -55,7 +55,7 @@ jobs:
 
       - name: Run mypy
         run: |
-          mypy --config-file pyproject.toml src/python/ensembl/tools/anno/
+          mypy --config-file pyproject.toml bin/src/python/ensembl/tools/anno/
           mypy --config-file pyproject.toml tests
 
   black:

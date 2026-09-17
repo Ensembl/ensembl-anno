@@ -1,13 +1,11 @@
 import argparse
 import re
 
-def write_rfam_selected_models_file(rfam_accession_file, 
-                                    rfam_cm_db, 
-                                    rfam_selected_models_file):
 
+def write_rfam_selected_models_file(rfam_accession_file, rfam_cm_db, rfam_selected_models_file):
     with open(rfam_accession_file, encoding="utf-8") as rfam_accessions_in:
         rfam_accessions = rfam_accessions_in.read().splitlines()
-    
+
     with open(rfam_cm_db, "r", encoding="utf-8") as rfam_cm_in:
         rfam_data = rfam_cm_in.read()
 
@@ -21,25 +19,21 @@ def write_rfam_selected_models_file(rfam_accession_file,
                 model_accession = match.group(1)
                 if model_accession in rfam_accessions:
                     rfam_cm_out.write(model + "//\n")
-     
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Arguments for script to write a file of rfam models to use with cmsearch.")
+    parser = argparse.ArgumentParser(
+        description="Arguments for script to write a file of rfam models to use with cmsearch."
+    )
     parser.add_argument("--rfam_accession_file", help="Path to rfam accession file")
     parser.add_argument("--rfam_cm_db", help="Path to rfam cm db")
     parser.add_argument("--rfam_selected_models_file", help="Path to output rfam models file")
 
     args = parser.parse_args()
     return args
-    
+
 
 if __name__ == "__main__":
     args = parse_args()
 
-    write_rfam_selected_models_file(args.rfam_accession_file,
-                                    args.rfam_cm_db,
-                                    args.rfam_selected_models_file)
-
-
-
+    write_rfam_selected_models_file(args.rfam_accession_file, args.rfam_cm_db, args.rfam_selected_models_file)

@@ -6,8 +6,7 @@ from typing import List
 import os
 
 
-
-def split_protein_file(protein_dataset: Path,  protein_source,  batch_size: int = 200) -> List:
+def split_protein_file(protein_dataset: Path, protein_source, batch_size: int = 200) -> List:
     """
     The protein dataset file is split by a number of sequence
     equals to the batch_size
@@ -60,15 +59,17 @@ def split_protein_file(protein_dataset: Path,  protein_source,  batch_size: int 
             batched_protein_files.append(batch_file)
     return batched_protein_files
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
+    parser = argparse.ArgumentParser(
+        description="Arguments for script to check contents of transcriptomic gtfs"
+    )
     parser.add_argument("--proteins", help="Path to input protein file")
     parser.add_argument("--protein_source", help="name of protein source")
     args = parser.parse_args()
     return args
-    
+
 
 if __name__ == "__main__":
     args = parse_args()
-    split_protein_file(protein_dataset=args.proteins, 
-                       protein_source=args.protein_source)
+    split_protein_file(protein_dataset=args.proteins, protein_source=args.protein_source)

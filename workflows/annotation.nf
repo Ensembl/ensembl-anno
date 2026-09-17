@@ -28,15 +28,15 @@ workflow ANNOTATION {
     sliced_fastas = SPLIT_FASTA(fasta, fasta_slicing_params)
 
     REPEATS(fasta, sliced_fastas, repeats_params)
-    // SIMPLE_FEATURE_ANNOTATION(sliced_fastas, simple_features_params)
-    // SMALL_NCRNA_ANNOTATION(fasta, 
-    //                        sliced_fastas, 
-    //                        rfam_accession_file,
-    //                        rfam_cm_db,
-    //                        rfam_seeds_file
-    // )
+    SIMPLE_FEATURE_ANNOTATION(sliced_fastas, simple_features_params)
+    SMALL_NCRNA_ANNOTATION(fasta, 
+                           sliced_fastas, 
+                           rfam_accession_file,
+                           rfam_cm_db,
+                           rfam_seeds_file
+    )
 
-    // TRANSCRIPTOMICS_ANNOTATION(short_reads, long_reads, fasta, transcriptomics_params)
-    // PROTEINS(REPEATS.out.red_masked_genome, proteins, genblast_alignscore, protein_params)
+    TRANSCRIPTOMICS_ANNOTATION(short_reads, long_reads, fasta, transcriptomics_params)
+    PROTEINS(REPEATS.out.red_masked_genome, proteins, genblast_alignscore, protein_params)
 
 }

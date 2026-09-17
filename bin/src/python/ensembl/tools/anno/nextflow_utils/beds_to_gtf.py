@@ -1,6 +1,7 @@
 import argparse
 from typing import List
 
+
 def beds_to_gtf(bedfile_list, gtf_path) -> None:  # pylint:disable = too-many-locals
     """
     Convert bed file into gtf file
@@ -74,7 +75,7 @@ def bed_block_to_exons(block_sizes: List, block_starts: List, offset: int) -> Li
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arguments for script to convert paftools bedfiles to gtfs")
-    parser.add_argument("--bedfile_list", nargs='+', help="Path to input bedfile")
+    parser.add_argument("--bedfile_list", nargs="+", help="Path to input bedfile")
     parser.add_argument("--gtf_path", help="Path to output gtf")
     args = parser.parse_args()
     return args
@@ -82,5 +83,4 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    beds_to_gtf(bedfile_list=args.bedfile_list, 
-                gtf_path=args.gtf_path)
+    beds_to_gtf(bedfile_list=args.bedfile_list, gtf_path=args.gtf_path)

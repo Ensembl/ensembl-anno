@@ -31,11 +31,9 @@ API
 OUT.mkdir(parents=True, exist_ok=True)
 
 for package, group in GROUPS.items():
-
     package_dir = SRC / package
 
     for module in sorted(package_dir.glob("*.py")):
-
         if module.name.startswith("_"):
             continue
 

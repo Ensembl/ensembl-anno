@@ -6,6 +6,7 @@ from typing import Union, Dict, List, Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
+
 def create_red_gtf(repeat_coords_file: Path, output_file: Path):
     """
     Create Red gtf file from masked genome file
@@ -30,6 +31,7 @@ def create_red_gtf(repeat_coords_file: Path, output_file: Path):
                     f'{end}\t.\t+\t.\trepeat_id "{repeat_id}";\n'  # pylint:disable=line-too-long
                 )
                 red_out.write(gtf_line)
+
 
 def create_dust_gtf(
     input_file: Path,
@@ -59,6 +61,7 @@ def create_dust_gtf(
                 )
                 dust_out.write(gtf_line)
                 repeat_count += 1
+
 
 # Function to find the repeat class based on the mappings
 def get_repeat_type(repeat_type: str) -> str:
@@ -254,6 +257,7 @@ def create_cpg_gtf(  # pylint:disable=too-many-arguments, too-many-locals, too-m
                     )
                     cpg_out.write(gtf_line)
 
+
 def create_eponine_gtf(
     input_file: Path,
     output_gtf: Path,
@@ -294,7 +298,7 @@ def create_eponine_gtf(
                 feature_count += 1
 
 
-def create_trnascan_gtf(input_file: Path, output_gtf: Path,  region_name: str) -> None:
+def create_trnascan_gtf(input_file: Path, output_gtf: Path, region_name: str) -> None:
     """
     Read the fasta file and save the content in gtf format
     All the genomic slices are collected in a single gtf output
@@ -421,6 +425,7 @@ def extract_rfam_metrics(rfam_selected_models: PathLike) -> Dict[str, Dict[str, 
                             continue
 
     return parsed_cm_data
+
 
 def parse_rfam_tblout(region_tblout: Path, region_name: str) -> List[Dict[str, Any]]:
     """Parse cmsearch output
@@ -676,9 +681,9 @@ def create_cmsearch_gtf(  # pylint: disable=too-many-arguments, too-many-locals,
                         + str(end)
                         + "\t"
                         + str(gene_counter)
-                        +" \t.\t"
+                        + " \t.\t"
                         + gtf_strand
-                        + '\n'
+                        + "\n"
                     )
 
                     rfam_gtf_out.write(transcript_string)
@@ -687,26 +692,29 @@ def create_cmsearch_gtf(  # pylint: disable=too-many-arguments, too-many-locals,
                     gene_counter += 1
 
 
-def orchestrate_cmsearch_gtf(input_file: Path, 
-                             output_gtf: Path,  
-                             region_name: str,
-                             rfam_seed_descriptions: Path,
-                             rfam_selected_models_file: Path,
-                             output_bed: Path):
-    
+def orchestrate_cmsearch_gtf(
+    input_file: Path,
+    output_gtf: Path,
+    region_name: str,
+    rfam_seed_descriptions: Path,
+    rfam_selected_models_file: Path,
+    output_bed: Path,
+):
     seed_descriptions = get_rfam_seed_descriptions(rfam_seed_descriptions)
     cm_models = extract_rfam_metrics(rfam_selected_models_file)
     initial_table_results = parse_rfam_tblout(input_file, region_name)
     unique_table_results = remove_rfam_overlap(initial_table_results)
     filtered_table_results = filter_rfam_results(unique_table_results, cm_models)
 
-    create_cmsearch_gtf(filtered_results=filtered_table_results,
-                        cm_models=cm_models,
-                        seed_descriptions=seed_descriptions,
-                        region_name=region_name,
-                        output_gtf=output_gtf,
-                        output_bed=output_bed
-                        )
+    create_cmsearch_gtf(
+        filtered_results=filtered_table_results,
+        cm_models=cm_models,
+        seed_descriptions=seed_descriptions,
+        region_name=region_name,
+        output_gtf=output_gtf,
+        output_bed=output_bed,
+    )
+
 
 def _convert_genblast_gff_to_gtf(gff_file: Path) -> str:
     """
@@ -753,6 +761,7 @@ def set_genblast_attributes(attributes: str, feature_type: str) -> str:
         converted_attributes = f'gene_id "{name}"; transcript_id "{name}"; exon_number "{exon_rank}";'  # pylint:disable=line-too-long
 
     return converted_attributes
+
 
 def create_genblast_gtf(gff_file: Path, gtf_file: Path) -> str:
     """
@@ -870,27 +879,39 @@ def create_miniprot_gtf(  # pylint: disable=too-many-locals, too-many-branches, 
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
+    parser = argparse.ArgumentParser(
+        description="Arguments for script to check contents of transcriptomic gtfs"
+    )
     parser.add_argument("--input_file", help="Path to input to convert to gtf")
     parser.add_argument("--output_gtf", help="Path to output logfile recording status of each gtf")
-    parser.add_argument("--region_name", default = None, help="Optional region name field")
-    parser.add_argument("--rfam_seed_descriptions", default=None, help="path to rfam seed description file (only required for cmsearch)")
-    parser.add_argument("--rfam_selected_models_file", default=None, help="path to rfam selected model file (only required for cmsearch)")
-    parser.add_argument("--output_bed", default=None, help="path to output bedfile (only required for cmsearch)")
-    parser.add_argument("--red", action='store_true', help="convert red output to gtf")
-    parser.add_argument("--dust", action='store_true', help="convert red output to gtf")
-    parser.add_argument("--repeatmasker", action='store_true', help="convert red output to gtf")
-    parser.add_argument("--trf", action='store_true', help="convert trf output to gtf")
-    parser.add_argument("--cpg", action='store_true', help="convert cpg output to gtf")
-    parser.add_argument("--eponine", action='store_true', help="convert eponine output to gtf")
-    parser.add_argument("--trnascan", action = 'store_true', help="convert trnascan output to gtf")
-    parser.add_argument("--cmsearch", action='store_true', help="convert cmsearch/rfam output to gtf")
-    parser.add_argument("--genblast", action='store_true', help="convert genblast gff to gtf")
-    parser.add_argument("--miniprot", action='store_true', help="convert miniprot gff to gtf")
+    parser.add_argument("--region_name", default=None, help="Optional region name field")
+    parser.add_argument(
+        "--rfam_seed_descriptions",
+        default=None,
+        help="path to rfam seed description file (only required for cmsearch)",
+    )
+    parser.add_argument(
+        "--rfam_selected_models_file",
+        default=None,
+        help="path to rfam selected model file (only required for cmsearch)",
+    )
+    parser.add_argument(
+        "--output_bed", default=None, help="path to output bedfile (only required for cmsearch)"
+    )
+    parser.add_argument("--red", action="store_true", help="convert red output to gtf")
+    parser.add_argument("--dust", action="store_true", help="convert red output to gtf")
+    parser.add_argument("--repeatmasker", action="store_true", help="convert red output to gtf")
+    parser.add_argument("--trf", action="store_true", help="convert trf output to gtf")
+    parser.add_argument("--cpg", action="store_true", help="convert cpg output to gtf")
+    parser.add_argument("--eponine", action="store_true", help="convert eponine output to gtf")
+    parser.add_argument("--trnascan", action="store_true", help="convert trnascan output to gtf")
+    parser.add_argument("--cmsearch", action="store_true", help="convert cmsearch/rfam output to gtf")
+    parser.add_argument("--genblast", action="store_true", help="convert genblast gff to gtf")
+    parser.add_argument("--miniprot", action="store_true", help="convert miniprot gff to gtf")
 
     args = parser.parse_args()
     return args
-    
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -902,7 +923,7 @@ if __name__ == "__main__":
 
     if args.repeatmasker:
         create_repeatmasker_gtf(args.input_file, args.output_gtf, args.region_name)
-    
+
     if args.trf:
         create_trf_gtf(args.input_file, args.output_gtf, args.region_name)
 
@@ -916,17 +937,17 @@ if __name__ == "__main__":
         create_trnascan_gtf(args.input_file, args.output_gtf, args.region_name)
 
     if args.cmsearch:
-        orchestrate_cmsearch_gtf(input_file = args.input_file, 
-                                 output_gtf = args.output_gtf,  
-                                 region_name = args.region_name,
-                                 rfam_seed_descriptions = args.rfam_seed_descriptions,
-                                 rfam_selected_models_file = args.rfam_selected_models_file,
-                                 output_bed = args.output_bed)
+        orchestrate_cmsearch_gtf(
+            input_file=args.input_file,
+            output_gtf=args.output_gtf,
+            region_name=args.region_name,
+            rfam_seed_descriptions=args.rfam_seed_descriptions,
+            rfam_selected_models_file=args.rfam_selected_models_file,
+            output_bed=args.output_bed,
+        )
 
     if args.genblast:
-        create_genblast_gtf(gff_file =args.input_file, 
-                            gtf_file = args.output_gtf)
+        create_genblast_gtf(gff_file=args.input_file, gtf_file=args.output_gtf)
 
     if args.miniprot:
-        create_miniprot_gtf(input_file =args.input_file, 
-                            output_file = args.output_gtf)
+        create_miniprot_gtf(input_file=args.input_file, output_file=args.output_gtf)

@@ -12,12 +12,13 @@ def generate_protein_gtf(sliced_gtf_list, output_gtf):
                 gtf_string = file_in.read()
                 file_out.write(gtf_string)
 
+
 def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statements, too-many-locals
     output_gtf: Path,
     sliced_gtf_list: List,
     feature_id_label: str = "",
     unique_ids: bool = True,
-    tool: str = ""
+    tool: str = "",
 ) -> None:
     """
     Collect all the gtf files per file extension and
@@ -39,9 +40,9 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
     unique_ids : If True assign unique ids for the same
     feature type.
     """
-    if 'genblast' in tool or 'miniprot' in tool:
+    if "genblast" in tool or "miniprot" in tool:
         generate_protein_gtf(sliced_gtf_list, output_gtf)
-        return 'genblast gtfs combined'
+        return "genblast gtfs combined"
     feature_types = ["exon", "transcript", "repeat", "simple_feature"]
     new_id_prefix = ""
     if tool == "repeatmasker":
@@ -61,7 +62,7 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                 print("File is empty, will skip %s", input_file)
                 continue
 
-            # I've replaced the original search logic here with logic to strip the start coordinates out of the 
+            # I've replaced the original search logic here with logic to strip the start coordinates out of the
             # filename. This is pretty dirty - I've done this as a temporary measure. In the long term maybe we
             # could look at gtf parsing and operations across all of our repositories and build something more
             # robust.
@@ -73,14 +74,16 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
 
             # Here is my temporary fix - we should plan to replace this!!!
             # Under the new naming scheme the filename is chr:start-end'.1.bed'. Therefore...
-            start_offset = input_file.split(':')[1].split("-")[0]
-            try: 
+            start_offset = input_file.split(":")[1].split("-")[0]
+            try:
                 start_offset = int(start_offset)
             except:
-                raise ValueError(f"Filenames are not as expected - the third field in the filename should be the " \
-                "slice start coordinate but instead it is {start_offset}. The filename was {input_file}. This shouldn't " \
-                "happen, exiting.")
-            
+                raise ValueError(
+                    f"Filenames are not as expected - the third field in the filename should be the "
+                    "slice start coordinate but instead it is {start_offset}. The filename was {input_file}. This shouldn't "
+                    "happen, exiting."
+                )
+
             with open(input_file, "r", encoding="utf8") as gtf_in:
                 for line in gtf_in:
                     values = line.split("\t")
@@ -135,9 +138,9 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                                         transcript_id_count_gene_id[gene_id_slice]
                                     )  # pylint:disable=line-too-long
                                 )
-                                gene_transcript_id_collection[transcript_id_slice] = (
-                                    new_transcript_id  # pylint:disable=line-too-long
-                                )
+                                gene_transcript_id_collection[
+                                    transcript_id_slice
+                                ] = new_transcript_id  # pylint:disable=line-too-long
                                 transcript_id_count_gene_id[gene_id_slice] += 1
                             else:
                                 # If a transcript of the same set is already present,
@@ -185,18 +188,19 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                             values[2],
                         )
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="Arguments for script to check contents of transcriptomic gtfs")
-    parser.add_argument("--sliced_gtfs", nargs = '+', help="Path to input to convert to gtf")
+    parser = argparse.ArgumentParser(
+        description="Arguments for script to check contents of transcriptomic gtfs"
+    )
+    parser.add_argument("--sliced_gtfs", nargs="+", help="Path to input to convert to gtf")
     parser.add_argument("--output_gtf", help="Path to output logfile recording status of each gtf")
     parser.add_argument("--tool")
     args = parser.parse_args()
     return args
-    
+
 
 if __name__ == "__main__":
     args = parse_args()
 
-    slice_output_to_gtf(output_gtf = args.output_gtf, 
-                        sliced_gtf_list=args.sliced_gtfs,
-                        tool = args.tool)
+    slice_output_to_gtf(output_gtf=args.output_gtf, sliced_gtf_list=args.sliced_gtfs, tool=args.tool)
