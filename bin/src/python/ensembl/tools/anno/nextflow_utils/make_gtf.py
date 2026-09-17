@@ -727,7 +727,7 @@ def _convert_genblast_gff_to_gtf(gff_file: Path) -> str:
             results = line.split()
             if len(results) == 9:
                 results[2] = "exon" if results[2] == "coding_exon" else results[2]
-                attributes = _set_genblast_attributes(str(results[8]), str(results[2]))
+                attributes = set_genblast_attributes(str(results[8]), str(results[2]))
                 results[8] = attributes
                 converted_line = "\t".join(results)
                 gtf_string += converted_line + "\n"
@@ -781,6 +781,8 @@ def create_genblast_gtf(gff_file: Path, gtf_file: Path) -> str:
 
     with open(gtf_file, "w", encoding="utf8") as file_out:
         file_out.write(gtf_string)
+
+    return "genblast gtf created"
 
 
 def create_miniprot_gtf(  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
