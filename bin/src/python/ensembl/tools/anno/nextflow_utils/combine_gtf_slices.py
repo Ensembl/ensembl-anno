@@ -5,14 +5,12 @@ from pathlib import Path
 import re
 
 
-def generate_protein_gtf(sliced_gtf_list, output_gtf):
+def generate_protein_gtf(sliced_gtf_list, output_gtf) -> None:
     with open(output_gtf, "w+", encoding="utf8") as file_out:
         for sliced_gtf in sliced_gtf_list:
             with open(sliced_gtf, "r") as file_in:
                 gtf_string = file_in.read()
                 file_out.write(gtf_string)
-
-    return "made protein gtf"
 
 
 def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statements, too-many-locals
@@ -189,7 +187,6 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
                             "Feature type not recognised, will skip. Feature type: %s",
                             values[2],
                         )
-    return "made gtf"
 
 
 def parse_args():
