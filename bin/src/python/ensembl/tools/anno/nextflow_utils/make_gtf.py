@@ -676,7 +676,7 @@ def create_cmsearch_gtf(  # pylint: disable=too-many-arguments, too-many-locals,
                     bed_string = (
                         region_name
                         + "\t"
-                        + str(int(start) - 1 )
+                        + str(int(start) - 1)
                         + "\t"
                         + str(end)
                         + "\t"
