@@ -1,0 +1,10 @@
+[MASTER]
+init-hook='import sys; sys.path.insert(0, ".")'
+
+[MESSAGES CONTROL]
+disable=
+    R0801
+
+ignore=site,build,.venv
+
+py-version=3.10

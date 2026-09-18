@@ -1,4 +1,4 @@
-# Copyright [2019] EMBL-European Bioinformatics Institute
+# pylint: disable=invalid-name,too-many-locals,too-many-arguments,too-many-branches,too-many-statements,consider-using-with,redefined-outer-name,too-many-nested-blocks,line-too-long,unspecified-encoding# Copyright [2019] EMBL-European Bioinformatics Institute
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,17 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+"""Subsample FASTQ files by read count or percentage."""
 import argparse
-import os
-import re
-import random
-import multiprocessing
 import gzip
+import multiprocessing
+import os
+import random
+import re
 
 
-def subsample(fastq_files, output_files, subsample_read_limit, subsample_percentage, subsample_method, num_threads, compressed):
-
+def subsample(  # pylint: disable=too-many-arguments, too-many-locals, too-many-branches, too-many-statements, too-many-nested-blocks
+    fastq_files,
+    output_files,
+    subsample_read_limit,
+    subsample_percentage,
+    subsample_method,
+    num_threads,
+    compressed,
+):
+    """Subsample one or two FASTQ files."""
     fastq_file = fastq_files[0]
     fastq_file_pair = fastq_files[1]
     output_file = output_files[0]
@@ -34,26 +42,29 @@ def subsample(fastq_files, output_files, subsample_read_limit, subsample_percent
 
     # Count the file to begin with
     if compressed:
-        num_lines = sum(1 for line in gzip.open(fastq_file))
+        with gzip.open(fastq_file, "rt") as handle:
+            num_lines = sum(1 for _ in handle)
     else:
-        num_lines = sum(1 for line in open(fastq_file))
+        with open(fastq_file, encoding="utf-8") as handle:
+            num_lines = sum(1 for _ in handle)
 
     range_limit = int(num_lines / 4)
-    
-    print(f'Number of reads in file(s): {range_limit}')
-    
-    # Selection sampling methond and determinate sampling size 
+
+    print(f"Number of reads in file(s): {range_limit}")
+
+    # Selection sampling methond and determinate sampling size
     # subsample read limit only
     if not subsample_method and not subsample_percentage:
         sampling_size = subsample_read_limit
     # Both methods
     elif subsample_method == 0 and subsample_percentage:
-        sampling_size = min(subsample_read_limit, round(range_limit*subsample_percentage))
+        sampling_size = min(subsample_read_limit, round(range_limit * subsample_percentage))
     # Only percentage
     elif subsample_method == 1 and subsample_percentage:
-        sampling_size = round(range_limit*subsample_percentage)
-    
-    print(f'Number of sampled reads: {sampling_size}')
+        sampling_size = round(range_limit * subsample_percentage)
+    else:
+        raise ValueError("Invalid subsampling arguments.")
+    print(f"Number of sampled reads: {sampling_size}")
 
     if range_limit <= sampling_size:
         print(
@@ -67,10 +78,9 @@ def subsample(fastq_files, output_files, subsample_read_limit, subsample_percent
 
     random_indices = {}
 
-    rand_list = random.sample(range(0, range_limit - 1), sampling_size)
-    rand_count = 0
-    for idx, item in enumerate(rand_list):
-        random_indices[rand_list[idx] * 4] = 1
+    rand_list = random.sample(range(range_limit - 1), sampling_size)
+    for idx in rand_list:
+        random_indices[idx * 4] = 1
 
     # Note that because of the checks in main this will only be true if there if a paired file that exists
     if num_threads == 2:
@@ -100,19 +110,17 @@ def subsample(fastq_files, output_files, subsample_read_limit, subsample_percent
     else:
         print_subsample(fastq_file, output_file, random_indices, compressed)
         if fastq_file_pair:
-            print_subsample(
-                fastq_file_pair, output_file_pair, random_indices, compressed
-            )
+            print_subsample(fastq_file_pair, output_file_pair, random_indices, compressed)
 
 
 def print_subsample(fastq_file, output_file, random_indices, compressed):
-
+    """Write the selected reads to the output FASTQ."""
     line_index = 0
 
     if compressed:
         file_in = gzip.open(fastq_file, "rt")
     else:
-        file_in = open(fastq_file)
+        file_in = open(fastq_file, encoding="utf-8")
 
     file_out = open(output_file, "w+")
 
@@ -148,15 +156,8 @@ def print_subsample(fastq_file, output_file, random_indices, compressed):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--fastq_file", 
-        help="Path to the fastq file", 
-        required=True)
-    parser.add_argument(
-        "--fastq_file_pair", 
-        help="Path to the paired file if it exists", 
-        required=False
-    )
+    parser.add_argument("--fastq_file", help="Path to the fastq file", required=True)
+    parser.add_argument("--fastq_file_pair", help="Path to the paired file if it exists", required=False)
     parser.add_argument(
         "--output_file",
         help='Designated output file. Defaults to appending ".sub" to input file',
@@ -212,13 +213,10 @@ if __name__ == "__main__":
     compressed = args.compressed
 
     if not os.path.exists(fastq_file):
-        raise OSError("Fastq file does not exist. Path checked: %s" % fastq_file)
+        raise OSError(f"Fastq file does not exist. Path checked: {fastq_file}")
 
     if fastq_file_pair and not os.path.exists(fastq_file_pair):
-        raise OSError(
-            "Paired fastq file does not exist. Path checked: %s" % fastq_file_path
-        )
-
+        raise OSError(f"Paired fastq file does not exist. Path checked: {fastq_file_pair}")
     if not output_file:
         output_file = fastq_file + ".sub"
         print("No output file designated. Will write to:")
@@ -228,14 +226,14 @@ if __name__ == "__main__":
         output_file_pair = fastq_file_pair + ".sub"
         print("No output file for the paired file designated. Will write to:")
         print(output_file_pair)
-    
+
     print(f"subsample method: {subsample_method}")
-    
+
     # setting to default read_limit = 1M
     if not subsample_method and not subsample_percentage and not subsample_read_limit:
         subsample_read_limit = 100000000
         print("subsample_read_limit not set, defaulting to", str(subsample_read_limit))
-    #Both method, min number of reads
+    # Both method, min number of reads
     elif subsample_method == 0 and subsample_percentage:
         print("subsampling by percentage and read limit will be used")
         if not subsample_read_limit:
@@ -264,4 +262,12 @@ if __name__ == "__main__":
     output_files.append(output_file)
     output_files.append(output_file_pair)
 
-    subsample(fastq_files, output_files, subsample_read_limit, subsample_percentage, subsample_method, num_threads, compressed)
+    subsample(
+        fastq_files,
+        output_files,
+        subsample_read_limit,
+        subsample_percentage,
+        subsample_method,
+        num_threads,
+        compressed,
+    )

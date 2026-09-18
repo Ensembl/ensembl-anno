@@ -1,0 +1,137 @@
+# See the NOTICE file distributed with this work for additional information
+# regarding copyright ownership.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# pyproject.toml -- Ensembl Anno project configuration
+
+[project]
+name = "ensembl-anno" 
+
+# Versions should comply with PEP 440:
+version = "0.1.0"  # Required
+
+description = "Ensembl Anno - pipeline to provide genome annotation"
+
+requires-python = ">=3.10"
+authors = [
+    {name = "Ensembl", email = "dev@ensembl.org"},
+]
+maintainers = [
+    {name = "Ensembl", email = "dev@ensembl.org"},
+]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Bio-Informatics"
+]
+
+
+dependencies = [ 
+    "psutil",
+    "numpy"
+]
+
+
+[project.optional-dependencies] # Optional
+cicd = [
+    "black==25.11.0",
+    "coverage",
+    "mypy",
+    "pylint",
+    "pytest",
+]
+dev = [
+    "black==25.11.0",
+    "coverage",
+    "ipython",
+    "mock",
+    "mypy",
+    "pylint",
+    "pytest",
+    "sphinx",
+]
+docs = [
+    "mock",
+    "sphinx>=7",
+    "pydata-sphinx-theme",
+    "myst-parser",
+    "sphinxcontrib-bibtex",
+]
+
+[project.urls]  
+homepage = "https://www.ensembl.org"
+repository = "https://github.com/Ensembl/ensembl-anno"
+
+# The following would provide a command line executable called `sample`
+# which executes the function `main` from this package when invoked.
+[project.scripts]  # Optional
+#ensembl-anno = "ensembl.anno.ensembl_anno:main"
+run_repeatmasker = "ensembl.tools.anno.repeat_annotation.repeatmasker:main"
+run_trf = "ensembl.tools.anno.repeat_annotation.trf:main"
+run_dust = "ensembl.tools.anno.repeat_annotation.dust:main"
+run_red = "ensembl.tools.anno.repeat_annotation.red:main"
+run_eponine = "ensembl.tools.anno.simple_feature_annotation.eponine:main"
+run_cpg = "ensembl.tools.anno.simple_feature_annotation.cpg:main"
+run_trnascan = "ensembl.tools.anno.snc_rna_annotation.trnascan:main"
+run_cmsearch = "ensembl.tools.anno.snc_rna_annotation.cmsearch:main"
+run_genblast = "ensembl.tools.anno.protein_annotation.genblast:main"
+run_miniprot = "ensembl.tools.anno.protein_annotation.miniprot:main"
+run_star = "ensembl.tools.anno.transcriptomic_annotation.star:main"
+run_minimap2 = "ensembl.tools.anno.transcriptomic_annotation.minimap:main"
+run_stringtie = "ensembl.tools.anno.transcriptomic_annotation.stringtie:main"
+run_scallop = "ensembl.tools.anno.transcriptomic_annotation.scallop:main"
+# This is configuration specific to the `setuptools` build backend.
+# If you are using a different build backend, you will need to change this.
+[tool.setuptools]
+# If there are data files included in your packages that need to be
+# installed, specify them here.
+#package-data = {"ensembl-anno" = ["data"]}
+package-dir = {"" = "src/python"}
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools", "setuptools-scm", "wheel"]
+
+
+
+[tool.setuptools.packages.find]
+#where = ["src/python/ensembl/tools/anno"]  # list of folders that contain the packages (["."] by default)
+where = ["src/python"]
+
+[tool.black]
+line-length = 110
+
+
+
+[tool.mypy]
+#mypy_path = "src/python"
+explicit_package_bases = true
+ignore_missing_imports = true
+show_error_codes = true
+warn_unused_configs = true
+
+[tool.pylint.messages_control]
+max-line-length = 110
+
+disable = [
+    "invalid-name",
+    "similarities",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-locals",
+    "too-many-statements",
+    "unspecified-encoding",
+    "wildcard-import"
+]
+
