@@ -94,14 +94,35 @@ HelixerFilterConfig = BackboneFilterConfig
 
 @dataclass
 class ScoringWeights:
-    # backbone: weight for whichever ab initio backbone is actually loaded
-    # (Helixer or Tiberius -- matched against scoring.backbone_label, not a
-    # fixed source name). Legacy YAML key `helixer` is still accepted (see
-    # _DEPRECATED_KEY_ALIASES).
+    """Base evidence weight per EVIDENCE ROLE, never per tool name.
+
+    Each weight is selected by resolving a candidate's source label to its role
+    through ``gmb.pipeline.canonical_evidence.EvidenceRoles`` (configured by
+    ``scoring.backbone_label`` / ``shortread_labels`` / ``longread_label`` /
+    ``protein_alignment_labels``). A source whose role cannot be resolved gets
+    ``unknown``.
+
+    This is why an assembler called ``StringTie2``, ``IsoQuant``, ``FLAIR`` or
+    ``AssemblerX`` behaves identically to one called ``StringTie``, provided it
+    is listed under the right role. Before the role refactor these weights were
+    keyed by the literal strings ``scallop``/``stringtie``/``minimap2``, so a
+    differently-named tool was classified into the correct role everywhere else
+    yet silently received the ``unknown`` weight.
+
+    Legacy YAML keys ``helixer``, ``scallop``, ``stringtie`` and ``minimap2``
+    are still accepted as deprecated aliases (see ``_DEPRECATED_KEY_ALIASES``
+    and ``_collapse_shortread_weight_aliases``).
+    """
+
     backbone: float = 2.0
-    scallop: float = 1.0
-    stringtie: float = 1.0
-    minimap2: float = 1.0
+    short_read: float = 1.0
+    long_read: float = 1.0
+    # Protein alignments are support/veto evidence and are never candidate
+    # structures, so this weight is only reached if an operator deliberately
+    # lists a protein track as a structural source.
+    protein_alignment: float = 1.0
+    # Weight for a source that resolves to no configured role.
+    unknown: float = 1.0
 
 
 @dataclass
@@ -147,14 +168,44 @@ class ScoringConfig:
     # another source. Long-read models stay eligible where they are the only
     # candidate, or where every credible candidate is single-exon.
     longread_structural_guard: bool = False
-    # Backbone intron rescue. Ab initio backbones systematically under-call
+    # How a long-read transcript track is allowed to participate in SELECTION.
+    #   "primary_structural" -- may win a locus on its own splice structure
+    #   "support_only"       -- contributes locus extent and attribution, never
+    #                           takes primary structural priority
+    #   "reject"             -- excluded from candidate structures entirely
+    # `longread_structural_guard` is the narrower, conditional form of
+    # "support_only": it demotes long-read-only structures ONLY where another
+    # multi-exon structure survives at the same locus.
+    #
+    # Preflight may recommend "support_only"/"reject" when a long-read track
+    # fails its splice-quality check (see gmb.preflight). An operator override is
+    # always honoured and is recorded in the run manifest.
+    longread_disposition: str = "primary_structural"
+    # Backbone intron rescue. SOME ab initio backbones systematically under-call
     # introns, emitting one long coding exon where the gene is spliced. Where an
     # assembled transcript at the same locus shows a spliced CDS with canonical
     # introns that recovers MORE coding sequence than the collapsed backbone
     # model and contains most of it, the assembly is the direct observation and
     # takes structural priority; it is also exempt from the single-source protein
     # retention gate, since the backbone independently agrees the locus is coding.
-    backbone_intron_rescue: bool = False
+    #
+    # This rule is only correct in a particular EVIDENCE STATE, not for a clade.
+    # Measured: rescued models were 68.6% CDS-exact against a diatom-trained
+    # Tiberius backbone (P. falciparum) and 1.8% CDS-exact against a Helixer
+    # backbone (Z. tritici), where it destroyed models that were already right.
+    # It is therefore applicability-gated:
+    #   "off"  -- never fires (safe default)
+    #   "on"   -- expert override; fires regardless of the measured evidence
+    #   "auto" -- fires only where the backbone measurably under-resolves introns
+    #             relative to credible assembled transcripts
+    # See gmb.pipeline.applicability for the gate and its calibration.
+    # Legacy booleans are accepted: true -> "on", false -> "off".
+    backbone_intron_rescue: str = "off"
+    # Resolved at run time by the builder from the loaded evidence; not a user
+    # setting. None means "not yet resolved", in which case the selection path
+    # falls back to interpreting backbone_intron_rescue directly (so unit tests
+    # calling select_isoforms() without a builder still behave predictably).
+    backbone_intron_rescue_resolved: object = None
 
     # ---- evidence roles ----
     # Selection logic operates on roles, never on literal tool names. These
@@ -169,6 +220,42 @@ class ScoringConfig:
     shortread_labels: list = field(default_factory=lambda: ["Scallop", "StringTie"])
     protein_alignment_labels: list = field(
         default_factory=lambda: ["OrthoDB", "GenBlast", "UniProt"])
+
+
+@dataclass
+class PreflightConfig:
+    """Thresholds for pre-build input validation (see gmb.preflight).
+
+    Splice-quality floors are per evidence ROLE, because the roles make
+    different claims. A long-read transcript track asserts that it observed the
+    splice structure directly, so a poor canonical fraction there is a hard
+    failure. A backbone is a prediction and is judged more leniently. Protein
+    alignments are support-only and are not splice-checked at all.
+
+    The long-read floor is the reason this config exists: a P. falciparum
+    long-read consensus track measured 16.4% canonical against 99-100% for every
+    other track, and nothing in the pipeline objected. Locus-by-locus it then
+    worsened as many gene models as it improved.
+    """
+
+    # Canonical GT-AG/GC-AG/AT-AC fraction below which a track warns / fails.
+    backbone_splice_warn: float = 0.90
+    backbone_splice_fail: float = 0.70
+    shortread_splice_warn: float = 0.95
+    shortread_splice_fail: float = 0.80
+    # Strictest of the three: this track's whole purpose is observed structure.
+    longread_splice_warn: float = 0.95
+    longread_splice_fail: float = 0.85
+    # Below this many introns the fraction is too noisy to act on.
+    min_introns_for_splice_check: int = 100
+    # Fraction of a track's sequence names that may be absent from the genome
+    # before it fails rather than warns.
+    max_unknown_seqid_fraction: float = 0.05
+    # Fraction of feature rows that may lack a strand before it fails.
+    max_unstranded_fraction: float = 0.05
+    # Informational span guardrails; these only ever warn.
+    max_transcript_span_warn_bp: int = 500000
+    max_intron_warn_bp: int = 100000
 
 
 @dataclass
@@ -574,6 +661,7 @@ class PipelineConfig:
     # _DEPRECATED_KEY_ALIASES).
     backbone_filter: BackboneFilterConfig = field(default_factory=BackboneFilterConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
+    preflight: PreflightConfig = field(default_factory=PreflightConfig)
     protein_validation: ProteinValidationConfig = field(default_factory=ProteinValidationConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
     utr: UtrConfig = field(default_factory=UtrConfig)
@@ -622,6 +710,48 @@ def list_build_presets() -> list[str]:
         return []
 
 
+class _DuplicateKeyError(ValueError):
+    """A YAML mapping defined the same key twice."""
+
+
+class _StrictLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate keys instead of silently keeping the last.
+
+    Plain YAML semantics let a second `scoring:` block at the top level replace
+    the first outright. In a layered config that is a silent, total loss of every
+    setting in the earlier block -- a whole clade preset can evaporate and the
+    run still succeeds, just with the neutral defaults. Fail loudly instead.
+    """
+
+
+def _no_duplicate_keys(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise _DuplicateKeyError(
+                f"Duplicate key {key!r} at line {key_node.start_mark.line + 1} "
+                f"of {key_node.start_mark.name}. YAML would silently discard the "
+                f"earlier block; merge them into one instead."
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicate_keys)
+
+
+def _safe_load_strict(stream, source: str = ""):
+    """yaml.safe_load, but duplicate keys are an error rather than an overwrite."""
+    try:
+        return yaml.load(stream, Loader=_StrictLoader) or {}
+    except _DuplicateKeyError as exc:
+        raise ValueError(
+            f"Invalid configuration{f' in {source}' if source else ''}: {exc}"
+        ) from None
+
+
 def _load_bundled_config_yaml(name: str) -> dict:
     """Load a bundled YAML from gmb.configs by base name (no extension).
 
@@ -630,7 +760,7 @@ def _load_bundled_config_yaml(name: str) -> dict:
     """
     try:
         text = _pkg_files("gmb.configs").joinpath(f"{name}.yaml").read_text(encoding="utf-8")
-        return yaml.safe_load(text) or {}
+        return _safe_load_strict(text, f"bundled preset '{name}'")
     except FileNotFoundError:
         raise FileNotFoundError(
             f"Bundled config '{name}.yaml' not found in gmb.configs package.  "
@@ -648,8 +778,66 @@ def _load_bundled_config_yaml(name: str) -> dict:
 _DEPRECATED_KEY_ALIASES: dict = {
     "PipelineConfig": {"helixer_filter": "backbone_filter"},
     "ScoringConfig": {"keep_helixer_without_support": "keep_backbone_without_support"},
-    "ScoringWeights": {"helixer": "backbone"},
+    # scoring.weights was keyed by tool name before the evidence-role refactor.
+    # `minimap2` maps 1:1 onto the long_read role. `scallop` and `stringtie`
+    # BOTH map onto short_read, so they cannot go through the generic 1:1
+    # mechanism -- see _collapse_shortread_weight_aliases, which runs first.
+    "ScoringWeights": {"helixer": "backbone", "minimap2": "long_read"},
 }
+
+# Legacy scoring.weights keys that all collapse onto the single `short_read`
+# role weight. Kept separate from _DEPRECATED_KEY_ALIASES because that table
+# assumes one legacy key per current key.
+_SHORTREAD_WEIGHT_ALIASES = ("scallop", "stringtie")
+
+
+def _collapse_shortread_weight_aliases(d: dict, path_prefix: str) -> dict:
+    """Collapse legacy per-assembler weights onto the `short_read` role weight.
+
+    Before the evidence-role refactor, `scoring.weights` carried one weight per
+    assembler (`scallop`, `stringtie`). Both are the same evidence role, so they
+    now share a single `short_read` weight.
+
+    Rules, in order:
+      - if `short_read` is set explicitly, it wins and the legacy keys are dropped;
+      - if the legacy keys are all set to the SAME value, that value is adopted
+        silently-but-for-one DeprecationWarning (this is every shipped preset);
+      - if they DISAGREE, that is a real semantic change, so warn loudly, and
+        adopt the maximum so no evidence class is silently down-weighted.
+    """
+    present = {k: d[k] for k in _SHORTREAD_WEIGHT_ALIASES if k in d}
+    if not present:
+        return d
+    resolved = dict(d)
+    for k in present:
+        resolved.pop(k)
+    if "short_read" in resolved:
+        warnings.warn(
+            f"Config key(s) {sorted(present)} under '{path_prefix}' are deprecated "
+            f"and were ignored because '{path_prefix}short_read' was also set -- "
+            "the current key always takes precedence over the legacy one.",
+            DeprecationWarning, stacklevel=5)
+        return resolved
+    values = set(present.values())
+    if len(values) == 1:
+        warnings.warn(
+            f"Config key(s) {sorted(present)} under '{path_prefix}' are deprecated; "
+            f"use '{path_prefix}short_read' instead. Weights are now keyed by "
+            "evidence role, not tool name. This alias will be removed in a "
+            "future release.",
+            DeprecationWarning, stacklevel=5)
+        resolved["short_read"] = present[sorted(present)[0]]
+        return resolved
+    chosen = max(present.values())
+    warnings.warn(
+        f"Config key(s) {sorted(present)} under '{path_prefix}' set DIFFERENT "
+        f"weights ({present}), but they are all the same evidence role "
+        f"(short_read) and now share one weight. Using the maximum "
+        f"({chosen}) so no evidence class is silently down-weighted. Set "
+        f"'{path_prefix}short_read' explicitly to remove this ambiguity.",
+        DeprecationWarning, stacklevel=5)
+    resolved["short_read"] = chosen
+    return resolved
 
 
 def _apply_deprecated_key_aliases(dc, d: dict, path_prefix: str) -> dict:
@@ -660,6 +848,8 @@ def _apply_deprecated_key_aliases(dc, d: dict, path_prefix: str) -> dict:
     the current name always wins -- the legacy value is dropped (never
     silently combined) with a warning explaining why.
     """
+    if type(dc).__name__ == "ScoringWeights":
+        d = _collapse_shortread_weight_aliases(d, path_prefix)
     aliases = _DEPRECATED_KEY_ALIASES.get(type(dc).__name__)
     if not aliases or not any(old in d for old in aliases):
         return d
@@ -713,6 +903,13 @@ def _update_dataclass(dc, d: dict, path_prefix: str = ""):
     return dc
 
 
+def validate_rescue_mode(cfg) -> str:
+    """Normalise and validate scoring.backbone_intron_rescue, raising on a typo."""
+    from gmb.pipeline.applicability import normalise_rescue_mode
+    return normalise_rescue_mode(
+        getattr(cfg.scoring, "backbone_intron_rescue", "off"))
+
+
 def validate_selection_policy(cfg) -> list:
     """Check the selection policy for contradictory or inert configuration.
 
@@ -750,7 +947,11 @@ def validate_selection_policy(cfg) -> list:
                     f"({a} and {b}). Each source must have exactly one role."
                 )
 
-    if getattr(scfg, "backbone_intron_rescue", False):
+    # "off" is a truthy string -- always go through the mode normaliser.
+    from gmb.pipeline.applicability import normalise_rescue_mode
+    rescue_mode = normalise_rescue_mode(
+        getattr(scfg, "backbone_intron_rescue", "off"))
+    if rescue_mode != "off":
         if not roles["backbone_label"]:
             warnings_out.append(
                 "scoring.backbone_intron_rescue is enabled but no backbone_label "
@@ -823,8 +1024,11 @@ def load_config(
     -------
     PipelineConfig
     """
-    # Normalise preset: None / "none" / "" all mean "standard only".
-    if preset in (None, "none", ""):
+    # Normalise preset: None / "none" / "" / "standard" all mean "the neutral
+    # standard.yaml base, with no clade overlay". "standard" is accepted as an
+    # explicit, self-documenting spelling so a production config can name the
+    # neutral preset rather than relying on an omitted argument.
+    if preset in (None, "none", "", "standard"):
         preset = None
 
     # Remap deprecated preset names.
@@ -862,7 +1066,7 @@ def load_config(
         if not os.path.exists(override_path):
             raise FileNotFoundError(f"Config file not found: {override_path}")
         with open(override_path) as fh:
-            data = yaml.safe_load(fh) or {}
+            data = _safe_load_strict(fh, str(override_path))
         _update_dataclass(cfg, data)
 
     _validate_dataclass(cfg)

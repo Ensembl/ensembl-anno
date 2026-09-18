@@ -1,5 +1,12 @@
 # GMB build configuration reference
 
+> **Superseded for the production path — read [`configuration.md`](configuration.md) first.**
+>
+> This file remains the exhaustive per-section schema reference and is still accurate for
+> the sections it covers, but it predates evidence-role weights, the
+> `backbone_intron_rescue` applicability gate, `longread_disposition` and the preflight
+> thresholds. Use it for depth, not as a starting point.
+
 Configuration is assembled in layers. This document describes the layering
 model, every top-level config section, and how to supply environment-specific
 paths without duplicating biological settings.

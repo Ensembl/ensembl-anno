@@ -20,6 +20,7 @@ from gmb.pipeline.annotate_cds_utrs import check_splice_sites
 from gmb.pipeline.canonical_evidence import (
     EVIDENCE_CLASS_BACKBONE,
     EVIDENCE_CLASS_LONG_READ,
+    EVIDENCE_CLASS_PROTEIN_ALIGNMENT,
     EVIDENCE_CLASS_SHORT_READ,
     EvidenceRoles,
 )
@@ -44,11 +45,45 @@ def _get_intron_chain(exon_df: pd.DataFrame) -> str:
 # ---------------------------------------------------------------------------
 
 
+def rescue_enabled(scoring_config) -> bool:
+    """Whether backbone intron rescue is active for this run.
+
+    Prefers the value the builder resolved through the applicability gate. Falls
+    back to interpreting the configured mode directly when nothing resolved it --
+    "auto" is treated as OFF in that case, because the gate needs run-level
+    evidence that a bare select_isoforms() call does not have, and OFF is the
+    safe interpretation.
+    """
+    resolved = getattr(scoring_config, "backbone_intron_rescue_resolved", None)
+    if resolved is not None:
+        return bool(resolved)
+    from gmb.pipeline.applicability import normalise_rescue_mode
+    return normalise_rescue_mode(
+        getattr(scoring_config, "backbone_intron_rescue", "off")) == "on"
+
+
+def weights_for_role(weights, role: str) -> float:
+    """Base weight for one evidence role.
+
+    The single place that maps a resolved role onto a configured numeric weight.
+    An unrecognised role falls back to `weights.unknown` rather than to a
+    hard-coded literal, so adding a role to `canonical_evidence` cannot silently
+    change scoring.
+    """
+    return {
+        EVIDENCE_CLASS_BACKBONE: weights.backbone,
+        EVIDENCE_CLASS_SHORT_READ: weights.short_read,
+        EVIDENCE_CLASS_LONG_READ: weights.long_read,
+        EVIDENCE_CLASS_PROTEIN_ALIGNMENT: weights.protein_alignment,
+    }.get(role, weights.unknown)
+
+
 def score_model(
     model: dict,
     config: PipelineConfig,
     protein_supported_tids: set[str],
     genome: dict[str, str] | None = None,
+    roles: "EvidenceRoles | None" = None,
 ) -> float:
     """Score a single gene model.
 
@@ -61,6 +96,9 @@ def score_model(
     protein_supported_tids : set of str
     genome : dict or None
         If provided, enables splice-site scoring.
+    roles : EvidenceRoles or None
+        Resolved evidence roles. Built from `config.scoring` when omitted;
+        callers in a loop should build it once and pass it in.
 
     Returns
     -------
@@ -70,22 +108,16 @@ def score_model(
     scfg = config.scoring
     score = 0.0
 
-    # Base evidence weight
+    # Base evidence weight, resolved through evidence ROLES -- never through a
+    # literal tool name. A source listed under scoring.shortread_labels gets the
+    # short_read weight whatever it is called, so StringTie2 / IsoQuant / FLAIR /
+    # AssemblerX all behave identically to StringTie.
     sources = set(model.get("combined_evidence", model["source"]).split(","))
     weights = scfg.weights
-    backbone_lower = scfg.backbone_label.strip().lower()
+    if roles is None:
+        roles = EvidenceRoles.from_config(scfg)
     for s in sources:
-        s_lower = s.strip().lower()
-        if s_lower == backbone_lower:
-            score += weights.backbone
-        elif s_lower == "scallop":
-            score += weights.scallop
-        elif s_lower == "stringtie":
-            score += weights.stringtie
-        elif s_lower == "minimap2":
-            score += weights.minimap2
-        else:
-            score += 1.0  # unknown source gets base weight
+        score += weights_for_role(weights, roles.role_of(s))
 
     # Multi-source bonus — uses raw named-source count, not biological evidence classes.
     # canonical_selection uses evidence classes for breadth ranking; these are different
@@ -321,7 +353,7 @@ def select_isoforms(
         rep["protein_evidence"] = ",".join(sorted(s["protein_sources"]))
         if s["protein_support"]:
             rep["protein_support"] = True
-        s["score"] = score_model(rep, config, strong_protein_tids, genome)
+        s["score"] = score_model(rep, config, strong_protein_tids, genome, roles=roles)
 
         # ---- structural corroboration (role-based, no literal tool names) ----
         src_roles = {src: roles.role_of(src) for src in s["sources"]}
@@ -367,7 +399,7 @@ def select_isoforms(
         s["backbone_intron_rescue"] = False
         s["rep"]["backbone_intron_rescue"] = False
 
-    if getattr(scfg, "backbone_intron_rescue", False) and cds_map:
+    if rescue_enabled(scfg) and cds_map:
         collapsed = [s for s in merged.values()
                      if s["has_backbone"] and s["n_cds_exons"] <= 1 and s["cds"]]
         if collapsed:
@@ -462,6 +494,11 @@ def select_isoforms(
     # A long-read-only structure does not take primary structural priority where
     # any multi-exon structure from another role exists. It is not removed: it
     # stays eligible as an alternate isoform and keeps its attribution.
+    # `longread_disposition` is the unconditional form; the guard is the
+    # conditional one. support_only demotes every long-read-only structure;
+    # the guard demotes one only where another multi-exon structure survives.
+    disposition = str(getattr(scfg, "longread_disposition", "primary_structural"))
+    demote_all_longread = disposition == "support_only"
     if guard_on:
         has_other_multiexon = any(
             (not s["is_longread_only"]) and s["rep"]["exon_count"] > 1
@@ -470,8 +507,9 @@ def select_isoforms(
     else:
         has_other_multiexon = False
     for s in candidates:
-        s["longread_demoted"] = bool(guard_on and has_other_multiexon
-                                     and s["is_longread_only"])
+        s["longread_demoted"] = bool(
+            s["is_longread_only"]
+            and (demote_all_longread or (guard_on and has_other_multiexon)))
         s["rep"]["longread_structural_role"] = (
             "support_only" if s["longread_demoted"]
             else "primary" if s["is_longread_only"]

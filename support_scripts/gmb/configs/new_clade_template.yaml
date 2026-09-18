@@ -1,0 +1,223 @@
+# =============================================================================
+# GMB — new clade configuration template
+# =============================================================================
+#
+# Copy this file, fill in the CHANGE_ME values, and pass it on top of the
+# neutral preset:
+#
+#     gmb-preflight --preset standard --config my_clade.yaml --genome ... \
+#         --output-dir $OUT/preflight
+#     gmb-build     --preset standard --config my_clade.yaml --genome ... \
+#         --output-dir $OUT/build
+#
+# Everything here is COMMENTED OUT or set to the neutral default on purpose.
+# An unedited copy of this file changes nothing: it resolves to exactly the
+# `standard` preset. That is deliberate — a new clade starts from neutral,
+# never from another clade's tuning.
+#
+# Layering:  standard.yaml  ->  (optional clade preset)  ->  this file
+# Later files win on shared keys. Never edit the shipped presets themselves.
+#
+# The rule that governs every choice below:
+#
+#     Change a biological policy only when an evidence-derived reason exists,
+#     and measure that reason with `gmb-preflight` BEFORE you look at any
+#     reference annotation.
+#
+# A reference may be used to EVALUATE a finished build. It must never be used to
+# choose the configuration that produced it. See docs/creating_a_preset.md.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 1. Evidence role labels  — THE ONLY SECTION YOU MUST EDIT
+# -----------------------------------------------------------------------------
+# GMB's selection logic never tests a tool name. It resolves each source label
+# to an evidence ROLE and acts on the role. These labels are that mapping.
+#
+# The labels must match the ones GMB assigns when it loads your files:
+#   --helixer  -> "Helixer"      --tiberius  -> "Tiberius"
+#   --scallop  -> "Scallop"      --stringtie -> "StringTie"
+#   --minimap2 -> "Minimap2"     --orthodb   -> "OrthoDB"
+#   --uniprot  -> "UniProt"      --genblast  -> "GenBlast"
+#
+# If your tool is none of these, its label still resolves correctly as long as
+# you list it here. Preflight reports the resolved role and weight for every
+# track; a source that lands in no role is reported as a FAILURE, not ignored.
+scoring:
+  # The ab initio gene predictor. Exactly one per run.
+  #   what it controls  which track is treated as the structural scaffold
+  #   safe default      "Helixer"
+  #   when to change    whenever your backbone is not Helixer
+  backbone_label: Helixer            # CHANGE_ME if not Helixer
+
+  # Assembled short-read transcript tracks. Any number.
+  #   when to change    add your assembler's label, whatever it is called
+  shortread_labels: [Scallop, StringTie]      # CHANGE_ME
+
+  # Long-read transcript track. Optional; leave as-is if you have none.
+  longread_label: Minimap2                    # CHANGE_ME if using another tool
+
+  # Protein-to-genome alignments. Support and veto evidence only — these never
+  # become candidate gene structures.
+  protein_alignment_labels: [OrthoDB, GenBlast, UniProt]   # CHANGE_ME
+
+  # ---------------------------------------------------------------------------
+  # 2. Evidence weights — keyed by ROLE, not by tool name
+  # ---------------------------------------------------------------------------
+  # Base score contributed by each evidence role. Relative values matter; the
+  # absolute scale does not.
+  #
+  #   how to measure whether to change:
+  #     run `gmb-preflight` and compare the multi-exon fraction and canonical
+  #     splice fraction of the backbone against the assembled tracks. Raise the
+  #     backbone weight where the backbone is clearly the better structural
+  #     source; lower it where the assemblies are.
+  #
+  #   for calibration, the two validated clades:
+  #     apicomplexa  backbone 2.6   (diatom-trained Tiberius, 17-39% multi-exon)
+  #     fungi        backbone 3.1   (Helixer, 72% multi-exon — trusted more)
+  #
+  # weights:
+  #   backbone: 2.0
+  #   short_read: 1.0
+  #   long_read: 1.0
+  #   protein_alignment: 1.0
+  #   unknown: 1.0        # a source resolving to no role — should never be hit
+
+  # ---------------------------------------------------------------------------
+  # 3. Biological selection policy — ALL OFF BY DEFAULT
+  # ---------------------------------------------------------------------------
+  # These are tuning, not correctness. Correctness behaviours (UTR handling,
+  # FASTA regeneration, duplicate collapse, gene-boundary recomputation,
+  # cross-seqid ID namespacing, sequence QC) are always on and are not
+  # configurable.
+  #
+  # Enable these one at a time, and measure each one.
+
+  # Rank on independent structural agreement before the numeric score.
+  #   safe default   false
+  #   when to change when preflight shows several credible structural tracks
+  #   how to measure compare CDS-exact rate for multi-source vs single-source
+  #                  models. Observed: enriches in fungi (42.7% vs 28.1%) and in
+  #                  the P. falciparum baseline (51.5% vs 45.1%), but INVERTS
+  #                  once the rest of the policy is on. Not fully understood.
+  structural_corroboration: false
+
+  # Which protein-alignment signal acts as the strong support/retention signal.
+  #   "positional"          any same-strand overlap  (safe default)
+  #   "cds_span_compatible" alignment must fall inside the candidate's CDS span
+  #   when to change  only if protein support predicts structural correctness
+  #                   MONOTONICALLY for your evidence
+  #   how to measure  CDS-exact rate for strong / positional-only / none.
+  #                   Observed monotone in fungi (38.0 / 6.8 / 0.8) but NOT in
+  #                   P. falciparum (71.7 / 30.4 / 42.6 — "none" beats "weak").
+  protein_support_mode: positional
+
+  # Stop a long-read-only model taking primary structural priority where another
+  # multi-exon structure survives at the same locus.
+  #   safe default   false
+  #   when to change enable whenever you supply a long-read track whose splice
+  #                  quality preflight does not fully vouch for
+  #   note           provably inert with no long-read track
+  longread_structural_guard: false
+
+  # How a long-read track may participate in selection at all.
+  #   "primary_structural"  may win a locus on its own splice structure (default)
+  #   "support_only"        contributes extent and attribution, never structure
+  #   "reject"              excluded from candidate structures entirely
+  #   when to change  preflight FAILS a long-read track's splice-quality check.
+  #                   A P. falciparum long-read consensus measured 16.4%
+  #                   canonical splice sites and contributed no net structural
+  #                   benefit; it should have been "support_only".
+  longread_disposition: primary_structural
+
+  # Replace a collapsed single-exon backbone CDS with a canonically spliced
+  # assembled transcript that recovers more coding sequence.
+  #   "off"   never fires (safe default)
+  #   "auto"  fires only where the evidence shows the backbone under-resolving
+  #           introns relative to credible assembled transcripts
+  #   "on"    expert override; fires regardless of the measured evidence
+  #
+  #   when to change  set "auto" once preflight shows a low backbone multi-exon
+  #                   fraction against high-quality assembled transcripts
+  #   how to measure  preflight reports the decision and the numbers behind it.
+  #                   Observed: 68.6% of rescued models CDS-exact against a
+  #                   17% multi-exon Tiberius backbone; 1.8% against a 72%
+  #                   multi-exon Helixer backbone, where it DESTROYED correct
+  #                   models. This is why "auto" exists and why "on" is rarely
+  #                   the right answer.
+  backbone_intron_rescue: "off"
+
+
+# -----------------------------------------------------------------------------
+# 4. Preflight thresholds
+# -----------------------------------------------------------------------------
+# Splice-quality floors per evidence role. Defaults are sensible for eukaryotes
+# with normal splicing.
+#
+#   when to change  an organism with genuinely unusual splicing, or a track type
+#                   whose canonical fraction is expected to be lower
+#   how to measure  run preflight and read the per-track canonical fractions
+#                   before deciding anything
+#
+# preflight:
+#   backbone_splice_warn: 0.90
+#   backbone_splice_fail: 0.70
+#   shortread_splice_warn: 0.95
+#   shortread_splice_fail: 0.80
+#   longread_splice_warn: 0.95
+#   longread_splice_fail: 0.85      # strictest: this track claims to OBSERVE structure
+#   min_introns_for_splice_check: 100
+#   max_unknown_seqid_fraction: 0.05
+#   max_unstranded_fraction: 0.05
+
+
+# -----------------------------------------------------------------------------
+# 5. Genome-structure thresholds
+# -----------------------------------------------------------------------------
+# Measure these from your reference-free inputs (or from published statistics
+# for the clade) — never by tuning against a reference annotation.
+#
+# transcriptomic_filter:
+#   # Longest plausible intron. Too high admits chimeras; too low deletes real
+#   # genes. apicomplexa 2,500 / fungi 3,000 / neutral 1,000,000.
+#   max_intron_length: 1000000       # CHANGE_ME — the neutral default is very permissive
+#   # Longest plausible transcript. apicomplexa 35,000 / fungi 20,000.
+#   max_transcript_length: 100000    # CHANGE_ME
+#
+# transcript_splitting:
+#   split_enabled: true
+#   split_gap_bp: 3000               # usually mirrors max_intron_length
+#   split_on_large_exon_bp: 50000
+#
+# orf:
+#   # Shortest CDS to keep, in codons. Raise only if your clade genuinely lacks
+#   # short genes; lowering it admits spurious ORFs.
+#   min_codons: 33
+#
+# utr:
+#   # Measure real UTR length percentiles where you can.
+#   max_5p_bp: 5000
+#   max_3p_bp: 5000
+#   max_total_bp: 10000
+
+
+# -----------------------------------------------------------------------------
+# 6. Protein validation (DIAMOND + Psauron) — machine-specific
+# -----------------------------------------------------------------------------
+# Keep execution paths in a SEPARATE overlay from biological policy, so the
+# policy file can be identical across machines and species. GMB does not install
+# these tools.
+#
+# protein_validation:
+#   enabled: true
+#   diamond_path: "/path/to/diamond"           # CHANGE_ME
+#   psauron_path: "/path/to/psauron"           # CHANGE_ME
+#   diamond_db: "/path/to/proteins.dmnd"       # CHANGE_ME
+#   policy: penalize          # penalize | drop | bonus
+#   min_score: 0.7
+#
+# Set enabled: false if these tools are unavailable. Protein validation only
+# SCORES models that already exist; it can change which isoform wins, but it
+# cannot change which structures are possible.

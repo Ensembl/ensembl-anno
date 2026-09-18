@@ -42,6 +42,76 @@ def _require(path: str, label: str) -> None:
         sys.exit(f"ERROR: required file missing: {label} ({path})")
 
 
+def _resolve_finalise_config(resolved_cfg, preset, config_files, override_build_config):
+    """Choose the configuration finalisation runs under.
+
+    Finalisation MUST, by default, run under the exact configuration that
+    produced the build. Anything else can silently finalise an annotation under
+    settings that never applied to it -- for example selecting canonical
+    transcripts under different weights than the ones that chose the models.
+
+    Rules:
+      1. ``build/resolved_config.yaml`` is used whenever it exists -- including
+         when --preset/--config are supplied, because those are how a caller
+         *reproduces* the build invocation and passing them must not quietly
+         change what finalisation does.
+      2. If --preset/--config were supplied AND resolve differently from the
+         build config, the divergence is reported loudly.
+      3. ``--override-build-config`` opts in to the supplied preset/config.
+      4. With no build config present, the supplied preset/config is used.
+
+    Returns (config, source_description, sha256_of_config_actually_used).
+    """
+    from gmb.pipeline.config import load_config
+
+    have_build_cfg = os.path.exists(resolved_cfg)
+    supplied = bool(config_files) or (preset not in (None, "", "none"))
+
+    if have_build_cfg and override_build_config:
+        print("  WARNING: --override-build-config given; finalising under the supplied "
+              "preset/config INSTEAD of the build's resolved_config.yaml.")
+        print(f"           build config ignored: {resolved_cfg}")
+        return load_config(config_files, preset), "explicit_override", None
+
+    if have_build_cfg:
+        config = load_config(resolved_cfg, preset=None)
+        print(f"  Using the build's resolved_config.yaml ({resolved_cfg})")
+        if supplied:
+            try:
+                diffs = _config_differences(config, load_config(config_files, preset))
+            except Exception:
+                diffs = None
+            if diffs:
+                print(f"  WARNING: the supplied --preset/--config resolve differently from "
+                      f"the build configuration in {len(diffs)} setting(s); the BUILD "
+                      f"configuration is being used.")
+                for key, build_val, supplied_val in diffs[:10]:
+                    print(f"           {key}: build={build_val!r} supplied={supplied_val!r}")
+                if len(diffs) > 10:
+                    print(f"           ... and {len(diffs) - 10} more")
+                print("           Pass --override-build-config to finalise under the "
+                      "supplied configuration instead.")
+        return config, "build_resolved_config", _sha256(resolved_cfg)
+
+    print("  No resolved_config.yaml in the build directory; using the supplied "
+          "preset/config.")
+    return load_config(config_files, preset), "supplied_preset_config", None
+
+
+def _config_differences(a, b, prefix="", out=None):
+    """Flat list of (dotted_key, a_value, b_value) where two configs differ."""
+    if out is None:
+        out = []
+    for field_name in getattr(a, "__dataclass_fields__", {}):
+        av = getattr(a, field_name, None)
+        bv = getattr(b, field_name, None)
+        if hasattr(av, "__dataclass_fields__"):
+            _config_differences(av, bv, f"{prefix}{field_name}.", out)
+        elif av != bv:
+            out.append((f"{prefix}{field_name}", av, bv))
+    return out
+
+
 def run_finalise(
     build_dir: str,
     genome_path: str,
@@ -49,6 +119,7 @@ def run_finalise(
     preset: str = "standard",
     config_files: list[str] | None = None,
     comparison_gff3: str | None = None,
+    override_build_config: bool = False,
 ) -> dict:
     """Run the complete post-build finalisation workflow.
 
@@ -153,11 +224,8 @@ def run_finalise(
 
     # --- 5. Canonical selection ---
     print("Step 4: Running canonical selection...")
-    if os.path.exists(resolved_cfg) and not config_files:
-        config = load_config(resolved_cfg, preset=None)
-        print(f"  Using build's resolved_config.yaml")
-    else:
-        config = load_config(config_files, preset)
+    config, config_source, config_sha = _resolve_finalise_config(
+        resolved_cfg, preset, config_files, override_build_config)
     pv_path = prot_val_tsv if os.path.exists(prot_val_tsv) else None
     canonical_dir = os.path.join(output_dir, "canonical")
     canonical_summary = run_canonical_selection(
@@ -215,6 +283,11 @@ def run_finalise(
         "fasta_stats": fasta_stats,
         "resolved_config_present": os.path.exists(resolved_cfg),
         "resolved_config_sha256": _sha256(resolved_cfg) if os.path.exists(resolved_cfg) else None,
+        # Which configuration finalisation actually ran under, and its hash.
+        # "build_resolved_config" is the safe default; "explicit_override" means a
+        # caller deliberately finalised under different settings.
+        "finalise_config_source": config_source,
+        "finalise_config_sha256": config_sha,
         "runtime_seconds": round(elapsed, 1),
         "errors": errors,
         "outputs": {},
@@ -289,13 +362,26 @@ def main() -> None:
     parser.add_argument(
         "--preset",
         default="standard",
-        help="Config preset (default: standard). Use 'apicomplexa' for Plasmodium.",
+        help="Config preset. IGNORED when the build directory contains "
+             "resolved_config.yaml, which is the normal case -- finalisation runs "
+             "under the configuration that produced the build.",
     )
     parser.add_argument(
         "--config",
         action="append",
         default=None,
-        help="Additional YAML config file(s). May be repeated.",
+        help="Additional YAML config file(s). Same caveat as --preset: ignored "
+             "(with a warning if it differs) when the build's resolved_config.yaml "
+             "is present.",
+    )
+    parser.add_argument(
+        "--override-build-config",
+        action="store_true",
+        help="Finalise under --preset/--config INSTEAD of the build's "
+             "resolved_config.yaml. Rarely correct: finalising under settings that "
+             "did not produce the build can select canonical transcripts under "
+             "different weights than the ones that chose the models. Recorded in "
+             "the handover manifest as finalise_config_source=explicit_override.",
     )
     parser.add_argument("--comparison-gff3", default=None, help="Reference GFF3 for comparison")
     args = parser.parse_args()
@@ -306,6 +392,7 @@ def main() -> None:
         output_dir=args.output_dir,
         preset=args.preset,
         config_files=args.config,
+        override_build_config=args.override_build_config,
         comparison_gff3=args.comparison_gff3,
     )
 

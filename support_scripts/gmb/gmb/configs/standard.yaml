@@ -85,11 +85,19 @@ backbone_filter:
 # scoring — isoform scoring and selection
 # ---------------------------------------------------------------------------
 scoring:
+  # Base evidence weight per EVIDENCE ROLE, not per tool name. A source is
+  # mapped to its role by scoring.backbone_label / shortread_labels /
+  # longread_label / protein_alignment_labels, so an assembler called anything
+  # (StringTie2, IsoQuant, FLAIR, AssemblerX) is weighted identically to one
+  # called StringTie as long as it is listed under the right role.
+  # Legacy per-tool keys (helixer/scallop/stringtie/minimap2) are still accepted
+  # as deprecated aliases.
   weights:
-    backbone: 2.0     # raised in clade presets tuned to a specific predictor
-    scallop: 1.0
-    stringtie: 1.0
-    minimap2: 1.0
+    backbone: 2.0       # raised in clade presets tuned to a specific predictor
+    short_read: 1.0
+    long_read: 1.0
+    protein_alignment: 1.0  # protein tracks are support-only; rarely reached
+    unknown: 1.0        # source resolving to no configured role
   protein_overlap_bonus: 2.0
   # Bonus when a transcript is supported by multiple independent source classes.
   multi_source_bonus: 1.0

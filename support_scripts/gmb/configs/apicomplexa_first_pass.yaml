@@ -91,7 +91,7 @@ scoring:
     # collapsed long-read consensus models are supplied. Weighted above
     # Scallop/StringTie because long reads span full introns directly rather
     # than relying on short-read splice-junction inference.
-    minimap2: 1.3
+    long_read: 1.3
   # Raised from 0.5: rewards loci where the Tiberius backbone agrees with
   # independent transcriptomic evidence -- exactly the situation that
   # corrects Tiberius's multi-exon structural errors (see helixer weight

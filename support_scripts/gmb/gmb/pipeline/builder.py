@@ -55,7 +55,7 @@ from gmb.pipeline.evidence_filter import (
     filter_protein_evidence,
     split_mega_transcripts,
 )
-from gmb.pipeline.gff3_validate import validate_and_fix_gff3
+from gmb.pipeline.gff3_validate import recompute_gene_bounds, validate_and_fix_gff3
 from gmb.pipeline.protein_validation import batch_score_proteins, check_dependencies
 from gmb.pipeline.scoring import select_isoforms
 from gmb.pipeline.subset_utils import (
@@ -69,6 +69,38 @@ from gmb.pipeline.subset_utils import (
 )
 from gmb.utils.intervals import cds_span_compatible_ids, same_strand_overlap_ids
 from gmb.utils.logging import resolve_log_file, setup_logging
+
+
+def _assembled_canonical_splice_fraction(exon_df, scoring_config, genome_dict):
+    """Canonical GT-AG fraction of the assembled-transcript (short-read) tracks.
+
+    Precondition for the backbone-intron-rescue auto gate: replacement splice
+    structures are only credible if the track they come from is canonically
+    spliced. Returns None when there is nothing to measure, which the gate
+    treats as "cannot judge" and therefore refuses.
+    """
+    from gmb.pipeline.annotate_cds_utrs import check_splice_sites
+    from gmb.pipeline.canonical_evidence import (
+        EVIDENCE_CLASS_SHORT_READ,
+        EvidenceRoles,
+    )
+
+    if exon_df is None or len(exon_df) == 0 or not genome_dict:
+        return None
+    roles = EvidenceRoles.from_config(scoring_config)
+    canonical = total = 0
+    for (source, _tid), grp in exon_df.groupby(["Source", "transcript_id"], observed=True):
+        if roles.role_of(source) != EVIDENCE_CLASS_SHORT_READ or len(grp) < 2:
+            continue
+        chrom = str(grp["Chromosome"].iloc[0])
+        if chrom not in genome_dict:
+            continue
+        exons = sorted(zip(grp["Start"].astype(int), grp["End"].astype(int)))
+        for site in check_splice_sites(exons, str(grp["Strand"].iloc[0]), genome_dict[chrom]):
+            total += 1
+            if site["class"] == "canonical":
+                canonical += 1
+    return (canonical / total) if total else None
 
 
 def regenerate_final_fasta(
@@ -558,6 +590,29 @@ def load_evidence(
         else:
             df["gene_id"] = df["transcript_id"]
 
+    # Cross-seqid ID collisions: some predictors (notably Tiberius) restart
+    # gene/transcript numbering on every sequence, so "g2.t1" can name
+    # unrelated models on different contigs. Everything downstream groups
+    # exons by transcript_id alone, which would fuse those models into one
+    # chimeric transcript spanning both sequences -- joining unrelated coding
+    # fragments in unrelated reading frames. Namespace only the IDs that
+    # actually occur on more than one seqname, so this is a no-op for inputs
+    # whose IDs are already genome-wide unique. Same policy as
+    # gmb.compare.annotation_loader._namespace_duplicate_ids.
+    for id_col in ("transcript_id", "gene_id"):
+        seqs_per_id = df.groupby(id_col, observed=True)["Chromosome"].nunique()
+        dup_ids = set(seqs_per_id[seqs_per_id > 1].index)
+        if not dup_ids:
+            continue
+        dup_mask = df[id_col].isin(dup_ids)
+        df.loc[dup_mask, id_col] = (
+            df.loc[dup_mask, "Chromosome"].astype(str) + ":" + df.loc[dup_mask, id_col].astype(str)
+        )
+        print(
+            f"  {source_label}: {len(dup_ids)} {id_col} value(s) reused across "
+            f"seqids — namespaced by seqid to keep per-sequence models distinct"
+        )
+
     # Prefix with source label to prevent ID collisions across tools
     df["transcript_id"] = f"{source_label}_" + df["transcript_id"].astype(str)
     df["gene_id"] = f"{source_label}_" + df["gene_id"].astype(str)
@@ -596,6 +651,8 @@ def main() -> None:
         (args.tiberius, "Tiberius") if args.tiberius else (args.helixer, "Helixer")
     )
 
+    import time as _time
+    _run_started_at = _time.time()
     config = load_config(args.config, args.preset)
     # Sync the scoring gate's backbone string to whichever ab initio track was
     # actually loaded, so weighting/single-exon-without-support logic (which
@@ -618,6 +675,19 @@ def main() -> None:
     scallop_exons, scallop_cds = load_evidence(args.scallop, "Scallop")
     stringtie_exons, stringtie_cds = load_evidence(args.stringtie, "StringTie")
     minimap2_exons, minimap2_cds = load_evidence(args.minimap2, "Minimap2")
+
+    # scoring.longread_disposition == "reject" excludes the long-read track from
+    # candidate structures entirely. This is the disposition preflight recommends
+    # for a track that fails its splice-quality check; an operator may also set it
+    # directly. Either way the decision is recorded in the run manifest.
+    _lr_disposition = str(
+        getattr(config.scoring, "longread_disposition", "primary_structural"))
+    if _lr_disposition == "reject" and minimap2_exons is not None and not minimap2_exons.empty:
+        print(f"  Long-read track REJECTED by scoring.longread_disposition="
+              f"'{_lr_disposition}': dropping "
+              f"{minimap2_exons['transcript_id'].nunique()} long-read model(s) "
+              f"from the candidate pool.")
+        minimap2_exons, minimap2_cds = None, None
 
     print("Loading ab initio evidence...")
     helixer_exons, helixer_cds = load_evidence(backbone_path, backbone_label)
@@ -824,10 +894,27 @@ def main() -> None:
         protein_cds_span_tids = cds_span_compatible_ids(cand_spans, prot_spans, with_cds)
     stats["protein_cds_span_compatible_candidates"] = len(protein_cds_span_tids)
 
+    # ---- backbone intron rescue: resolve the applicability gate ONCE --------
+    # The rule is only correct where the backbone measurably under-resolves
+    # introns relative to credible assembled transcripts. Decided here, from the
+    # loaded evidence alone -- never from a reference annotation, never from the
+    # organism name. See gmb.pipeline.applicability.
+    from gmb.pipeline.applicability import resolve_backbone_intron_rescue
+
+    assembled_canonical_fraction = _assembled_canonical_splice_fraction(
+        candidate_exons, config.scoring, genome_dict)
+    rescue_decision = resolve_backbone_intron_rescue(
+        config.scoring, candidate_exons, assembled_canonical_fraction)
+    config.scoring.backbone_intron_rescue_resolved = rescue_decision.enabled
+    stats["backbone_intron_rescue"] = rescue_decision.as_dict()
+    print(f"  Backbone intron rescue [{rescue_decision.mode}]: "
+          f"{'ENABLED' if rescue_decision.enabled else 'disabled'} "
+          f"-- {rescue_decision.reason}")
+
     # Per-candidate CDS and canonical-intron status, for backbone intron rescue.
     candidate_cds = {tid: (ann.get("cds") or []) for tid, ann in annotations.items()}
     canonical_intron_tids: set[str] = set()
-    if getattr(config.scoring, "backbone_intron_rescue", False):
+    if rescue_decision.enabled:
         from gmb.pipeline.annotate_cds_utrs import check_splice_sites
 
         for tid, grp in candidate_exons.groupby("transcript_id"):
@@ -857,15 +944,31 @@ def main() -> None:
     stats["effective_max_exon_len_bp"] = runtime_params["effective_max_exon_len_bp"]
     stats["effective_max_transcript_span_bp"] = runtime_params["effective_max_transcript_span_bp"]
 
-    print("Scoring and Selecting Isoforms...")
+    # Progress is reported because this loop dominates runtime and used to print
+    # nothing between entry and completion -- on a genome with thousands of
+    # sequences that is hours of silence, with no way to tell slow from stuck.
+    _loci_total = cluster_df["Cluster"].nunique()
+    print(f"Scoring and Selecting Isoforms... ({_loci_total:,} loci)")
     selected_gff_rows = []
     selected_cdna_fa = []
     selected_prot_fa = []
     unstranded_exclusion_rows: list[dict] = []
 
     gene_counter = 1
+    _loci_done = 0
+    _sel_started = _time.time()
+    _report_every = max(1, _loci_total // 20)  # ~20 updates, whatever the scale
 
     for _cid, locus_df in cluster_df.groupby("Cluster"):
+        _loci_done += 1
+        if _loci_done % _report_every == 0 or _loci_done == _loci_total:
+            _elapsed = _time.time() - _sel_started
+            _rate = _loci_done / _elapsed if _elapsed > 0 else 0
+            _eta = (_loci_total - _loci_done) / _rate if _rate > 0 else 0
+            print(f"  loci {_loci_done:,}/{_loci_total:,} "
+                  f"({100 * _loci_done / _loci_total:.0f}%) "
+                  f"{_rate:.0f} loci/s  elapsed {_elapsed / 60:.0f}m  "
+                  f"eta {_eta / 60:.0f}m", flush=True)
         genes = select_isoforms(
             locus_df,
             config,
@@ -1181,6 +1284,24 @@ def main() -> None:
     else:
         print("    No exact-duplicate transcripts found")
 
+    # Gene spans are set when the gene row is built, but validation, dedup and
+    # duplicate collapse all add or remove transcripts afterwards. Recompute
+    # here -- after the last stage that can change gene membership -- so the
+    # written coordinates always describe the transcripts actually present.
+    print("  Recomputing gene bounds from final transcripts...")
+    selected_gff_rows, gene_bounds_stats = recompute_gene_bounds(selected_gff_rows)
+    stats.update({f"gene_bounds_{k}": v for k, v in gene_bounds_stats.items()})
+    if gene_bounds_stats["genes_adjusted"] or gene_bounds_stats["genes_dropped_no_transcript"]:
+        print(
+            f"    {gene_bounds_stats['genes_adjusted']} gene span(s) corrected "
+            f"({gene_bounds_stats['genes_contracted']} contracted, "
+            f"{gene_bounds_stats['genes_widened']} widened; max contraction "
+            f"{gene_bounds_stats['max_contraction_bp']} bp), "
+            f"{gene_bounds_stats['genes_dropped_no_transcript']} gene(s) dropped with no transcript"
+        )
+    else:
+        print("    All gene spans already matched their transcripts")
+
     # Final gene count
     final_gene_count = sum(1 for r in selected_gff_rows if r.get("Feature") == "gene")
     stats["total_loci"] = final_gene_count
@@ -1436,6 +1557,7 @@ def main() -> None:
         for k, v in stats.items():
             fh.write(f"{k}\t{v}\n")
 
+    qc_report = None
     if getattr(args, "validate_fasta", False):
         from gmb.pipeline.fasta_qc import print_report, validate_fasta
 
@@ -1445,10 +1567,43 @@ def main() -> None:
         report_path = os.path.join(args.output_dir, "fasta_qc_report.json")
         with open(report_path, "w") as fh:
             json.dump(qc_report, fh, indent=2)
-        if not qc_report.get("pass", False):
-            failed = qc_report.get("failed_checks", [])
-            print(f"ERROR: FASTA QC failed: {', '.join(failed)}")
-            sys.exit(1)
+
+    # --- run provenance -----------------------------------------------------
+    # Written BEFORE the QC exit so a failing run still leaves a complete record
+    # of what produced it -- that is exactly when the provenance is most needed.
+    try:
+        from gmb.provenance import build_run_manifest, write_run_manifest
+
+        manifest = build_run_manifest(
+            config,
+            args=args,
+            inputs={
+                "genome": getattr(args, "genome", None),
+                backbone_label: backbone_path,
+                "Scallop": getattr(args, "scallop", None),
+                "StringTie": getattr(args, "stringtie", None),
+                "Minimap2": getattr(args, "minimap2", None),
+                "OrthoDB": getattr(args, "orthodb", None),
+                "UniProt": getattr(args, "uniprot", None),
+                "GenBlast": getattr(args, "genblast", None),
+            },
+            output_dir=args.output_dir,
+            started_at=_run_started_at,
+            rescue_decision=rescue_decision,
+            qc={
+                "fasta_qc_pass": qc_report.get("pass") if qc_report else None,
+                "failed_checks": qc_report.get("failed_checks") if qc_report else None,
+            } if qc_report else None,
+        )
+        json_path, _ = write_run_manifest(manifest, args.output_dir)
+        print(f"  Run manifest: {json_path}")
+    except Exception as exc:  # provenance must never break a completed build
+        print(f"  WARNING: could not write run manifest: {exc}")
+
+    if qc_report is not None and not qc_report.get("pass", False):
+        failed = qc_report.get("failed_checks", [])
+        print(f"ERROR: FASTA QC failed: {', '.join(failed)}")
+        sys.exit(1)
 
     print("Done!")
 

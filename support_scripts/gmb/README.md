@@ -1,395 +1,238 @@
-# Gene Model Builder
+# Gene Model Builder (GMB)
 
-A configurable Python pipeline for generating consensus eukaryotic gene models by
-integrating transcriptomic assemblies (Scallop, StringTie), *ab initio* predictions
-(Helixer or Tiberius), and protein alignment evidence (OrthoDB, UniProt, GenBlast).
-Optional protein validation (DIAMOND + Psauron) and canonical transcript selection
-are available as post-build steps.
+**Consensus gene annotation for eukaryotic genomes.** GMB is the
+evidence-integration and final gene-model-selection stage of an annotation
+pipeline: it takes an ab initio backbone, assembled transcript models and protein
+alignments, and emits a finished annotation with per-model evidence attribution,
+QC and provenance.
 
----
-
-## Requirements
-
-| Dependency | Version |
-| :--------- | :------ |
-| Python | **≥ 3.10** (production cluster baseline is 3.10.x) |
-| pandas | `>=2.0,<3` (compat-tested to `==3.0.0` on Python ≥ 3.11) |
-| pyranges | `>=0.0.120,<=0.1.4` |
-| biopython | latest |
-| pyyaml | latest |
-| matplotlib | latest (for QC plotting) |
-
-External tools are **optional** — the core pipeline runs without them:
-
-| Tool | Used for |
-| :--- | :------- |
-| DIAMOND | Protein validation (`protein_validation.enabled: true`) |
-| Psauron | Protein-coding score in protein validation |
-| InterProScan | Canonical-choice resolver only — not required for a normal build |
+It does not generate evidence and it does not install the tools that do.
 
 ---
 
-## Installation
+## The 60-second version
 
 ```bash
-cd support_scripts/gmb
+# 1. validate the evidence bundle (exits 1 on FAIL)
+gmb-preflight --preset fungi --genome genome.fa --helixer backbone.gff3 \
+  --scallop scallop.gtf --stringtie stringtie.gtf --orthodb orthodb.gtf \
+  --output-dir out/preflight
 
-# Recommended: editable install (development)
-pip install -e ".[dev]"
+# 2. integrate evidence and select gene models
+gmb-build --preset fungi --genome genome.fa --helixer backbone.gff3 \
+  --scallop scallop.gtf --stringtie stringtie.gtf --orthodb orthodb.gtf \
+  --gene-prefix XXGMB --output-dir out/build --validate-fasta
 
-# Or: install from a built wheel
-pip install gene_model_builder-2.0.0-py3-none-any.whl
+# 3. regenerate FASTA from the final GFF3, QC, canonical, handover
+gmb-finalise --build-dir out/build --genome genome.fa \
+  --output-dir out/finalise
 ```
 
-Entry points installed: `gmb-build`, `gmb-compare`, `gmb-visualize`,
-`gmb-longread-consensus`, `gmb-canonical-selection`, `gmb-interpro-review`,
-`gmb-interpro-resolve`.
+Hand over `out/finalise/`. Full walk-through: **[docs/quickstart.md](docs/quickstart.md)**.
 
 ---
 
-## Quickstart — bundled *Z. tritici* fixture
+## What inputs do I need?
 
-The repository includes a pre-subsetted 500 kb fixture under
-`tests/fixtures/z_tritici_region1/` for a fast smoke test (~8 seconds):
+| input | required | flag |
+|---|---|---|
+| genome FASTA | **yes** | `--genome` |
+| ab initio backbone (Helixer or Tiberius) | **yes** in practice | `--helixer` / `--tiberius` |
+| short-read transcript models | recommended | `--scallop`, `--stringtie` |
+| protein-to-genome alignments | recommended | `--orthodb`, `--uniprot`, `--genblast` |
+| long-read transcript models | **optional** | `--minimap2` |
+| DIAMOND protein DB | optional | config |
 
-```bash
-cd support_scripts/gmb
+Every evidence file must use the **same sequence names as the genome FASTA**.
 
-gmb-build \
-    --scallop   tests/fixtures/z_tritici_region1/scallop_geneset.gtf \
-    --stringtie tests/fixtures/z_tritici_region1/stringtie_geneset.gtf \
-    --helixer   tests/fixtures/z_tritici_region1/helixer_remapped.gff3 \
-    --orthodb   tests/fixtures/z_tritici_region1/orthodb_geneset.gtf \
-    --uniprot   tests/fixtures/z_tritici_region1/uniprot_geneset.gtf \
-    --genome    tests/fixtures/z_tritici_region1/genome.fa \
-    --output-dir output_region1/ \
-    --gene-prefix ZTRITICI
+> **A reference annotation is never an input.** `gmb-preflight`, `gmb-build` and
+> `gmb-finalise` expose no option that accepts one. References are for evaluation
+> only, through `gmb-compare`, after the annotation exists.
+
+Details: **[docs/input_contract.md](docs/input_contract.md)**
+
+## What does it output?
+
+```
+out/finalise/canonical/consensus.canonical_annotated.gff3   <- the annotation
+out/finalise/consensus.gff3                                 all isoforms
+out/finalise/{cdna,cds,prot}.fa                             sequences
+out/finalise/{fasta_qc_report,utr_qc_report}.json           QC evidence
+out/build/evidence_attribution.tsv                          why each model won
+out/build/resolved_config.yaml                              exact configuration
+out/build/run_manifest.json                                 full provenance
 ```
 
-The fixture has no corresponding full-genome data in this repository; the subset
-fixture is self-contained and sufficient to verify installation.
+**`finalise/` is the handover; `build/` is intermediate.** Sequences are
+regenerated from the final GFF3 in `finalise/`, so annotation and sequence cannot
+drift. Details: **[docs/output_contract.md](docs/output_contract.md)**
+
+## Which preset do I use?
+
+| preset | use it for | `backbone_intron_rescue` |
+|---|---|---|
+| `standard` | a new or unknown clade | `off` |
+| `apicomplexa` | Apicomplexa with a general-purpose ab initio backbone | `auto` |
+| `fungi` | fungi with a strong Helixer-like backbone | `off` |
+
+The presets differ because the **evidence states** differ, not because the clades
+do — the same policy that improved P. falciparum made Z. tritici measurably worse.
+The evidence for each choice is in **[docs/presets.md](docs/presets.md)**.
+
+For a new clade, start from `configs/new_clade_template.yaml` and follow
+**[docs/creating_a_preset.md](docs/creating_a_preset.md)**.
+
+## What is optional?
+
+- **Long-read evidence.** With none supplied there is no special case, no penalty,
+  and the long-read guard cannot fire.
+- **Protein validation** (DIAMOND + Psauron). It only *scores* models that already
+  exist; it can change which isoform wins, never which structures are possible.
+- **Evaluation** (`gmb-compare`). Not part of the production path.
+- **Every biological policy.** All default off.
+
+## What does QC guarantee?
+
+Every handover annotation satisfies, verifiably:
+
+```
+0 cDNA / CDS / protein sequence mismatches
+0 unintended internal stop codons
+0 gene-boundary violations      (gene span == union of its transcripts)
+0 UTR invariant violations
+0 cross-seqid chimeras
+1 canonical transcript per gene
+```
+
+> **QC PASS does not mean high biological accuracy.** It means the annotation is
+> internally consistent. In one validation, all four gene sets passed every hard
+> check — and one of them was *worse than doing nothing*.
+
+Details: **[docs/qc.md](docs/qc.md)**
+
+## Where do I look when something fails?
+
+| question | file |
+|---|---|
+| were my inputs fit to build from? | `preflight/preflight_report.txt` |
+| what did the build do? | `build/gmb.log` |
+| did it pass QC? | `finalise/fasta_qc_report.json` |
+| why was this model chosen? | `build/evidence_attribution.tsv` |
+| what settings applied? | `build/resolved_config.yaml` |
+| what produced this run? | `build/run_manifest.json` |
+
+Symptom-first guide: **[docs/troubleshooting.md](docs/troubleshooting.md)**
 
 ---
 
-## Basic usage
+## Install
 
 ```bash
-gmb-build \
-    --scallop   scallop.gtf \
-    --stringtie stringtie.gtf \
-    --helixer   helixer_remapped.gff3 \
-    --orthodb   orthodb.gtf \
-    --uniprot   uniprot.gtf \
-    --genome    genome.fa \
-    --config    my_species.yaml \
-    --output-dir output/
+mamba create -n gmb -c conda-forge python=3.12 pandas 'pyranges<=0.1.4' \
+    biopython pyyaml matplotlib numpy
+mamba activate gmb
+pip install -e /path/to/ensembl-anno/support_scripts/gmb
+gmb-build --help
 ```
 
-All evidence files must share coordinate systems with the genome FASTA.
-If sequence names differ (e.g. NCBI accessions vs. short chromosome names),
-pass `--assembly-report` to remap automatically, or `--seqname-map` for a
-custom two-column TSV.
+Python ≥ 3.10. `pyranges` must be `<=0.1.4` — the API changed after that and it is
+the most common install failure.
 
-**Subsetting a single chromosome:**
+**GMB does not install** Helixer, Tiberius, Scallop, StringTie, Minimap2, DIAMOND
+or Psauron. DIAMOND and Psauron are *invoked* by GMB if you give it their paths;
+they generally need their own environments.
+
+## Commands
+
+| command | purpose | production path |
+|---|---|---|
+| `gmb-preflight` | validate an evidence bundle before building | **yes** |
+| `gmb-build` | integrate evidence and select gene models | **yes** |
+| `gmb-finalise` | regenerate FASTA, QC, canonical, handover | **yes** |
+| `gmb-compare` | evaluate against a reference | evaluation only |
+| `gmb-longread-consensus` | collapse long-read alignments into models | optional, upstream |
+| `gmb-canonical-selection`, `gmb-interpro-*`, `gmb-visualize` | specialised tools | no |
+
+## Python API
+
+```python
+from gmb import run_gene_model_builder
+
+result = run_gene_model_builder(
+    genome="/data/genome.fa",
+    backbone="/data/backbone.gff3", backbone_kind="helixer",
+    short_read=["/data/scallop.gtf", "/data/stringtie.gtf"],
+    protein_alignment=["/data/orthodb.gtf"],
+    preset="fungi", output_dir="/work/gmb", gene_prefix="XXGMB",
+)
+if result.ok:
+    ship(result.handover_dir)
+```
+
+`run_gene_model_builder` is the **only** supported Python entry point. Everything
+under `gmb.pipeline`, `gmb.preflight` and `gmb.provenance` is internal.
+
+## Two design rules
+
+**Evidence roles, not tool names.** Selection logic never tests a literal tool
+name. Each source resolves to a role (`backbone`, `short_read_transcriptomic`,
+`long_read_transcriptomic`, `protein_alignment`) and everything — ranking,
+retention, corroboration, **and numeric weights** — acts on the role. An assembler
+called `IsoQuant` or `AssemblerX` behaves exactly like `StringTie` once listed
+under `shortread_labels`.
+
+**Correctness is not policy.** UTR correction, FASTA regeneration, duplicate
+collapse, gene-boundary recomputation, cross-seqid ID namespacing and sequence QC
+are **always on and not configurable**. Biological tuning —
+structural corroboration, protein-support mode, long-read handling, backbone
+intron rescue, weights — is **explicit and off by default**.
+
+## Documentation
+
+### START HERE
+
+Four documents cover the normal job of running GMB. You should not need anything else.
+
+| | |
+|---|---|
+| 1. [quickstart.md](docs/quickstart.md) | run it end to end |
+| 2. [pipeline_integration.md](docs/pipeline_integration.md) | wire it into an existing pipeline — what to hand it, what comes back |
+| 3. [configuration.md](docs/configuration.md) | presets, overrides, adding an evidence source, new clades |
+| 4. [qc.md](docs/qc.md) | what QC guarantees, and what it does not |
+
+### REFERENCE
+
+Consult when you need the detail.
+
+| | |
+|---|---|
+| [input_contract.md](docs/input_contract.md) | formats, coordinates, IDs, failure behaviour |
+| [output_contract.md](docs/output_contract.md) | every output file and which ones to hand over |
+| [presets.md](docs/presets.md) | the preset catalogue and the evidence behind each |
+| [creating_a_preset.md](docs/creating_a_preset.md) | the 8-step procedure for a validated clade preset |
+| [architecture.md](docs/architecture.md) | module map and production boundary |
+| [reproducibility.md](docs/reproducibility.md) | run manifests and reproducing a run |
+| [troubleshooting.md](docs/troubleshooting.md) | symptom-first fixes |
+
+Specialised: [longread_consensus.md](docs/longread_consensus.md),
+[canonical_selection.md](docs/canonical_selection.md),
+[interpro_resolver.md](docs/interpro_resolver.md).
+
+Examples: `examples/run_gene_model_builder.sh`, `.py`, `submit_gmb.slurm`.
+
+### Development evidence — not needed to run GMB
+
+For the validation behind the current production design, see
+`diagnostics/gmb_productionisation/final_report.md`. Everything else under `diagnostics/` is
+an audit trail: you do not need to read any of it to use this module.
+
+## Tests
 
 ```bash
-gmb-build ... --seqname 1
+pytest tests/ -q
 ```
 
----
-
-## Configuration
-
-GMB assembles the effective configuration in layers:
-
-```text
-standard.yaml (organism-neutral base, always loaded)
-    → clade preset  (--preset fungi | apicomplexa | none)
-        → user-supplied --config files (in order)
-```
-
-The default preset is `fungi`.  Use `--list-presets` to see what is
-installed.
-
-```bash
-# Apicomplexa preset with local paths layered on top
-gmb-build \
-    --preset apicomplexa \
-    --config local_cluster_paths.yaml \
-    ...
-
-# Standard base only, no clade preset
-gmb-build --preset none --config my_species.yaml ...
-
-# List installed clade presets
-gmb-build --list-presets
-```
-
-**A misspelled or absent `--config` path raises an error immediately** — GMB
-never silently falls back.
-
-Every run writes `resolved_config.yaml` and `resolved_config_sha256` to the
-output directory so runs are reproducible.
-
-Example config files in `configs/`:
-
-| File | Purpose |
-| :--- | :------- |
-| `configs/apicomplexa_first_pass.yaml` | Apicomplexa delta (use `--preset apicomplexa` instead) |
-| `configs/apicomplexa_chr1_protein_validation.example.yaml` | Protein-validation overlay example |
-| `configs/ebi_protein_validation.example.yaml` | EBI cluster protein-validation paths |
-
-For the full layering model, preset descriptions, and config schema see
-**[docs/build_and_configuration.md](docs/build_and_configuration.md)**.
-
----
-
-## Protein validation
-
-DIAMOND and Psauron must be installed separately — they are **not bundled**.
-The DIAMOND database must also be provided by the user (`swissprot.dmnd` is **not
-included** in the repository or the wheel).
-
-To enable protein validation, set in your config YAML:
-
-```yaml
-protein_validation:
-  enabled: true
-  diamond_db: /path/to/swissprot.dmnd   # required; no default
-  diamond_weight: 0.7
-  psauron_weight: 0.3
-  min_score: 0.7
-  policy: penalize   # "drop" | "penalize" (also accepts "penalise")
-```
-
-Verify tools are on `$PATH` before a long run:
-
-```bash
-gmb-build --check-deps
-```
-
-Per-transcript DIAMOND/Psauron results are written to `protein_validation.tsv` in
-the output directory.
-
----
-
-## Long-read consensus preprocessing
-
-Raw Minimap2 per-read GTF alignments are too noisy to use directly as `--minimap2`
-evidence. Collapse them first with `gmb-longread-consensus`:
-
-```bash
-# A species preset or --config is required for Stage 2 consensus
-gmb-longread-consensus \
-    --input     raw_minimap2.gtf \
-    --output-dir longread_consensus_out/ \
-    --preset    pfalciparum_pure
-```
-
-This writes `minimap2_consensus.gtf` (source label `Minimap2Consensus`) that can
-then be passed to `gmb-build --minimap2 longread_consensus_out/minimap2_consensus.gtf`.
-
-Available presets:
-
-```bash
-gmb-longread-consensus --help   # lists available presets
-```
-
-See **[docs/longread_consensus.md](docs/longread_consensus.md)** for the full
-config schema, preset descriptions, short-read rescue modes, and cluster
-(Slurm array) usage.
-
----
-
-## Canonical transcript selection
-
-For multi-isoform genes, `gmb-canonical-selection` is a non-destructive post-build
-step that ranks isoforms and picks one representative per gene:
-
-```bash
-gmb-canonical-selection \
-    --consensus-gff3        output/consensus.gff3 \
-    --evidence-attribution  output/evidence_attribution.tsv \
-    --protein-validation    output/protein_validation.tsv \
-    --output-dir            output/canonical_selection/
-```
-
-Writes `canonical_transcripts.tsv`, `transcript_ranking.tsv`, and
-`canonical_selection_summary.json`. Selection uses a deterministic priority order
-(complete ORF → protein-validation support → biological evidence-class breadth → GMB
-score → CDS length → transcript ID). The `canonical_total_score` is continuous and
-reflects *how much better* the winner is, not *what picked it*.
-
-See **[docs/canonical_selection.md](docs/canonical_selection.md)**.
-
----
-
-## InterProScan resolver (optional second stage)
-
-For the small subset of genes where GMB could not choose confidently,
-`gmb-interpro-review` + `gmb-interpro-resolve` provides a second-stage canonical
-resolver backed by InterProScan domain evidence. InterProScan is **never required**
-for a normal build.
-
-See **[docs/interpro_resolver.md](docs/interpro_resolver.md)** for the full
-config schema, replacement policy, and cluster execution examples.
-
----
-
-## Outputs
-
-All output files are written to `--output-dir`.
-
-| File | Description |
-| :--- | :---------- |
-| `consensus.gff3` | Final structural annotation (gene / mRNA / exon / CDS / UTR) |
-| `cdna.fa` | Spliced transcript sequences — one record per mRNA |
-| `cds.fa` | Coding sequences (absent when no CDS features were predicted) |
-| `prot.fa` | Translated proteins — one record per CDS-bearing mRNA |
-| `summary.json` | Pipeline metrics (gene counts, filtering statistics) |
-| `summary.tsv` | Same data in tabular form |
-| `evidence_attribution.tsv` | Per-transcript evidence source and score provenance |
-| `protein_validation.tsv` | Per-transcript DIAMOND/Psauron results (when enabled) |
-| `collapsed_duplicate_transcripts.tsv` | Log of exact-duplicate collapses (when any occur) |
-| `fasta_qc_report.json` | FASTA QC report (when `--validate-fasta` is used) |
-| `subset_regions.tsv` | Regions selected (when `--seqname` / `--region` is used) |
-
-Every `>id` in `prot.fa` and `cdna.fa` maps to exactly one `mRNA` row in
-`consensus.gff3`. See **[docs/output_contracts.md](docs/output_contracts.md)** for
-the complete output contract.
-
-**FASTA QC:**
-
-```bash
-# Coverage only
-python -m gmb.pipeline.fasta_qc output/
-
-# Coverage + sequence reconstruction (requires genome FASTA)
-python -m gmb.pipeline.fasta_qc output/ --genome genome.fa
-```
-
----
-
-## Testing
-
-```bash
-cd support_scripts/gmb
-
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# All fast tests (~30 s)
-pytest tests/ -q -m "not integration"
-
-# Integration tests on the bundled z_tritici region fixture (~8 s)
-pytest tests/test_z_tritici_subset.py -v -m integration
-
-# Protein validation tests (requires DIAMOND + Psauron on $PATH)
-RUN_EXTERNAL_TOOLS=1 pytest tests/ -m external_tools -v
-```
-
-Key test modules:
-
-| Module | What it covers |
-| :----- | :------------- |
-| `tests/test_z_tritici_subset.py` | End-to-end on the bundled region fixture; golden regression |
-| `tests/test_integration.py` | Synthetic 501 bp dataset |
-| `tests/test_scoring.py` | Isoform scoring and selection |
-| `tests/test_evidence_filter.py` | Chimera / protein / backbone filtering |
-| `tests/test_annotate_cds_utrs.py` | ORF finding and CDS derivation |
-| `tests/test_config.py` | YAML config loading, preset merging, validation |
-| `tests/test_longread_rescue.py` | Long-read consensus + short-read rescue |
-| `tests/test_canonical_selection.py` | Canonical transcript ranking and selection |
-| `tests/test_protein_validation.py` | Protein scoring (skipped without external tools) |
-
-Regenerate golden regression fixtures after intentional output changes:
-
-```bash
-python tests/generate_golden_fixtures.py
-```
-
----
-
-## Project structure
-
-```
-gmb/                           # Installable Python package
-  __init__.py                  # Package root (__version__ = "2.0.0")
-  configs/                     # Bundled preset YAML files (package data)
-    standard.yaml              # Organism-neutral base (always loaded)
-    fungi.yaml                 # Fungal overrides over standard
-    apicomplexa.yaml           # Apicomplexa overrides over standard
-    longread_consensus/
-      pfalciparum_pure.yaml
-      pfalciparum_assisted.yaml
-  pipeline/                    # Core pipeline logic
-    builder.py                 # Main orchestrator (15-step pipeline)
-    config.py                  # YAML config loading & dataclass hierarchy
-    evidence_filter.py         # Noise removal (fragments, chimeras, etc.)
-    scoring.py                 # Isoform scoring & selection
-    annotate_cds_utrs.py       # ORF/CDS/UTR derivation
-    fasta_export.py            # Strand-aware FASTA extraction
-    fasta_qc.py                # FASTA QC checks
-    gff3_validate.py           # GFF3 structural validation
-    dedup_genes.py             # Gene deduplication
-    protein_validation.py      # DIAMOND + Psauron scoring
-    canonical_evidence.py      # Evidence-class vocabulary
-    canonical_selection.py     # Canonical transcript selector
-    reporting.py               # Summary metrics (JSON/TSV)
-    subset_utils.py            # Region/seqname subsetting
-    longread/                  # Long-read consensus collapsing
-      config.py                # LongreadConsensusConfig + preset loading
-      consensus.py             # Read collapsing and grouping
-      rescue.py                # Short-read-assisted rescue policies
-      io.py                    # GTF I/O and split-by-seqname
-      reporting.py             # Run manifest + summary outputs
-  compare/                     # Annotation comparison tools
-    compare_annotations.py
-    visualize_disagreements.py
-    validate_annotation.py
-  utils/                       # Shared helpers
-    intervals.py
-    fasta.py
-    gff.py
-    io.py
-    logging.py
-  cli/                         # CLI entry points (installed by pip)
-    build.py
-    compare.py
-    visualize.py
-    longread_consensus.py
-    canonical_selection.py
-    interpro_review.py
-    interpro_resolve.py
-configs/                       # User-facing example config files (not installed)
-  apicomplexa_first_pass.yaml
-  apicomplexa_chr1_protein_validation.example.yaml
-  ebi_protein_validation.example.yaml
-docs/                          # Detailed documentation
-  build_and_configuration.md
-  longread_consensus.md
-  canonical_selection.md
-  output_contracts.md
-  interpro_resolver.md
-tests/                         # pytest suite
-  fixtures/
-    z_tritici_region1/         # Bundled 500 kb real-data fixture
-tools/                         # Optional standalone helper scripts
-  remap_helixer.py
-  retranslate_from_gff3.py
-  audit_duplicate_transcripts.py
-```
-
----
-
-## Supported dependency versions
-
-| Package    | Base (`requirements.txt`)   | Compat (`requirements-compat.txt`) |
-| :--------- | :-------------------------- | :--------------------------------- |
-| pandas     | `>=2.0,<3`                  | `==3.0.0` (requires Python ≥ 3.11) |
-| pyranges   | `>=0.0.120,<=0.1.4`         | `==0.1.4`                          |
-| biopython  | latest                      | latest                             |
-| pyyaml     | latest                      | latest                             |
-| matplotlib | latest                      | latest                             |
-
-CI runs both environments on Python 3.10 and 3.11 (and 3.13 for unit tests).
+`tests/test_production_contract.py` pins the production contract: role-based
+weight resolution using **invented** tool names, the rescue applicability gate,
+long-read optionality, preflight splice classification, and the resolved values of
+every shipped preset.

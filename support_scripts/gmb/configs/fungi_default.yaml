@@ -40,8 +40,8 @@ backbone_filter:
 scoring:
   weights:
     backbone: 3.1
-    scallop: 1.0
-    stringtie: 1.0
+    # Role-keyed: applies to every track listed under shortread_labels.
+    short_read: 1.0
   protein_overlap_bonus: 2.0
   multi_source_bonus: 0.5
   noncanonical_splice_penalty: 0.5

@@ -69,7 +69,7 @@ class TestYamlOverride:
         cfg = load_config(str(yaml_file))
         assert cfg.scoring.max_isoforms_per_locus == 5
         assert cfg.scoring.weights.backbone == 3.0
-        assert cfg.scoring.weights.scallop == 1.0  # unchanged
+        assert cfg.scoring.weights.short_read == 1.0  # unchanged
 
     def test_override_list(self, tmp_path):
         yaml_file = tmp_path / "test.yaml"

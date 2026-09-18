@@ -31,6 +31,7 @@ dev = [
 
 [project.scripts]
 gmb-build = "gmb.cli.build:main"
+gmb-preflight = "gmb.cli.preflight:main"
 gmb-compare = "gmb.cli.compare:main"
 gmb-visualize = "gmb.cli.visualize:main"
 gmb-longread-consensus = "gmb.cli.longread_consensus:main"

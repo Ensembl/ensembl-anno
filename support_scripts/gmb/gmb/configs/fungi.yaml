@@ -49,6 +49,54 @@ scoring:
   # For a transcript supported by only one source, require protein support.
   require_protein_support_for_single_source: true
 
+# ---------------------------------------------------------------------------
+# Evidence-aware selection policy — DELIBERATELY NOT ENABLED
+# ---------------------------------------------------------------------------
+# The Apicomplexa selection policy was applied unchanged to the full
+# Z. tritici IPO323 genome (21 chromosomes, Ensembl Fungi reference,
+# 10,931 protein-coding genes) and made the annotation measurably WORSE:
+#
+#     CDS exact              4,895 -> 4,611   (-284)
+#     CDS exact, multi-exon  2,984 -> 2,877   (-107)
+#     Exact Match            1,881 -> 1,727   (-154)
+#     locus detection       97.24% -> 94.91%
+#   improvements : regressions = 249 : 555   (ratio 0.449)
+#
+# The fungal production default is therefore the VALIDATED BASELINE behaviour:
+# the four policy flags below stay off. This is not caution for its own sake —
+# it is the only fungal configuration with a validated whole-genome result.
+#
+# Why the policy does not transfer, measured from the inputs alone:
+#   backbone (Helixer) multi-exon      71.9%   vs reference 69.8%
+#   assembled transcripts multi-exon   90.7-92.1%
+#   ratio assembled/backbone            1.27x
+# The backbone is NOT under-calling introns, so there is nothing to rescue.
+#
+# CDS-exact rate by evidence bucket (baseline), which inverts against Apicomplexa:
+#   backbone + short-read agreement    55.5%
+#   backbone only                      30.1%
+#   short-read only                     5.2%   <-- assemblies are far worse here
+# Agreement with the backbone is strong evidence; replacing the backbone with a
+# short-read-only structure is usually harmful.
+  # Off: see the ratio above. `auto` would decline anyway (71.9% > 55% gate),
+  # but stating it explicitly documents the decision and survives a gate change.
+  backbone_intron_rescue: "off"   # YAML bare `off` is boolean False; quoted for clarity
+  # Off: the validated fungal baseline. Independent structural agreement DOES
+  # enrich for correctness in fungi (multi-source 42.7% vs single-source 28.1%),
+  # so this is a promising candidate to enable — but only after a per-flag
+  # experiment. It has never been validated in isolation on a fungal genome.
+  structural_corroboration: false
+  # Off: the validated fungal baseline. Protein support IS monotone in fungi
+  # (strong 37.5% / positional-only 5.1% / none 0.7%), unlike in Apicomplexa,
+  # so this is the second candidate to enable after a per-flag experiment.
+  protein_support_mode: positional
+  # Off: no long-read evidence existed for the validated genome, so the guard
+  # is provably inert there (it can only demote long-read-only structures).
+  # Enable it, or set longread_disposition, if you supply a long-read track —
+  # and run preflight first to check its splice quality.
+  longread_structural_guard: false
+
+
 protein_validation:
   # Tuned weights for SwissProt-trained models on fungal proteins.
   diamond_weight: 0.7

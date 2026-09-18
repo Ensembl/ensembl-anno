@@ -77,4 +77,4 @@ confidently, `gmb-interpro-review` + `gmb-interpro-resolve` provides a
 second-stage resolver backed by InterProScan domain evidence. This is
 disabled by default and is not required for a normal build.
 
-See **[docs/interpro_resolver.md](docs/interpro_resolver.md)**.
+See **[docs/interpro_resolver.md](interpro_resolver.md)**.

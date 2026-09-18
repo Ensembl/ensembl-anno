@@ -1,5 +1,11 @@
 # Output contracts
 
+> **Superseded — read [`output_contract.md`](output_contract.md) instead.**
+>
+> This file predates the `build/` vs `finalise/` handover distinction and describes only
+> `gmb-build` outputs. It is kept for the per-file format detail. **`finalise/` is the
+> production handover**, not `build/`.
+
 All output files written by `gmb-build` are listed here with their format,
 coverage guarantees, and consistency rules.
 
@@ -119,9 +125,9 @@ It reports:
 ## Canonical selection outputs
 
 Written by `gmb-canonical-selection` to its own `--output-dir`.
-See **[docs/canonical_selection.md](docs/canonical_selection.md)**.
+See **[docs/canonical_selection.md](canonical_selection.md)**.
 
 ## InterPro resolver outputs
 
 Written by `gmb-interpro-resolve` to its own `--output-dir`.
-See **[docs/interpro_resolver.md](docs/interpro_resolver.md)**.
+See **[docs/interpro_resolver.md](interpro_resolver.md)**.

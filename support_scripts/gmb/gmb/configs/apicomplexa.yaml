@@ -52,7 +52,8 @@ scoring:
     backbone: 2.6
     # Long-read evidence (when collapsed consensus is supplied) spans full
     # introns directly rather than relying on splice-junction inference.
-    minimap2: 1.3
+    # Role-keyed: applies to whatever track is listed under longread_label.
+    long_read: 1.3
   # Raised from standard 1.0: rewards loci where Tiberius agrees with
   # independent transcriptomic evidence — exactly where Tiberius structural
   # errors are corrected by multi-source support.
@@ -69,6 +70,43 @@ scoring:
   require_protein_support_for_single_source: true
   # No Helixer model exists for this genome; Tiberius is the backbone.
   backbone_label: Tiberius
+
+# ---------------------------------------------------------------------------
+# Evidence-aware selection policy
+# ---------------------------------------------------------------------------
+# Validated on P. falciparum GCA_000002765.3 (Ensembl 63) and independently on
+# T. gondii GCA_000006565.2 (Ensembl 63), with the identical policy file.
+#
+# P. falciparum, baseline -> this policy (no long-read track):
+#     CDS exact              2,128 -> 2,430
+#     CDS exact, multi-exon    570 ->   957   (+68%)
+#     Exact Match              447 ->   518
+#     canonical intron frac   87.8% -> 100.0% (reference 99.94%)
+#   improvements : regressions = 731 : 447
+#
+# These settings assume the EVIDENCE STATE seen in both genomes, not the clade:
+# a diatom-trained Tiberius backbone that under-calls introns (17.3% / 38.7%
+# multi-exon) alongside short-read assemblies that do not (95-99% multi-exon).
+# If a future Apicomplexan is annotated with a well-resolved backbone, the
+# `auto` gate below will correctly decline to apply the rescue rule.
+  # Rank on independent structural corroboration before the numeric score.
+  structural_corroboration: true
+  # Only CDS-span-compatible protein alignments gate retention / earn the bonus.
+  # NOTE: in Apicomplexa protein support is NOT a monotone predictor of
+  # structural correctness (P. falciparum: strong 71.7%, none 42.6%, but
+  # positional-only 30.4%). It is used as a retention gate, never as a tier.
+  protein_support_mode: cds_span_compatible
+  # Long-read models never take primary structural priority where another
+  # multi-exon structure survives. Fired 332 times on P. falciparum and 0 times
+  # when no long-read track was supplied.
+  longread_structural_guard: true
+  # APPLICABILITY-GATED, not unconditionally on. The rule fires only where the
+  # backbone measurably under-resolves introns relative to credible assembled
+  # transcripts. Measured rescue accuracy: 68.6% CDS-exact here, against 1.8%
+  # on a Helixer backbone in fungi -- which is why this is `auto` and not `on`.
+  # See gmb/pipeline/applicability.py for the gate and its calibration.
+  backbone_intron_rescue: auto
+
 
 protein_validation:
   # Fungi values for weights and threshold retained; no DIAMOND database is

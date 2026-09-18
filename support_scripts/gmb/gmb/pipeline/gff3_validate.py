@@ -18,6 +18,7 @@ Also provides UTR trimming against biological length limits.
 from __future__ import annotations
 
 import sys
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -180,7 +181,12 @@ def validate_transcript(
 
 
 def validate_gene(gene_row: dict, mrna_rows: list[dict]) -> list[str]:
-    """Validate gene span covers all mRNA children.
+    """Validate that a gene span equals the union of its mRNA children.
+
+    The invariant is equality, not containment: a gene wider than its
+    surviving transcripts is as wrong as one that fails to cover them. A
+    containment-only check silently accepts a stale span left behind when a
+    transcript is dropped after the gene row was built.
 
     Parameters
     ----------
@@ -204,6 +210,10 @@ def validate_gene(gene_row: dict, mrna_rows: list[dict]) -> list[str]:
         violations.append(f"gene start {gene_s} > mRNA min {mrna_min}")
     if gene_e < mrna_max:
         violations.append(f"gene end {gene_e} < mRNA max {mrna_max}")
+    if gene_s < mrna_min:
+        violations.append(f"gene start {gene_s} < mRNA min {mrna_min}")
+    if gene_e > mrna_max:
+        violations.append(f"gene end {gene_e} > mRNA max {mrna_max}")
     return violations
 
 
@@ -257,6 +267,90 @@ def fix_gene(gene_row: dict, mrna_rows: list[dict]) -> None:
     if mrna_rows:
         gene_row["Start"] = min(r["Start"] for r in mrna_rows)
         gene_row["End"] = max(r["End"] for r in mrna_rows)
+
+
+def recompute_gene_bounds(rows: list[dict]) -> tuple[list[dict], dict]:
+    """Make gene coordinates authoritative for the final transcript set.
+
+    Every gene row's span is reset to the union of the mRNA rows that are
+    still present in *rows*. Run this after the last stage that can add or
+    remove transcripts, so no gene can carry coordinates inherited from a
+    candidate cluster, a dropped isoform, or a deduplicated model.
+
+    Genes left with no surviving mRNA child are dropped along with any
+    orphaned descendants, since a gene record with no transcript is not a
+    meaningful annotation feature.
+
+    Parameters
+    ----------
+    rows : list of dict
+        GFF3 rows with Feature/Start/End/ID/Parent keys.
+
+    Returns
+    -------
+    tuple of (list of dict, dict)
+        ``(rows, stats)``. Rows are the same objects, mutated in place, minus
+        any dropped gene records and their orphaned descendants.
+    """
+    stats = {
+        "genes_checked": 0,
+        "genes_adjusted": 0,
+        "genes_contracted": 0,
+        "genes_widened": 0,
+        "genes_dropped_no_transcript": 0,
+        "max_contraction_bp": 0,
+        "max_widening_bp": 0,
+    }
+
+    mrna_by_gene: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        if r.get("Feature") == "mRNA":
+            mrna_by_gene[r.get("Parent")].append(r)
+
+    dropped_gene_ids = set()
+    for r in rows:
+        if r.get("Feature") != "gene":
+            continue
+        stats["genes_checked"] += 1
+        children = mrna_by_gene.get(r.get("ID"), [])
+        if not children:
+            dropped_gene_ids.add(r.get("ID"))
+            stats["genes_dropped_no_transcript"] += 1
+            continue
+        new_start = min(c["Start"] for c in children)
+        new_end = max(c["End"] for c in children)
+        if new_start != r["Start"] or new_end != r["End"]:
+            stats["genes_adjusted"] += 1
+            contraction = max(new_start - r["Start"], 0) + max(r["End"] - new_end, 0)
+            widening = max(r["Start"] - new_start, 0) + max(new_end - r["End"], 0)
+            if contraction:
+                stats["genes_contracted"] += 1
+                stats["max_contraction_bp"] = max(stats["max_contraction_bp"], contraction)
+            if widening:
+                stats["genes_widened"] += 1
+                stats["max_widening_bp"] = max(stats["max_widening_bp"], widening)
+            r["Start"] = new_start
+            r["End"] = new_end
+
+    if not dropped_gene_ids:
+        return rows, stats
+
+    kept_tids = {
+        r["ID"]
+        for r in rows
+        if r.get("Feature") == "mRNA" and r.get("Parent") not in dropped_gene_ids
+    }
+    out = []
+    for r in rows:
+        feat = r.get("Feature")
+        if feat == "gene" and r.get("ID") in dropped_gene_ids:
+            continue
+        if feat == "mRNA" and r.get("Parent") in dropped_gene_ids:
+            continue
+        if feat not in ("gene", "mRNA") and r.get("Parent") not in kept_tids:
+            continue
+        out.append(r)
+    return out, stats
 
 
 # ---------------------------------------------------------------------------
