@@ -1,0 +1,4 @@
+# Probe overlay used ONLY to ask the implemented backbone-intron-rescue gate what it
+# would decide for this evidence bundle. Never used for a build.
+scoring:
+  backbone_intron_rescue: auto

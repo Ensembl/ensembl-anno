@@ -1,0 +1,57 @@
+# Example input manifest for the gmb-new-clade-config skill.
+#
+# Paths may be absolute or relative to this file. Tool names are free text: GMB acts on each
+# file's ROLE, never its tool name. Allowed roles and GMB's input limits:
+#
+#   backbone                    exactly 1   (GFF3 or GTF)
+#   short_read_transcriptomic   up to 2
+#   long_read_transcriptomic    up to 1     (optional)
+#   protein_alignment           up to 3     (support only; never a gene structure)
+#
+# Evidence files must be uncompressed, with a .gtf or .gff3 extension matching their content.
+
+clade: CHANGE_ME                  # e.g. nematodes -> writes configs/nematodes.yaml
+genome: CHANGE_ME/genome.fa
+
+# Optional. Tool/database paths and hardware settings ONLY -- enforced. Allowed keys:
+#   protein_validation.{diamond_path, psauron_path, diamond_db, psauron_use_cpu}
+#   qc.{parallel, workers}
+#   canonical_selection.interpro_resolver.nextflow.{nextflow_executable, profile, config_file,
+#       data_dir, work_dir, output_dir, cpus, max_workers}
+# Anything else (including protein_validation.enabled) is biology: put it in the clade config.
+# machine_overlay: CHANGE_ME/local_paths.yaml
+
+evidence:
+  - path: CHANGE_ME/predictor.gff3
+    tool: PredictorFoo
+    role: backbone
+
+  - path: CHANGE_ME/assembler_a.gtf
+    tool: AssemblerA
+    role: short_read_transcriptomic
+    rnaseq_source: rnaseq_batch1    # same value = assembled from the same reads
+
+  - path: CHANGE_ME/assembler_b.gtf
+    tool: AssemblerB
+    role: short_read_transcriptomic
+    rnaseq_source: rnaseq_batch1
+
+  # Optional:
+  # - path: CHANGE_ME/long_reads.gtf
+  #   tool: LongReadsX
+  #   role: long_read_transcriptomic
+
+  - path: CHANGE_ME/orthodb.gtf
+    tool: ProteinMapperY
+    role: protein_alignment
+
+# EVALUATION ONLY. Never passed to gmb-preflight, gmb-build or gmb-finalise, and never used
+# until the candidate config has been frozen.
+evaluation_only:
+  reference: CHANGE_ME/reference.gff3   # evaluation only; must currently be GFF3
+  # seqname_map: CHANGE_ME/seqname_map.tsv
+
+# Optional: a genuinely independent genome of the same clade, for CLADE_VALIDATED.
+# It gets its own manifest and is run with the FROZEN config, unchanged.
+# validation_genomes:
+#   - CHANGE_ME/genome_b_manifest.yaml
