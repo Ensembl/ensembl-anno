@@ -27,7 +27,7 @@ workflow PROTEINS {
 
     split_proteins_with_ids = SPLIT_PROTEIN_FILE.out.sliced_proteins.flatMap { val, files ->
         files.collect { file -> tuple(val, file.baseName, file) }
-    }.take(10)
+    }
     
     GENBLAST(MAKE_BLAST_DB.out.fasta_db.collect(), 
              split_proteins_with_ids, 

@@ -76,7 +76,9 @@ def slice_output_to_gtf(  # pylint: disable=too-many-branches, too-many-statemen
             # Under the new naming scheme the filename is chr:start-end'.1.bed'. Therefore...
             start_offset = input_file.split(":")[1].split("-")[0]
             try:
-                start_offset = int(start_offset)
+                # Need to add 1 to start coordinate because we are going from bed coordinates (start coordinate is 0 based)
+                # to gtf coordinates (start coordinate is 1 based)
+                start_offset = int(start_offset) + 1 
             except:
                 raise ValueError(
                     f"Filenames are not as expected - the third field in the filename should be the "

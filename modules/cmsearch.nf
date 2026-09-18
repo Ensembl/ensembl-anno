@@ -1,5 +1,5 @@
 process CMSEARCH {
-    label 'process_medium'
+    label 'process_high'
 
     publishDir "${params.outdir}/cmsearch",
         mode: 'copy'
