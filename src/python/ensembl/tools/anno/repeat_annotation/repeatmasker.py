@@ -21,7 +21,7 @@ References
 :cite:`repeatmasker`
 """
 
-__all__ = ["run_repeatmasker"]
+__all__ = ["run_repeatmasker", "create_repeatmasker_gtf"]
 
 import argparse
 import logging
@@ -173,7 +173,7 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     repeatmasker_cmd.append(str(region_file))
     logger.info(repeatmasker_cmd)
     subprocess.run(repeatmasker_cmd, check=True)
-    _create_repeatmasker_gtf(output_file, region_results_file, region_name)
+    create_repeatmasker_gtf(output_file, region_results_file, region_name)
     output_file.unlink()
     region_file.unlink()
     masked_file.unlink(missing_ok=True)
@@ -218,7 +218,7 @@ def get_repeat_type(repeat_type: str) -> str:
     return "Unknown"  # Default if no match is found
 
 
-def _create_repeatmasker_gtf(  # pylint: disable=too-many-locals
+def create_repeatmasker_gtf(  # pylint: disable=too-many-locals
     output_file: Path,
     region_results_file: Path,
     region_name: str,
