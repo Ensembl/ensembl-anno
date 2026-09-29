@@ -40,3 +40,25 @@ python ensembl_anno.py \
     --genome_file genome.fa \
     --output_dir output \
     --run_full_annotation
+```
+
+## Proposed File Structure
+
+```
+.
+├── main.nf                       # workflow entry point
+├── workflows/                    # workflows
+├── subworkflows/                 # subworkflows (eg. long reads, repeats, etc)
+├── modules/                      # tools (eg. Dust, minimap2 etc)                 
+├── bin/                          # Python code required to run anno (happy to move in future)
+├── conf/                         # NF configs
+├── tests/                        # Testing directory (useful for CI)
+    └──nf/                          # Nextflow tests
+        ├── data/                       # nf testing data 
+        └── tests/                      # Nextflow tests (system testing)
+    └── python                      # Python tests
+        ├── data/                       # Any python test inputs
+        └── tests/                      # Python tests (unit testing)    
+└── docs/                         # All documentation
+└── .github/                      # Github actions (CI)
+```

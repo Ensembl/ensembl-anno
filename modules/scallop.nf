@@ -1,0 +1,29 @@
+process SCALLOP {
+    label 'process_medium'
+
+    publishDir "${params.outdir}/scallop",
+        mode: 'copy'
+
+
+    input:
+    tuple val(meta), path(bam)
+ 
+    output:
+    tuple val(meta), path("${meta.id}.scallop.gtf"),          emit: scallop_gtf
+    path "versions.yml",                                   emit: versions
+
+    script:
+    """
+    scallop -i ${bam} -o ${meta.id}.scallop.gtf --min_flank_length 10
+
+    echo 'scallop' > versions.yml
+    scallop --version >> versions.yml
+    """
+
+    stub:
+    """
+    touch ${meta.id}.scallop.gtf
+
+    touch versions.yml
+    """
+}
