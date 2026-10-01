@@ -39,6 +39,8 @@ from ensembl.tools.anno.utils._utils import (
     create_dir,
     check_gtf_content,
 )
+from ensembl.tools.anno.transcriptomic_annotation.splice_to_bed import splice_to_bed
+from ensembl.tools.anno.transcriptomic_annotation.transcript_strand import MissingTsPolicy
 
 
 def run_minimap2(  # pylint:disable=too-many-arguments, too-many-positional-arguments, too-many-locals
@@ -49,6 +51,7 @@ def run_minimap2(  # pylint:disable=too-many-arguments, too-many-positional-argu
     paftools_bin: Path = Path("paftools.js"),
     max_intron_length: int = 100000,
     num_threads: int = 1,
+    on_missing_ts: str = MissingTsPolicy.UNSTRANDED,
 ) -> None:
     """
     Run Minimap2 to align long read data against genome file.
@@ -68,6 +71,10 @@ def run_minimap2(  # pylint:disable=too-many-arguments, too-many-positional-argu
         :type max_intron_length: int, default 100000
         :param num_threads: Number of available threads.
         :type num_threads: int, default 1
+        :param on_missing_ts: How to resolve the transcript strand when Minimap2
+            reported no usable ``ts`` tag: 'unstranded' (emit '.'), 'error' or
+            'flag'. See transcript_strand.MissingTsPolicy.
+        :type on_missing_ts: str, default 'unstranded'
 
         :return: None
         :rtype: None
@@ -77,7 +84,10 @@ def run_minimap2(  # pylint:disable=too-many-arguments, too-many-positional-argu
     paftools_bin = paftools_bin or Path("paftools.js")
 
     check_exe(minimap2_bin)
-    check_exe(paftools_bin)
+    # paftools_bin is retained for backwards compatibility with existing callers
+    # but is no longer used: SAM -> BED is done in-process by splice_to_bed so the
+    # transcript strand can be taken from Minimap2's ts tag.
+    del paftools_bin
     minimap2_dir = create_dir(output_dir, "minimap2_output")
 
     logging.info("Skip analysis if the gtf file already exists")
@@ -119,30 +129,27 @@ def run_minimap2(  # pylint:disable=too-many-arguments, too-many-positional-argu
         sam_file = minimap2_dir / f"{fastq_file.name}.sam"
         bed_file = minimap2_dir / f"{fastq_file.name}.bed"
         logging.info("Processing %s", fastq_file)
-        with open(bed_file, "w+", encoding="utf8") as bed_file_out:
-            subprocess.run(  # pylint:disable=subprocess-run-check
-                [
-                    minimap2_bin,
-                    "-G",
-                    str(max_intron_length),
-                    "-t",
-                    str(num_threads),
-                    "--cs",
-                    "--secondary=no",
-                    "-ax",
-                    "splice",
-                    "-u",
-                    "b",
-                    minimap2_index_file,
-                    fastq_file,
-                    "-o",
-                    sam_file,
-                ]
-            )
-            logging.info("Creating bed file from SAM")
-            subprocess.run(  # pylint:disable=subprocess-run-check
-                [paftools_bin, "splice2bed", sam_file], stdout=bed_file_out
-            )
+        subprocess.run(  # pylint:disable=subprocess-run-check
+            [
+                minimap2_bin,
+                "-G",
+                str(max_intron_length),
+                "-t",
+                str(num_threads),
+                "--cs",
+                "--secondary=no",
+                "-ax",
+                "splice",
+                "-u",
+                "b",
+                minimap2_index_file,
+                fastq_file,
+                "-o",
+                sam_file,
+            ]
+        )
+        logging.info("Creating bed file from SAM")
+        splice_to_bed(sam_file, bed_file, on_missing_ts=on_missing_ts)
 
     _bed_to_gtf(minimap2_dir)
 
@@ -233,6 +240,16 @@ def parse_args():
         "--max_intron_length", type=int, default=100000, help="The maximum intron length."
     )  # pylint:disable=line-too-long
     parser.add_argument("--num_threads", type=int, default=1, help="Number of threads")
+    parser.add_argument(
+        "--on_missing_ts",
+        choices=MissingTsPolicy.ALL,
+        default=MissingTsPolicy.UNSTRANDED,
+        help=(
+            "Transcript strand when Minimap2 reports no usable ts tag: "
+            "'unstranded' emits '.', 'error' aborts, 'flag' reproduces the old "
+            "(incorrect) SAM FLAG behaviour."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -257,6 +274,7 @@ def main():
         args.paftools_bin,
         args.max_intron_length,
         args.num_threads,
+        args.on_missing_ts,
     )
 
 

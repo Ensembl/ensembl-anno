@@ -1,0 +1,12 @@
+@HD	VN:1.6	SO:unsorted	GO:query
+@SQ	SN:chr1	LN:10000
+@PG	ID:minimap2	PN:minimap2	VN:2.31-r1302	CL:minimap2 -ax splice --cs -u b
+read_fwd_ts_plus	0	chr1	101	60	50M200N50M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	####################################################################################################	ts:A:+
+read_rev_ts_plus	16	chr1	1001	60	50M200N50M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	####################################################################################################	ts:A:+
+read_fwd_ts_minus	0	chr1	2001	60	50M200N50M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	####################################################################################################	ts:A:-
+read_rev_ts_minus	16	chr1	3001	60	50M200N50M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	####################################################################################################	ts:A:-
+read_no_ts	0	chr1	4001	60	100M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	####################################################################################################
+read_bad_ts	0	chr1	5001	60	50M200N50M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	####################################################################################################	ts:A:*
+read_secondary	256	chr1	6001	0	50M200N50M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	####################################################################################################	ts:A:+
+read_two_primary	0	chr1	8001	60	40M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	########################################	ts:A:+
+read_two_primary	2048	chr1	8501	60	30M	*	0	0	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA	##############################	ts:A:+
