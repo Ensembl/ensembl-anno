@@ -74,7 +74,8 @@ def _resolve_finalise_config(resolved_cfg, preset, config_files, override_build_
         return load_config(config_files, preset), "explicit_override", None
 
     if have_build_cfg:
-        config = load_config(resolved_cfg, preset=None)
+        # A resolved_config.yaml lists every key, including inert ones, by design.
+        config = load_config(resolved_cfg, preset=None, warn_inert=False)
         print(f"  Using the build's resolved_config.yaml ({resolved_cfg})")
         if supplied:
             try:

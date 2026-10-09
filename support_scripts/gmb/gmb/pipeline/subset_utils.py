@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Shared utilities for region subsetting, seqname mapping, and locus sampling.
 
-Used by gene_model_builder.py, compare_annotations.py, and
-visualize_disagreements.py to provide a consistent "fast test" capability.
+Used by gmb-build (``--seqname``/``--region``/``--sample-loci`` and the
+``--assembly-report``/``--seqname-map`` seqname mapping) to provide a
+consistent "fast test" capability.
 """
 
 import csv
@@ -82,7 +83,7 @@ def load_regions_file(path: str) -> list[Region]:
 
 
 # ---------------------------------------------------------------------------
-# Seqname mapping (extracted from compare_annotations.py)
+# Seqname mapping
 # ---------------------------------------------------------------------------
 
 

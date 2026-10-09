@@ -13,6 +13,4 @@
 # `python-version: '3.11'`.
 pandas==3.0.0
 pyranges==0.1.4
-biopython
 pyyaml
-matplotlib

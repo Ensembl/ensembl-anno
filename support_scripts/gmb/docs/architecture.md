@@ -54,8 +54,8 @@ it; you supply the paths.
 
 A reference annotation is **evaluation-only**. `gmb-build`, `gmb-finalise` and `gmb-preflight`
 expose no option that accepts one, and no resolved config can reference one. The reference
-enters only through `gmb-compare`, which runs after the annotation exists and cannot
-influence it.
+enters only through reference-comparison tooling, which lives outside GMB (`annotation-qc` in
+the `ensembl-genes` repository), runs after the annotation exists and cannot influence it.
 
 ---
 
@@ -70,8 +70,8 @@ gmb/
     preflight.py         gmb-preflight    input validation
     build.py             gmb-build        evidence integration + selection
     finalise.py          gmb-finalise     FASTA regeneration, QC, canonical, handover
-    compare.py           gmb-compare      EVALUATION ONLY
-    longread_consensus.py, canonical_selection.py, interpro_*.py, visualize.py
+    compare.py           gmb-compare      stub: prints where reference comparison moved
+    longread_consensus.py, canonical_selection.py, interpro_*.py
 
   configs/             shipped configuration
     standard.yaml        neutral base, always loaded
@@ -86,26 +86,32 @@ gmb/
     config.py            schema, layering, deprecated aliases, strict YAML loading
     canonical_evidence.py  EvidenceRoles — the ONLY source-label -> role mapping
     applicability.py     reference-free gates (backbone_intron_rescue auto)
-    builder.py           orchestration: load -> filter -> ORF -> select -> emit
-    evidence_filter.py   normalisation and filtering of loaded evidence
-    scoring.py           score_model, rank_tier, retention gate, select_isoforms
+    builder.py           orchestration: load -> filter -> ORF -> cluster loci -> select
+                         -> UTR end support -> GFF3 rows -> validate -> dedup -> collapse
+                         -> gene bounds -> GFF3 + FASTA (regenerate_final_fasta) + sidecars
+    backbone.py          --helixer / --tiberius / --backbone -> (path, source label)
+    evidence_filter.py   chimera filter, mega-transcript splitting, backbone and protein filters
     annotate_cds_utrs.py ORF inference, CDS/UTR annotation, splice-site checks
-    dedup_genes.py       gene construction from selected transcripts
-    duplicate_transcript_collapse.py
+    scoring.py           score_model, rank_tier, retention gate, select_isoforms
     gff3_validate.py     structural invariants + recompute_gene_bounds
-    utr_validator.py     UTR invariant checks
-    fasta_export.py      cDNA/CDS/protein emission
+    dedup_genes.py       merge or drop overlapping genes after selection
+    duplicate_transcript_collapse.py  collapse exact-duplicate transcripts within a gene
+    protein_validation.py   DIAMOND + Psauron (optional)
+    subset_utils.py      --seqname/--region/--sample-loci and seqname mapping
     fasta_qc.py          sequence-vs-annotation acceptance checks
-    canonical_selection.py  canonical transcript ranking
+    utr_validator.py     UTR invariant checks (finalise)
+    canonical_selection.py, domain_evidence.py   canonical transcript ranking (finalise)
+    interpro_review.py, interpro_resolver.py     optional InterProScan second stage
     finalise.py          handover assembly
-    protein_validation.py   DIAMOND + Psauron
-    longread/            long-read consensus collapse
+    longread/            long-read consensus collapse (gmb-longread-consensus, upstream)
 
   provenance/          RUN MANIFEST
     manifest.py          versions, input hashes, resolved policy, runtime
 
-  compare/             EVALUATION ONLY — not part of the production path
   utils/               fasta, gff, intervals, io, logging
+
+Reference comparison is not part of GMB: it moved to ensembl-genes `annotation-qc` in 2.0.0
+(the old gmb/compare/ package, gmb-compare and gmb-visualize were removed).
 ```
 
 ### Why this layout rather than the notional `evidence/ validation/ qc/ canonical/ io/`

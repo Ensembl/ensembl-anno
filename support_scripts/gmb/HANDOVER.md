@@ -13,6 +13,9 @@ does not generate evidence and does not install the tools that do. A reference a
 
 1. [`README.md`](README.md) — what it is, inputs, outputs, a copy-paste example
 2. [`docs/quickstart.md`](docs/quickstart.md) — a first run, end to end
+3. [`docs/release/release_readiness.md`](docs/release/release_readiness.md) — state of the
+   2.0.0 release, what changed, and what to do before the first production-scale run
+4. [`docs/known_issues.md`](docs/known_issues.md) — open issues by severity
 
 ## Normal workflow
 
@@ -23,15 +26,18 @@ gmb-preflight   →   gmb-build   →   gmb-finalise
  (exits 1 on FAIL)   select models    the handover
 ```
 
-`gmb-compare` exists for evaluating against a reference. It is **not** part of the production
-path.
+For *Z. tritici*, rename the Helixer GFF3 to the genome's sequence names first
+(`tools/remap_helixer.py`; see README). Evaluation against a reference is **not** part of GMB: it lives in the `ensembl-genes`
+repository as `annotation-qc pairwise-compare` (see `docs/qc.md`). The old `gmb-compare`
+command only prints that pointer. Always pass the same `--preset` to `gmb-preflight` and
+`gmb-build`.
 
 ## Presets
 
 | preset | use it when |
 |---|---|
 | `standard` | new or unvalidated clade — neutral, no policy enabled, no clade assumption |
-| `fungi` | fungi with a strong Helixer-like backbone — the **validated fungal baseline** |
+| `fungi` | fungi with a strong Helixer-like backbone — 2.0.0 adds a working 20 kb read-through filter, `transcript_linked` loci and detached-isoform removal (validated on 22% of Z. tritici; genome-wide confirmation is the production-scale test) |
 | `apicomplexa` | Apicomplexa with a general-purpose backbone that under-calls introns |
 | `configs/new_clade_template.yaml` | starting a clade of your own — copy and fill in `CHANGE_ME` |
 
@@ -43,7 +49,7 @@ an **evidence state**, not a taxonomy. See [`docs/configuration.md`](docs/config
 | input | flag | required |
 |---|---|---|
 | genome FASTA | `--genome` | **yes** |
-| ab initio backbone (exactly one) | `--helixer` or `--tiberius` | **yes** in practice |
+| ab initio backbone (exactly one) | `--helixer`, `--tiberius` or generic `--backbone` | **yes** in practice |
 | short-read transcript models | `--scallop`, `--stringtie` | recommended |
 | protein-to-genome alignments | `--orthodb`, `--uniprot`, `--genblast` | recommended |
 | long-read transcript models | `--minimap2` | optional |
@@ -82,20 +88,33 @@ equivalence** — no structure lost, gained or altered:
 | **T. gondii** | 2,263 | 6,902 / 6,902 | **PASS** | 47.9 h |
 | **Z. tritici** | 21 | 16,408 / 16,408 | **PASS** | 29 h |
 
-Tests: **763 passed, 0 failed, 15 skipped**.
+Those builds predate the 2.0.0 release-preparation changes (UTR end support restricted to the
+same sequence, performance fixes); see `docs/release/release_readiness.md`.
+
+Tests: **862 passed, 0 failed, 3 skipped** (the 3 need a full `z_tritici/` data directory
+that is not in the repository).
+
+Release decision (2026-10-09): **GO** for a production-scale fungal test; **NO-GO** for a stable
+tag until that test confirms the 2.0.0 fungal behaviour — see
+[`docs/release/release_readiness.md`](docs/release/release_readiness.md).
 
 ## Known limitations
 
-1. **Runtime on highly fragmented genomes.** Fragmented assemblies are supported and validated,
-   but runtime rises substantially with fragmented or large candidate sets — T. gondii's 2,263
-   sequences took **47.9 h**. Use dedicated cluster jobs. The isoform-selection loop is the known
-   hotspot and should be profiled and optimised separately. **It does not hang**: that run
-   completed with exit code 0 and full QC.
-2. **Clade breadth** — two Apicomplexa, one fungus. `fungi.yaml` was itself tuned against
+1. **Runtime.** T. gondii (2,263 sequences) took **47.9 h** and Z. tritici 29 h. Two costs in
+   the isoform-selection loop were removed in 2.0.0 — a second, discarded selection pass and a
+   per-model genome-wide UTR end-support scan (1.32 s per model on Z. tritici) — but the
+   end-to-end gain has not been measured. Keep generous limits for the first production run
+   and record the timing. **It does not hang**: those runs completed with exit code 0.
+2. **Alternate isoforms** cause most remaining gene splits and merges, and all of GMB's
+   measured CDS gain over Helixer on Z. tritici; the isoform policy for fungi is an open
+   decision (`docs/known_issues.md`, P1).
+3. **Clade breadth** — two Apicomplexa, one fungus. `fungi.yaml` was itself tuned against
    Z. tritici, so the preset is not independent of that organism; only the selection policy was
    tested independently.
-3. **Z. tritici over-predicts** (16,137 genes against 10,931 in the reference). Inherited from
-   the validated baseline.
+4. **Z. tritici over-predicts** (16,137 genes against 10,931 in the reference). Inherited from
+   the validated baseline. Not all of the excess is error: genome-wide, 81.8% of core Helixer
+   genes absent from the reference have both protein and RNA-seq support; accessory ones are
+   mostly weakly supported (`docs/release/z_tritici_validation.md`).
 
 ## If something goes wrong
 

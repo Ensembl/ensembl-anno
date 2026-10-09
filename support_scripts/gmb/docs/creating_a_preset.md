@@ -87,9 +87,11 @@ production configuration.
 ```bash
 gmb-build    --preset standard --config my_clade.yaml ... --output-dir "$OUT/build"
 gmb-finalise --preset standard --config my_clade.yaml ... --output-dir "$OUT/finalise"
-gmb-compare  --query "$OUT/finalise/consensus.gff3" --reference "$REFERENCE" \
-             --reference-fasta "$GENOME" --evaluation-mode protein_coding \
-             --output-dir "$OUT/comparison"
+# reference comparison: ensembl-genes `annotation-qc` (see qc.md)
+annotation-qc pairwise-compare --query "$OUT/finalise/consensus.gff3" \
+  --reference "$REFERENCE_GFF3" --genome "$GENOME" \
+  --evaluation-mode protein_coding --reference-transcript-biotypes protein_coding \
+  --outdir "$OUT/comparison"
 ```
 
 Report **CDS exact** and **CDS exact — multi-exon** as the headline. Do not report

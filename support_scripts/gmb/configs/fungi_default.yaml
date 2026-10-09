@@ -1,14 +1,8 @@
 orf:
   min_codons: 33
-  allow_partial_5: true
-  allow_partial_3: true
-  allow_non_atg_start: false
-  stop_codon_char: "*"
-  partial_prefix: ""
 
 protein_filter:
   min_protein_aa: 30
-  min_exon_count_for_short: 1
   redundancy_overlap: 0.8
   top_n_per_locus: 3
   max_span_bp: 50000
@@ -22,13 +16,10 @@ transcriptomic_filter:
   max_intron_length: 3000
   min_intergenic_gap: 500
   allow_single_exon: true
-  strand_consistency_check: false
 
 transcript_splitting:
   split_enabled: true
   split_gap_bp: 3000
-  split_on_contig_change: true
-  split_on_strand_change: true
   split_on_large_exon_bp: 50000
   max_segments_per_transcript: 50
 
@@ -64,6 +55,7 @@ scoring:
   require_protein_support_for_single_source: true
   min_cds_bp: 150
   require_support_for_single_exon: true
+  locus_clustering: transcript_linked
 
 # Protein validation is disabled in this portable default: enabling it here
 # unconditionally required an EBI-only DIAMOND database path
@@ -124,18 +116,3 @@ dedup:
   reciprocal_overlap_threshold: 0.80
   same_structure_tolerance_bp: 10
   policy: "merge_as_isoforms"
-
-qc:
-  max_transcripts_per_track: 5
-  skip_orf_inference_tracks: ["OrthoDB", "UniProt"]
-  parallel: false
-  workers: 4
-
-export:
-  write_cdna: true
-  write_protein: true
-  write_cds: true
-  include_partial: true
-
-reporting:
-  formats: ["json", "tsv"]

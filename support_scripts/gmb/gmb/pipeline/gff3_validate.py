@@ -269,6 +269,62 @@ def fix_gene(gene_row: dict, mrna_rows: list[dict]) -> None:
         gene_row["End"] = max(r["End"] for r in mrna_rows)
 
 
+def _overlap_components(mrnas: list[dict]) -> list[list[str]]:
+    """Group mRNA rows into chains of overlapping spans (half-open coordinates)."""
+    components, current, reach = [], [], None
+    for m in sorted(mrnas, key=lambda m: (m["Start"], m["End"])):
+        if current and m["Start"] >= reach:
+            components.append(current)
+            current, reach = [], None
+        current.append(m["ID"])
+        reach = m["End"] if reach is None else max(reach, m["End"])
+    components.append(current)
+    return components
+
+
+def drop_detached_isoforms(rows: list[dict]) -> tuple[list[dict], dict]:
+    """Remove transcripts that no longer overlap the rest of their gene.
+
+    Alternate isoforms are admitted by ``select_isoforms`` because they overlap the
+    gene's primary model. Structural validation can later trim a transcript (for
+    example a long read-through assembly cut back to its coding part) so that it no
+    longer overlaps any other transcript of its gene, and the gene record would join
+    unrelated loci. The first transcript emitted for each gene (the selected primary)
+    anchors it; transcripts not connected to it through overlapping transcripts are
+    removed with their child features. They are dropped rather than made into genes
+    of their own because they were never selected as genes: on Z. tritici test
+    windows, giving them their own genes added 5% more genes and more reference-gene
+    splits for a 0.2% gain in exact CDS matches.
+
+    Returns ``(rows, stats)`` with stats ``genes_with_detached_isoforms`` and
+    ``detached_isoforms_removed``.
+    """
+    stats = {"genes_with_detached_isoforms": 0, "detached_isoforms_removed": 0}
+    mrna_by_gene: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        if r.get("Feature") == "mRNA":
+            mrna_by_gene[r.get("Parent")].append(r)
+
+    drop: set = set()
+    for mrnas in mrna_by_gene.values():
+        if len(mrnas) < 2:
+            continue
+        anchor = mrnas[0]["ID"]
+        components = _overlap_components(mrnas)
+        if len(components) == 1:
+            continue
+        keep = next(c for c in components if anchor in c)
+        detached = {tid for c in components if c is not keep for tid in c}
+        stats["genes_with_detached_isoforms"] += 1
+        stats["detached_isoforms_removed"] += len(detached)
+        drop |= detached
+
+    if not drop:
+        return rows, stats
+    out = [r for r in rows if r.get("ID") not in drop and r.get("Parent") not in drop]
+    return out, stats
+
+
 def recompute_gene_bounds(rows: list[dict]) -> tuple[list[dict], dict]:
     """Make gene coordinates authoritative for the final transcript set.
 

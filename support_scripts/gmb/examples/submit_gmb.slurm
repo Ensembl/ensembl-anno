@@ -34,7 +34,8 @@
 #   gmb-build wall        2.1 - 3.5 h          10.8 - 12.0 h
 #   gmb-build peak RSS    0.9 - 1.4 GB         2.3 - 2.5 GB
 #   gmb-finalise          3 - 6 s, < 0.5 GB    6 s, ~0.4 GB
-#   gmb-compare peak RSS  ~0.6 GB              4.2 GB   <-- highest of any stage
+#   reference comparison  ~0.6 GB              4.2 GB   (former gmb-compare; now
+#   peak RSS                                            ensembl-genes annotation-qc)
 #
 # These are EXAMPLES, not requirements.
 #
@@ -44,8 +45,8 @@
 #   --mem 16G           8G is enough for a compact genome with modest evidence.
 #                       Scale from EVIDENCE VOLUME, not genome size: Z. tritici
 #                       is the heavier job because of its protein track, not its
-#                       genome. If you also run gmb-compare with a large protein
-#                       track, size for that stage -- it peaked highest.
+#                       genome. Reference comparison is no longer part of GMB;
+#                       size its own job separately.
 #   --time 24:00:00     generous for a compact genome on a dedicated node.
 #
 # After the first run, size from your own measurements:

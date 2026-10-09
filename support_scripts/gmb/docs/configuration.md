@@ -68,6 +68,23 @@ role. If they are set to the same value it is adopted; if they **disagree**, GMB
 and takes the maximum, so no evidence class is silently down-weighted. Setting `short_read`
 explicitly always wins.
 
+### Keys that have no effect
+
+21 keys are accepted so existing configs load, but change nothing; `load_config` warns when a
+preset or `--config` file sets one (a reloaded `resolved_config.yaml` does not warn). The
+list, with each key's status, is `INERT_CONFIG_KEYS` in `gmb/pipeline/config.py`:
+
+- **deprecated** (`FutureWarning`, to be removed in a major release): `orf.stop_codon_char`,
+  `orf.partial_prefix`, `protein_filter.min_exon_count_for_short`,
+  `transcriptomic_filter.strand_consistency_check`,
+  `transcript_splitting.split_on_contig_change` / `split_on_strand_change` (splitting is
+  always per sequence and strand), all of `qc.*`, `export.*` and `reporting.formats`
+  (configured removed modules; FASTA and summaries are always written in full).
+- **unsupported** (`UserWarning`, reserved; behaviour is fixed): `orf.allow_partial_5` /
+  `allow_partial_3` (partial ORFs are always allowed), `orf.allow_non_atg_start` (ATG only),
+  `utr.min_protein_coding_score_for_utr`, `utr.max_end_extension_bp`,
+  `canonical_selection.interpro_resolver.min_coverage_delta_for_replacement`.
+
 ---
 
 ## Evidence roles — the central abstraction
@@ -144,6 +161,16 @@ All default **off**. Enable one at a time, for a reason visible in preflight out
 | `longread_structural_guard` | bool | `false` |
 | `longread_disposition` | `primary_structural` \| `support_only` \| `reject` | `primary_structural` |
 | `backbone_intron_rescue` | `off` \| `on` \| `auto` | `"off"` |
+| `locus_clustering` | `exon_overlap` \| `transcript_linked` | `exon_overlap` (fungi: `transcript_linked`) |
+
+`locus_clustering` decides how candidate exons are grouped into the loci selection scores.
+`exon_overlap` (the validated baseline) splits a multi-exon candidate whose introns nothing
+spans into separately scored fragments; `transcript_linked` keeps every candidate whole. It is
+listed here because changing it changes selected models. Pair `transcript_linked` with a
+chimera filter (`transcriptomic_filter.max_transcript_length`): it keeps a read-through
+transcript whole, where `exon_overlap` fragments it. Conversely, a span filter under
+`exon_overlap` removes the transcripts that bridged introns and increases fragmentation
+(`release/z_tritici_validation.md` §5).
 
 `backbone_intron_rescue` is **applicability-gated**:
 
@@ -186,6 +213,9 @@ preflight:
   min_introns_for_splice_check: 100
   max_unknown_seqid_fraction: 0.05
   max_unstranded_fraction: 0.05
+  max_transcript_span_warn_bp: 500000
+  max_intron_warn_bp: 100000
+  max_longread_models_per_mb: 2000  # above this a long-read track looks like raw reads (WARN)
 ```
 
 Roles are judged differently on purpose. A long-read track asserts it observed the splice

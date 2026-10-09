@@ -26,7 +26,7 @@ import os
 import sys
 
 from gmb.preflight import FAIL, run_preflight
-from gmb.pipeline.config import load_config, validate_selection_policy
+from gmb.pipeline.config import DEFAULT_PRESET, load_config, validate_selection_policy
 from gmb.pipeline.backbone import BackboneInputError, resolve_backbone_input
 from gmb.utils.logging import setup_logging
 
@@ -45,8 +45,12 @@ def build_parser() -> argparse.ArgumentParser:
     setup = p.add_argument_group("Setup")
     setup.add_argument("--config", action="append", default=None,
                        help="YAML config override; repeatable, last wins.")
-    setup.add_argument("--preset", default="standard",
-                       help="Clade preset (default: standard, the neutral base).")
+    setup.add_argument(
+        "--preset",
+        default=None,
+        help=f"Clade preset (default: '{DEFAULT_PRESET}', the same "
+        "default as gmb-build). Name it explicitly in pipelines.",
+    )
 
     inputs = p.add_argument_group("Inputs (same names as gmb-build)")
     inputs.add_argument("--genome", required=True, help="Genome FASTA")
@@ -123,6 +127,12 @@ def main(argv=None) -> int:
     if log_file:
         setup_logging(log_file=log_file)
 
+    if args.preset is None:
+        args.preset = DEFAULT_PRESET
+        print(
+            f"note: --preset not given; using '{DEFAULT_PRESET}', the gmb-build default.",
+            file=sys.stderr,
+        )
     config = load_config(args.config, args.preset)
 
     # The backbone flag decides which label carries the backbone role, exactly

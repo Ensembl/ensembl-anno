@@ -27,9 +27,14 @@ protein_filter:
   min_bitscore: 30.0
 
 transcriptomic_filter:
-  # Reference spans reach 32,487 bp (p99=14,717 bp, p99.9=26,920 bp).
-  # 35,000 bp keeps the real tail of large multi-exon genes.
-  max_transcript_length: 35000
+  # Reference spans reach 32,487 bp (p99=14,717 bp, p99.9=26,920 bp), so a
+  # 35,000 bp cap would keep the real P. falciparum tail. Before 2.0.0 this key
+  # was accepted but never applied, and every validated apicomplexan build ran
+  # without it. Applying 35,000 removes an extra 0.2% of surviving short-read
+  # models in P. falciparum but 7.8% in GCA_000006355.3 and 18.3% in T. gondii
+  # (GCA_000006565.2), whose genes are longer. Left disabled until re-validated;
+  # set 35000 in a --config overlay for P. falciparum-like genomes.
+  max_transcript_length: null
   # P. falciparum introns max at 2,425 bp (p50=141 bp, p99=736 bp).
   # 2,500 bp gives chimera detection with headroom above the observed maximum.
   max_intron_length: 2500
@@ -130,10 +135,7 @@ utr:
   # Fungi value: tighter boundary wobble for compact UTRs.
   end_tolerance_bp: 30
 
-qc:
-  # GenBlast evidence is a protein-to-genome alignment (like OrthoDB/UniProt),
-  # not a transcript assembly; ORF inference should be skipped for it.
-  skip_orf_inference_tracks:
-    - OrthoDB
-    - UniProt
-    - GenBlast
+# GenBlast, like OrthoDB and UniProt, is a protein-to-genome alignment. Protein
+# alignment tracks are support-only and never become candidate models, so no ORF
+# is ever inferred for them; the former qc.skip_orf_inference_tracks setting here
+# configured only the removed gmb-visualize plots.

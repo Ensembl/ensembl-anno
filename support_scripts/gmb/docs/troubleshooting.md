@@ -54,6 +54,21 @@ keyed by evidence role. Use `short_read`. The old key still works.
 If clade values look like the neutral defaults, suspect a duplicate top-level key in the
 overlay (now an error) or an overlay overriding them later in the chain.
 
+**`NOTE: --preset not given; using 'fungi'`** — `gmb-build` and `gmb-preflight` fall back to
+`fungi` for backward compatibility. Pass `--preset` explicitly (the same value to both).
+
+**`config key 'X' is deprecated|unsupported and has no effect`** — one of 21 keys that load
+but change nothing (`configuration.md`, "Keys that have no effect"). Remove it from your
+config. `transcriptomic_filter.max_transcript_length` and `allow_single_exon` *are* applied
+since 2.0.0.
+
+**`seqid_compatibility [Helixer]: 21/21 sequence name(s) are absent`** — the backbone uses
+GenBank accessions. Rename it with `tools/remap_helixer.py` (`input_contract.md`).
+
+**`file_readable` / `coordinates_valid` / `exon_rows_present` FAIL** — the file is empty or not
+GTF/GFF3, has impossible coordinates or was made against another assembly, or a backbone /
+transcript track has no exon rows (`input_contract.md`, failure behaviour).
+
 ---
 
 ## Preflight
@@ -80,6 +95,10 @@ them. A large number means the upstream tool numbers models per sequence (Tiberi
 **`strand_completeness [X]: N feature row(s) have no strand`** — unstranded features are
 excluded from selection. Usually harmless below a few percent.
 
+**`longread_collapsed [X]: N long-read models (… per Mb) look like per-read alignments`** —
+WARN. The track is raw read alignments, not transcript models; a build would score every read.
+Collapse it (`gmb-longread-consensus`, `longread_consensus.md`) or leave it out.
+
 ---
 
 ## Build
@@ -95,9 +114,12 @@ correct: with a well-resolved backbone the rule destroys models that were alread
 **Build is slower than expected** — GMB's hot path is single-threaded; extra cores do not
 help. Runtime scales with **evidence volume**, not genome size: a 732 MB protein track with
 1.69 M alignments dominates a 40 Mb genome. Use `--seqname` or `--sample-loci` for a smoke test.
+Check preflight for `longread_collapsed` — a raw per-read long-read track alone makes a build
+impractical. Runtimes recorded before 2.0.0 include two costs since removed (see
+`known_issues.md`).
 
 **Out of memory** — peak RSS follows the largest evidence track. Measured 0.9–1.4 GB
-(P. falciparum) and 2.3–2.5 GB (Z. tritici) for `gmb-build`; `gmb-compare` peaked at **4.2 GB**
+(P. falciparum) and 2.3–2.5 GB (Z. tritici) for `gmb-build`; the former `gmb-compare` peaked at **4.2 GB**
 with a large protein track. Size for the compare stage if you run it.
 
 ---
@@ -123,7 +145,7 @@ reference genes (22.7%) had a byte-identical CDS yet failed Exact Match on UTR e
 **Quote CDS exact.**
 
 **Locus detection changed after upgrading** — earlier builds had gene records wider than their
-own transcripts, which inflated locus detection (`gmb-compare` pairs genes by span overlap).
+own transcripts, which inflated locus detection (the comparator pairs genes by span overlap).
 Corrected figures are lower and right. CDS exact and Exact Match are unaffected.
 
 ---

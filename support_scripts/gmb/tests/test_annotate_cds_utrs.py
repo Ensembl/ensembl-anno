@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Unit tests for annotate_cds_utrs module.
 
-Uses a tiny region of Chromosome 1 from the Candida auris genome
-and Helixer predictions as ground truth.
+Uses the bundled Z. tritici region fixture (500 kb of chromosome 1) and two
+of its Helixer predictions as ground truth.
 """
 
 import os
@@ -31,28 +31,29 @@ from gmb.pipeline.annotate_cds_utrs import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
-GENOME_PATH = os.path.join(os.path.dirname(__file__), "candida_auris_softmasked_toplevel.fa")
+GENOME_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "z_tritici_region1", "genome.fa")
 
-# Helixer transcript 1: Chr 1, + strand, single exon
-# Exon:  6847-11220   CDS: 6990-11118   5'UTR: 6847-6990   3'UTR: 11118-11220
+# Coordinates below are 0-based half-open, taken from
+# fixtures/z_tritici_region1/helixer_remapped.gff3 (GFF3 start - 1, end).
+
+# Helixer _CM001196.1_000008.1: chr 1, + strand, single exon
 HELIXER_TX1 = {
     "chrom": "1",
     "strand": "+",
-    "exons": [(6847, 11220)],
-    "cds": [(6990, 11118)],
-    "five_utr": [(6847, 6990)],
-    "three_utr": [(11118, 11220)],
+    "exons": [(122847, 124508)],
+    "cds": [(123049, 124219)],
+    "five_utr": [(122847, 123049)],
+    "three_utr": [(124219, 124508)],
 }
 
-# Helixer transcript 2: Chr 1, + strand, single exon
-# Exon: 11338-14171   CDS: 11535-13908   5'UTR: 11338-11535   3'UTR: 13908-14171
+# Helixer _CM001196.1_000024.1: chr 1, + strand, single exon
 HELIXER_TX2 = {
     "chrom": "1",
     "strand": "+",
-    "exons": [(11338, 14171)],
-    "cds": [(11535, 13908)],
-    "five_utr": [(11338, 11535)],
-    "three_utr": [(13908, 14171)],
+    "exons": [(228390, 230380)],
+    "cds": [(228546, 230163)],
+    "five_utr": [(228390, 228546)],
+    "three_utr": [(230163, 230380)],
 }
 
 
@@ -70,14 +71,15 @@ def genome():
 
 
 class TestLoadGenome:
-    def test_loads_all_chromosomes(self, genome):
-        assert len(genome) == 7
-        for i in range(1, 8):
-            assert str(i) in genome
+    def test_loads_fixture_sequence(self, genome):
+        assert list(genome) == ["1"]
+        assert len(genome["1"]) == 500_000
 
-    def test_sequence_is_uppercase(self, genome):
+    def test_sequence_is_uppercase(self, tmp_path):
         # Softmasked FASTA has lowercase for repeats; we uppercase everything
-        assert genome["1"][:100] == genome["1"][:100].upper()
+        fa = tmp_path / "softmasked.fa"
+        fa.write_text(">chrA\nACGTacgtNNnn\n")
+        assert load_genome(str(fa)) == {"chrA": "ACGTACGTNNNN"}
 
     def test_small_fasta(self, tmp_path):
         fa = tmp_path / "test.fa"

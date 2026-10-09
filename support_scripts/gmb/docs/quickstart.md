@@ -7,7 +7,7 @@ From a prepared evidence bundle to a handover, in three commands.
 ## 1. Install
 
 ```bash
-mamba create -n gmb -c conda-forge python=3.12 pandas 'pyranges<=0.1.4' biopython pyyaml matplotlib numpy
+mamba create -n gmb -c conda-forge python=3.12 'pandas>=2,<3' 'pyranges<=0.1.4' pyyaml numpy
 mamba activate gmb
 pip install -e /path/to/ensembl-anno/support_scripts/gmb
 gmb-build --help
@@ -100,12 +100,15 @@ violations, UTR violations. See `qc.md`.
 ## 7. Optional — evaluate against a reference
 
 ```bash
-gmb-compare --query "$OUT/finalise/consensus.gff3" \
-  --reference "$REFERENCE" --reference-fasta "$GENOME" \
-  --evaluation-mode protein_coding --output-dir "$OUT/comparison"
+annotation-qc pairwise-compare --query "$OUT/finalise/consensus.gff3" \
+  --reference "$REFERENCE_GFF3" --genome "$GENOME" \
+  --evaluation-mode protein_coding --reference-transcript-biotypes protein_coding \
+  --outdir "$OUT/comparison"
 ```
 
-Evaluation only — never part of the production path, and never used to choose a configuration.
+`annotation-qc` is in the `ensembl-genes` repository (its own Python ≥ 3.12 environment; GMB
+does not depend on it). Evaluation only — never part of the production path, and never used to
+choose a configuration. Metric guidance: `qc.md`.
 
 ---
 

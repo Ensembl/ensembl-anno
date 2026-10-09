@@ -86,6 +86,12 @@ class TrackSummary:
     max_transcript_span: int | None = None
     max_intron: int | None = None
     sha256: str = ""
+    # Malformed-input counters (rows, except where noted).
+    inverted_coordinates: int = 0
+    beyond_sequence_end: int = 0
+    cds_rows: int = 0
+    exon_rows: int = 0
+    cds_without_exons: int = 0  # transcripts
 
     @property
     def multi_exon_fraction(self) -> float | None:
@@ -245,14 +251,32 @@ def summarise_track(label: str, path: str, role: str, genome: dict | None = None
             tid = _transcript_key(attrs, gff3)
             if tid is None:
                 continue
+            try:
+                start, end = int(f[3]), int(f[4])
+            except ValueError:
+                summary.inverted_coordinates += 1
+                continue
+            if start > end or start < 1:
+                summary.inverted_coordinates += 1
+                continue
+            if genome and f[0] in genome and end > len(genome[f[0]]):
+                summary.beyond_sequence_end += 1
+            if f[2] == "CDS":
+                summary.cds_rows += 1
+            else:
+                summary.exon_rows += 1
             seqids.add(f[0])
             strand_counts[f[6]] += 1
             seqids_per_tx[tid].add(f[0])
-            exons[(tid, f[2])].append((f[0], int(f[3]), int(f[4]), f[6]))
+            exons[(tid, f[2])].append((f[0], start, end, f[6]))
 
     # Prefer exon rows; protein-alignment tracks often carry CDS only.
     use = "exon" if any(k[1] == "exon" for k in exons) else "CDS"
     models = {tid: segs for (tid, ft), segs in exons.items() if ft == use}
+    if use == "exon":
+        summary.cds_without_exons = sum(
+            1 for (tid, ft) in exons if ft == "CDS" and (tid, "exon") not in exons
+        )
 
     summary.models = len(models)
     summary.multi_exon = sum(1 for s in models.values() if len(s) > 1)
@@ -393,7 +417,62 @@ def run_preflight(inputs: dict, config, genome_seqs: dict | None = None) -> Pref
         structural = role in (EVIDENCE_CLASS_BACKBONE, EVIDENCE_CLASS_SHORT_READ,
                               EVIDENCE_CLASS_LONG_READ)
 
+        if track.models == 0:
+            why = (
+                f"all {track.inverted_coordinates:,} feature row(s) have start > end or "
+                f"start < 1"
+                if track.inverted_coordinates
+                else "the file is empty or not GTF/GFF3"
+            )
+            add(
+                "file_readable",
+                FAIL,
+                f"no transcript models parsed (no usable exon/CDS rows with a transcript "
+                f"ID): {why}.",
+                label,
+            )
+            continue
         add("file_readable", PASS, f"{track.models:,} model(s)", label)
+
+        bad = track.inverted_coordinates + track.beyond_sequence_end
+        if bad:
+            add(
+                "coordinates_valid",
+                FAIL,
+                f"{track.inverted_coordinates:,} row(s) with start > end or start < 1 and "
+                f"{track.beyond_sequence_end:,} row(s) ending beyond their sequence. "
+                f"Check the coordinate system and that the genome FASTA matches.",
+                label,
+                inverted=track.inverted_coordinates,
+                beyond_end=track.beyond_sequence_end,
+            )
+        else:
+            add("coordinates_valid", PASS, "all coordinates inside their sequences", label)
+        if structural and track.exon_rows == 0:
+            add(
+                "exon_rows_present",
+                FAIL,
+                "no exon rows: gmb-build builds candidate models from exon rows, so this "
+                "track would contribute nothing. Add exon features (CDS-only input is "
+                "accepted for protein alignments only).",
+                label,
+            )
+        if track.cds_without_exons:
+            add(
+                "cds_without_exons",
+                WARN,
+                f"{track.cds_without_exons:,} transcript(s) have CDS rows but no exon "
+                f"rows; GMB builds models from exons, so these are ignored.",
+                label,
+            )
+        if role == EVIDENCE_CLASS_BACKBONE and track.cds_rows == 0:
+            add(
+                "backbone_cds_present",
+                WARN,
+                "the backbone has no CDS features; GMB will infer ORFs from its exons "
+                "instead of using the predictor's coding sequence.",
+                label,
+            )
 
         # role resolution
         if role == "other" or role is None:
@@ -549,6 +628,23 @@ def run_preflight(inputs: dict, config, genome_seqs: dict | None = None) -> Pref
             "no long-read track supplied; the long-read guard cannot fire and no "
             "long-read special case applies.")
     else:
+        genome_mb = (report.genome or {}).get("total_bp", 0) / 1e6
+        for t in lr_tracks:
+            density = t.models / genome_mb if genome_mb else 0
+            if density > pcfg.max_longread_models_per_mb:
+                add(
+                    "longread_collapsed",
+                    WARN,
+                    f"{t.models:,} long-read models ({density:,.0f} per Mb) look like "
+                    f"per-read alignments, not collapsed transcript models. GMB scores "
+                    f"every model as a candidate, so the build will be impractically slow. "
+                    f"Collapse first (gmb-longread-consensus) or omit the track.",
+                    t.label,
+                )
+                report.recommendations.append(
+                    f"Collapse the long-read track {t.label!r} into transcript models "
+                    f"before building (see docs/longread_consensus.md)."
+                )
         lr_fail = [c for c in report.checks
                    if c.name == "splice_quality" and c.verdict == FAIL
                    and c.target in {t.label for t in lr_tracks}]

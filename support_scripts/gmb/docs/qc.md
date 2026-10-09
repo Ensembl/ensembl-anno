@@ -42,7 +42,7 @@ Each corresponds to a defect that actually shipped and was not caught by anythin
   transcripts, leaving gene spans far wider than their own transcripts (one 492 kb "gene" whose
   transcripts were all under 8 kb). Affected 10.7% of P. falciparum genes, 22.1% of a fungal
   region and 27% of T. gondii. It also **inflated locus-detection metrics** in every report,
-  because `gmb-compare` pairs genes by span overlap.
+  because the reference comparator pairs genes by span overlap.
 - **UTR invariants.** UTR trimming once kept the wrong end, leaving exonic bases classified as
   neither CDS nor UTR: 156 of 874 junctions (17.9%).
 
@@ -90,24 +90,39 @@ gene models are **right**.
 
 ## Evaluating against a reference
 
-`gmb-compare` is **evaluation tooling and not part of the production path**. Run it when a
-reference exists.
+Reference comparison is **evaluation tooling and not part of GMB**. It lives in the
+`ensembl-genes` repository as `annotation-qc pairwise-compare`
+(`src/python/ensembl/genes/annotation_qc/`, Python ≥ 3.12, its own environment). GMB has no
+runtime dependency on it. The former `gmb-compare` command now only prints this pointer.
 
 ```bash
-gmb-compare --query "$OUT/finalise/consensus.gff3" \
-            --reference "$REFERENCE" --reference-fasta "$GENOME" \
-            --evaluation-mode protein_coding \
-            --evidence-attribution "$OUT/build/evidence_attribution.tsv" \
-            --output-dir "$OUT/comparison"
+annotation-qc pairwise-compare \
+    --query "$OUT/finalise/consensus.gff3" \
+    --reference "$REFERENCE_GFF3" \
+    --genome "$GENOME" \
+    --evaluation-mode protein_coding \
+    --reference-transcript-biotypes protein_coding \
+    --evidence-attribution "$OUT/build/evidence_attribution.tsv" \
+    --outdir "$OUT/comparison"
 ```
 
-Add `--seqname-map` only when the reference uses different sequence names.
+Add `--seqname-map` only when the reference uses different sequence names. Decompress a
+`.gff3.bgz` reference first (the genome may stay compressed). It writes the
+`comparison_summary.{json,tsv}` and `comparison_details.tsv` files `gmb-compare` used to, with
+bug fixes (notably `matched_consensus_count` no longer double-counts), one-to-one exact-CDS
+F1, split/merge tables and intron-level support. To compare several predictors or references
+use `annotation-qc benchmark` and `annotation-qc dashboard` (see that package's README).
+
+Before quoting exact-CDS numbers, check that the query and reference use the same stop-codon
+convention (both include the stop codon in CDS, or both exclude it); `--add-stop-codon`
+harmonises a stop-excluded query.
 
 ### Which metric to quote
 
 | metric | use |
 |---|---|
-| **CDS exact** | **the headline.** Reference genes whose coding structure is reproduced exactly |
+| **CDS exact** | **the headline.** Reference genes whose coding structure is reproduced: `classification_cds == Exact_Match`, i.e. identical CDS intron chain and ≥0.8 reciprocal CDS overlap. This is the definition behind every historical GMB "CDS exact" figure (including those in `fungi.yaml`); it is *not* coordinate-exact |
+| CDS coordinate-exact | stricter: start, every splice site and stop identical (`sensitivity_cds.cds_coordinate_exact_count`; one-to-one F1 in `cds_exact_one_to_one`). Quote it alongside, labelled |
 | **CDS exact — multi-exon** | **the most informative single number** — where evidence integration does real work |
 | CDS exact — single-exon | mostly measures whether an unspliced call was kept |
 | CDS intron chain | correct splice junctions, CDS ends may differ |
@@ -121,7 +136,7 @@ Add `--seqname-map` only when the reference uses different sequence names.
 > extent alone**; Exact Match was 20.3% where the reference had no UTR against 7.6% where it
 > did — a 2.7× swing from annotation extent, not from accuracy.
 
-> **Locus detection is only meaningful with correct gene records.** `gmb-compare` pairs genes
+> **Locus detection is only meaningful with correct gene records.** The comparator pairs genes
 > by span overlap, so a gene wider than its own transcripts "detects" reference genes it has
 > nothing near. Any locus-detection figure from a build predating the gene-boundary fix is
 > inflated. CDS exact and Exact Match are unaffected.

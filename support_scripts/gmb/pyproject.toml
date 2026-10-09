@@ -8,16 +8,13 @@ version = "2.0.0"
 description = "Consensus gene model builder for eukaryotic genomes"
 # Minimum version is 3.10: the production cluster runs 3.10.20 (conda-forge),
 # all dependencies are compatible, and all modules use `from __future__ import
-# annotations` to allow X | Y union syntax.  3.9 was removed from the CI
-# matrix after confirming it was never exercised in production.
-# See python_compat/ for the full compatibility audit.
+# annotations` to allow X | Y union syntax.  CI tests 3.10, 3.11 and 3.13
+# (.github/workflows/ci.yml); 3.9 is not supported.
 requires-python = ">=3.10"
 dependencies = [
     "pandas>=2.0,<3",
     "pyranges>=0.0.120,<=0.1.4",
-    "biopython",
     "pyyaml",
-    "matplotlib",
     "numpy",
 ]
 
@@ -33,7 +30,6 @@ dev = [
 gmb-build = "gmb.cli.build:main"
 gmb-preflight = "gmb.cli.preflight:main"
 gmb-compare = "gmb.cli.compare:main"
-gmb-visualize = "gmb.cli.visualize:main"
 gmb-longread-consensus = "gmb.cli.longread_consensus:main"
 gmb-canonical-selection = "gmb.cli.canonical_selection:main"
 gmb-interpro-review = "gmb.cli.interpro_review:main"
@@ -98,13 +94,6 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B", "SIM", "RUF", "F841", "E712", "F401"]
-"gmb/compare/visualize_disagreements.py" = ["SIM102", "SIM115", "RUF059"]
-"gmb/compare/compare_annotations.py" = ["SIM102", "SIM115", "RUF059"]
-# `== True` used deliberately: comparison_details.tsv columns are read back
-# as object dtype (can hold NaN alongside True/False), where a plain truth
-# check and an explicit `== True` differ for NaN -- an explicit comparison
-# is the safer, intent-revealing choice here, not an oversight.
-"gmb/compare/tool_performance_analysis.py" = ["E712"]
 # __all__ in the longread package __init__ is grouped by logical category (config,
 # io, rescue, reporting) for readability; alphabetical sorting would destroy that.
 "gmb/pipeline/longread/__init__.py" = ["RUF022"]

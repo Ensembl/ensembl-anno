@@ -21,11 +21,11 @@ orf:
   # Minimum ORF length in codons.  50 is conservative for diverse eukaryotes;
   # compact-genome clades (fungi, many parasites) lower this to 33.
   min_codons: 50
-  # Retain partial ORFs that lack a start codon (useful at assembly ends).
+  # NOT APPLIED -- the five keys below are accepted for compatibility but no
+  # code reads them. ORF finding always considers partial ORFs, ATG starts
+  # only, and "*" as the stop character (see annotate_cds_utrs.find_best_orf).
   allow_partial_5: true
-  # Retain partial ORFs that lack a stop codon.
   allow_partial_3: true
-  # Accept non-ATG starts (rare; off by default).
   allow_non_atg_start: false
   stop_codon_char: "*"
   partial_prefix: ""
@@ -35,11 +35,15 @@ orf:
 # ---------------------------------------------------------------------------
 protein_filter:
   min_protein_aa: 30
-  min_exon_count_for_short: 1
+  min_exon_count_for_short: 1    # NOT APPLIED -- no code reads this key
   redundancy_overlap: 0.80
   top_n_per_locus: 3
   max_span_bp: 50000
   keep_secondary: true
+  # Applied only when the alignment GTF carries Coverage / Identity attributes
+  # or a numeric score on its EXON rows. genBlastG output from the Ensembl
+  # anno pipeline has neither (its score is on transcript rows, which GMB
+  # does not load), so these three thresholds remove nothing for it.
   min_alignment_coverage: 0.80
   min_percent_identity: 60.0
   min_bitscore: 50.0
@@ -48,14 +52,18 @@ protein_filter:
 # transcriptomic_filter — RNA-seq assembly evidence (Scallop, StringTie)
 # ---------------------------------------------------------------------------
 transcriptomic_filter:
-  # Upper bound on transcript span (bp); null disables the filter.
-  # Compact-genome clades set this to a species-appropriate ceiling.
+  # Drop assembled transcripts (short- and long-read) spanning more than this
+  # (bp); null disables. Read-through chimeras in compact genomes often have no
+  # long intron, so max_intron_length alone does not remove them. The neutral
+  # value is effectively off; compact-genome presets set a species ceiling.
   max_transcript_length: 2000000
   # Drop transcripts with any intron longer than this.  Large for neutrality
   # (vertebrates have introns > 1 Mbp); compact-genome clades lower this.
   max_intron_length: 1000000
   min_intergenic_gap: 500
+  # false drops single-exon assembled transcripts.
   allow_single_exon: true
+  # NOT APPLIED -- accepted but no code reads it (deprecated; see known_issues.md).
   strand_consistency_check: false
 
 # ---------------------------------------------------------------------------
@@ -67,6 +75,8 @@ transcript_splitting:
   split_enabled: false
   # Gap that triggers a split (mirrors max_intron_length in clade presets).
   split_gap_bp: 3000
+  # NOT APPLIED -- the two keys below are accepted but no code reads them;
+  # splitting is always per contig and strand.
   split_on_contig_change: true
   split_on_strand_change: true
   # Cap individual exons at this length before splitting; null = no cap.
@@ -114,8 +124,19 @@ scoring:
   min_cds_bp: 150
   require_support_for_single_exon: true
   same_gene_overlap_threshold: 0.15
-  # Set automatically by the CLI (--helixer → Helixer, --tiberius → Tiberius).
+  # Set automatically by the CLI (--helixer → Helixer, --tiberius → Tiberius,
+  # --backbone → the file's source column or --backbone-label).
   backbone_label: Helixer
+  # How candidate exons are grouped into loci before selection.
+  #   exon_overlap      -- overlapping exons only (validated baseline). A
+  #                        multi-exon candidate whose introns no other candidate
+  #                        spans is split into several loci and scored as
+  #                        single-exon fragments.
+  #   transcript_linked -- additionally merge exon clusters that share a
+  #                        candidate transcript, so each candidate is scored
+  #                        whole. The fungi preset uses it; the neutral base and
+  #                        apicomplexa keep exon_overlap until re-validated.
+  locus_clustering: exon_overlap
 
 # ---------------------------------------------------------------------------
 # protein_validation — DIAMOND + Psauron protein-coding validation
@@ -179,6 +200,7 @@ utr:
   require_multisource_for_utr_5p: true
   require_multisource_for_utr_3p: true
   fallback_policy_when_unsupported: drop_utr
+  # NOT APPLIED -- the two keys below are accepted but no code reads them.
   min_protein_coding_score_for_utr: null
   max_end_extension_bp: null
 
@@ -203,6 +225,8 @@ duplicate_transcript_collapse:
 # ---------------------------------------------------------------------------
 # qc — per-track quality-control thresholds
 # ---------------------------------------------------------------------------
+# NOT APPLIED -- the qc section configured the removed gmb-visualize plots; no
+# build or finalise code reads it. Accepted so existing configs still load.
 qc:
   max_transcripts_per_track: 5
   skip_orf_inference_tracks:
@@ -214,6 +238,10 @@ qc:
 # ---------------------------------------------------------------------------
 # export
 # ---------------------------------------------------------------------------
+# NOT APPLIED -- export and reporting configured modules with no callers that
+# were removed in 2.0.0. FASTA is always regenerated in full from the final GFF3
+# (partial models included) and summary.json/.tsv are always written. Both
+# sections are still accepted so existing configs load.
 export:
   write_cdna: true
   write_protein: true
@@ -272,7 +300,7 @@ canonical_selection:
     trigger_length_or_lexical_only: true
     trigger_internal_stop_conflict: true
     length_ratio_flag: 1.5
-    min_coverage_delta_for_replacement: 0.10
+    min_coverage_delta_for_replacement: 0.10   # NOT APPLIED -- no code reads this key
     require_no_worse_structural_class: true
     require_no_new_internal_stops: true
     max_protein_validation_override_gap: 0.15

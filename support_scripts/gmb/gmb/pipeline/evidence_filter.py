@@ -300,8 +300,15 @@ def filter_chimeras(
 ) -> pd.DataFrame:
     """Filter likely chimeric or artefactual transcriptomic models.
 
-    - Remove transcripts with unreasonably large introns
-    - Keep single-exon transcripts by default (fungal mode)
+    - Remove transcripts with any intron longer than
+      ``transcriptomic_filter.max_intron_length``
+    - Remove transcripts whose genomic span exceeds
+      ``transcriptomic_filter.max_transcript_length`` (``null`` disables). In compact
+      genomes read-through assemblies can join several genes without any long intron
+      (they cross short intergenic gaps, often as one long "exon"), so the intron rule
+      alone does not catch them.
+    - Remove single-exon transcripts when ``transcriptomic_filter.allow_single_exon``
+      is false (default true)
 
     Parameters
     ----------
@@ -325,19 +332,29 @@ def filter_chimeras(
     n_input = tx_df["transcript_id"].nunique()
 
     remove_tids = set()
+    long_span = set()
+    single_exon = set()
+    max_span = tcfg.max_transcript_length
 
-    # Check intron lengths per transcript
     for tid, grp in tx_df.groupby("transcript_id"):
         exons = sorted(zip(grp["Start"].values, grp["End"].values))
         if len(exons) < 2:
-            continue  # single-exon → always keep in fungal mode
+            if not tcfg.allow_single_exon:
+                single_exon.add(tid)
+            continue
         for i in range(len(exons) - 1):
             intron_len = exons[i + 1][0] - exons[i][1]
             if intron_len > tcfg.max_intron_length:
                 remove_tids.add(tid)
                 break
+        if max_span is not None and exons[-1][1] - exons[0][0] > max_span:
+            long_span.add(tid)
 
+    # Each counter is the number removed by that rule alone (a transcript can fail several).
     stats["chimeras_large_intron"] = len(remove_tids)
+    stats["chimeras_long_span"] = len(long_span)
+    stats["single_exon_removed"] = len(single_exon)
+    remove_tids |= long_span | single_exon
 
     filtered = tx_df[~tx_df["transcript_id"].isin(remove_tids)].copy()
     n_after = filtered["transcript_id"].nunique()
@@ -345,8 +362,9 @@ def filter_chimeras(
     if remove_tids:
         print(
             f"    Chimera filter: {n_input} → {n_after} transcripts "
-            f"({len(remove_tids)} removed for intron > "
-            f"{tcfg.max_intron_length}bp)"
+            f"({stats['chimeras_large_intron']} with an intron > {tcfg.max_intron_length} bp, "
+            f"{len(long_span)} spanning > {max_span} bp, "
+            f"{len(single_exon)} single-exon removed)"
         )
 
     return filtered

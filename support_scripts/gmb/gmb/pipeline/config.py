@@ -25,6 +25,63 @@ from typing import Optional, Union
 
 import yaml
 
+#: Preset applied by ``load_config``, ``gmb-build`` and ``gmb-preflight`` when
+#: none is named. Kept as "fungi" for backward compatibility with existing
+#: builds; production pipelines should always pass a preset explicitly.
+#: ``run_gene_model_builder`` defaults to the neutral "standard" instead and
+#: passes it explicitly to every stage.
+DEFAULT_PRESET = "fungi"
+
+#: Keys that are accepted (so existing configs load) but change nothing. Setting one
+#: in a preset or --config file warns. "deprecated": obsolete, will be removed in a
+#: future major release. "unsupported": reserved for behaviour that is not
+#: implemented; the current fixed behaviour is described in docs/known_issues.md.
+INERT_CONFIG_KEYS = {
+    "orf.allow_partial_5": "unsupported",
+    "orf.allow_partial_3": "unsupported",
+    "orf.allow_non_atg_start": "unsupported",
+    "orf.stop_codon_char": "deprecated",
+    "orf.partial_prefix": "deprecated",
+    "protein_filter.min_exon_count_for_short": "deprecated",
+    "transcriptomic_filter.strand_consistency_check": "deprecated",
+    "transcript_splitting.split_on_contig_change": "deprecated",
+    "transcript_splitting.split_on_strand_change": "deprecated",
+    "utr.min_protein_coding_score_for_utr": "unsupported",
+    "utr.max_end_extension_bp": "unsupported",
+    "qc.max_transcripts_per_track": "deprecated",
+    "qc.skip_orf_inference_tracks": "deprecated",
+    "qc.parallel": "deprecated",
+    "qc.workers": "deprecated",
+    "canonical_selection.interpro_resolver.min_coverage_delta_for_replacement": "unsupported",
+    "export.write_cdna": "deprecated",
+    "export.write_protein": "deprecated",
+    "export.write_cds": "deprecated",
+    "export.include_partial": "deprecated",
+    "reporting.formats": "deprecated",
+}
+
+
+def _warn_inert_keys(data, source: str, prefix: str = "") -> None:
+    """Warn for every INERT_CONFIG_KEYS entry a config layer sets."""
+    if not isinstance(data, dict):
+        return
+    for key, value in data.items():
+        dotted = f"{prefix}{key}"
+        status = INERT_CONFIG_KEYS.get(dotted)
+        if status:
+            warnings.warn(
+                f"{source}: config key '{dotted}' is {status} and has no effect "
+                "(see docs/known_issues.md).",
+                FutureWarning if status == "deprecated" else UserWarning,
+                stacklevel=3,
+            )
+        elif isinstance(value, dict):
+            _warn_inert_keys(value, source, dotted + ".")
+
+
+#: Accepted values of ``scoring.locus_clustering`` (see ScoringConfig).
+LOCUS_CLUSTERING_MODES = ("exon_overlap", "transcript_linked")
+
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
@@ -55,7 +112,8 @@ class ProteinFilterConfig:
 
 @dataclass
 class TranscriptomicFilterConfig:
-    max_transcript_length: int = 20_000
+    # Drop assembled transcripts spanning more than this (bp); None disables.
+    max_transcript_length: Optional[int] = 20_000
     max_intron_length: int = 3_000
     min_intergenic_gap: int = 500
     allow_single_exon: bool = True
@@ -206,6 +264,17 @@ class ScoringConfig:
     # falls back to interpreting backbone_intron_rescue directly (so unit tests
     # calling select_isoforms() without a builder still behave predictably).
     backbone_intron_rescue_resolved: object = None
+    # How candidate exons are grouped into the loci select_isoforms() sees.
+    #   "exon_overlap"      -- clusters of overlapping exons (validated baseline).
+    #                          A multi-exon candidate whose introns no other
+    #                          candidate spans is split across several loci, so
+    #                          its exons are scored as unrelated single-exon
+    #                          fragments (12.6% of multi-exon candidates on the
+    #                          Z. tritici fixture). Kept as the default until the
+    #                          alternative is validated genome-wide.
+    #   "transcript_linked" -- exon clusters that share a candidate transcript are
+    #                          merged, so every candidate is scored whole.
+    locus_clustering: str = "exon_overlap"
 
     # ---- evidence roles ----
     # Selection logic operates on roles, never on literal tool names. These
@@ -255,6 +324,11 @@ class PreflightConfig:
     max_unstranded_fraction: float = 0.05
     # Informational span guardrails; these only ever warn.
     max_transcript_span_warn_bp: int = 500000
+    # A long-read track with more models than this per Mb of genome looks like
+    # per-read alignments rather than collapsed transcript models. Collapsed
+    # sets are typically tens to a few hundred per Mb; a raw Z. tritici run
+    # had ~52,000 per Mb (2.05 M reads), which no build can process in time.
+    max_longread_models_per_mb: int = 2000
     max_intron_warn_bp: int = 100000
 
 
@@ -978,6 +1052,12 @@ def validate_selection_policy(cfg) -> list:
             f"scoring.protein_support_mode must be 'positional' or "
             f"'cds_span_compatible', got {mode!r}."
         )
+    locus_mode = getattr(scfg, "locus_clustering", "exon_overlap")
+    if locus_mode not in LOCUS_CLUSTERING_MODES:
+        raise ValueError(
+            f"scoring.locus_clustering must be one of {LOCUS_CLUSTERING_MODES}, "
+            f"got {locus_mode!r}."
+        )
     return warnings_out
 
 
@@ -994,7 +1074,8 @@ def _validate_dataclass(dc):
 
 def load_config(
     path: Optional[Union[str, list]] = None,
-    preset: Optional[str] = "fungi",
+    preset: Optional[str] = DEFAULT_PRESET,
+    warn_inert: bool = True,
 ) -> "PipelineConfig":
     """Load pipeline configuration in layers.
 
@@ -1019,6 +1100,10 @@ def load_config(
 
         The deprecated name ``"fungi_default"`` is accepted with a
         ``DeprecationWarning`` and silently remapped to ``"fungi"``.
+    warn_inert : bool
+        Warn when a preset or override sets a key in ``INERT_CONFIG_KEYS``.
+        Pass False when reloading a GMB-written ``resolved_config.yaml``, which
+        lists every key by construction.
 
     Returns
     -------
@@ -1056,7 +1141,10 @@ def load_config(
                 f"Available presets: {available or ['none installed']}.\n"
                 "Use --list-presets to see what is installed."
             )
-        _update_dataclass(cfg, _load_bundled_config_yaml(preset))
+        preset_data = _load_bundled_config_yaml(preset)
+        if warn_inert:
+            _warn_inert_keys(preset_data, f"preset '{preset}'")
+        _update_dataclass(cfg, preset_data)
 
     # Layer 3 — user overrides: applied in order (later files win on shared keys).
     paths = [path] if isinstance(path, str) else (path or [])
@@ -1067,6 +1155,8 @@ def load_config(
             raise FileNotFoundError(f"Config file not found: {override_path}")
         with open(override_path) as fh:
             data = _safe_load_strict(fh, str(override_path))
+        if warn_inert:
+            _warn_inert_keys(data, str(override_path))
         _update_dataclass(cfg, data)
 
     _validate_dataclass(cfg)

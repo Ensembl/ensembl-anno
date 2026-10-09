@@ -1,4 +1,18 @@
+"""Rename the sequence IDs of a GFF3 (e.g. Helixer output) using an NCBI assembly report.
+
+Upstream normalisation step: every GMB input must use the genome FASTA's sequence names, and
+``gmb-preflight`` fails a track whose names are absent from the genome. Maps the GenBank
+accession column to the Assigned-Molecule column (e.g. ``CM001196.1`` -> ``1``), including
+``##sequence-region`` headers. Coordinates are unchanged, so this is only valid when each
+accession is the whole assigned molecule (checked: the mapping must be one-to-one).
+Sequences absent from the report are an error unless ``--allow-unmapped`` is given.
+
+    python tools/remap_helixer.py --input helixer.gff3 \
+        --assembly-report GCA_xxx_assembly_report.txt --output helixer_remapped.gff3
+"""
+
 import argparse
+import sys
 
 
 def parse_args():
@@ -8,6 +22,12 @@ def parse_args():
     parser.add_argument("--input", required=True, help="Input Helixer GFF3 file")
     parser.add_argument("--assembly-report", required=True, help="NCBI assembly report TXT file")
     parser.add_argument("--output", required=True, help="Output remapped GFF3 file")
+    parser.add_argument(
+        "--allow-unmapped",
+        action="store_true",
+        help="Keep records on sequences absent from the report under their original name "
+        "(default: fail, because GMB would reject them anyway).",
+    )
     return parser.parse_args()
 
 
@@ -56,8 +76,16 @@ def main():
 
     print(f"Remapping {args.input}...")
     remapped_count = 0
+    unmapped = set()
     with open(args.input) as infile, open(args.output, "w") as outfile:
         for line in infile:
+            if line.startswith("##sequence-region"):
+                fields = line.split()
+                if len(fields) >= 2 and fields[1] in mapping:
+                    fields[1] = mapping[fields[1]]
+                    line = " ".join(fields) + "\n"
+                outfile.write(line)
+                continue
             if line.startswith("#"):
                 outfile.write(line)
                 continue
@@ -73,11 +101,19 @@ def main():
                 outfile.write("\t".join(parts) + "\n")
                 remapped_count += 1
             else:
-                # If not in mapping, keep original or warn?
-                # Usually keep original if it's a scaffold not in the main chromosome list
+                unmapped.add(seq_id)
                 outfile.write(line)
 
-    print(f"Created {args.output} with {remapped_count} overlapping lines remapped.")
+    if unmapped and not args.allow_unmapped:
+        sys.exit(
+            f"ERROR: {len(unmapped)} sequence(s) are not in the assembly report "
+            f"(e.g. {sorted(unmapped)[:3]}); {args.output} is incomplete. Re-run with "
+            "--allow-unmapped to keep them under their original names."
+        )
+    print(
+        f"Created {args.output}: {remapped_count} feature lines remapped, "
+        f"{len(unmapped)} unmapped sequence(s)."
+    )
 
 
 if __name__ == "__main__":

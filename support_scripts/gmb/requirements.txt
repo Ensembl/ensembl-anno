@@ -3,6 +3,5 @@
 # pandas 3.0 + pyranges 0.1.4 compatibility testing pins.
 pandas>=2.0,<3
 pyranges>=0.0.120,<=0.1.4
-biopython
 pyyaml
-matplotlib
+numpy

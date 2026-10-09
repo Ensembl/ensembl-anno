@@ -19,7 +19,13 @@ orf:
   min_codons: 33
 
 transcriptomic_filter:
-  # Fungal transcripts rarely exceed 20 kb; removes chimeric joins.
+  # Drop assembled transcripts spanning > 20 kb. Z. tritici reference transcripts
+  # reach 45 kb but p99.9 is 12 kb (1 of 10,931 exceeds 20 kb). In this compact
+  # genome read-through assemblies join neighbouring genes across short
+  # intergenic gaps without any long intron, so max_intron_length cannot catch
+  # them: 4,945 of 31,392 filtered short-read transcripts spanned > 20 kb and
+  # 98% of those overlapped >= 2 reference genes. Applied since 2.0.0 (the key
+  # was previously accepted but ignored); pair it with locus_clustering below.
   max_transcript_length: 20000
   # Fungal introns rarely exceed 3 kb; tighter than the neutral 1 Mbp default.
   max_intron_length: 3000
@@ -95,6 +101,15 @@ scoring:
   # Enable it, or set longread_disposition, if you supply a long-read track —
   # and run preflight first to check its splice quality.
   longread_structural_guard: false
+  # Score every candidate whole (2.0.0). With exon_overlap, a candidate whose
+  # introns nothing spans is scored as fragments: 5.7% of multi-exon candidates
+  # genome-wide on Z. tritici. Removing read-through chimeras (above) also
+  # removes the transcripts that happened to bridge introns, so exon_overlap +
+  # the 20 kb filter fragments 1,138 candidates in 6 core windows and LOSES CDS
+  # accuracy; transcript_linked + the filter was best or equal on every exact
+  # metric there and cut gene merges 28% (docs/release/z_tritici_validation.md).
+  # Regional evidence only: confirm genome-wide in the production-scale test.
+  locus_clustering: transcript_linked
 
 
 protein_validation:

@@ -47,7 +47,7 @@ from gmb.pipeline.annotate_cds_utrs import (
     translate,
 )
 from gmb.pipeline.backbone import BackboneInputError, resolve_backbone_input
-from gmb.pipeline.config import dump_config, list_build_presets, load_config
+from gmb.pipeline.config import DEFAULT_PRESET, dump_config, list_build_presets, load_config
 from gmb.pipeline.dedup_genes import dedup_genes
 from gmb.pipeline.duplicate_transcript_collapse import collapse_exact_duplicate_transcripts
 from gmb.pipeline.evidence_filter import (
@@ -56,7 +56,11 @@ from gmb.pipeline.evidence_filter import (
     filter_protein_evidence,
     split_mega_transcripts,
 )
-from gmb.pipeline.gff3_validate import recompute_gene_bounds, validate_and_fix_gff3
+from gmb.pipeline.gff3_validate import (
+    drop_detached_isoforms,
+    recompute_gene_bounds,
+    validate_and_fix_gff3,
+)
 from gmb.pipeline.protein_validation import batch_score_proteins, check_dependencies
 from gmb.pipeline.scoring import select_isoforms
 from gmb.pipeline.subset_utils import (
@@ -314,10 +318,117 @@ def compute_percentile_guardrails(
     return runtime_params
 
 
+def cluster_candidate_loci(
+    candidate_exons: pd.DataFrame, mode: str = "exon_overlap"
+) -> pd.DataFrame:
+    """Group candidate exons into the loci that ``select_isoforms`` scores.
+
+    ``"exon_overlap"`` clusters overlapping exon intervals (pyranges
+    ``cluster``, slack 0). Nothing ties a transcript's exons together, so where
+    no candidate spans an intron the exons on either side land in different
+    loci -- most often exactly where every candidate agrees on that intron.
+
+    ``"transcript_linked"`` starts from the same exon clusters and merges any
+    that share a ``transcript_id``, so no candidate is ever split. Exon clusters
+    that are not linked by a transcript (e.g. a gene nested in another gene's
+    intron) stay separate.
+
+    Returns the exon frame with an integer ``Cluster`` column.
+    """
+    cluster_df = pr.PyRanges(candidate_exons).cluster(slack=0, count=True).df
+    if mode == "exon_overlap":
+        return cluster_df
+    if mode != "transcript_linked":
+        raise ValueError(f"unknown locus clustering mode {mode!r}")
+
+    parent: dict = {}
+
+    def find(c):
+        while parent.setdefault(c, c) != c:
+            parent[c] = parent[parent[c]]
+            c = parent[c]
+        return c
+
+    pairs = cluster_df[["transcript_id", "Cluster"]].drop_duplicates()
+    for _tid, clusters in pairs.groupby("transcript_id", observed=True)["Cluster"]:
+        clusters = clusters.tolist()
+        root = find(clusters[0])
+        for c in clusters[1:]:
+            other = find(c)
+            if other != root:
+                parent[other] = root
+    cluster_df["Cluster"] = cluster_df["Cluster"].map(find)
+    cluster_df["Count"] = cluster_df.groupby("Cluster")["Cluster"].transform("size")
+    return cluster_df
+
+
+def build_transcript_end_index(exon_df: pd.DataFrame, sources) -> dict:
+    """Index the 5' and 3' ends of every transcript from *sources*.
+
+    Built once per run so ``compute_utr_end_support`` does not rescan the whole
+    candidate table for every selected model (which made that step quadratic in
+    the number of candidates). Ends are taken from each transcript's *full* exon
+    set, exactly as the per-call scan did.
+
+    Returns ``{(chrom, strand): {"5p": (ends, tids), "3p": (ends, tids)}}`` with
+    ``ends`` a sorted int64 array and ``tids`` the matching transcript IDs.
+    """
+    index: dict = {}
+    if exon_df is None or exon_df.empty:
+        return index
+    df = exon_df[exon_df["Source"].isin(set(sources))]
+    if df.empty:
+        return index
+    if "Chromosome" not in df.columns:  # no sequence information: one shared key
+        df = df.assign(Chromosome="")
+    spans = (
+        df.groupby(["Source", "transcript_id"], observed=True)
+        .agg(
+            Chromosome=("Chromosome", "first"),
+            Strand=("Strand", "first"),
+            lo=("Start", "min"),
+            hi=("End", "max"),
+        )
+        .reset_index()
+    )
+    for (chrom, strand), grp in spans.groupby(["Chromosome", "Strand"], observed=True):
+        if strand not in ("+", "-"):
+            continue
+        five = grp["lo"] if strand == "+" else grp["hi"]
+        three = grp["hi"] if strand == "+" else grp["lo"]
+        entry = {}
+        for key, vals in (("5p", five), ("3p", three)):
+            order = np.argsort(vals.to_numpy(), kind="stable")
+            entry[key] = (
+                vals.to_numpy(dtype=np.int64)[order],
+                grp["transcript_id"].to_numpy()[order],
+            )
+        index[(str(chrom), strand)] = entry
+    return index
+
+
+def _end_supported(
+    index: dict, chrom, strand: str, end_type: str, pos: int, tol: int, self_tid: str
+) -> bool:
+    """True if another indexed transcript has an *end_type* end within *tol* of *pos*."""
+    keys = [(str(chrom), strand)] if chrom is not None else [k for k in index if k[1] == strand]
+    for key in keys:
+        entry = index.get(key)
+        if entry is None:
+            continue
+        ends, tids = entry[end_type]
+        lo = np.searchsorted(ends, pos - tol, side="left")
+        hi = np.searchsorted(ends, pos + tol, side="right")
+        if any(t != self_tid for t in tids[lo:hi]):
+            return True
+    return False
+
+
 def compute_utr_end_support(
     model: dict,
     locus_df: pd.DataFrame,
     config: PipelineConfig,
+    end_index: dict | None = None,
 ) -> dict[str, object]:
     """Determine if 5' and 3' ends are supported by other sources.
 
@@ -325,12 +436,19 @@ def compute_utr_end_support(
     ----------
     model : dict
         Candidate gene model dict with keys ``id``, ``strand``, ``start``,
-        ``end``, and optionally ``protein_coding_score``.
+        ``end``, and optionally ``chrom`` and ``protein_coding_score``.
     locus_df : pd.DataFrame
-        Exon-level DataFrame for the enclosing locus.
+        Exon-level DataFrame of the transcripts whose ends may support this
+        model. Ignored when *end_index* is given.
     config : PipelineConfig
         Pipeline configuration with ``utr`` and ``protein_validation``
         sections.
+    end_index : dict or None
+        Prebuilt :func:`build_transcript_end_index` over the same transcripts.
+        The builder passes one so the lookup is not repeated per model.
+
+    Only ends on the model's own sequence and strand count: a coordinate within
+    tolerance on another contig is not agreement.
 
     Returns
     -------
@@ -360,28 +478,8 @@ def compute_utr_end_support(
     target_sources = set(utr_cfg.end_support_sources)
     tol = utr_cfg.end_tolerance_bp
 
-    # Extract end coordinate candidates from locus (excluding self)
-    other_models = locus_df[locus_df["transcript_id"] != tid]
-    other_ends_5p = []
-    other_ends_3p = []
-
-    for _, grp in other_models.groupby(["Source", "transcript_id"]):
-        src = grp["Source"].iloc[0]
-        if src not in target_sources:
-            continue
-        strand = grp["Strand"].iloc[0]
-        if strand != model["strand"]:
-            continue
-
-        # Determine 5p/3p based on strand
-        min_c = grp["Start"].min()
-        max_c = grp["End"].max()
-        if strand == "+":
-            other_ends_5p.append(min_c)
-            other_ends_3p.append(max_c)
-        else:
-            other_ends_5p.append(max_c)
-            other_ends_3p.append(min_c)
+    if end_index is None:
+        end_index = build_transcript_end_index(locus_df, target_sources)
 
     # Model's own ends
     strand = model["strand"]
@@ -390,9 +488,11 @@ def compute_utr_end_support(
     m_5p = min_c if strand == "+" else max_c
     m_3p = max_c if strand == "+" else min_c
 
-    # multisource_end_agreement
-    multi_5p = any(abs(e - m_5p) <= tol for e in other_ends_5p)
-    multi_3p = any(abs(e - m_3p) <= tol for e in other_ends_3p)
+    # multisource_end_agreement: another transcript (never the model itself)
+    # from an end-support source ends within tolerance on the same seq/strand.
+    chrom = model.get("chrom")
+    multi_5p = _end_supported(end_index, chrom, strand, "5p", m_5p, tol, tid)
+    multi_3p = _end_supported(end_index, chrom, strand, "3p", m_3p, tol, tid)
 
     # protein_validated
     prot_supported = False
@@ -475,11 +575,12 @@ def parse_args():
     )
     parser.add_setup_args.add_argument(
         "--preset",
-        default="fungi",
+        default=None,
         help=(
             "Clade preset to load before any --config overrides "
-            "(default: 'fungi').  Use --list-presets to see what is "
-            "installed.  Pass 'none' to use the neutral standard base only."
+            f"(default: '{DEFAULT_PRESET}', kept for backward compatibility -- "
+            "name it explicitly in pipelines).  Use --list-presets to see what "
+            "is installed.  Pass 'standard' or 'none' for the neutral base only."
         ),
     )
     parser.add_setup_args.add_argument(
@@ -521,7 +622,8 @@ def parse_args():
     parser.add_input_args.add_argument("--genblast", help="GenBlast protein alignment GTF")
 
     parser.add_output_args = parser.add_argument_group("Outputs")
-    parser.add_output_args.add_argument("--output-dir", required=True, help="Output directory")
+    # Required for every run; checked after parsing so --list-presets works alone.
+    parser.add_output_args.add_argument("--output-dir", help="Output directory (required)")
     parser.add_output_args.add_argument("--gene-prefix", default="GENE", help="Prefix for new IDs")
     parser.add_output_args.add_argument(
         "--log-file",
@@ -540,7 +642,10 @@ def parse_args():
 
     add_subset_args(parser)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.output_dir and not args.list_presets:
+        parser.error("the following arguments are required: --output-dir")
+    return args
 
 
 def load_evidence(
@@ -610,8 +715,7 @@ def load_evidence(
     # chimeric transcript spanning both sequences -- joining unrelated coding
     # fragments in unrelated reading frames. Namespace only the IDs that
     # actually occur on more than one seqname, so this is a no-op for inputs
-    # whose IDs are already genome-wide unique. Same policy as
-    # gmb.compare.annotation_loader._namespace_duplicate_ids.
+    # whose IDs are already genome-wide unique.
     for id_col in ("transcript_id", "gene_id"):
         seqs_per_id = df.groupby(id_col, observed=True)["Chromosome"].nunique()
         dup_ids = set(seqs_per_id[seqs_per_id > 1].index)
@@ -670,6 +774,12 @@ def main() -> None:
 
     import time as _time
     _run_started_at = _time.time()
+    if args.preset is None:
+        args.preset = DEFAULT_PRESET
+        print(
+            f"NOTE: --preset not given; using '{DEFAULT_PRESET}'. Name the preset "
+            "explicitly so preflight and build cannot disagree."
+        )
     config = load_config(args.config, args.preset)
     # Sync the scoring gate's backbone string to whichever ab initio track was
     # actually loaded, so weighting/single-exon-without-support logic (which
@@ -955,10 +1065,17 @@ def main() -> None:
         f"(mode={getattr(config.scoring, 'protein_support_mode', 'positional')})"
     )
 
-    print("Clustering loci...")
-    pr_candidates = pr.PyRanges(candidate_exons)
-    clustered = pr_candidates.cluster(slack=0, count=True)
-    cluster_df = clustered.df
+    locus_mode = getattr(config.scoring, "locus_clustering", "exon_overlap")
+    print(f"Clustering loci (locus_clustering={locus_mode})...")
+    cluster_df = cluster_candidate_loci(candidate_exons, locus_mode)
+    _tx_clusters = cluster_df.groupby("transcript_id", observed=True)["Cluster"].nunique()
+    stats["candidates_split_across_loci"] = int((_tx_clusters > 1).sum())
+    if stats["candidates_split_across_loci"]:
+        print(
+            f"  {stats['candidates_split_across_loci']} candidate transcript(s) span more "
+            f"than one locus and are scored as fragments; "
+            f"scoring.locus_clustering=transcript_linked keeps them whole"
+        )
 
     print("Computing guardrails...")
     runtime_params = compute_percentile_guardrails(cluster_df, config, protein_supported_tids)
@@ -970,6 +1087,13 @@ def main() -> None:
     # sequences that is hours of silence, with no way to tell slow from stuck.
     _loci_total = cluster_df["Cluster"].nunique()
     print(f"Scoring and Selecting Isoforms... ({_loci_total:,} loci)")
+    # Transcript ends from every candidate, indexed once for UTR end support.
+    utr_end_index = (
+        build_transcript_end_index(cluster_df, config.utr.end_support_sources)
+        if config.utr.require_end_support
+        else {}
+    )
+
     selected_gff_rows = []
     selected_cdna_fa = []
     selected_prot_fa = []
@@ -1056,7 +1180,9 @@ def main() -> None:
                 }
 
                 try:
-                    utr_support = compute_utr_end_support(model, cluster_df, config)
+                    utr_support = compute_utr_end_support(
+                        model, cluster_df, config, end_index=utr_end_index
+                    )
                 except Exception as e:
                     print(f"Warning: UTR support computation failed for {tid}: {e}")
 
@@ -1305,6 +1431,17 @@ def main() -> None:
     else:
         print("    No exact-duplicate transcripts found")
 
+    # Validation can trim a transcript until it no longer overlaps the rest of its
+    # gene; such a gene would span unrelated loci. Run after the last stage that
+    # changes gene membership and before gene bounds are recomputed.
+    selected_gff_rows, detached_stats = drop_detached_isoforms(selected_gff_rows)
+    stats.update(detached_stats)
+    if detached_stats["detached_isoforms_removed"]:
+        print(
+            f"  Removed {detached_stats['detached_isoforms_removed']} isoform(s) no longer "
+            f"overlapping their gene ({detached_stats['genes_with_detached_isoforms']} gene(s))"
+        )
+
     # Gene spans are set when the gene row is built, but validation, dedup and
     # duplicate collapse all add or remove transcripts afterwards. Recompute
     # here -- after the last stage that can change gene membership -- so the
@@ -1335,7 +1472,9 @@ def main() -> None:
     if not out_df.empty:
         # Convert to 1-based start for GFF3. pyranges is 0-based half-open (start is 0-based, end is 1-based)
         out_df["Start"] = out_df["Start"] + 1
-        out_df = out_df.sort_values(["Chromosome", "Start"])
+        # Stable: rows were built parent-first, and a parent never starts after
+        # its children, so ties keep every gene/mRNA ahead of its own features.
+        out_df = out_df.sort_values(["Chromosome", "Start"], kind="stable")
         with open(gff3_path, "w") as fh:
             fh.write("##gff-version 3\n")
             for _, r in out_df.iterrows():
@@ -1375,30 +1514,10 @@ def main() -> None:
         if r.get("Parent"):
             by_parent[r["Parent"]].append(r)
 
-    # Iterate ALL output mRNAs directly
+    # Iterate ALL output mRNAs directly. Per-transcript selection metadata (UTR
+    # support, evidence, scores) was attached to each mRNA row when it was
+    # built, so no second pass over the loci is needed here.
     output_mrnas = [r for r in selected_gff_rows if r.get("Feature") == "mRNA"]
-
-    # Extract original models to map UTR support metadata
-    for _cid, locus_df in cluster_df.groupby("Cluster"):
-        genes = select_isoforms(
-            locus_df,
-            config,
-            protein_supported_tids,
-            genome_dict,
-            protein_support_sources=protein_support_sources,
-            protein_cds_span_tids=protein_cds_span_tids,
-            candidate_cds=candidate_cds,
-            canonical_intron_tids=canonical_intron_tids,
-        )
-        if genes:
-            for g in genes:
-                for _idx, _m in enumerate(g):
-                    # Emitted ID matches `gene_id.t{idx+1}` logic
-                    # To accurately find it here we need to reconstruct what it was called or just use order, but the logic in select isoforms creates it.
-                    pass  # We will instead pass it via a side-channel or Evidence field since tid changes
-
-    # Better approach: parse Evidence field or just store it in mRNA row temporarily
-    {m["ID"]: m for m in output_mrnas}
 
     for m in output_mrnas:
         tid = m["ID"]

@@ -7,12 +7,12 @@ Five subcommands, run in this order:
     measure        reference-free evidence measurements + evidence-state flags
     freeze         hash the overlay + the build's resolved config BEFORE any reference is used
     summarise-run  reference-free hard QC + diagnostics for a finished run
-    evaluate       compare a FROZEN config's run against a reference (gmb-compare output)
+    evaluate       compare a FROZEN config's run against a reference (annotation-qc pairwise-compare output)
 
 Design rules
 ------------
 * This script never runs GMB itself; the agent runs the documented CLI
-  (gmb-preflight / gmb-build / gmb-finalise / gmb-compare).
+  (gmb-preflight / gmb-build / gmb-finalise; reference comparison via ensembl-genes annotation-qc).
 * It does not re-implement preflight checks or the backbone-intron-rescue gate.
   It reads their outputs. The only things computed here are distributions
   preflight does not report (intron / span / CDS-length percentiles) and
@@ -907,8 +907,8 @@ def main(argv=None):
 
     s = sub.add_parser("evaluate", help="evaluate a FROZEN config against a reference")
     s.add_argument("--freeze", required=True, help="config_freeze.json from `freeze`")
-    s.add_argument("--comparison", required=True, help="gmb-compare dir for the candidate")
-    s.add_argument("--baseline-comparison", help="gmb-compare dir for the standard preset")
+    s.add_argument("--comparison", required=True, help="annotation-qc pairwise-compare --outdir for the candidate")
+    s.add_argument("--baseline-comparison", help="annotation-qc pairwise-compare --outdir for the standard preset")
     s.add_argument("--reference", required=True,
                    help="reference annotation, GFF3 only (evaluation only)")
     s.add_argument("--out", required=True)

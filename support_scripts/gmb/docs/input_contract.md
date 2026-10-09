@@ -12,13 +12,13 @@ Every input is a file path. GMB reads them; it does not produce them (the one ex
 | input | required | format | role | CLI flag |
 |---|---|---|---|---|
 | genome FASTA | **yes** | FASTA | coordinate system | `--genome` |
-| ab initio backbone | **yes** in practice | GFF3 or GTF | `backbone` | `--helixer` / `--tiberius` |
+| ab initio backbone | **yes** in practice | GFF3 or GTF | `backbone` | `--helixer` / `--tiberius` / `--backbone` (any predictor) |
 | short-read transcript models | recommended | GTF | `short_read_transcriptomic` | `--scallop`, `--stringtie` |
 | long-read transcript models | optional | GTF | `long_read_transcriptomic` | `--minimap2` |
 | protein-to-genome alignments | recommended | GTF | `protein_alignment` | `--orthodb`, `--uniprot`, `--genblast` |
 | DIAMOND protein DB | optional | `.dmnd` | `protein_validation` | config only |
-| reference annotation | **never a production input** | GFF3 | evaluation only | `gmb-compare --reference` |
-| seqname map | **never a production input** | TSV | evaluation only | `gmb-compare --seqname-map` |
+| reference annotation | **never a production input** | GFF3 | evaluation only | `annotation-qc pairwise-compare --reference` (ensembl-genes) |
+| seqname map | **never a production input** | TSV | evaluation only | `annotation-qc pairwise-compare --seqname-map` |
 
 The CLI flags are named after the tools that historically produced each file, but **the flag
 does not determine behaviour** — the evidence *role* does. Passing an IsoQuant GTF to
@@ -38,6 +38,14 @@ GFF3/GTF as specified: **1-based, inclusive** start and end. GMB converts intern
 Every evidence file must use the **same seqids as the genome FASTA**. Preflight fails a track
 where more than `preflight.max_unknown_seqid_fraction` (default 5%) of its sequence names are
 absent from the genome. Remap upstream — GMB does not guess.
+
+Helixer and other tools run on an NCBI download name sequences by GenBank accession
+(`CM001196.1`), while Ensembl genomes use names such as `1`. Rename with
+`tools/remap_helixer.py --assembly-report <NCBI assembly report>`, which maps the
+GenBank-Accn column to the Assigned-Molecule column (including `##sequence-region` headers)
+and fails on any sequence the report does not cover. `gmb-build --assembly-report` /
+`--seqname-map` can rename at build time, but `gmb-preflight` and `run_gene_model_builder`
+cannot, so renamed files are the supported route.
 
 ### Strand
 
@@ -66,11 +74,17 @@ reused **across sequences** in the same file are namespaced automatically with t
 | situation | behaviour |
 |---|---|
 | file missing/unreadable | preflight FAIL; `gmb-build` raises |
+| empty file, or no exon/CDS rows with a transcript ID (not GTF/GFF3) | preflight FAIL (`file_readable`) |
+| start > end, start < 1, or end beyond the sequence | preflight FAIL (`coordinates_valid`) |
+| backbone / transcript track with no `exon` rows | preflight FAIL (`exon_rows_present`); `gmb-build` builds candidates from exon rows only |
+| transcripts with CDS rows but no exon rows | preflight WARN; ignored by `gmb-build` |
+| backbone with no CDS | preflight WARN; ORFs are inferred from exons instead |
 | seqids not in genome | preflight FAIL above 5%, WARN below; unmatched models are unusable |
 | unstranded features | preflight FAIL above 5%, WARN below; those features are excluded |
-| duplicate IDs within a file | last wins after source prefixing |
+| one ID used for several rows on the same sequence | grouped into one model: exact repeats duplicate its exons, distinct alignments fuse into one span (protein spans > `protein_filter.max_span_bp` are then dropped) |
 | IDs reused across seqids | namespaced automatically; preflight WARNs |
 | poor splice quality | preflight WARN/FAIL by role (see below) |
+| per-read long-read alignments | preflight WARN (`longread_collapsed`) |
 | source in no evidence role | preflight **FAIL** — it would get the unknown-source weight |
 
 ---
@@ -85,7 +99,10 @@ whitespace.
 
 ### Ab initio backbone — required for the standard workflow
 
-`--helixer` (GFF3) or `--tiberius` (GTF). **Mutually exclusive: exactly one backbone.**
+`--helixer` (GFF3), `--tiberius` (GTF) or the generic `--backbone` (GTF or GFF3, any
+predictor; label from its source column or `--backbone-label`). **Mutually exclusive:
+exactly one backbone.** It must have `exon` rows; its `CDS` rows are used as the coding
+sequence where present (Helixer: all models, stop codon included in the CDS).
 
 Whichever flag you use sets `scoring.backbone_label`, which is how the backbone role is
 resolved. GMB will run without a backbone, but the standard production workflow expects one
@@ -100,10 +117,25 @@ GTF with `exon` features and `transcript_id`. Any assembler; list its label unde
 `scoring.shortread_labels`. Two flags ship (`--scallop`, `--stringtie`) but the role, not the
 flag, determines behaviour.
 
+Assembled transcripts are filtered before scoring: any intron longer than
+`transcriptomic_filter.max_intron_length`, or a genomic span longer than
+`transcriptomic_filter.max_transcript_length` (fungi: 3 kb and 20 kb), removes the
+transcript. In compact genomes read-through assemblies join neighbouring genes across short
+intergenic gaps with no long intron, so the span rule is the one that catches them.
+
 ### Long-read transcript models — optional
 
 Supply **collapsed consensus models**, not raw read alignments. `gmb-longread-consensus` does
-the collapse if you have alignments.
+the collapse if you have alignments. GMB scores every model as a candidate, so a per-read
+track (2.05 M reads for *Z. tritici*) makes a build impractical; preflight warns
+(`longread_collapsed`) above `preflight.max_longread_models_per_mb`.
+
+**Strand is taken as given.** GMB uses each transcript's GTF strand; it never re-derives
+strand from reads. Upstream, the Ensembl anno Minimap2 path sets strand from Minimap2's `ts`
+tag combined with the alignment orientation
+(`src/python/ensembl/tools/anno/transcriptomic_annotation/transcript_strand.py`); the SAM
+FLAG alone is not a transcript strand for an unstranded library. Preflight's splice check is
+computed on the declared strand, so a mis-stranded track shows up as a low canonical fraction.
 
 Long-read evidence is genuinely optional: with none supplied there is no special case, no
 penalty, and the long-read guard cannot fire.
@@ -120,7 +152,8 @@ GTF, typically CDS features. **Protein alignments are support and veto evidence 
 never become candidate gene structures**, in any configuration. They can raise a candidate's
 score, satisfy a retention gate, and appear in attribution.
 
-Alignment tracks are exempt from ORF inference via `qc.skip_orf_inference_tracks`.
+Because they are never candidates, no ORF is ever inferred for them. CDS-only GTFs are
+accepted for this role (and only this role).
 
 ### DIAMOND protein database — optional
 
@@ -134,7 +167,7 @@ GMB does **not** install DIAMOND or Psauron; you supply absolute paths.
 
 > `gmb-preflight`, `gmb-build` and `gmb-finalise` expose **no option** that accepts a reference
 > annotation, and no resolved config can reference one. The reference enters only through
-> `gmb-compare`, after the annotation exists.
+> external evaluation (`annotation-qc` in ensembl-genes), after the annotation exists.
 
 Using a reference to choose a production configuration is not validation. Freeze the config
 first, then evaluate.

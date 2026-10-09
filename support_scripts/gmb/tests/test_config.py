@@ -613,21 +613,25 @@ class TestLayeredPresetArchitecture:
         cfg = load_config(preset="apicomplexa")
         assert cfg.scoring.backbone_label == "Tiberius"
 
-    def test_apicomplexa_has_larger_max_transcript_length_than_fungi(self):
+    def test_apicomplexa_transcript_length_filter_disabled_pending_validation(self):
+        # The 35,000 bp value was never applied before 2.0.0; applying it would
+        # change validated apicomplexan builds (18% of T. gondii short-read models).
         cfg_ap = load_config(preset="apicomplexa")
         cfg_fn = load_config(preset="fungi")
-        assert cfg_ap.transcriptomic_filter.max_transcript_length > (
-            cfg_fn.transcriptomic_filter.max_transcript_length
-        )
+        assert cfg_ap.transcriptomic_filter.max_transcript_length is None
+        assert cfg_fn.transcriptomic_filter.max_transcript_length == 20000
 
     def test_apicomplexa_has_lower_backbone_weight_than_fungi(self):
         cfg_ap = load_config(preset="apicomplexa")
         cfg_fn = load_config(preset="fungi")
         assert cfg_ap.scoring.weights.backbone < cfg_fn.scoring.weights.backbone
 
-    def test_apicomplexa_has_genblast_in_skip_orf(self):
-        cfg = load_config(preset="apicomplexa")
-        assert "GenBlast" in cfg.qc.skip_orf_inference_tracks
+    def test_apicomplexa_preset_sets_no_inert_qc_keys(self):
+        # qc.skip_orf_inference_tracks configured only the removed gmb-visualize
+        # plots; protein-alignment tracks never get ORF inference in the build.
+        from gmb.pipeline.config import _load_bundled_config_yaml
+
+        assert "qc" not in _load_bundled_config_yaml("apicomplexa")
 
     def test_apicomplexa_has_higher_5p_utr_than_fungi(self):
         cfg_ap = load_config(preset="apicomplexa")

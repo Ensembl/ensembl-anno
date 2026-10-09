@@ -60,6 +60,8 @@ transcriptomic_filter:
   # Real reference transcript spans reach 32,487bp (p99=14,717bp,
   # p99.9=26,920bp). The fungal default of 20,000bp sits between p99 and
   # p99.9 and would clip a real (if uncommon) tail of large multi-exon genes.
+  # Applied since GMB 2.0.0 (previously accepted but ignored). On P. falciparum
+  # it removes 23 of 9,511 surviving short-read models (0.2%).
   max_transcript_length: 35000
   # Real intron lengths max out at 2,425bp (p50=141bp, p99=736bp,
   # p99.9=1,192bp) in this genome -- much shorter than the fungal default's
@@ -120,8 +122,6 @@ utr:
   # the combined total cap must grow to match the 5' change.
   max_total_bp: 6000
 
-qc:
-  # GenBlast evidence in this run is a protein-to-genome alignment (like
-  # OrthoDB/UniProt), not a transcript assembly -- ORF inference should be
-  # skipped for it the same way it already is for OrthoDB/UniProt.
-  skip_orf_inference_tracks: ["OrthoDB", "UniProt", "GenBlast"]
+# GenBlast here is a protein-to-genome alignment (like OrthoDB/UniProt). Protein
+# alignments never become candidate models, so no ORF is inferred for them; the
+# former qc.skip_orf_inference_tracks setting configured only removed QC plots.

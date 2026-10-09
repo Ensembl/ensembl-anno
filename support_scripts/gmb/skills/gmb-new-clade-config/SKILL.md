@@ -44,7 +44,8 @@ Verify these against the current code if anything below looks stale (`gmb-build 
 `gmb/pipeline/config.py`); do not invent keys.
 
 **The production path is three commands:** `gmb-preflight` → `gmb-build` → `gmb-finalise`.
-`gmb-compare` is evaluation only.
+Reference comparison is evaluation only and lives outside GMB, in `ensembl-genes`
+(`annotation-qc pairwise-compare`).
 
 **Configuration layers:** `gmb/configs/standard.yaml` → optional `--preset` → each `--config`
 overlay in order, last wins. Unknown keys and duplicate YAML keys are **errors**, so loading a
@@ -236,7 +237,10 @@ p99 of 115–145 kb against backbone span p99 of 6–10 kb, which is overjoining
 
 **`transcriptomic_filter.max_transcript_length`** (standard 2,000,000)
 ~1.5–2 × the backbone's maximum span, rounded up (worked examples: backbone max 30 kb → ~35–45
-kb; 19 kb → ~20–30 kb). Confidence: medium.
+kb; 19 kb → ~20–30 kb). Confidence: medium. Applied since GMB 2.0.0 (ignored before). When it
+removes many transcripts, also set `scoring.locus_clustering: transcript_linked`: removing
+read-through assemblies removes the transcripts that bridged introns, and under
+`exon_overlap` that fragments agreeing models (Z. tritici windows: CDS-exact 771 → 761).
 
 **`orf.min_codons`** (standard 50)
 Lower to 33 only if a non-trivial share (≳1%) of *backbone* models have CDS of 33–49 codons —
@@ -373,14 +377,17 @@ build and freeze every one of them first**, each in its own output directory, th
 ### Phase 7 — evaluate against the reference (optional, after freeze only)
 
 **The reference must be GFF3.** `evaluate` refuses a GTF (or GTF content under a `.gff3` name)
-before writing anything, rather than risk silently wrong metrics; convert it first. `gmb-compare`
-itself also accepts GTF, but the skill's exon-count split does not.
+before writing anything, rather than risk silently wrong metrics; convert it first.
+`annotation-qc` (ensembl-genes) itself also accepts GTF, but the skill's exon-count split does
+not. `evaluate` reads `comparison_summary.tsv` and `comparison_details.tsv`, which
+`annotation-qc pairwise-compare` writes with the same column names `gmb-compare` used.
 
 ```bash
 for arm in standard candidate; do
-  gmb-compare --query $OUT/$arm/finalise/consensus.gff3 --reference <reference.gff3> \
-    --reference-fasta <genome.fa> [--seqname-map <map.tsv>] \
-    --evaluation-mode protein_coding --output-dir $OUT/$arm/comparison
+  annotation-qc pairwise-compare --query $OUT/$arm/finalise/consensus.gff3 \
+    --reference <reference.gff3> --genome <genome.fa> [--seqname-map <map.tsv>] \
+    --evaluation-mode protein_coding --reference-transcript-biotypes protein_coding \
+    --outdir $OUT/$arm/comparison
 done
 python $SKILL/scripts/gmb_clade.py evaluate --freeze $OUT/config_freeze.json \
     --comparison $OUT/candidate/comparison --baseline-comparison $OUT/standard/comparison \

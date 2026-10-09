@@ -145,10 +145,11 @@ Controls open-reading-frame detection.
 
 ```yaml
 orf:
-  min_codons: 33               # minimum ORF length (codons)
-  allow_partial_5: true        # allow ORFs without a start codon
-  allow_partial_3: false       # allow ORFs without a stop codon
+  min_codons: 33               # minimum ORF length (codons); standard 50, fungi 33
 ```
+
+`allow_partial_5`, `allow_partial_3`, `allow_non_atg_start`, `stop_codon_char` and
+`partial_prefix` are accepted but **not applied** (see `known_issues.md`).
 
 ### `protein_filter`
 
@@ -157,24 +158,35 @@ GenBlast).
 
 ```yaml
 protein_filter:
-  min_alignment_coverage: 0.5  # minimum query coverage fraction
-  min_percent_identity: 0.3    # minimum percent identity
-  min_bitscore: 50             # minimum bitscore
-  min_protein_aa: 30           # minimum protein length (amino acids)
-  top_n_per_locus: 3           # keep at most N protein models per locus
+  min_alignment_coverage: 0.80 # minimum coverage FRACTION (needs a Coverage attribute)
+  min_percent_identity: 60.0   # minimum identity in PERCENT (needs an Identity attribute)
+  min_bitscore: 50.0           # minimum score (needs a numeric score on exon rows)
+  min_protein_aa: 30           # alignments spanning < 3 x this many bp are dropped
+  max_span_bp: 50000           # alignments spanning more are dropped as artefacts
+  redundancy_overlap: 0.80     # reciprocal overlap at which alignments are collapsed
+  top_n_per_locus: 3           # rank the N best per locus; with keep_secondary the rest stay
+  keep_secondary: true
 ```
+
+The three score thresholds only act when the alignment GTF carries those attributes on its
+exon rows. Ensembl anno genBlastG output does not, so for it they remove nothing.
 
 ### `transcriptomic_filter`
 
-Controls filtering of RNA-seq assembly evidence (Scallop, StringTie).
+Controls filtering of assembled transcript evidence (short- and long-read).
 
 ```yaml
 transcriptomic_filter:
-  max_intron_length: 100000    # drop transcripts with any intron > this bp
-  max_transcript_length: null  # drop transcripts longer than this bp (null = no limit)
-  allow_single_exon: true      # keep single-exon transcriptomic models
-  min_exon_length: 10          # drop exons shorter than this bp
+  max_intron_length: 3000      # drop transcripts with any intron > this bp (fungi 3000)
+  max_transcript_length: 20000 # drop transcripts spanning > this bp; null = off (fungi 20000)
+  allow_single_exon: true      # false drops single-exon transcripts
+  min_intergenic_gap: 500
 ```
+
+`max_transcript_length` and `allow_single_exon` are applied since 2.0.0 (earlier versions
+accepted and ignored them). The build log and `summary.json` report how many transcripts
+each rule removed (`chimeras_large_intron`, `chimeras_long_span`, `single_exon_removed`).
+`strand_consistency_check` is deprecated and has no effect.
 
 ### `backbone_filter`
 
@@ -185,10 +197,9 @@ with a deprecation warning.
 
 ```yaml
 backbone_filter:
-  min_exon_count: 1
-  max_intron_length: 500000
-  require_protein_support: false
-  require_transcriptomic_support: false
+  enabled: true
+  min_cds_bp: 90               # drop backbone models with less CDS than this
+  max_exons: 50                # flag models with more exons than this
 ```
 
 ### `scoring`
@@ -198,17 +209,20 @@ Weights and thresholds for isoform scoring and selection.
 ```yaml
 scoring:
   max_isoforms_per_locus: 3
-  fungal_single_exon_mode: true     # fungi-specific single-exon handling
+  fungal_single_exon_mode: true        # single-exon handling; the name is historical
   keep_backbone_without_support: true  # keep backbone models with no other evidence
-  weights:
-    backbone: 2.0
-    scallop: 1.0
-    stringtie: 1.0
-    minimap2: 1.0
-    orthodb: 1.5
-    uniprot: 1.5
-    genblast: 1.0
+  locus_clustering: exon_overlap       # or transcript_linked -- see known_issues.md
+  weights:                             # keyed by evidence ROLE, not tool name
+    backbone: 3.1
+    short_read: 1.0
+    long_read: 1.0
+    protein_alignment: 1.0
+    unknown: 1.0
 ```
+
+Weights are keyed by role (see `configuration.md`). The legacy tool keys `helixer`,
+`scallop`, `stringtie` and `minimap2` are accepted with a deprecation warning; there are no
+per-protein-track weights, because protein alignments are support, not candidates.
 
 ### `protein_validation`
 
@@ -256,7 +270,8 @@ utr:
 
 ### `qc`
 
-Per-track quality-control thresholds applied before scoring.
+**Not applied.** This section configured the plots of the removed `gmb-visualize` tool. It is
+still accepted so existing configs load, but nothing reads it.
 
 ```yaml
 qc:

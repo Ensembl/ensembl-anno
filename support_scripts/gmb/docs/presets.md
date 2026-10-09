@@ -55,6 +55,8 @@ measures it for you.
 | `protein_support_mode` | `cds_span_compatible` | only CDS-span-compatible alignments gate retention |
 | `longread_structural_guard` | `true` | fired 332× on P. falciparum; 0× with no long-read track |
 | `backbone_intron_rescue` | **`auto`** | applicability-gated, not unconditional |
+| `max_transcript_length` | `null` (off) | 35,000 was set but never applied before 2.0.0; applying it would remove 0.2% (P. falciparum), 7.8% (GCA_000006355.3) and 18.3% (T. gondii) of surviving short-read models, so it stays off until re-validated |
+| `locus_clustering` | `exon_overlap` | inherited; not re-validated for apicomplexans |
 
 **Evidence.** P. falciparum GCA_000002765.3, baseline → this policy, no long-read track:
 
@@ -73,7 +75,15 @@ under-calls introns (17.3% and 38.7% multi-exon in the two genomes) alongside as
 do not (95–99%). If a future Apicomplexan arrives with a well-resolved backbone, the `auto`
 gate declines and the preset degrades safely.
 
-## `fungi` — validated on Z. tritici
+## `fungi` — Z. tritici (2.0.0 release candidate)
+
+> **Validation status.** The September 2026 whole-genome validation used the pre-2.0.0
+> behaviour. 2.0.0 changes the fungi preset's *effective* behaviour in three ways: the 20 kb
+> transcript-span filter now applies, loci are `transcript_linked`, and isoforms detached
+> from their gene are removed. These are validated on nine representative windows (8.8 Mb,
+> 22% of the genome, core and accessory chromosomes) but **not yet genome-wide**; the
+> production-scale test is that validation. Earlier figures on this page describe the
+> pre-2.0.0 baseline.
 
 | setting | value | why |
 |---|---|---|
@@ -81,11 +91,12 @@ gate declines and the preset degrades safely.
 | `weights.backbone` | **3.1** | Helixer is well-trained on fungi and is the dominant signal |
 | `multi_source_bonus` | 0.5 | lowered: agreement is a modest rather than strong signal here |
 | `max_intron_length` | 3,000 | fungal introns are short (reference median 62 bp) |
-| `max_transcript_length` | 20,000 | compact transcripts; caps chimeras |
+| `max_transcript_length` | 20,000 | **applied since 2.0.0** (previously ignored): removes read-through assemblies that join genes without a long intron — 4,945 of 31,392 Z. tritici short-read models, 98% of which overlap ≥ 2 reference genes |
 | `structural_corroboration` | **`false`** | validated baseline |
 | `protein_support_mode` | **`positional`** | validated baseline |
 | `longread_structural_guard` | **`false`** | no long-read evidence existed; provably inert |
 | `backbone_intron_rescue` | **`"off"`** | see below |
+| `locus_clustering` | **`transcript_linked`** | 2.0.0: score candidates whole. Needed with the span filter — with `exon_overlap` the filter *lowers* CDS accuracy because the removed chimeras were bridging introns (`release/z_tritici_validation.md` §5) |
 
 ### Why fungi does NOT inherit the Apicomplexa policy
 

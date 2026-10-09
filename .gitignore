@@ -13,6 +13,8 @@ venv/*
 !.github/actions/
 !.github/actions/python_build/
 !.github/actions/python_build/**
+# "*_build*" also matches the GMB example scripts (run_gene_model_builder.*)
+!support_scripts/gmb/examples/run_gene_model_builder.*
 eggs/
 .eggs*
 *.egg-info*

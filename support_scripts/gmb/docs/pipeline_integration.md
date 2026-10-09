@@ -39,7 +39,8 @@ For a production developer whose pipeline already produces the evidence and need
                                      HANDOVER
                          finalise/ + attribution + manifests
 
-                    ( gmb-compare — EVALUATION ONLY, off the production path )
+      ( reference comparison — EVALUATION ONLY, outside GMB:
+        ensembl-genes `annotation-qc pairwise-compare` )
 ```
 
 ---
@@ -167,7 +168,7 @@ the final GFF3.
 | `gmb-build` wall | 2.1–3.5 h | 10.8–12.0 h |
 | `gmb-build` peak RSS | 0.9–1.4 GB | 2.3–2.5 GB |
 | `gmb-finalise` | seconds | seconds |
-| `gmb-compare` peak RSS | ~0.6 GB | **4.2 GB** |
+| reference comparison (former `gmb-compare`) peak RSS | ~0.6 GB | **4.2 GB** |
 
 Measured with up to five builds sharing an 8-core/16 GB host, so wall times are pessimistic.
 **GMB's hot path is single-threaded**: `--cpus-per-task 2` is enough. Scale memory from
