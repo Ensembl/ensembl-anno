@@ -54,6 +54,7 @@ from gmb.compare.annotation_loader import (
     select_transcripts,
     validate_against_fasta,
 )
+from gmb.pipeline.backbone import BackboneInputError, resolve_backbone_input
 from gmb.pipeline.annotate_cds_utrs import load_genome, reverse_complement, translate
 from gmb.pipeline.subset_utils import (
     add_subset_args,
@@ -1255,6 +1256,18 @@ def main():
         default=None,
         help="Tiberius GTF evidence track (ab initio backbone, alternative to --helixer)",
     )
+    parser.add_argument(
+        "--backbone",
+        default=None,
+        help="Ab initio backbone evidence track (GTF or GFF3) from any predictor; "
+        "generic alternative to --helixer/--tiberius. The track is labelled from "
+        "the file's own source column unless --backbone-label is given.",
+    )
+    parser.add_argument(
+        "--backbone-label",
+        default=None,
+        help="Source label for the backbone evidence track.",
+    )
     parser.add_argument("--orthodb", default=None, help="OrthoDB GTF")
     parser.add_argument("--uniprot", default=None, help="UniProt GTF")
     parser.add_argument("--genblast", default=None, help="GenBlast protein alignment GTF")
@@ -1661,10 +1674,22 @@ def main():
     evidence_tracks["Reference"] = (ref_exons, ref_cds)
     evidence_tracks["Query"] = (cons_exons, cons_cds)
 
-    if args.helixer and args.tiberius:
-        sys.exit(
-            "ERROR: pass only one ab initio backbone track: --helixer or --tiberius, not both."
+    try:
+        _bb_path, _bb_label = resolve_backbone_input(
+            helixer=args.helixer,
+            tiberius=args.tiberius,
+            backbone=getattr(args, "backbone", None),
+            backbone_label=getattr(args, "backbone_label", None),
         )
+    except BackboneInputError as exc:
+        sys.exit(f"ERROR: {exc}")
+    if getattr(args, "backbone", None) and _bb_path and os.path.exists(_bb_path):
+        bb_exons, bb_cds, _ = load_gff(_bb_path, _bb_label)
+        if mapping:
+            bb_exons = remap_df_seqnames(bb_exons, mapping)
+            if not bb_cds.empty:
+                bb_cds = remap_df_seqnames(bb_cds, mapping)
+        evidence_tracks[_bb_label] = (bb_exons, bb_cds)
     if args.helixer and os.path.exists(args.helixer):
         hx_exons, hx_cds, _ = load_gff(args.helixer, "Helixer")
         if mapping:

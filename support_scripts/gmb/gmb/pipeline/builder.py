@@ -46,6 +46,7 @@ from gmb.pipeline.annotate_cds_utrs import (
     reverse_complement,
     translate,
 )
+from gmb.pipeline.backbone import BackboneInputError, resolve_backbone_input
 from gmb.pipeline.config import dump_config, list_build_presets, load_config
 from gmb.pipeline.dedup_genes import dedup_genes
 from gmb.pipeline.duplicate_transcript_collapse import collapse_exact_duplicate_transcripts
@@ -503,6 +504,18 @@ def parse_args():
         help="Tiberius GTF (ab initio backbone, alternative to --helixer; "
         "mutually exclusive with --helixer)",
     )
+    parser.add_input_args.add_argument(
+        "--backbone",
+        help="Ab initio backbone annotation (GTF or GFF3) from any predictor. "
+        "Generic alternative to --helixer/--tiberius; mutually exclusive with "
+        "both. The source label defaults to the file's own GFF/GTF source "
+        "column, so the predictor keeps its name in the output attribution.",
+    )
+    parser.add_input_args.add_argument(
+        "--backbone-label",
+        help="Source label for the backbone track, overriding the label implied "
+        "by the flag or the file's source column.",
+    )
     parser.add_input_args.add_argument("--orthodb", help="OrthoDB GTF")
     parser.add_input_args.add_argument("--uniprot", help="UniProt GTF")
     parser.add_input_args.add_argument("--genblast", help="GenBlast protein alignment GTF")
@@ -645,11 +658,15 @@ def main() -> None:
     if log_file:
         print(f"Logging to {log_file}")
 
-    if args.helixer and args.tiberius:
-        sys.exit("ERROR: pass only one ab initio backbone: --helixer or --tiberius, not both.")
-    backbone_path, backbone_label = (
-        (args.tiberius, "Tiberius") if args.tiberius else (args.helixer, "Helixer")
-    )
+    try:
+        backbone_path, backbone_label = resolve_backbone_input(
+            helixer=args.helixer,
+            tiberius=args.tiberius,
+            backbone=getattr(args, "backbone", None),
+            backbone_label=getattr(args, "backbone_label", None),
+        )
+    except BackboneInputError as exc:
+        sys.exit(f"ERROR: {exc}")
 
     import time as _time
     _run_started_at = _time.time()
@@ -784,7 +801,9 @@ def main() -> None:
             "transcriptomic": (
                 tx_exons_filtered["transcript_id"].nunique() if not tx_exons_filtered.empty else 0
             ),
-            "helixer": h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0,
+            backbone_label.lower(): (
+                h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0
+            ),
             "protein": (
                 prot_exons_filt["transcript_id"].nunique() if not prot_exons_filt.empty else 0
             ),
@@ -805,7 +824,9 @@ def main() -> None:
             "transcriptomic": (
                 tx_exons_filtered["transcript_id"].nunique() if not tx_exons_filtered.empty else 0
             ),
-            "helixer": h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0,
+            backbone_label.lower(): (
+                h_exons_filt["transcript_id"].nunique() if not h_exons_filt.empty else 0
+            ),
             "protein": (
                 prot_exons_filt["transcript_id"].nunique() if not prot_exons_filt.empty else 0
             ),

@@ -27,6 +27,7 @@ import sys
 
 from gmb.preflight import FAIL, run_preflight
 from gmb.pipeline.config import load_config, validate_selection_policy
+from gmb.pipeline.backbone import BackboneInputError, resolve_backbone_input
 from gmb.utils.logging import setup_logging
 
 
@@ -54,6 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
     inputs.add_argument("--minimap2", help="Long-read transcript models GTF (optional)")
     inputs.add_argument("--helixer", help="Helixer GFF3 (ab initio backbone)")
     inputs.add_argument("--tiberius", help="Tiberius GTF (ab initio backbone)")
+    inputs.add_argument("--backbone",
+                        help="Ab initio backbone annotation (GTF or GFF3) from any "
+                             "predictor; generic alternative to --helixer/--tiberius.")
+    inputs.add_argument("--backbone-label",
+                        help="Source label for the backbone track, overriding the "
+                             "label implied by the flag or the file's source column.")
     inputs.add_argument("--orthodb", help="OrthoDB protein-to-genome GTF")
     inputs.add_argument("--uniprot", help="UniProt protein-to-genome GTF")
     inputs.add_argument("--genblast", help="GenBlast protein-to-genome GTF")
@@ -76,12 +83,17 @@ def _tracks_from_args(args) -> list:
     builder uses for the same flags -- this is the single place the two are
     kept in step.
     """
+    backbone_path, backbone_label = resolve_backbone_input(
+        helixer=args.helixer,
+        tiberius=args.tiberius,
+        backbone=getattr(args, "backbone", None),
+        backbone_label=getattr(args, "backbone_label", None),
+    )
     pairs = [
         ("Scallop", args.scallop),
         ("StringTie", args.stringtie),
         ("Minimap2", args.minimap2),
-        ("Helixer", args.helixer),
-        ("Tiberius", args.tiberius),
+        (backbone_label, backbone_path),
         ("OrthoDB", args.orthodb),
         ("UniProt", args.uniprot),
         ("GenBlast", args.genblast),
@@ -92,9 +104,15 @@ def _tracks_from_args(args) -> list:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
 
-    if args.helixer and args.tiberius:
-        print("error: --helixer and --tiberius are mutually exclusive "
-              "(exactly one backbone).", file=sys.stderr)
+    try:
+        _, _backbone_label = resolve_backbone_input(
+            helixer=args.helixer,
+            tiberius=args.tiberius,
+            backbone=getattr(args, "backbone", None),
+            backbone_label=getattr(args, "backbone_label", None),
+        )
+    except BackboneInputError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
 
     if args.output_dir:
@@ -109,10 +127,8 @@ def main(argv=None) -> int:
 
     # The backbone flag decides which label carries the backbone role, exactly
     # as in gmb-build.
-    if args.tiberius:
-        config.scoring.backbone_label = "Tiberius"
-    elif args.helixer:
-        config.scoring.backbone_label = "Helixer"
+    if args.tiberius or args.helixer or getattr(args, "backbone", None):
+        config.scoring.backbone_label = _backbone_label
 
     for warning in validate_selection_policy(config):
         print(f"config warning: {warning}", file=sys.stderr)

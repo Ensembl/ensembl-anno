@@ -117,6 +117,7 @@ def run_gene_model_builder(
     genome: str,
     backbone: str | None = None,
     backbone_kind: str = "helixer",
+    backbone_label: str | None = None,
     short_read=None,
     long_read=None,
     protein_alignment=None,
@@ -137,9 +138,14 @@ def run_gene_model_builder(
         Genome FASTA. Defines the sequence names every other input must use.
     backbone : str or None
         Ab initio backbone annotation. One per run.
-    backbone_kind : {"helixer", "tiberius"}
+    backbone_kind : {"helixer", "tiberius", "backbone"}
         Which CLI slot the backbone occupies. This also sets
         ``scoring.backbone_label``, which is how the backbone role resolves.
+        ``"backbone"`` is the generic slot for any other predictor; its label
+        comes from the annotation's own source column unless *backbone_label*
+        is given.
+    backbone_label : str or None
+        Override the source label of the backbone track.
     short_read, long_read, protein_alignment : sequence of str or None
         Evidence tracks. ``long_read`` is genuinely optional: with none supplied
         there is no special case and the long-read guard cannot fire.
@@ -165,8 +171,9 @@ def run_gene_model_builder(
     -------
     GmbResult
     """
-    if backbone_kind not in ("helixer", "tiberius"):
-        raise ValueError("backbone_kind must be 'helixer' or 'tiberius'")
+    if backbone_kind not in ("helixer", "tiberius", "backbone"):
+        raise ValueError(
+            "backbone_kind must be 'helixer', 'tiberius' or 'backbone'")
 
     bin_dir = bin_dir or os.path.dirname(sys.executable)
     out = os.path.abspath(output_dir)
@@ -181,6 +188,8 @@ def run_gene_model_builder(
     evidence: list = []
     if backbone:
         evidence += [f"--{backbone_kind}", str(backbone)]
+        if backbone_label:
+            evidence += ["--backbone-label", str(backbone_label)]
     evidence += _flags_for(short_read, _SHORT_READ_FLAGS, "short-read")
     evidence += _flags_for(long_read, _LONG_READ_FLAGS, "long-read")
     evidence += _flags_for(protein_alignment, _PROTEIN_FLAGS, "protein-alignment")
