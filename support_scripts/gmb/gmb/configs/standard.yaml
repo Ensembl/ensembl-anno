@@ -121,7 +121,12 @@ scoring:
   fungal_single_exon_mode: false
   keep_backbone_without_support: true
   require_protein_support_for_single_source: false
-  min_cds_bp: 150
+  # Retention floor on a candidate's CDS length (bp); 0 disables. Until the
+  # evidence-integration work this was set to 150 but never applied (it read a
+  # field nothing set), so 0 keeps every preset's validated output. On
+  # Z. tritici no reference CDS is < 150 bp and 150 removes mostly unsupported
+  # short models: see docs/release/evidence_integration.md.
+  min_cds_bp: 0
   require_support_for_single_exon: true
   same_gene_overlap_threshold: 0.15
   # Set automatically by the CLI (--helixer → Helixer, --tiberius → Tiberius,
@@ -137,6 +142,23 @@ scoring:
   #                        whole. The fungi preset uses it; the neutral base and
   #                        apicomplexa keep exon_overlap until re-validated.
   locus_clustering: exon_overlap
+  # Which structure becomes a gene's primary transcript.
+  #   score              -- highest-ranked structure (validated baseline). Where
+  #                         the backbone has a model it always wins.
+  #   junction_supported -- additionally replace a backbone primary whose introns
+  #                         no transcriptomic model observes by an admitted
+  #                         alternate with fewer unobserved introns, a complete
+  #                         ORF, a CDS >= junction_primary_min_cds_fraction of the
+  #                         backbone's and no worse spliced-protein compatibility.
+  #                         Experimental: see docs/release/evidence_integration.md.
+  primary_selection: score
+  junction_primary_min_cds_fraction: 0.9
+  # Must an alternate share >= 1 coding base with its gene's primary?
+  #   off      -- no: structural test only (validated baseline)
+  #   drop     -- discard a structure that would join without shared coding
+  #               sequence (a backbone structure becomes its own gene instead)
+  #   new_gene -- such a structure becomes its own gene
+  isoform_cds_overlap: "off"   # quoted: bare off is YAML boolean false
 
 # ---------------------------------------------------------------------------
 # protein_validation — DIAMOND + Psauron protein-coding validation
@@ -157,6 +179,10 @@ protein_validation:
   min_score: 0.5
   # "drop" removes low-scoring transcripts; "penalize" reduces their rank.
   policy: drop
+  # Points subtracted under policy "penalize" when protein_coding_score < min_score
+  # (formerly hard-coded). Larger than any backbone weight, so penalised
+  # alternates fall below scoring.min_alternate_score.
+  penalty: 5.0
   diamond_min_query_coverage: 0.0
   diamond_min_target_coverage: 0.0
 
@@ -262,6 +288,10 @@ reporting:
 canonical_selection:
   enabled: true
   low_confidence_score_gap: 0.05
+  # true ranks the build's primary transcript (<gene>.t1) above the raw
+  # named-source count, so two short-read assemblers of the same libraries
+  # cannot by themselves displace the model the build selected.
+  prefer_build_primary: false
   protein_validation:
     psauron_weight: 0.35
     diamond_identity_weight: 0.15

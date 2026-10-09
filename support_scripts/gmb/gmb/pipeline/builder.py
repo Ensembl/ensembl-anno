@@ -61,6 +61,11 @@ from gmb.pipeline.gff3_validate import (
     recompute_gene_bounds,
     validate_and_fix_gff3,
 )
+from gmb.pipeline.junction_support import (
+    observed_introns,
+    protein_compatibility_counts,
+    unsupported_intron_counts,
+)
 from gmb.pipeline.protein_validation import batch_score_proteins, check_dependencies
 from gmb.pipeline.scoring import select_isoforms
 from gmb.pipeline.subset_utils import (
@@ -1065,6 +1070,24 @@ def main() -> None:
         f"(mode={getattr(config.scoring, 'protein_support_mode', 'positional')})"
     )
 
+    # Junction-level evidence: introns no transcriptomic model observes, and
+    # spliced protein alignments agreeing / disagreeing with each CDS. Junctions
+    # come from every loaded transcriptomic transcript, including read-through
+    # chimeras removed above -- their individual splices are still observed.
+    junction_support = unsupported_intron_counts(
+        candidate_exons, observed_introns(tx_exons))
+    protein_compat = protein_compatibility_counts(candidate_exons, candidate_cds, prot_exons_filt)
+    complete_orf_tids = {
+        tid for tid, ann in annotations.items()
+        if ann and ann.get("cds") and ann.get("protein")
+        and not ann.get("is_partial_5") and not ann.get("is_partial_3")
+    }
+    stats["candidates_with_unobserved_introns"] = sum(
+        1 for _n, bad in junction_support.values() if bad)
+    print(f"  Primary selection: {getattr(config.scoring, 'primary_selection', 'score')}; "
+          f"{stats['candidates_with_unobserved_introns']} candidate(s) have introns no "
+          f"transcriptomic model observes")
+
     locus_mode = getattr(config.scoring, "locus_clustering", "exon_overlap")
     print(f"Clustering loci (locus_clustering={locus_mode})...")
     cluster_df = cluster_candidate_loci(candidate_exons, locus_mode)
@@ -1123,6 +1146,9 @@ def main() -> None:
             protein_cds_span_tids=protein_cds_span_tids,
             candidate_cds=candidate_cds,
             canonical_intron_tids=canonical_intron_tids,
+            junction_support=junction_support,
+            protein_compatibility=protein_compat,
+            complete_orf_tids=complete_orf_tids,
         )
         if not genes:
             continue
@@ -1251,6 +1277,11 @@ def main() -> None:
                     "BackboneIntronRescue": model.get("backbone_intron_rescue", ""),
                     "SelectionReason": model.get("selection_reason", ""),
                     "gmb_score": model.get("score"),
+                    "IntronsWithoutTranscriptSupport": model.get(
+                        "introns_without_transcript_support"),
+                    "ProteinAlignmentsCompatible": model.get("protein_alignments_compatible"),
+                    "ProteinAlignmentsIncompatible": model.get(
+                        "protein_alignments_incompatible"),
                 }
 
                 # Attach here (not re-looked-up later) because `annotations`
@@ -1589,6 +1620,10 @@ def main() -> None:
                     "utr_3p_reason": s_dict.get("reason_3p", "default"),
                 }
             )
+        # Junction-level evidence (appended after the 2.0.0 columns).
+        row_dict["introns_without_transcript_support"] = m.get("IntronsWithoutTranscriptSupport")
+        row_dict["protein_alignments_compatible"] = m.get("ProteinAlignmentsCompatible")
+        row_dict["protein_alignments_incompatible"] = m.get("ProteinAlignmentsIncompatible")
 
         evidence_rows.append(row_dict)
 

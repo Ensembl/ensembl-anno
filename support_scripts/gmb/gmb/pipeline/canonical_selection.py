@@ -380,12 +380,28 @@ def score_transcript(
 # discarded -- it still breaks ties the class count leaves open, standing
 # in for "detailed [named-]source/transcript support" one level more
 # granular than the class-level breadth measure above it.
-def _rank_key(rec: dict, scored: dict) -> tuple:
+def is_build_primary(rec: dict) -> bool:
+    """True for the transcript gmb-build selected as its gene's primary.
+
+    gmb-build names a gene's transcripts ``<gene_id>.t<n>`` with ``t1`` the
+    primary; a transcript absorbed from another gene by dedup keeps its own
+    gene prefix and is therefore not this gene's primary.
+    """
+    return rec["transcript_id"] == f"{rec['gene_id']}.t1"
+
+
+def _rank_key(rec: dict, scored: dict, prefer_build_primary: bool = False) -> tuple:
+    # prefer_build_primary inserts tier 3b: the build's primary ranks above the
+    # raw named-source count, which counts two assemblers of one short-read
+    # library twice. Evidence-class breadth stays above it: with an independent
+    # long-read class it is informative (Z. tritici dev windows: canonical
+    # CDS-exact 773 with breadth first vs 767 with the build primary first).
     return (
         not scored["has_complete_orf"],  # False (complete) sorts before True
         scored["has_internal_stop"],  # False (no internal stop) sorts before True
         -scored["protein_validation_subtotal"],
         -scored["n_evidence_classes"],
+        not (prefer_build_primary and is_build_primary(rec)),
         -scored["n_independent_sources"],
         -(rec.get("gmb_score") if rec.get("gmb_score") is not None else float("-inf")),
         -(rec.get("cds_bp") if rec.get("cds_bp") is not None else -1),
@@ -393,7 +409,8 @@ def _rank_key(rec: dict, scored: dict) -> tuple:
     )
 
 
-def _reason_code(winner_rec, winner_scored, runner_rec, runner_scored) -> str:
+def _reason_code(winner_rec, winner_scored, runner_rec, runner_scored,
+                 prefer_build_primary: bool = False) -> str:
     if not winner_scored["has_any_protein_support"]:
         return "LOW_CONFIDENCE_NO_PROTEIN_SUPPORT"
     if runner_rec is None:
@@ -418,6 +435,8 @@ def _reason_code(winner_rec, winner_scored, runner_rec, runner_scored) -> str:
         return "BEST_DIAMOND_COVERAGE"
     if winner_scored["n_evidence_classes"] != runner_scored["n_evidence_classes"]:
         return "BEST_EVIDENCE_CLASS_BREADTH"
+    if prefer_build_primary and is_build_primary(winner_rec) and not is_build_primary(runner_rec):
+        return "BUILD_PRIMARY"
     if winner_scored["n_independent_sources"] != runner_scored["n_independent_sources"]:
         return "BEST_MULTI_SOURCE_SUPPORT"
     if (winner_rec.get("gmb_score") or 0) != (runner_rec.get("gmb_score") or 0):
@@ -445,14 +464,16 @@ def select_canonical_for_gene(
         r["transcript_id"]: score_transcript(r, cfg, backbone_label, gene_range, domain_metrics)
         for r in records
     }
-    ranked = sorted(records, key=lambda r: _rank_key(r, scored_by_tid[r["transcript_id"]]))
+    prefer_primary = getattr(cfg, "prefer_build_primary", False)
+    ranked = sorted(
+        records, key=lambda r: _rank_key(r, scored_by_tid[r["transcript_id"]], prefer_primary))
 
     winner = ranked[0]
     winner_scored = scored_by_tid[winner["transcript_id"]]
     runner = ranked[1] if len(ranked) > 1 else None
     runner_scored = scored_by_tid[runner["transcript_id"]] if runner else None
 
-    reason = _reason_code(winner, winner_scored, runner, runner_scored)
+    reason = _reason_code(winner, winner_scored, runner, runner_scored, prefer_primary)
 
     score_gap = (
         winner_scored["total_score"] - runner_scored["total_score"] if runner_scored else None

@@ -53,7 +53,8 @@ scoring:
   fungal_single_exon_mode: true
   keep_backbone_without_support: true
   require_protein_support_for_single_source: true
-  min_cds_bp: 150
+  # 0 = off: the former 150 was never applied (see gmb/configs/standard.yaml).
+  min_cds_bp: 0
   require_support_for_single_exon: true
   locus_clustering: transcript_linked
 

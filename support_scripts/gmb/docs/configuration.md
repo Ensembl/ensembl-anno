@@ -162,6 +162,9 @@ All default **off**. Enable one at a time, for a reason visible in preflight out
 | `longread_disposition` | `primary_structural` \| `support_only` \| `reject` | `primary_structural` |
 | `backbone_intron_rescue` | `off` \| `on` \| `auto` | `"off"` |
 | `locus_clustering` | `exon_overlap` \| `transcript_linked` | `exon_overlap` (fungi: `transcript_linked`) |
+| `primary_selection` | `score` \| `junction_supported` | `score` |
+| `isoform_cds_overlap` | `off` \| `drop` \| `new_gene` | `"off"` |
+| `canonical_selection.prefer_build_primary` | bool | `false` |
 
 `locus_clustering` decides how candidate exons are grouped into the loci selection scores.
 `exon_overlap` (the validated baseline) splits a multi-exon candidate whose introns nothing
@@ -171,6 +174,31 @@ chimera filter (`transcriptomic_filter.max_transcript_length`): it keeps a read-
 transcript whole, where `exon_overlap` fragments it. Conversely, a span filter under
 `exon_overlap` removes the transcripts that bridged introns and increases fragmentation
 (`release/z_tritici_validation.md` §5).
+
+`primary_selection`, `isoform_cds_overlap` and `canonical_selection.prefer_build_primary`
+are the evidence-integration settings (`release/evidence_integration.md`). Under the default
+`score`, a backbone model is primary at every locus where it exists: with the fungal weights
+no structure supported only by transcripts can outscore it, so transcript evidence reaches the
+output only as alternate isoforms. `junction_supported` promotes an admitted alternate over a
+backbone primary only where the backbone has introns that no transcriptomic model observes and
+the alternate has fewer, a complete ORF, a CDS of at least
+`junction_primary_min_cds_fraction` (0.9) of the backbone's, a shared coding locus, and no
+worse agreement with spliced protein alignments; the backbone model stays as an alternate.
+`isoform_cds_overlap: drop` refuses an "isoform" that shares no coding base with its gene's
+primary (a UTR or read-through overlap reaching a neighbouring ORF), which is what chains
+neighbouring genes together; a backbone model refused this way becomes its own gene.
+`prefer_build_primary` stops canonical selection from replacing the build's primary because
+two short-read assemblers of the same libraries count as two sources. The three are combined
+in `configs/fungi_evidence_integration.experimental.yaml` together with
+`scoring.min_cds_bp: 150`.
+
+`scoring.min_cds_bp` is a retention floor on a candidate's CDS length; 0 (the shipped value)
+disables it. Before this release it was set to 150 but never applied.
+`protein_validation.penalty` (default 5.0, formerly hard-coded) is subtracted under
+`policy: penalize` from a model whose `protein_coding_score` is below `min_score`. With the
+fungal weights (`diamond_weight` 0.7, `min_score` 0.7) every model without a DIAMOND hit is
+penalised whatever its Psauron score, and 5.0 exceeds every backbone weight, so in practice
+the setting removes most alternate isoforms.
 
 `backbone_intron_rescue` is **applicability-gated**:
 

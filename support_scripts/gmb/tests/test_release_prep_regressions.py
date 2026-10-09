@@ -900,6 +900,10 @@ EVIDENCE_ATTRIBUTION_COLUMNS = [
     "utr_3p_action",
     "utr_5p_reason",
     "utr_3p_reason",
+    # junction-level evidence, appended after 2.0.0
+    "introns_without_transcript_support",
+    "protein_alignments_compatible",
+    "protein_alignments_incompatible",
 ]
 
 

@@ -139,7 +139,7 @@ def score_model(
         if val_cfg.enabled and val_cfg.policy in ("penalize", "penalise"):
             # E.g. penalty if it falls below min_score
             if model["protein_coding_score"] < val_cfg.min_score:
-                score -= 5.0  # Arbitrary high penalty. Can be tied to config later.
+                score -= getattr(val_cfg, "penalty", 5.0)
         elif val_cfg.enabled and val_cfg.policy == "bonus":
             score += model["protein_coding_score"]
 
@@ -220,6 +220,9 @@ def select_isoforms(
     protein_cds_span_tids: set[str] | None = None,
     candidate_cds: dict[str, list] | None = None,
     canonical_intron_tids: set[str] | None = None,
+    junction_support: dict[str, tuple[int, int]] | None = None,
+    protein_compatibility: dict[str, tuple[int, int]] | None = None,
+    complete_orf_tids: set[str] | None = None,
 ) -> list[list[dict]]:
     """Score and select isoforms for a single locus.
 
@@ -248,6 +251,16 @@ def select_isoforms(
         Candidates whose introns are all canonical.  ``None`` means the caller
         supplied no such information and the check is skipped; an empty set means
         nothing qualifies.  Used by ``backbone_intron_rescue`` as a safety guard.
+    junction_support : dict or None
+        ``{candidate_transcript_id: (n_introns, n_introns_not_observed)}`` from
+        :func:`gmb.pipeline.junction_support.unsupported_intron_counts`. Recorded on
+        every selected model; selection-affecting only with
+        ``scoring.primary_selection: junction_supported``.
+    protein_compatibility : dict or None
+        ``{candidate_transcript_id: (compatible, incompatible)}`` spliced protein
+        alignments over the candidate's CDS. Same use as *junction_support*.
+    complete_orf_tids : set of str or None
+        Candidates whose ORF has both an ATG start and a stop codon.
 
     Returns
     -------
@@ -396,6 +409,10 @@ def select_isoforms(
         s["cds"] = cds
         s["cds_bp"] = sum(e - st for st, e in cds)
         s["n_cds_exons"] = len(cds)
+        # Kept under its own key: the retention floor reads rep["cds_bp"].
+        s["rep"]["candidate_cds_bp"] = s["cds_bp"]
+        s["rep"]["candidate_cds"] = cds
+        s["rep"]["has_backbone"] = s["has_backbone"]
         s["backbone_intron_rescue"] = False
         s["rep"]["backbone_intron_rescue"] = False
 
@@ -446,7 +463,9 @@ def select_isoforms(
             score = s["rep"].get("protein_coding_score")
             if score is not None and score < val_cfg.min_score:
                 return False
-        cds_bp = s["rep"].get("cds_bp", 0)
+        # The candidate's own CDS (from the ORF stage). Before this read s["cds_bp"]
+        # it read rep["cds_bp"], which nothing sets, so the floor never applied.
+        cds_bp = s.get("cds_bp", 0)
         if cds_bp > 0 and cds_bp < scfg.min_cds_bp:
             return False
         return True
@@ -559,6 +578,18 @@ def select_isoforms(
                 return True
         return False
 
+    # scoring.isoform_cds_overlap: whether an isoform must share coding sequence
+    # with its gene's primary (Ensembl groups transcripts into a gene by shared
+    # coding bases). "off" keeps the structural test alone, under which UTR and
+    # read-through overlaps make a different ORF an "isoform" of the gene.
+    cds_mode = getattr(scfg, "isoform_cds_overlap", "off")
+
+    def shares_coding_base(m1, m2):
+        c1, c2 = m1.get("candidate_cds") or [], m2.get("candidate_cds") or []
+        if not c1 or not c2:
+            return True  # no ORF on one side: the structural test decides
+        return any(min(e1, e2) > max(s1, s2) for s1, e1 in c1 for s2, e2 in c2)
+
     genes = []
 
     for s in candidates:
@@ -566,12 +597,18 @@ def select_isoforms(
         r["score"] = s["score"]
         # Try to assign to an existing gene sub-cluster
         found = -1
+        coding_conflict = False
         for i, g_isoforms in enumerate(genes):
             if is_same_gene(r, g_isoforms[0]):
+                if cds_mode != "off" and not shares_coding_base(r, g_isoforms[0]):
+                    coding_conflict = True
+                    continue
                 found = i
                 break
 
         if found == -1:
+            if coding_conflict and cds_mode == "drop" and not r.get("has_backbone"):
+                continue
             r["is_primary"] = True
             genes.append([r])
         else:
@@ -583,6 +620,77 @@ def select_isoforms(
                         r["is_primary"] = False
                         g_isoforms.append(r)
 
+    junctions = junction_support or {}
+    compat = protein_compatibility or {}
+    for g in genes:
+        for m in g:
+            m["n_introns"], m["introns_without_transcript_support"] = junctions.get(
+                m["id"], (m["exon_count"] - 1, None))
+            m["protein_alignments_compatible"], m["protein_alignments_incompatible"] = (
+                compat.get(m["id"], (0, 0)))
+
+    if getattr(scfg, "primary_selection", "score") == "junction_supported":
+        complete = complete_orf_tids or set()
+        frac = getattr(scfg, "junction_primary_min_cds_fraction", 0.9)
+        for g in genes:
+            _promote_junction_supported(g, complete, frac)
+
     # Sort genes by start coordinate
     genes.sort(key=lambda g: min(m["start"] for m in g))
     return genes
+
+
+def _promote_junction_supported(gene: list[dict], complete_orf_tids: set, min_cds_fraction: float):
+    """Replace a backbone primary that has transcript-unsupported introns (in place).
+
+    The backbone wins every locus on score, so an assembled structure that RNA-seq
+    supports better can only ever be an alternate. Here the primary is swapped for
+    the alternate with the fewest unobserved introns when that alternate:
+      * is not itself a backbone structure,
+      * has strictly fewer introns that no transcriptomic model observes,
+      * has a complete ORF (ATG start and stop codon),
+      * keeps at least ``min_cds_fraction`` of the backbone's CDS length,
+      * shares at least half of its CDS bases with the backbone CDS and covers at
+        least half of the backbone CDS (the same coding locus, not a neighbour
+        reached through a read-through span), and
+      * is contradicted by no more spliced protein alignments, net of agreeing
+        ones, than the backbone is.
+    Ties go to better protein compatibility, then the longer CDS. The backbone
+    model is kept as an alternate, so no structure is lost.
+    """
+    primary = gene[0]
+    p_bad = primary.get("introns_without_transcript_support")
+    if not primary.get("has_backbone") or not p_bad:
+        return
+
+    def net(m):
+        return m["protein_alignments_compatible"] - m["protein_alignments_incompatible"]
+
+    p_cds = primary.get("candidate_cds_bp") or 0
+    p_ivs = primary.get("candidate_cds") or []
+
+    def same_coding_locus(m):
+        shared = sum(max(0, min(e1, e2) - max(s1, s2))
+                     for s1, e1 in p_ivs for s2, e2 in (m.get("candidate_cds") or []))
+        m_cds = m.get("candidate_cds_bp") or 0
+        return p_cds > 0 and m_cds > 0 and 2 * shared >= p_cds and 2 * shared >= m_cds
+
+    eligible = [
+        m for m in gene[1:]
+        if not m.get("has_backbone")
+        and m.get("introns_without_transcript_support") is not None
+        and m["introns_without_transcript_support"] < p_bad
+        and m["id"] in complete_orf_tids
+        and (m.get("candidate_cds_bp") or 0) >= min_cds_fraction * p_cds
+        and net(m) >= net(primary)
+        and same_coding_locus(m)
+    ]
+    if not eligible:
+        return
+    best = min(eligible, key=lambda m: (m["introns_without_transcript_support"],
+                                        -net(m), -(m.get("candidate_cds_bp") or 0)))
+    gene.remove(best)
+    best["is_primary"] = True
+    best["selection_reason"] = "transcript_junction_support"
+    primary["is_primary"] = False
+    gene.insert(0, best)

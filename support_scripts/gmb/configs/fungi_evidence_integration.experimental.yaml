@@ -1,0 +1,33 @@
+# EXPERIMENTAL evidence-integration overlay for the fungi preset.
+#
+# Layer on top of --preset fungi:
+#
+#   gmb-build --preset fungi --config configs/fungi_evidence_integration.experimental.yaml ...
+#
+# gmb-finalise reads the build's resolved_config.yaml, so canonical selection
+# uses the same settings without further options.
+#
+# Each setting addresses a failure measured on Zymoseptoria tritici (17 windows,
+# 9 development + 8 held-out); numbers and rationale are in
+# docs/release/evidence_integration.md. Validated regionally only: run it
+# alongside the plain fungi preset in the first production-scale test.
+
+scoring:
+  # Where Helixer's model has introns that no assembled transcript observes,
+  # promote an admitted alternate whose introns are observed, with a complete
+  # ORF, >= 90% of the backbone CDS, shared coding locus and no worse spliced
+  # protein agreement. The plain fungi preset keeps the backbone primary at
+  # every locus it predicts, whatever the transcripts show.
+  primary_selection: junction_supported
+  # A structure that shares no coding base with its gene's primary is not an
+  # isoform of that gene (UTR / read-through overlap); discard it. Removes the
+  # isoform-driven gene merges and splits.
+  isoform_cds_overlap: drop
+  # Retention floor on candidate CDS length. No Z. tritici reference CDS is
+  # shorter; the removed models are almost all unsupported novel loci.
+  min_cds_bp: 150
+
+canonical_selection:
+  # Do not let two short-read assemblers of the same libraries (counted as two
+  # sources) displace the build's primary transcript.
+  prefer_build_primary: true

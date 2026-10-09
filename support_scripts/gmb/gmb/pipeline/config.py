@@ -82,6 +82,12 @@ def _warn_inert_keys(data, source: str, prefix: str = "") -> None:
 #: Accepted values of ``scoring.locus_clustering`` (see ScoringConfig).
 LOCUS_CLUSTERING_MODES = ("exon_overlap", "transcript_linked")
 
+#: Accepted values of ``scoring.isoform_cds_overlap`` (see ScoringConfig).
+ISOFORM_CDS_OVERLAP_MODES = ("off", "drop", "new_gene")
+
+#: Accepted values of ``scoring.primary_selection`` (see ScoringConfig).
+PRIMARY_SELECTION_MODES = ("score", "junction_supported")
+
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
@@ -197,7 +203,7 @@ class ScoringConfig:
     # protects whichever backbone (Helixer or Tiberius) is actually loaded.
     keep_backbone_without_support: bool = True
     require_protein_support_for_single_source: bool = False
-    min_cds_bp: int = 150
+    min_cds_bp: int = 0  # retention floor on candidate CDS bp; 0 disables (was 150, never applied)
     require_support_for_single_exon: bool = True
     same_gene_overlap_threshold: float = 0.15
     # Source label of the ab initio backbone track actually loaded (set
@@ -275,6 +281,27 @@ class ScoringConfig:
     #   "transcript_linked" -- exon clusters that share a candidate transcript are
     #                          merged, so every candidate is scored whole.
     locus_clustering: str = "exon_overlap"
+    # Which structure becomes a gene's primary transcript.
+    #   "score"              -- the highest-ranked structure (validated baseline).
+    #                           Where the backbone has a model it always wins: a
+    #                           structure only transcripts support cannot outscore it.
+    #   "junction_supported" -- as "score", then a backbone primary with introns that
+    #                           no transcriptomic model observes is replaced by an
+    #                           admitted alternate isoform that has fewer such
+    #                           introns, a complete ORF, a CDS at least
+    #                           junction_primary_min_cds_fraction of the backbone's,
+    #                           and no worse spliced-protein compatibility. The
+    #                           backbone model is kept as an alternate.
+    primary_selection: str = "score"
+    junction_primary_min_cds_fraction: float = 0.9
+    # Whether an alternate must share >= 1 coding base with its gene's primary.
+    #   "off"      -- structural test only (shared intron or span overlap >
+    #                 same_gene_overlap_threshold): validated baseline.
+    #   "drop"     -- a structure that would join a gene without sharing coding
+    #                 sequence is discarded (a backbone structure becomes its own
+    #                 gene instead).
+    #   "new_gene" -- such a structure becomes its own gene.
+    isoform_cds_overlap: str = "off"
 
     # ---- evidence roles ----
     # Selection logic operates on roles, never on literal tool names. These
@@ -346,6 +373,12 @@ class ProteinValidationConfig:
     psauron_weight: float = 0.5
     min_score: float = 0.5
     policy: str = "drop"  # 'drop' or 'penalize' (also accepts 'penalise')
+    # Score points subtracted, under policy 'penalize', from a model whose
+    # protein_coding_score is below min_score. 5.0 was the former hard-coded value;
+    # it exceeds every backbone weight, so a penalised alternate falls below
+    # scoring.min_alternate_score. With diamond_weight > 1 - min_score a model
+    # without a DIAMOND hit is always penalised, whatever its Psauron score.
+    penalty: float = 5.0
     diamond_min_query_coverage: float = 0.0  # 0-100; additional gate before counting a hit
     diamond_min_target_coverage: float = 0.0  # 0-100; additional gate before counting a hit
 
@@ -356,6 +389,8 @@ class ProteinValidationConfig:
                 "diamond_weight > 0.  Set diamond_db to the path of your DIAMOND "
                 "database (e.g. swissprot.dmnd)."
             )
+        if self.penalty < 0:
+            raise ValueError(f"protein_validation.penalty must be >= 0, got {self.penalty!r}.")
 
 
 @dataclass
@@ -717,6 +752,12 @@ class CanonicalSelectionConfig:
     # "low_confidence" in the report (in addition to the separate
     # LOW_CONFIDENCE_NO_PROTEIN_SUPPORT reason code for missing evidence).
     low_confidence_score_gap: float = 0.05
+    # Rank the build's primary transcript (<gene>.t1) above the raw named-source
+    # count (below ORF integrity, protein validation and evidence-class breadth).
+    # Off: two short-read assemblers run on the same libraries count as two
+    # sources and outrank a backbone model the build selected, which on
+    # Z. tritici swaps ~5% of canonical transcripts with a net loss of accuracy.
+    prefer_build_primary: bool = False
     interpro_resolver: InterProResolverConfig = field(default_factory=InterProResolverConfig)
 
 
@@ -1058,6 +1099,24 @@ def validate_selection_policy(cfg) -> list:
             f"scoring.locus_clustering must be one of {LOCUS_CLUSTERING_MODES}, "
             f"got {locus_mode!r}."
         )
+    primary_mode = getattr(scfg, "primary_selection", "score")
+    if primary_mode not in PRIMARY_SELECTION_MODES:
+        raise ValueError(
+            f"scoring.primary_selection must be one of {PRIMARY_SELECTION_MODES}, "
+            f"got {primary_mode!r}."
+        )
+    iso_mode = getattr(scfg, "isoform_cds_overlap", "off")
+    if iso_mode is False:  # bare YAML `off`
+        iso_mode = scfg.isoform_cds_overlap = "off"
+    if iso_mode not in ISOFORM_CDS_OVERLAP_MODES:
+        raise ValueError(
+            f"scoring.isoform_cds_overlap must be one of {ISOFORM_CDS_OVERLAP_MODES}, "
+            f"got {iso_mode!r}."
+        )
+    frac = getattr(scfg, "junction_primary_min_cds_fraction", 0.9)
+    if not 0.0 <= frac <= 10.0:
+        raise ValueError(
+            f"scoring.junction_primary_min_cds_fraction must be in [0, 10], got {frac!r}.")
     return warnings_out
 
 

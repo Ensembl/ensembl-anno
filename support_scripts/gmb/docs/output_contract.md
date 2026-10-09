@@ -74,6 +74,10 @@ One row per emitted transcript. The audit trail for every selection decision.
 | `exon_count`, `cds_bp`, `utr_5p_bp`, `utr_3p_bp`, spans | structure |
 | `gmb_score` | numeric score (tie-break within a ranking tier) |
 | `utr_*_supported` / `_action` / `_reason` | UTR retention decisions |
+| `introns_without_transcript_support` | introns that no loaded transcriptomic model (short or long read, including filtered read-through chimeras) observes exactly |
+| `protein_alignments_compatible`, `protein_alignments_incompatible` | spliced protein alignments whose introns agree / disagree with the CDS where they overlap it (unspliced overlaps count as neither) |
+
+The last three columns were appended after 2.0.0; earlier columns are unchanged.
 
 `selection_reason` values, highest ranking tier first:
 
@@ -86,6 +90,7 @@ One row per emitted transcript. The audit trail for every selection decision.
 | `longread_demoted_support_only` | a long-read model demoted by the guard or disposition |
 | `longread_only_locus` / `single_exon_longread` | only long-read evidence at this locus |
 | `best_single_source` | tier 0, no structural corroboration |
+| `transcript_junction_support` | promoted over a backbone primary by `scoring.primary_selection: junction_supported` |
 
 > A transcript may carry `backbone_intron_rescue=True` and still report a *different*
 > `selection_reason`: tiers are ordered, so a higher tier names the winner. Both fields are
