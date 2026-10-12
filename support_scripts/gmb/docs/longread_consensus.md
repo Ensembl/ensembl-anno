@@ -4,6 +4,12 @@
 deduplicated consensus track suitable for use as `--minimap2` evidence in
 `gmb-build`.
 
+> **You normally do not run this yourself.** `gmb-run --long-read-alignments <per-read GTF>`
+> runs it automatically (with `--preset fungi` for the fungal presets), validates the input,
+> records provenance in `<output-dir>/longread_consensus/longread_preparation.json` and reuses a
+> matching earlier consensus (`../RUN_FUNGI.md`, `output_contract.md`). This page is for expert
+> use and debugging.
+
 ---
 
 ## Why preprocessing is required

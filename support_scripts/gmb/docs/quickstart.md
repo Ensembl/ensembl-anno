@@ -1,6 +1,7 @@
 # GMB quickstart
 
-From a prepared evidence bundle to a handover, in three commands.
+> **Fungal genome? Follow [`../RUN_FUNGI.md`](../RUN_FUNGI.md) instead.** It is the supported
+> fungal procedure. This page covers other clades and running the stages individually.
 
 ---
 
@@ -9,116 +10,94 @@ From a prepared evidence bundle to a handover, in three commands.
 ```bash
 mamba create -n gmb -c conda-forge python=3.12 'pandas>=2,<3' 'pyranges<=0.1.4' pyyaml numpy
 mamba activate gmb
-pip install -e /path/to/ensembl-anno/support_scripts/gmb
-gmb-build --help
+pip install /path/to/ensembl-anno/support_scripts/gmb
+gmb-run --help
 ```
 
 `pyranges` must be `<=0.1.4` — the API changed after that and it is the most common install
 failure. GMB does **not** install Helixer, Tiberius, Scallop, StringTie, Minimap2, DIAMOND or
 Psauron.
 
-## 2. What you need
-
-```bash
-GENOME=/data/genome.fa          # required
-BACKBONE=/data/backbone.gff3    # required in practice (Helixer or Tiberius)
-SCALLOP=/data/scallop.gtf       # recommended
-STRINGTIE=/data/stringtie.gtf   # recommended
-ORTHODB=/data/orthodb.gtf       # recommended
-OUT=/work/gmb
-```
-
-Every evidence file must use the **same sequence names as the genome FASTA**.
-Long-read evidence is optional. A reference annotation is **never** an input.
-
-## 3. Pick a preset
+## 2. Pick a preset
 
 | your situation | preset |
 |---|---|
-| new or unknown clade | `standard` |
+| fungi | `fungi_latest_settings` ([`../RUN_FUNGI.md`](../RUN_FUNGI.md)) |
 | Apicomplexa with a general-purpose ab initio backbone | `apicomplexa` |
-| fungi with a strong Helixer-like backbone | `fungi` |
+| new or unknown clade | `standard` |
 
-Details and evidence: `presets.md`.
+Details and evidence: `presets.md`. A new clade: `creating_a_preset.md`.
 
-For fungi there are two supported configurations: the `fungi` preset as is (A, the validated
-baseline) and the same preset plus `--config configs/fungi_evidence_integration.experimental.yaml`
-(B, experimental evidence integration, pending the production-scale test). Pass the same
-`--config` to `gmb-preflight` and `gmb-build`; `gmb-finalise` picks it up from the build. See
-`../HANDOVER.md` §3.
-
-Long reads must be collapsed before use:
-`gmb-longread-consensus --input reads.gtf --preset fungi --output-dir lr/`, then
-`--minimap2 lr/minimap2_consensus.gtf`.
-
-## 4. Run
+## 3. Run
 
 ```bash
-# 1. validate the evidence bundle — exits 1 on FAIL
-gmb-preflight --preset fungi \
-  --genome "$GENOME" --helixer "$BACKBONE" \
-  --scallop "$SCALLOP" --stringtie "$STRINGTIE" --orthodb "$ORTHODB" \
-  --output-dir "$OUT/preflight"
-
-# 2. integrate evidence and select gene models
-gmb-build --preset fungi \
-  --genome "$GENOME" --helixer "$BACKBONE" \
-  --scallop "$SCALLOP" --stringtie "$STRINGTIE" --orthodb "$ORTHODB" \
-  --gene-prefix XXGMB --output-dir "$OUT/build" --validate-fasta
-
-# 3. regenerate FASTA from the final GFF3, QC, canonical, handover
-gmb-finalise --build-dir "$OUT/build" --genome "$GENOME" \
-  --output-dir "$OUT/finalise"
+gmb-run --preset apicomplexa \
+  --genome genome.fa --helixer backbone.gff3 \
+  --scallop scallop.gtf --stringtie stringtie.gtf --orthodb orthodb.gtf \
+  --gene-prefix XXGMB --output-dir out
 ```
 
-Use `--tiberius` instead of `--helixer` for a Tiberius backbone. Omit any evidence flag you do
-not have. Ready-made wrappers: `examples/run_gene_model_builder.sh`, `.py`, `submit_gmb.slurm`.
+Use `--tiberius` or `--backbone` instead of `--helixer` for another predictor. Omit any evidence
+you do not have. Every evidence file must use the **same sequence names as the genome FASTA**.
 
-## 5. What you get
+**Long reads.** Per-read alignments (`--long-read-alignments`) are collapsed automatically, but
+only for presets with a known consensus preset (the fungal ones). For other clades name one,
+e.g. `--longread-consensus-preset pfalciparum_pure`, after checking its thresholds suit the
+genome (`longread_consensus.md`), or supply already-collapsed models with
+`--long-read-models`.
 
-```
-$OUT/finalise/canonical/consensus.canonical_annotated.gff3   <- the annotation
-$OUT/finalise/consensus.gff3                                 all isoforms
-$OUT/finalise/{cdna,cds,prot}.fa                             sequences
-$OUT/finalise/{fasta_qc_report,utr_qc_report}.json           QC evidence
-$OUT/build/evidence_attribution.tsv                          why each model won
-$OUT/build/run_manifest.json                                 full provenance
-```
+Exit codes (`0` ok, `2` arguments, `3` long-read preparation, `4` preflight, `5` build,
+`6` sequence QC, `7` finalise), outputs and logs are as described in
+[`../RUN_FUNGI.md`](../RUN_FUNGI.md) §4–6.
 
-**Hand over `finalise/`, not `build/`** — `finalise/` is where sequences are regenerated from
-the final GFF3. Full list: `output_contract.md`.
+## 4. Running the stages individually (advanced)
 
-## 6. Check it
+`gmb-run` calls these; run them directly only for debugging or expert use. Give preflight and
+build the **same** `--preset`, `--config` and evidence. `--minimap2` takes **collapsed** long-read
+models only (`gmb-longread-consensus`, `longread_consensus.md`).
 
 ```bash
-python - <<'PY'
-import json
-qc = json.load(open("$OUT/finalise/fasta_qc_report.json"))
-print("QC pass:", qc["pass"], "| failed:", qc.get("failed_checks"))
-PY
+gmb-preflight --preset apicomplexa --genome genome.fa --helixer backbone.gff3 \
+  --scallop scallop.gtf --orthodb orthodb.gtf --output-dir out/preflight      # exits 1 on FAIL
+gmb-build --preset apicomplexa --genome genome.fa --helixer backbone.gff3 \
+  --scallop scallop.gtf --orthodb orthodb.gtf \
+  --gene-prefix XXGMB --output-dir out/build --validate-fasta
+gmb-finalise --build-dir out/build --genome genome.fa --output-dir out/finalise
 ```
 
-All of these must be zero: cDNA / CDS / protein mismatches, internal stops, gene-boundary
-violations, UTR violations. See `qc.md`.
+`gmb-finalise` needs no preset: it reads the build's `resolved_config.yaml`.
 
 > **A non-zero `gmb-build` exit under `--validate-fasta` is a QC verdict, not a crash.** The
 > annotation is fully written; read `build/fasta_qc_report.json`.
 
+## 5. What you get
+
+```
+out/finalise/canonical/consensus.canonical_annotated.gff3   <- the annotation
+out/finalise/consensus.gff3                                 all isoforms
+out/finalise/{cdna,cds,prot}.fa                             sequences
+out/finalise/{fasta_qc_report,utr_qc_report}.json           QC evidence
+out/build/evidence_attribution.tsv                          why each model won
+out/build/run_manifest.json                                 full provenance
+out/run_summary.json                                        gmb-run status
+```
+
+**Hand over `finalise/`, not `build/`.** Full list: `output_contract.md`.
+
 > **QC PASS does not mean high biological accuracy.** It means the annotation is internally
 > consistent. See `qc.md`.
 
-## 7. Optional — evaluate against a reference
+## 6. Evaluation against a reference (annotation lead, not part of a GMB run)
 
 ```bash
-annotation-qc pairwise-compare --query "$OUT/finalise/consensus.gff3" \
-  --reference "$REFERENCE_GFF3" --genome "$GENOME" \
+annotation-qc pairwise-compare --query out/finalise/consensus.gff3 \
+  --reference reference.gff3 --genome genome.fa \
   --evaluation-mode protein_coding --reference-transcript-biotypes protein_coding \
-  --outdir "$OUT/comparison"
+  --outdir comparison
 ```
 
-`annotation-qc` is in the `ensembl-genes` repository (its own Python ≥ 3.12 environment; GMB
-does not depend on it). Evaluation only — never part of the production path, and never used to
-choose a configuration. Metric guidance: `qc.md`.
+`annotation-qc` is in the `ensembl-genes` repository (its own Python ≥ 3.12 environment; GMB does
+not depend on it). Metric guidance: `qc.md`.
 
 ---
 

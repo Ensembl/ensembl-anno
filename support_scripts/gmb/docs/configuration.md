@@ -4,7 +4,8 @@
 
 | What you want to do | Where |
 |---|---|
-| Pick between `standard`, `fungi`, `apicomplexa` | [presets.md](presets.md) — the catalogue, with the evidence behind each |
+| Run a fungal genome | `--preset fungi_latest_settings` — [../RUN_FUNGI.md](../RUN_FUNGI.md) |
+| Pick between `standard`, `apicomplexa`, `fungi_latest_settings` (and the historical `fungi`) | [presets.md](presets.md) — the catalogue, with the evidence behind each |
 | See what a preset actually resolves to | `gmb-preflight` prints it, or `build/resolved_config.yaml` |
 | Override one value for a run | [Layering](#layering), below |
 | **Add a new evidence source** (a tool GMB has not seen) | [Evidence roles](#evidence-roles--the-central-abstraction), below |
@@ -21,7 +22,8 @@ gmb/configs/standard.yaml      neutral base — ALWAYS loaded
         |
         v
 gmb/configs/<preset>.yaml      --preset apicomplexa | fungi | standard
-        |
+        |                      (a layered preset first applies its base:
+        |                       fungi_latest_settings = fungi.yaml + fungi_latest_settings.yaml)
         v
 --config overlay1.yaml         run-specific, repeatable
 --config overlay2.yaml         each later file wins on shared keys
@@ -191,8 +193,8 @@ refused structure is listed in `build/excluded_candidates.tsv` and counted in `s
 (`isoform_cds_overlap_excluded`).
 `prefer_build_primary` stops canonical selection from replacing the build's primary because
 two short-read assemblers of the same libraries count as two sources. The three are combined
-in `configs/fungi_evidence_integration.experimental.yaml` together with
-`scoring.min_cds_bp: 150`.
+with `scoring.min_cds_bp: 150` in the `fungi_latest_settings` preset
+(`gmb/configs/fungi_latest_settings.yaml`, layered on `fungi`), the recommended fungal settings.
 
 `scoring.min_cds_bp` is a retention floor on a candidate's CDS length; 0 (the shipped value)
 disables it. Before this release it was set to 150 but never applied.

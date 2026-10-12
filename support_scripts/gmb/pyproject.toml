@@ -27,6 +27,7 @@ dev = [
 ]
 
 [project.scripts]
+gmb-run = "gmb.cli.run:main"
 gmb-build = "gmb.cli.build:main"
 gmb-preflight = "gmb.cli.preflight:main"
 gmb-compare = "gmb.cli.compare:main"
@@ -105,5 +106,6 @@ ignore = [
 testpaths = ["tests"]
 markers = [
     "integration: end-to-end tests using real data (may be slow)",
+    "slow: builds and installs a wheel into a fresh virtualenv (~30 s)",
     "external_tools: tests requiring DIAMOND / Psauron (skipped unless RUN_EXTERNAL_TOOLS=1)",
 ]

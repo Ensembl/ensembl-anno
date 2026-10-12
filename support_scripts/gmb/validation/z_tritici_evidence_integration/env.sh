@@ -16,5 +16,8 @@ AQC="${AQC:-$(command -v annotation-qc || true)}"
 PYTHON="${PYTHON:-$GMB_BIN/python}"
 [ -x "$PYTHON" ] || PYTHON="$(command -v python3)"
 JOBS="${JOBS:-6}"
-OVERLAY="$GMB_DIR/configs/fungi_evidence_integration.experimental.yaml"
-export WORK GMB_BIN AQC PYTHON GMB_DIR OVERLAY HERE JOBS
+# "overlay" arms (arms.tsv) run the latest fungal settings, the packaged preset
+# fungi_latest_settings (= fungi + gmb/configs/fungi_latest_settings.yaml; formerly the
+# overlay configs/fungi_evidence_integration.experimental.yaml, identical builds).
+LATEST_PRESET=fungi_latest_settings
+export WORK GMB_BIN AQC PYTHON GMB_DIR LATEST_PRESET HERE JOBS

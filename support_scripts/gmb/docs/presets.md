@@ -5,7 +5,11 @@ A preset is a bundle of clade-appropriate settings layered on the neutral base. 
 
 ```
 standard.yaml  ->  <preset>.yaml  ->  --config overlays
+standard.yaml  ->  fungi.yaml  ->  fungi_latest_settings.yaml  ->  --config overlays   (layered preset)
 ```
+
+A *layered* preset (listed in `gmb.pipeline.config.PRESET_BASES`) applies its base preset first,
+so its file holds only what differs from that base.
 
 **Never edit a shipped preset.** They are validated baselines; changing one silently
 invalidates every past comparison. Put run-specific values in an overlay.
@@ -18,7 +22,8 @@ invalidates every past comparison. Put run-specific values in an overlay.
 |---|---|---|---|---|---|
 | **`standard`** | a new or unknown clade | unknown | unknown | quality-gated by preflight; no guard by default | **`off`** |
 | **`apicomplexa`** | Apicomplexa with a general-purpose ab initio backbone | **may be intron-collapsed** | a genuinely better structural source | guard on; quality-gated | **`auto`** |
-| **`fungi`** | fungi with a strong Helixer-like backbone | **strong** | supportive, *not* automatically superior | none assumed; guard off (inert) | **`off`** |
+| **`fungi_latest_settings`** | **fungi — recommended** (`../RUN_FUNGI.md`) | **strong** | decides where the backbone has an intron no transcript observes | consensus preset `fungi` when per-read alignments are given | **`off`** |
+| `fungi` | historical fungal baseline, kept for reproducibility | **strong** | supportive, *not* automatically superior | none assumed; guard off (inert) | **`off`** |
 
 ---
 
@@ -75,7 +80,27 @@ under-calls introns (17.3% and 38.7% multi-exon in the two genomes) alongside as
 do not (95–99%). If a future Apicomplexan arrives with a well-resolved backbone, the `auto`
 gate declines and the preset degrades safely.
 
-## `fungi` — Z. tritici (2.0.0 release candidate)
+## `fungi_latest_settings` — the recommended fungal settings
+
+`fungi` plus four selection settings (`gmb/configs/fungi_latest_settings.yaml`, packaged with GMB):
+
+| setting | value | effect |
+|---|---|---|
+| `scoring.primary_selection` | `junction_supported` | where the backbone model has an intron no transcriptomic model observes, an admitted alternate with observed introns, a complete ORF, ≥ 90% of the backbone CDS at the same coding locus and no worse spliced-protein agreement becomes the primary; the backbone model stays as an alternate |
+| `scoring.isoform_cds_overlap` | `drop` | a structure sharing no coding base with its gene's primary is not admitted as an isoform (listed in `build/excluded_candidates.tsv`) |
+| `canonical_selection.prefer_build_primary` | `true` | two short-read assemblers of the same libraries cannot displace the build's primary as canonical |
+| `scoring.min_cds_bp` | `150` | candidates with a CDS shorter than 150 bp are not retained |
+
+**Evidence** (*Z. tritici*, 17 windows, canonical transcripts, held-out core windows; R = 1,874):
+exact CDS Helixer 710, `fungi` 695, `fungi_latest_settings` 733, with collapsed long reads 754;
+splits/merges at Helixer's level. Full report: `release/evidence_integration.md`. Validated
+regionally; the first production-scale annotations are its genome-wide test.
+
+Until 2026-10-12 these settings were the overlay
+`configs/fungi_evidence_integration.experimental.yaml` used with `--preset fungi`; that
+combination and `--preset fungi_latest_settings` give byte-identical builds.
+
+## `fungi` — Z. tritici (historical baseline; 2.0.0 release candidate)
 
 > **Validation status.** The September 2026 whole-genome validation used the pre-2.0.0
 > behaviour. 2.0.0 changes the fungi preset's *effective* behaviour in three ways: the 20 kb

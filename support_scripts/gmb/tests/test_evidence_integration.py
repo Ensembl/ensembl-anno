@@ -351,8 +351,8 @@ def test_invalid_primary_selection_rejected(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _build(out_dir, overlay_text=None):
-    cmd = [sys.executable, "-m", "gmb.cli.build", "--preset", "fungi",
+def _build(out_dir, overlay_text=None, preset="fungi"):
+    cmd = [sys.executable, "-m", "gmb.cli.build", "--preset", preset,
            "--scallop", str(FIXTURE / "scallop_geneset.gtf"),
            "--stringtie", str(FIXTURE / "stringtie_geneset.gtf"),
            "--helixer", str(FIXTURE / "helixer_remapped.gff3"),
@@ -393,8 +393,7 @@ def test_fixture_junction_supported_reorders_but_keeps_transcripts(tmp_path):
 
 @pytest.mark.integration
 def test_fixture_overlay_reports_locus_context_and_exclusions(tmp_path):
-    overlay = (GMB_DIR / "configs" / "fungi_evidence_integration.experimental.yaml").read_text()
-    att = _build(tmp_path / "overlay", overlay)
+    att = _build(tmp_path / "overlay", preset="fungi_latest_settings")
     # Locus context is consistent with the evidence actually recorded.
     has_bb = att.groupby("gene_id")["evidence_sources"].apply(
         lambda s: s.str.contains("Helixer").any())

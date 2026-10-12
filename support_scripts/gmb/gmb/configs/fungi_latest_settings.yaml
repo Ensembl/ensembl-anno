@@ -1,16 +1,18 @@
-# EXPERIMENTAL evidence-integration overlay for the fungi preset.
+# Latest fungal settings — the recommended configuration for fungal genomes.
 #
-# Layer on top of --preset fungi:
+#   gmb-run --preset fungi_latest_settings ...        (see RUN_FUNGI.md)
 #
-#   gmb-build --preset fungi --config configs/fungi_evidence_integration.experimental.yaml ...
-#
+# A layered preset: GMB loads standard.yaml, then the `fungi` preset, then the
+# four settings below (gmb.pipeline.config.PRESET_BASES). Nothing else differs
+# from `fungi`, which is kept as the historical baseline for reproducibility.
 # gmb-finalise reads the build's resolved_config.yaml, so canonical selection
-# uses the same settings without further options.
+# uses the same settings automatically.
 #
-# Each setting addresses a failure measured on Zymoseptoria tritici (17 windows,
-# 9 development + 8 held-out); numbers and rationale are in
-# docs/release/evidence_integration.md. Validated regionally only: run it
-# alongside the plain fungi preset in the first production-scale test.
+# Until 2026-10-12 this file was configs/fungi_evidence_integration.experimental.yaml,
+# applied as `--preset fungi --config <file>`; that combination gives identical
+# results. Each setting addresses a failure measured on Zymoseptoria tritici
+# (17 windows, 9 development + 8 held-out): docs/release/evidence_integration.md.
+# Validated regionally; the genome-wide confirmation is the production-scale run.
 
 scoring:
   # Where Helixer's model has introns that no assembled transcript observes,

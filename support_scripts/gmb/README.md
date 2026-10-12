@@ -8,35 +8,34 @@ QC and provenance.
 
 It does not generate evidence and it does not install the tools that do.
 
-> **Release status:** see [docs/release/release_readiness.md](docs/release/release_readiness.md)
-> and [docs/known_issues.md](docs/known_issues.md) before a production run.
+> **Annotating a fungal genome? Follow [RUN_FUNGI.md](RUN_FUNGI.md).** It is the complete,
+> supported procedure: install, inputs, one command, outputs and troubleshooting.
 
 ---
 
-## The 60-second version
+## One command
 
 ```bash
-# 1. validate the evidence bundle (exits 1 on FAIL)
-gmb-preflight --preset fungi --genome genome.fa --helixer backbone.gff3 \
-  --scallop scallop.gtf --stringtie stringtie.gtf --orthodb orthodb.gtf \
-  --output-dir out/preflight
-
-# 2. integrate evidence and select gene models
-gmb-build --preset fungi --genome genome.fa --helixer backbone.gff3 \
-  --scallop scallop.gtf --stringtie stringtie.gtf --orthodb orthodb.gtf \
-  --gene-prefix XXGMB --output-dir out/build --validate-fasta
-
-# 3. regenerate FASTA from the final GFF3, QC, canonical, handover
-gmb-finalise --build-dir out/build --genome genome.fa \
-  --output-dir out/finalise
+gmb-run --preset fungi_latest_settings \
+  --genome genome.fa --helixer helixer.gff3 \
+  --orthodb orthodb.gtf --uniprot uniprot.gtf \
+  --scallop scallop.gtf --stringtie stringtie.gtf \
+  --long-read-alignments minimap2_reads.gtf \
+  --gene-prefix XXGMB --output-dir out
 ```
 
-Hand over `out/finalise/`. Full walk-through: **[docs/quickstart.md](docs/quickstart.md)**.
+`gmb-run` runs the whole workflow, non-interactively:
 
-Always pass the **same `--preset` to preflight and build**. If omitted, both fall back to
-`fungi` for backward compatibility; the Python API defaults to `standard`.
+```
+[long-read consensus]  ->  preflight  ->  build  ->  finalise
+ only when per-read        validate the    integrate        regenerate sequences from
+ long-read alignments      prepared        evidence,        the final GFF3, QC, canonical
+ are supplied              inputs          select models    transcripts, handover
+```
 
----
+Hand over `out/finalise/`. Exit codes, logs and outputs: [RUN_FUNGI.md](RUN_FUNGI.md).
+Per-read long-read alignments are collapsed into consensus transcript models automatically
+(`out/longread_consensus/`); already-collapsed models go in `--long-read-models` instead.
 
 ## Upstream evidence preparation vs GMB
 
@@ -44,53 +43,17 @@ Always pass the **same `--preset` to preflight and build**. If omitted, both fal
 |---|---|---|
 | genome preparation (soft-masking, sequence naming) | upstream pipeline | genome FASTA |
 | short-read alignment + assembly (HISAT2/STAR → StringTie, Scallop) | upstream | transcript GTF, **stranded** |
-| long-read alignment (Minimap2) → strand from the `ts` tag (`transcriptomic_annotation/transcript_strand.py`) → **collapse to transcript models** (`gmb-longread-consensus` or an isoform collapser) | upstream | transcript GTF |
+| long-read alignment (Minimap2) with strand from the `ts` tag (`transcriptomic_annotation/transcript_strand.py`) | upstream | per-read GTF, **stranded** |
 | protein-to-genome alignment (genBlastG / OrthoDB, UniProt) | upstream | alignment GTF |
 | ab initio backbone prediction (Helixer, Tiberius, any predictor) | upstream | GFF3/GTF with CDS |
-| input validation | **GMB** `gmb-preflight` | `preflight_report.json` |
+| long-read consensus | **GMB** (inside `gmb-run`) | `longread_consensus/` |
+| input validation | **GMB** `gmb-preflight` | `preflight/` |
 | evidence filtering, ORF/CDS/UTR inference, scoring, model selection | **GMB** `gmb-build` | `build/` |
 | FASTA regeneration, sequence QC, canonical selection, handover manifest | **GMB** `gmb-finalise` | `finalise/` |
 | comparison with a reference annotation, BUSCO/OMArk | evaluation, outside GMB | — |
 
 GMB never re-derives strand from reads: a transcript's strand is whatever the evidence GTF
-says, so strand must be correct upstream. Raw per-read long-read alignments are **not** valid
-`--minimap2` input; collapse them first.
-
-## Fungal example (Zymoseptoria tritici, GCA_000219625.1)
-
-```bash
-G=genome.fa                        # sequence names 1..21, identical in every evidence file
-EV=input_data/GCA_000219625.1      # Ensembl anno evidence outputs
-# Helixer names sequences by GenBank accession (CM001196.1 ...); rename to the genome's
-# names first. Preflight fails the track otherwise.
-python tools/remap_helixer.py --input ${EV}_helixer.gff3 \
-  --assembly-report ${EV}_MYCGR_v2.0_assembly_report.txt --output helixer.gff3
-gmb-preflight --preset fungi --genome $G --helixer helixer.gff3 \
-  --scallop ${EV}_scallop_annotation.gtf --stringtie ${EV}_stringtie_annotation.gtf \
-  --orthodb ${EV}_orthodb_annotation.gtf --uniprot ${EV}_genblast_annotation.gtf \
-  --output-dir out/preflight
-gmb-build --preset fungi --genome $G --helixer helixer.gff3 \
-  --scallop ${EV}_scallop_annotation.gtf --stringtie ${EV}_stringtie_annotation.gtf \
-  --orthodb ${EV}_orthodb_annotation.gtf --uniprot ${EV}_genblast_annotation.gtf \
-  --gene-prefix ZTGMB --output-dir out/build --validate-fasta
-gmb-finalise --build-dir out/build --genome $G --output-dir out/finalise
-```
-
-For the experimental evidence-integrated configuration add
-`--config configs/fungi_evidence_integration.experimental.yaml` to preflight and build; to use
-the long reads, collapse them first (`gmb-longread-consensus --input
-${EV}_minimap2_annotation.gtf --preset fungi --output-dir lr/`) and add
-`--minimap2 lr/minimap2_consensus.gtf`. Both are described in [HANDOVER.md](HANDOVER.md).
-
-The `genblast_annotation.gtf` from Ensembl anno is the genBlastG alignment of **UniProt**
-proteins; pass it as `--uniprot` to match the validated baseline (labels only affect
-attribution). Do not pass the raw per-read `minimap2_annotation.gtf` (2 M reads for this
-genome; preflight warns) — see the upstream table above. Rename the backbone upstream as
-shown rather than with `gmb-build --assembly-report`: preflight and the Python API have no
-seqname-mapping option, so only a renamed file can be validated and run the same way
-everywhere. The `fungi` preset applies a 20 kb transcript-span filter and
-`locus_clustering: transcript_linked` (2.0.0). The evidence behind these choices:
-[docs/release/z_tritici_validation.md](docs/release/z_tritici_validation.md).
+says, so strand must be correct upstream.
 
 ---
 
@@ -102,7 +65,8 @@ everywhere. The `fungi` preset applies a 20 kb transcript-span filter and
 | ab initio backbone (any predictor; exactly one) | **yes** in practice | `--helixer`, `--tiberius`, or generic `--backbone` (+ optional `--backbone-label`) |
 | short-read transcript models | recommended | `--scallop`, `--stringtie` |
 | protein-to-genome alignments | recommended | `--orthodb`, `--uniprot`, `--genblast` |
-| long-read transcript models | **optional** | `--minimap2` |
+| long-read alignments, one record per read | **optional** | `gmb-run --long-read-alignments` (collapsed automatically) |
+| long-read transcript models, already collapsed | **optional** | `gmb-run --long-read-models`, `gmb-build --minimap2` |
 | DIAMOND protein DB | optional | config |
 
 Every evidence file must use the **same sequence names as the genome FASTA**.
@@ -124,6 +88,8 @@ out/finalise/{fasta_qc_report,utr_qc_report}.json           QC evidence
 out/build/evidence_attribution.tsv                          why each model won
 out/build/resolved_config.yaml                              exact configuration
 out/build/run_manifest.json                                 full provenance
+out/longread_consensus/longread_preparation.json            long-read consensus provenance
+out/run_summary.json                                        status of the whole run
 ```
 
 **`finalise/` is the handover; `build/` is intermediate.** Sequences are
@@ -134,21 +100,24 @@ drift. Details: **[docs/output_contract.md](docs/output_contract.md)**
 
 | preset | use it for | `backbone_intron_rescue` |
 |---|---|---|
-| `standard` | a new or unknown clade | `off` |
+| **`fungi_latest_settings`** | **fungi — the recommended fungal settings** ([RUN_FUNGI.md](RUN_FUNGI.md)) | `off` |
+| `fungi` | historical fungal baseline, kept to reproduce earlier results | `off` |
 | `apicomplexa` | Apicomplexa with a general-purpose ab initio backbone | `auto` |
-| `fungi` | fungi with a strong Helixer-like backbone | `off` |
+| `standard` | a new or unknown clade | `off` |
 
-The presets differ because the **evidence states** differ, not because the clades
-do — the same policy that improved P. falciparum made Z. tritici measurably worse.
-The evidence for each choice is in **[docs/presets.md](docs/presets.md)**.
+`fungi_latest_settings` is `fungi` plus four selection settings
+(`gmb/configs/fungi_latest_settings.yaml`; evidence in
+[docs/release/evidence_integration.md](docs/release/evidence_integration.md)). The presets differ
+because the **evidence states** differ, not because the clades do. The evidence for each choice
+is in **[docs/presets.md](docs/presets.md)**.
 
 For a new clade, start from `configs/new_clade_template.yaml` and follow
 **[docs/creating_a_preset.md](docs/creating_a_preset.md)**.
 
 ## What is optional?
 
-- **Long-read evidence.** With none supplied there is no special case, no penalty,
-  and the long-read guard cannot fire.
+- **Long-read evidence.** With none supplied there is no long-read preparation, no special
+  case and no penalty.
 - **Protein validation** (DIAMOND + Psauron). It only *scores* models that already
   exist; it can change which isoform wins, never which structures are possible.
 - **Evaluation against a reference.** Not part of GMB; see `ensembl-genes` `annotation-qc`.
@@ -177,8 +146,10 @@ Details: **[docs/qc.md](docs/qc.md)**
 
 | question | file |
 |---|---|
+| did the run finish, and where did it stop? | `run_summary.json`, `logs/gmb-run.log` |
+| were the long reads collapsed, reused or skipped? | `logs/gmb-run.log`, `longread_consensus/longread_preparation.json` |
 | were my inputs fit to build from? | `preflight/preflight_report.txt` |
-| what did the build do? | `build/gmb.log` |
+| what did the build do? | `logs/build.log` |
 | did it pass QC? | `finalise/fasta_qc_report.json` |
 | why was this model chosen? | `build/evidence_attribution.tsv` |
 | what settings applied? | `build/resolved_config.yaml` |
@@ -194,8 +165,8 @@ Symptom-first guide: **[docs/troubleshooting.md](docs/troubleshooting.md)**
 mamba create -n gmb -c conda-forge python=3.12 'pandas>=2,<3' 'pyranges<=0.1.4' \
     pyyaml numpy
 mamba activate gmb
-pip install -e /path/to/ensembl-anno/support_scripts/gmb
-gmb-build --help
+pip install /path/to/ensembl-anno/support_scripts/gmb     # -e for development
+gmb-run --help
 ```
 
 Python ≥ 3.10 (CI: 3.10, 3.11, 3.13). Runtime dependencies are only pandas, pyranges,
@@ -208,14 +179,19 @@ they generally need their own environments.
 
 ## Commands
 
-| command | purpose | production path |
+| command | purpose | |
 |---|---|---|
-| `gmb-preflight` | validate an evidence bundle before building | **yes** |
-| `gmb-build` | integrate evidence and select gene models | **yes** |
-| `gmb-finalise` | regenerate FASTA, QC, canonical, handover | **yes** |
-| `gmb-longread-consensus` | collapse long-read alignments into models | optional, upstream |
+| **`gmb-run`** | **the whole workflow: long-read consensus, preflight, build, finalise** | **recommended** |
+| `gmb-preflight` | validate an evidence bundle before building | advanced / individual stages |
+| `gmb-build` | integrate evidence and select gene models | advanced |
+| `gmb-finalise` | regenerate FASTA, QC, canonical, handover | advanced |
+| `gmb-longread-consensus` | collapse per-read long-read alignments into models (run by `gmb-run`) | expert / debugging ([longread_consensus.md](docs/longread_consensus.md)) |
 | `gmb-canonical-selection`, `gmb-interpro-*` | specialised tools (also run by `gmb-finalise`) | no |
 | `gmb-compare` | **removed** — prints where reference comparison moved (`ensembl-genes` `annotation-qc`) | no |
+
+Running the stages individually: give `gmb-preflight` and `gmb-build` the same `--preset`,
+`--config` and evidence, and `--minimap2` only a collapsed long-read track; `gmb-finalise` needs
+only `--build-dir`, `--genome` and `--output-dir`.
 
 ## Python API
 
@@ -224,16 +200,20 @@ from gmb import run_gene_model_builder
 
 result = run_gene_model_builder(
     genome="/data/genome.fa",
-    backbone="/data/backbone.gff3", backbone_kind="helixer",
+    backbone="/data/helixer.gff3", backbone_kind="helixer",
     short_read=["/data/scallop.gtf", "/data/stringtie.gtf"],
-    protein_alignment=["/data/orthodb.gtf"],
-    preset="fungi", output_dir="/work/gmb", gene_prefix="XXGMB",
+    protein_alignment=["/data/orthodb.gtf", "/data/genblast.gtf"],
+    long_read_alignments="/data/minimap2_reads.gtf",     # optional, per-read
+    preset="fungi_latest_settings", output_dir="/work/gmb", gene_prefix="XXGMB",
 )
 if result.ok:
     ship(result.handover_dir)
+else:
+    print(result.failed_stage, result.failure_reason)
 ```
 
-`run_gene_model_builder` is the **only** supported Python entry point. Everything
+`run_gene_model_builder` is the **only** supported Python entry point; `gmb-run` is a thin
+wrapper around it, so both apply the same long-read preparation policy. Everything
 under `gmb.pipeline`, `gmb.preflight` and `gmb.provenance` is internal.
 
 ## Two design rules
@@ -255,14 +235,12 @@ intron rescue, weights — is **explicit and off by default**.
 
 ### START HERE
 
-Four documents cover the normal job of running GMB. You should not need anything else.
-
 | | |
 |---|---|
-| 1. [quickstart.md](docs/quickstart.md) | run it end to end |
-| 2. [pipeline_integration.md](docs/pipeline_integration.md) | wire it into an existing pipeline — what to hand it, what comes back |
-| 3. [configuration.md](docs/configuration.md) | presets, overrides, adding an evidence source, new clades |
-| 4. [qc.md](docs/qc.md) | what QC guarantees, and what it does not |
+| **[RUN_FUNGI.md](RUN_FUNGI.md)** | **annotate a fungal genome: the supported procedure** |
+| [HANDOVER.md](HANDOVER.md) | production handover: responsibilities, what to return, pipeline integration |
+| [docs/pipeline_integration.md](docs/pipeline_integration.md) | wiring GMB into a workflow manager |
+| [docs/qc.md](docs/qc.md) | what QC guarantees, and what it does not |
 
 ### REFERENCE
 
@@ -270,6 +248,8 @@ Consult when you need the detail.
 
 | | |
 |---|---|
+| [quickstart.md](docs/quickstart.md) | other clades; running the stages individually |
+| [configuration.md](docs/configuration.md) | presets, overrides, adding an evidence source, new clades |
 | [input_contract.md](docs/input_contract.md) | formats, coordinates, IDs, failure behaviour |
 | [output_contract.md](docs/output_contract.md) | every output file and which ones to hand over |
 | [presets.md](docs/presets.md) | the preset catalogue and the evidence behind each |
@@ -285,14 +265,15 @@ Specialised: [longread_consensus.md](docs/longread_consensus.md),
 [canonical_selection.md](docs/canonical_selection.md),
 [interpro_resolver.md](docs/interpro_resolver.md).
 
-Examples: `examples/run_gene_model_builder.sh`, `.py`, `submit_gmb.slurm`.
+Examples: `examples/submit_gmb.slurm` (Slurm), `examples/run_gene_model_builder.sh`
+(environment-variable wrapper), `examples/run_gene_model_builder.py` (Python API).
 
-### Development evidence — not needed to run GMB
+### Development and scientific evidence — not needed to run GMB
 
-For the validation behind the current production design, see
-`diagnostics/gmb_productionisation/final_report.md` in the annotation team's working
-evidence. That directory sits **alongside this repository, not inside it**; ask the team for
-it if you need it. You do not need it to use this module.
+[docs/release/](docs/release/): release readiness, the *Z. tritici* validation, the
+evidence-integration investigation behind `fungi_latest_settings`, the handover review and the
+production-scale comparison plan. `validation/` reproduces the evaluation and holds a fixture
+smoke test.
 
 ## Tests
 

@@ -2,8 +2,9 @@
 
 What an upstream pipeline must hand to Gene Model Builder.
 
-Every input is a file path. GMB reads them; it does not produce them (the one exception is
-`gmb-longread-consensus`, which collapses long-read alignments another tool produced).
+Every input is a file path. GMB reads them; it does not produce them. The one preparation GMB
+performs itself is collapsing per-read long-read alignments into consensus transcript models,
+which `gmb-run` does automatically (below).
 
 ---
 
@@ -14,7 +15,8 @@ Every input is a file path. GMB reads them; it does not produce them (the one ex
 | genome FASTA | **yes** | FASTA | coordinate system | `--genome` |
 | ab initio backbone | **yes** in practice | GFF3 or GTF | `backbone` | `--helixer` / `--tiberius` / `--backbone` (any predictor) |
 | short-read transcript models | recommended | GTF | `short_read_transcriptomic` | `--scallop`, `--stringtie` |
-| long-read transcript models | optional | GTF | `long_read_transcriptomic` | `--minimap2` |
+| long-read alignments, one record per read | optional | GTF | `long_read_transcriptomic` (after consensus) | `gmb-run --long-read-alignments` |
+| long-read transcript models, already collapsed | optional | GTF | `long_read_transcriptomic` | `gmb-run --long-read-models`; `gmb-build --minimap2` |
 | protein-to-genome alignments | recommended | GTF | `protein_alignment` | `--orthodb`, `--uniprot`, `--genblast` |
 | DIAMOND protein DB | optional | `.dmnd` | `protein_validation` | config only |
 | reference annotation | **never a production input** | GFF3 | evaluation only | `annotation-qc pairwise-compare --reference` (ensembl-genes) |
@@ -123,23 +125,38 @@ Assembled transcripts are filtered before scoring: any intron longer than
 transcript. In compact genomes read-through assemblies join neighbouring genes across short
 intergenic gaps with no long intron, so the span rule is the one that catches them.
 
-### Long-read transcript models — optional
+### Long-read evidence — optional
 
-Supply **collapsed consensus models**, not raw read alignments. `gmb-longread-consensus` does
-the collapse if you have alignments; for fungi use its `fungi` preset, whose span (20 kb) and
-intron (3 kb) limits match the `fungi` build preset:
+Two inputs, never both:
 
-```bash
-gmb-longread-consensus --input minimap2_annotation.gtf --preset fungi --output-dir longread/
-# -> longread/minimap2_consensus.gtf : pass this file as --minimap2
-```
+* **Per-read alignments** (`gmb-run --long-read-alignments`): what the aligner produced, one GTF
+  transcript per read (Ensembl anno `*_minimap2_annotation.gtf`). `gmb-run` collapses them with
+  `gmb-longread-consensus` before preflight, into `<output-dir>/longread_consensus/`, using the
+  consensus preset that matches the build preset (`fungi` for `fungi_latest_settings`: span
+  20 kb, intron 3 kb, ≥ 2 reads per multi-exon and ≥ 4 per single-exon model). The consensus GTF
+  is the long-read evidence that preflight validates and the build uses.
+* **Already-collapsed transcript models** (`gmb-run --long-read-models`, or `gmb-build
+  --minimap2`): used as they are, e.g. from an isoform collapser.
 
-GMB scores every model as a candidate, so a per-read track (2.05 M reads for *Z. tritici*)
-makes a build impractical and floods the alternates with single reads. Both preflight
-(`longread_collapsed`) and `gmb-build` (a `WARNING` line and `longread_models_per_mb` in
-`summary.json`) warn above `preflight.max_longread_models_per_mb` (2,000 per Mb); neither
-refuses the track. A collapsed *Z. tritici* track has ~500–650 models per Mb of gene-dense
-sequence.
+The decision to collapse is taken from the option, never guessed from the file. The input is
+validated in both directions:
+
+| check | on | result |
+|---|---|---|
+| not a 9-column GTF, no exon rows, exon rows without `transcript_id` | per-read input | stop before consensus (exit 3) |
+| > 5% of rows without `+`/`-` strand (`preflight.max_unstranded_fraction`) | per-read input | stop (exit 3); a smaller share is dropped by the consensus |
+| > 5% of rows on sequences absent from the genome | per-read input | stop (exit 3) |
+| file is `gmb-longread-consensus` output (source `Minimap2Consensus` / `read_support`) | per-read input | stop (exit 3): collapsing models again would discard them; use `--long-read-models` |
+| more than `preflight.max_longread_models_per_mb` (2,000) models per Mb | collapsed-models input | preflight `longread_collapsed`; `gmb-run` stops (exit 4) |
+| canonical splice fraction below `preflight.longread_splice_fail` (0.85) on the declared strand | the long-read track preflight sees | preflight FAIL; `gmb-run` stops (exit 4) |
+
+A collapsed *Z. tritici* track has ~500–650 models per Mb of gene-dense sequence; per-read data
+has tens of thousands. A third-party collapsed GTF passed as per-read alignments cannot be
+recognised reliably and would be collapsed again; use `--long-read-models` for such files.
+
+The individual `gmb-build` command still only warns about a per-read `--minimap2` track (a
+`WARNING` line and `longread_models_per_mb` in `summary.json`) and `gmb-preflight` reports it as
+a WARN; both are for expert use. Standalone collapse: `longread_consensus.md`.
 
 **Strand is taken as given.** GMB uses each transcript's GTF strand; it never re-derives
 strand from reads. Upstream, the Ensembl anno Minimap2 path sets strand from Minimap2's `ts`
@@ -148,8 +165,8 @@ tag combined with the alignment orientation
 FLAG alone is not a transcript strand for an unstranded library. Preflight's splice check is
 computed on the declared strand, so a mis-stranded track shows up as a low canonical fraction.
 
-Long-read evidence is genuinely optional: with none supplied there is no special case, no
-penalty, and the long-read guard cannot fire.
+Long-read evidence is genuinely optional: with none supplied there is no preparation step, no
+special case, no penalty, and the long-read guard cannot fire.
 
 > **Splice quality is checked.** A long-read track asserts it *observed* the splice structure,
 > so it is judged most strictly (`preflight.longread_splice_fail`, default 0.85). A

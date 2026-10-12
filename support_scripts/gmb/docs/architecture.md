@@ -45,7 +45,8 @@ evidence another module produced and emits a finished annotation.
 
 Running the evidence generators. GMB never invokes Helixer, Tiberius, Scallop, StringTie,
 Minimap2, GenBlast or an aligner, and does not install them. The one exception is
-`gmb-longread-consensus`, which collapses long-read alignments that another tool produced.
+`gmb-longread-consensus`, which collapses long-read alignments that another tool produced;
+`gmb-run` invokes it automatically for per-read input (`gmb/pipeline/longread_prep.py`).
 
 DIAMOND and Psauron are *invoked* by GMB for protein validation but are **not installed** by
 it; you supply the paths.
@@ -103,7 +104,8 @@ gmb/
     canonical_selection.py, domain_evidence.py   canonical transcript ranking (finalise)
     interpro_review.py, interpro_resolver.py     optional InterProScan second stage
     finalise.py          handover assembly
-    longread/            long-read consensus collapse (gmb-longread-consensus, upstream)
+    longread/            long-read consensus collapse (gmb-longread-consensus)
+    longread_prep.py     automatic long-read preparation for gmb-run: validate, reuse or run consensus
 
   provenance/          RUN MANIFEST
     manifest.py          versions, input hashes, resolved policy, runtime

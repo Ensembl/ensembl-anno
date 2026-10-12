@@ -8,12 +8,34 @@ Symptom first. Where to look, and what it usually means.
 
 | question | file |
 |---|---|
+| where did a `gmb-run` stop, and why? | `run_summary.json` (`failed_stage`, `failure_reason`), `logs/gmb-run.log`; exit codes in `../RUN_FUNGI.md` §6 |
+| what happened to the long reads? | `logs/longread_consensus.log`, `longread_consensus/longread_preparation.json` |
 | were my inputs fit to build from? | `preflight/preflight_report.txt` |
 | what did the build do? | `build/gmb.log` |
 | did the annotation pass QC? | `finalise/fasta_qc_report.json`, `utr_qc_report.json` |
 | why was this model chosen? | `build/evidence_attribution.tsv` |
 | what settings actually applied? | `build/resolved_config.yaml` |
 | what produced this run? | `build/run_manifest.json` |
+
+---
+
+## Long-read preparation (`gmb-run` exit 3)
+
+**`… have no + / - strand (limit 5%)`** — the per-read GTF lacks strand. Strand must be set
+upstream (the Ensembl anno Minimap2 step takes it from the `ts` tag); GMB never infers it.
+
+**`… are on sequences absent from the genome FASTA`** — rename the long-read file's sequences
+to the genome's names (as for Helixer).
+
+**`this file is gmb-longread-consensus output`** — the file was already collapsed; pass it as
+`--long-read-models`.
+
+**`gmb-longread-consensus failed` / `produced no consensus models`** — read
+`logs/longread_consensus.log` and `longread_consensus/longread_consensus_dropped.tsv` (why each
+read was dropped: span, intron length, strand, support).
+
+**Wrongly stranded reads** pass preparation but fail preflight `splice_quality` on the long-read
+track (exit 4): fix the strand upstream.
 
 ---
 
@@ -96,8 +118,9 @@ them. A large number means the upstream tool numbers models per sequence (Tiberi
 excluded from selection. Usually harmless below a few percent.
 
 **`longread_collapsed [X]: N long-read models (… per Mb) look like per-read alignments`** —
-WARN. The track is raw read alignments, not transcript models; a build would score every read.
-Collapse it (`gmb-longread-consensus`, `longread_consensus.md`) or leave it out.
+the track is raw read alignments, not transcript models; a build would score every read.
+`gmb-run` stops (exit 4) when this file was given as `--long-read-models`: pass it as
+`--long-read-alignments` instead, and GMB collapses it.
 
 ---
 

@@ -933,6 +933,11 @@ def test_python_api_signature_is_stable():
         "stop_on_preflight_fail": True,
         "validate_fasta": True,
         "bin_dir": None,
+        # appended for automatic long-read preparation (gmb-run)
+        "long_read_alignments": None,
+        "longread_consensus_preset": None,
+        "longread_consensus_config": None,
+        "log": print,
     }
     import dataclasses
 

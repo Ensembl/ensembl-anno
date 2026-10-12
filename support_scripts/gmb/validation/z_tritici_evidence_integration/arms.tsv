@@ -1,4 +1,4 @@
-arm	tracks	configs	description
+arm	tracks	configs	description (configs "overlay" = preset fungi_latest_settings)
 A_helixer	-	-	raw Helixer, no GMB
 B_hx	helixer	-	fungi preset, Helixer only
 C_hx_prot	helixer,protein	-	+ protein alignments

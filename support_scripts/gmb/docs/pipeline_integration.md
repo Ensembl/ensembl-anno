@@ -1,7 +1,9 @@
 # Integrating GMB into an annotation pipeline
 
 For a production developer whose pipeline already produces the evidence and needs GMB as the
-**evidence-integration / final gene-model selection stage**.
+**evidence-integration / final gene-model selection stage**. For fungi, the procedure and the
+recommended settings are in [`../RUN_FUNGI.md`](../RUN_FUNGI.md); this page covers the
+interface.
 
 ---
 
@@ -11,33 +13,20 @@ For a production developer whose pipeline already produces the evidence and need
                          Genome FASTA
                               |
         +---------------------+---------------------+---------------------+
-        |                     |                     |                     |
         v                     v                     v                     v
-  backbone predictor    RNA-seq align +      long-read align +      protein-to-genome
-  (Helixer/Tiberius)    assemble (Scallop,   collapse (optional)    alignment (OrthoDB,
-                        StringTie, ...)                             UniProt, GenBlast)
+  backbone predictor    RNA-seq align +      long-read align        protein-to-genome
+  (Helixer/Tiberius)    assemble (Scallop,   (Minimap2, strand      alignment (OrthoDB,
+                        StringTie, ...)      from ts tag)           UniProt, genBlastG)
         |                     |                     |                     |
-        |  backbone_gtf       | short_read_gtf[]    | long_read_gtf[]     | protein_alignment_gtf[]
         +---------------------+----------+----------+---------------------+
-                                         |
                                          v
-                              +---------------------+
-                              |   GMB PREFLIGHT     |   gate: stop on FAIL
-                              +---------------------+
-                                         |
+     +----------------------------------------------------------------------+
+     |  gmb-run  (one step; = gmb.run_gene_model_builder)                    |
+     |    long-read consensus  ->  preflight  ->  build  ->  finalise          |
+     |    (per-read input only)    (gate)                   (handover)        |
+     +----------------------------------------------------------------------+
                                          v
-                              +---------------------+
-                              |     GMB BUILD       |
-                              +---------------------+
-                                         |
-                                         v
-                              +---------------------+
-                              |   GMB FINALISE      |
-                              +---------------------+
-                                         |
-                                         v
-                                     HANDOVER
-                         finalise/ + attribution + manifests
+                       <output-dir>/finalise/  + run_summary.json
 
       ( reference comparison — EVALUATION ONLY, outside GMB:
         ensembl-genes `annotation-qc pairwise-compare` )
@@ -47,116 +36,91 @@ For a production developer whose pipeline already produces the evidence and need
 
 ## What your pipeline must supply
 
-| pipeline artifact | GMB parameter | required | notes |
+| pipeline artifact | `gmb-run` option | required | notes |
 |---|---|---|---|
-| `genome_fasta` | `--genome` | **yes** | defines the seqids every other file must use |
-| `backbone_gtf` | `--helixer` *or* `--tiberius` | **yes** in practice | exactly one; mutually exclusive |
-| `short_read_gtf[]` | `--scallop`, `--stringtie` | recommended | 0..N |
-| `long_read_gtf[]` | `--minimap2` | optional | collapsed consensus, not raw alignments |
-| `protein_alignment_gtf[]` | `--orthodb`, `--uniprot`, `--genblast` | recommended | support/veto only |
-| `preset` | `--preset` | **yes** | `standard` \| `apicomplexa` \| `fungi` |
-| `config` | `--config` | optional | repeatable overlays; last wins |
-| `output_directory` | `--output-dir` | **yes** | one per stage |
+| `genome_fasta` | `--genome` | **yes** | defines the sequence names every other file must use |
+| `backbone` | `--helixer`, `--tiberius` or `--backbone` | **yes** | exactly one |
+| `short_read_gtf` | `--scallop`, `--stringtie` | recommended | stranded |
+| `protein_alignment_gtf` | `--orthodb`, `--uniprot`, `--genblast` | recommended | support/veto only |
+| `long_read_alignments_gtf` | `--long-read-alignments` | optional | **per-read**, stranded; GMB collapses it |
+| `long_read_models_gtf` | `--long-read-models` | optional | already-collapsed models (alternative to the above) |
+| `preset` | `--preset` | **yes** | fungi: `fungi_latest_settings` |
+| `output_directory` | `--output-dir` | **yes** | one per genome |
 
-**Flag names do not determine behaviour — evidence roles do.** An IsoQuant GTF passed to
-`--minimap2` is handled correctly provided `scoring.longread_label` names its label. See
-`input_contract.md`.
-
-Your pipeline supplies **only these artifacts and a preset**. Nothing else about GMB needs to
-be understood to run it safely.
+**Flag names do not determine behaviour — evidence roles do.** See `input_contract.md`.
 
 ---
 
 ## Calling it
 
-### Shell
+### Shell / workflow manager
 
 ```bash
-set -euo pipefail
-
-gmb-preflight --preset "$PRESET" ${CONFIG:+--config "$CONFIG"} \
-  --genome "$GENOME" --helixer "$BACKBONE" \
-  --scallop "$SCALLOP" --stringtie "$STRINGTIE" --orthodb "$PROTEINS" \
-  --output-dir "$OUT/preflight"          # exits 1 on FAIL
-
-gmb-build --preset "$PRESET" ${CONFIG:+--config "$CONFIG"} \
-  --genome "$GENOME" --helixer "$BACKBONE" \
-  --scallop "$SCALLOP" --stringtie "$STRINGTIE" --orthodb "$PROTEINS" \
-  --gene-prefix "$PREFIX" --output-dir "$OUT/build" --validate-fasta
-
-# No --preset/--config: finalise runs under the build's own resolved_config.yaml.
-gmb-finalise --build-dir "$OUT/build" --genome "$GENOME" \
-  --output-dir "$OUT/finalise"
+gmb-run --preset fungi_latest_settings \
+  --genome "$GENOME" --helixer "$HELIXER" \
+  --orthodb "$ORTHODB" --uniprot "$UNIPROT" \
+  --scallop "$SCALLOP" --stringtie "$STRINGTIE" \
+  ${LONG_READS:+--long-read-alignments "$LONG_READS"} \
+  --gene-prefix "$PREFIX" --output-dir "$OUT"
 ```
 
-A complete runnable version is `examples/run_gene_model_builder.sh`.
+Non-interactive. Templates: `examples/run_gene_model_builder.sh` (environment variables),
+`examples/submit_gmb.slurm` (Slurm, self-contained).
 
 ### Python
-
-For an orchestration layer that would rather not shell out:
 
 ```python
 from gmb import run_gene_model_builder
 
 result = run_gene_model_builder(
     genome="/data/genome.fa",
-    backbone="/data/backbone.gff3",
-    backbone_kind="helixer",          # or "tiberius"
+    backbone="/data/helixer.gff3", backbone_kind="helixer",
     short_read=["/data/scallop.gtf", "/data/stringtie.gtf"],
-    protein_alignment=["/data/orthodb.gtf"],
-    long_read=None,                   # optional
-    preset="fungi",
-    config=["/data/my_overlay.yaml"],  # optional
-    output_dir="/work/gmb",
-    gene_prefix="XXGMB",
+    protein_alignment=["/data/orthodb.gtf", "/data/genblast.gtf"],
+    long_read_alignments="/data/minimap2_reads.gtf",   # optional, per-read
+    preset="fungi_latest_settings",
+    output_dir="/work/gmb", gene_prefix="XXGMB",
 )
-
-result.preflight_verdict   # "PASS" | "WARN" | "FAIL"
-result.qc_passed           # bool
-result.handover_dir        # the directory to hand over
-result.annotation          # canonical annotated GFF3
-result.proteins            # prot.fa
-result.run_manifest        # run_manifest.json
+result.ok                    # True only when every stage succeeded and QC passed
+result.failed_stage          # None | "longread_consensus" | "preflight" | "build" | "sequence_qc" | "finalise"
+result.failure_reason        # human-readable
+result.handover_dir          # <output_dir>/finalise
+result.annotation            # canonical-tagged GFF3
+result.long_read_models      # the consensus GTF that preflight validated and the build used
+result.longread_preparation  # action ran / reused / skipped, input sha256, settings, versions
 ```
 
-`run_gene_model_builder` is the **only** supported Python entry point. An orchestration layer
-should never import from `gmb.pipeline.scoring`, `gmb.pipeline.builder` or any other internal
-module — those are free to change.
-
-See `examples/run_gene_model_builder.py`.
+`gmb-run` is a thin wrapper around this function, so both apply the same policy.
+`run_gene_model_builder` is the **only** supported Python entry point; never import from
+`gmb.pipeline` or other internal modules. See `examples/run_gene_model_builder.py`.
 
 ---
 
 ## Exit codes and gating
 
-| stage | exit 0 | non-zero |
-|---|---|---|
-| `gmb-preflight` | PASS or WARN | **1** = FAIL (override with `--allow-fail`); 2 = could not run |
-| `gmb-build` | build completed and QC passed | **1** = QC failed — *outputs are still complete* |
-| `gmb-finalise` | handover written | error |
+`gmb-run` returns: `0` success · `2` invalid arguments · `3` long-read preparation failed ·
+`4` preflight failed · `5` build failed · `6` sequence QC failed · `7` finalisation failed ·
+`1` unexpected error. Every stage after a failure is skipped, and `run_summary.json` records
+`failed_stage` and `failure_reason`. Treat any non-zero code as "do not hand over".
 
-> **A non-zero `gmb-build` exit under `--validate-fasta` is a QC verdict, not a crash.** The
-> annotation is fully written. Read `build/fasta_qc_report.json` and
-> `build/run_manifest.json` — the manifest is deliberately written *before* the QC exit, so a
-> failing run still leaves a complete record of what produced it.
+Long-read preparation fails, before any build, when the per-read file is not a GTF, has more
+than 5% records without a strand, uses sequence names absent from the genome, is already a GMB
+consensus, or when `gmb-longread-consensus` fails or yields no models. Preflight fails a
+per-read file given as `--long-read-models` and a long-read track whose splice sites are not
+canonical on the declared strand.
 
-Recommended gating:
-
-```
-preflight FAIL   -> stop; the evidence bundle is unfit
-build QC FAIL    -> stop; do not hand over (see qc.md)
-finalise error   -> stop
-```
+If you run the stages individually instead: `gmb-preflight` exits 1 on FAIL;
+`gmb-build --validate-fasta` exits 1 when QC fails (the outputs are complete, but must not be
+handed over); `gmb-finalise` exits non-zero on error.
 
 ---
 
 ## What to hand on
 
-The `finalise/` directory plus `evidence_attribution.tsv`, `resolved_config.yaml` and
-`run_manifest.json` from `build/`. Full list: `output_contract.md`.
-
-**Never hand over `build/` sequence files** — `finalise/` is where they are regenerated from
-the final GFF3.
+`finalise/`, `run_summary.json`, `preflight/preflight_report.txt` and, from `build/`,
+`evidence_attribution.tsv`, `resolved_config.yaml` and `run_manifest.json`; with long reads also
+`longread_consensus/longread_preparation.json` (`../RUN_FUNGI.md` §4, `output_contract.md`).
+**Never hand over `build/` sequence files.**
 
 ---
 
@@ -168,9 +132,11 @@ the final GFF3.
 | `gmb-build` wall | 2.1–3.5 h | 10.8–12.0 h |
 | `gmb-build` peak RSS | 0.9–1.4 GB | 2.3–2.5 GB |
 | `gmb-finalise` | seconds | seconds |
-| reference comparison (former `gmb-compare`) peak RSS | ~0.6 GB | **4.2 GB** |
 
-Measured with up to five builds sharing an 8-core/16 GB host, so wall times are pessimistic.
-**GMB's hot path is single-threaded**: `--cpus-per-task 2` is enough. Scale memory from
-**evidence volume**, not genome size — Z. tritici is heavier because its OrthoDB track is
-732 MB / 1.69 M transcripts. See `examples/submit_gmb.slurm`.
+Measured with GMB 1.x/2.0 builds without long reads and up to five builds sharing an
+8-core/16 GB host, so wall times are pessimistic. **GMB is single-threaded**:
+`--cpus-per-task 2` is enough. Scale memory from **evidence volume**, not genome size —
+*Z. tritici* is heavier because its OrthoDB track is 732 MB / 1.69 M alignments. Long-read
+consensus streams the per-read file once for validation and once to split it by sequence, then
+processes one sequence at a time; the split copy is deleted afterwards.
+See `examples/submit_gmb.slurm`.

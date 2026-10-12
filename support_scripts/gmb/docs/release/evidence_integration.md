@@ -1,5 +1,12 @@
 # Evidence integration — *Zymoseptoria tritici* (GCA_000219625.1)
 
+> **Naming note (2026-10-12).** The overlay this report calls
+> `configs/fungi_evidence_integration.experimental.yaml` ("configuration B", "the overlay") is now
+> the packaged preset **`fungi_latest_settings`** (`gmb/configs/fungi_latest_settings.yaml`,
+> identical settings, byte-identical builds), run with `gmb-run --preset fungi_latest_settings`
+> ([`../../RUN_FUNGI.md`](../../RUN_FUNGI.md)). Long reads no longer need collapsing by hand:
+> `gmb-run --long-read-alignments` does it. The text below records the work as it was done.
+
 Investigation and tuning, branch `gmb/evidence-tuning` (from `feature/gene_model_builder`
 e005a86; committed as be54b99), 2026-10-09; corrected in the final handover review
 ([`handover_review.md`](handover_review.md)). **No whole-genome GMB build was run.** The

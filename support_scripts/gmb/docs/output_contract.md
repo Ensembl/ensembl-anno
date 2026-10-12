@@ -7,8 +7,13 @@ What GMB produces, which files are the handover, and which are intermediate.
 ## The rule
 
 ```
-build/      INTERMEDIATE / DEBUG   — do not hand over
-finalise/   PRODUCTION HANDOVER    — this is what you ship
+<output-dir>/                  (gmb-run)
+  longread_consensus/   INTERMEDIATE — prepared long-read evidence (only with per-read input)
+  preflight/            validation report of the prepared inputs
+  build/                INTERMEDIATE / DEBUG   — do not hand over its GFF3/FASTA
+  finalise/             PRODUCTION HANDOVER    — this is what you ship
+  logs/                 gmb-run.log and one log per stage
+  run_summary.json      outcome of the run
 ```
 
 `gmb-build` writes a complete annotation, but `gmb-finalise` is where cDNA/CDS/protein are
@@ -20,6 +25,29 @@ handover manifest is written.
 > annotation** — and FASTA QC passed anyway, because it only checked ID coverage. Regenerating
 > from the final GFF3 makes that class of drift impossible. Handing over `build/` outputs
 > reintroduces the risk.
+
+### `run_summary.json` (gmb-run / `run_gene_model_builder`)
+
+`ok` (true only when every stage succeeded, sequence QC passed and finalisation ran),
+`stages_run`, `returncodes` per stage, `failed_stage` (`longread_consensus`, `preflight`,
+`build`, `sequence_qc`, `finalise` or null), `failure_reason`, `preflight_verdict`,
+`qc_passed`, the paths of the annotation, sequences, attribution, resolved configuration and
+manifests, `long_read_models` (the long-read file preflight validated and the build used) and
+`longread_preparation`.
+
+### `longread_consensus/` (only when per-read long-read alignments were supplied)
+
+| file | content |
+|---|---|
+| `minimap2_consensus.gtf` | consensus transcript models: the long-read evidence used |
+| `longread_preparation.json` | written last, only on success: input path, size, SHA-256 and scan statistics (rows, reads, unstranded rows, sequence names); consensus preset, config and fully resolved settings; GMB version; the command; consensus model count and summary; consensus GTF SHA-256 |
+| `longread_consensus_summary.{json,tsv}`, `longread_consensus_dropped.tsv`, `longread_consensus_rescue_attribution.tsv`, `longread_consensus_run_manifest.json` | written by `gmb-longread-consensus` (`longread_consensus.md`) |
+
+The per-sequence split of the input made during consensus is deleted. On a rerun the consensus
+is reused only when the input SHA-256, the resolved settings and the GMB version match and the
+consensus GTF is unchanged; otherwise it is rebuilt. `logs/gmb-run.log` says which
+(`RAN`, `REUSED`, `SKIPPED`). A failed preparation leaves no `longread_preparation.json`, so it
+is never reused.
 
 ---
 

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """``gmb-preflight`` — validate an evidence bundle before building.
 
-Takes the same input arguments as ``gmb-build`` so a production pipeline can run
-it with the identical argument list, then run the build only if it passes::
+Takes the same input arguments as ``gmb-build`` so a pipeline can run it with the
+identical argument list, then run the build only if it passes. ``gmb-run`` does this
+(and long-read consensus and finalisation) in one command; use the stages directly only
+for debugging or expert use::
 
-    gmb-preflight --preset fungi --genome "$GENOME" --helixer "$BACKBONE" \\
+    gmb-preflight --preset fungi_latest_settings --genome "$GENOME" --helixer "$BACKBONE" \\
         --scallop "$SCALLOP" --stringtie "$STRINGTIE" --orthodb "$ORTHODB" \\
         --output-dir "$OUT/preflight" \\
-      && gmb-build --preset fungi --genome "$GENOME" ... --output-dir "$OUT/build"
+      && gmb-build --preset fungi_latest_settings --genome "$GENOME" ... --output-dir "$OUT/build"
 
 Exit codes
 ----------

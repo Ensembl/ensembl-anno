@@ -1,10 +1,12 @@
 # First production-scale comparison — *Zymoseptoria tritici* (GCA_000219625.1)
 
-Purpose: decide, on the whole genome, whether the experimental evidence-integrated fungal
-configuration should become the default `fungi` behaviour. The decision criteria (§6) are fixed
-here, before the run. Background: [`evidence_integration.md`](evidence_integration.md) (17-window
-evaluation), [`handover_review.md`](handover_review.md) (readiness). How to run GMB in general:
-[`../../HANDOVER.md`](../../HANDOVER.md).
+Purpose: confirm on the whole genome that the latest fungal settings (`fungi_latest_settings`,
+formerly the "experimental evidence-integrated configuration") should replace the historical
+`fungi` preset. The decision criteria (§6) are fixed here, before the run. This plan belongs to
+the annotation lead: the person running GMB produces R4 by following
+[`../../RUN_FUNGI.md`](../../RUN_FUNGI.md) and returns it; the other arms are comparison runs.
+Background: [`evidence_integration.md`](evidence_integration.md) (17-window evaluation),
+[`handover_review.md`](handover_review.md).
 
 ---
 
@@ -13,10 +15,10 @@ evaluation), [`handover_review.md`](handover_review.md) (readiness). How to run 
 | # | run | configuration | long reads | purpose |
 |---|---|---|---|---|
 | R1 | **Helixer alone** | none (remapped Helixer GFF3) | — | the backbone GMB must improve on |
-| R2 | **Current fungal GMB** | `--preset fungi` | no | production baseline (configuration A) |
-| R3 | **Experimental, no long reads** | `--preset fungi --config configs/fungi_evidence_integration.experimental.yaml` | no | effect of the selection changes (configuration B) |
-| R4 | **Experimental + long reads** | as R3 | collapsed | B as intended for production |
-| R5 | Current fungal GMB + long reads | as R2 | collapsed | separates the long-read contribution (R5 − R2) from the selection changes (R4 − R5) |
+| R2 | **Historical fungal GMB** | `--preset fungi` | no | previous baseline (configuration A) |
+| R3 | **Latest settings, no long reads** | `--preset fungi_latest_settings` | no | effect of the selection changes (configuration B) |
+| R4 | **Latest settings + long reads** | as R3 | per-read, collapsed automatically | **the production annotation** (RUN_FUNGI.md) |
+| R5 | Historical fungal GMB + long reads | as R2 | per-read, collapsed automatically | separates the long-read contribution (R5 − R2) from the selection changes (R4 − R5) |
 
 Optional R6: R4 with protein validation as it would ship. The 17-window evaluation found that the
 fungi validation weights (`diamond_weight` 0.7, `min_score` 0.7, penalty 5.0) prune most
@@ -24,9 +26,10 @@ alternates and cost 15 exact CDS on held-out core windows (`handover_review.md` 
 to measure that, not as a candidate default.
 
 **Identical inputs in every run:** the same genome FASTA, remapped Helixer GFF3, OrthoDB and
-UniProt genBlastG alignments, Scallop and StringTie assemblies, the same collapsed long-read
-track (R4, R5), the same `--gene-prefix`, and the same GMB commit. Protein validation off
-(R1–R5).
+UniProt genBlastG alignments, Scallop and StringTie assemblies, the same per-read long-read file
+(R4, R5; `gmb-run` collapses it with the same `fungi` consensus settings, recorded in each run's
+`longread_consensus/longread_preparation.json`), the same `--gene-prefix`, and the same GMB
+commit. Protein validation off (R1–R5).
 
 ## 2. Inputs
 
@@ -42,10 +45,7 @@ gzip -dc $REF/Zymoseptoria_tritici_GCA_000219625.1.gff3.bgz > $OUT/inputs/refere
 # Helixer names sequences by GenBank accession: rename to the genome's names
 python $GMB/tools/remap_helixer.py --input ${EV}_helixer.gff3 \
   --assembly-report ${EV}_MYCGR_v2.0_assembly_report.txt --output $OUT/inputs/helixer.gff3
-# long reads: 2.05 M per-read alignments -> consensus transcript models
-gmb-longread-consensus --input ${EV}_minimap2_annotation.gtf --preset fungi \
-  --output-dir $OUT/inputs/longread
-LR=$OUT/inputs/longread/minimap2_consensus.gtf
+LR=${EV}_minimap2_annotation.gtf          # 2.05 M per-read alignments; gmb-run collapses them
 printf '%s\n' 1 2 3 4 5 6 7 8 9 10 11 12 13 > $OUT/inputs/core.txt
 printf '%s\n' 14 15 16 17 18 19 20 21 > $OUT/inputs/accessory.txt
 ```
@@ -54,34 +54,33 @@ printf '%s\n' 14 15 16 17 18 19 20 21 > $OUT/inputs/accessory.txt
 
 ```bash
 G=$OUT/inputs/genome.fa
-EVID=(--helixer $OUT/inputs/helixer.gff3
+EVID=(--genome $G --helixer $OUT/inputs/helixer.gff3
       --scallop ${EV}_scallop_annotation.gtf --stringtie ${EV}_stringtie_annotation.gtf
       --orthodb ${EV}_orthodb_annotation.gtf --uniprot ${EV}_genblast_annotation.gtf)
-X=$GMB/configs/fungi_evidence_integration.experimental.yaml
 
-run() {   # run <name> [extra gmb args...]
-  local n=$1; shift
-  gmb-preflight --preset fungi "$@" --genome $G "${EVID[@]}" --output-dir $OUT/$n/preflight
-  /usr/bin/time -v gmb-build --preset fungi "$@" --genome $G "${EVID[@]}" \
-    --gene-prefix ZTGMB --output-dir $OUT/$n/build --validate-fasta 2> $OUT/$n/build.time
-  gmb-finalise --build-dir $OUT/$n/build --genome $G --output-dir $OUT/$n/finalise
+run() {   # run <name> <preset> [extra gmb-run args...]
+  local n=$1 p=$2; shift 2
+  /usr/bin/time -v gmb-run --preset $p "${EVID[@]}" "$@" \
+    --gene-prefix ZTGMB --output-dir $OUT/$n 2> $OUT/$n.time
+  echo "$n exit $?"
   git -C $GMB rev-parse HEAD > $OUT/$n/gmb_commit.txt
 }
-run R2_baseline
-run R3_experimental        --config $X
-run R4_experimental_lr     --config $X --minimap2 $LR
-run R5_baseline_lr         --minimap2 $LR
+run R2_baseline        fungi
+run R3_latest          fungi_latest_settings
+run R4_latest_lr       fungi_latest_settings --long-read-alignments $LR
+run R5_baseline_lr     fungi                 --long-read-alignments $LR
 ```
 
-`gmb-preflight` exits 1 on FAIL: stop and fix the input rather than adding `--allow-fail`.
-`--minimap2` with the **raw** per-read
-file must produce `longread_collapsed` in preflight and a `WARNING` in the build log; if you see
-either, the wrong file was passed.
+Each run's exit code must be 0 (`RUN_FUNGI.md` §6 lists the others). R4 and R5 each collapse the
+same long-read file; the consensus GTFs (`R4_latest_lr/longread_consensus/minimap2_consensus.gtf`,
+`R5_baseline_lr/…`) must be identical, which `longread_preparation.json` records as SHA-256.
 
-Provenance captured automatically per run: `build/resolved_config.yaml` (+ SHA-256),
-`build/run_manifest.json` (versions, input hashes, runtime), `finalise/handover_manifest.json`
-(output inventory, configuration source). Wall time and peak RSS: `build.time` (GNU time
-`Elapsed` and `Maximum resident set size`; on macOS use `/usr/bin/time -l`).
+Provenance captured automatically per run: `run_summary.json`, `build/resolved_config.yaml`
+(+ SHA-256), `build/run_manifest.json` (versions, input hashes, runtime),
+`longread_consensus/longread_preparation.json`, `finalise/handover_manifest.json` (output
+inventory, configuration source). Wall time and peak RSS: `<run>.time` (GNU time `Elapsed` and
+`Maximum resident set size`; on macOS use `/usr/bin/time -l`). Long-read preparation for the
+whole genome took 34 s and ~0.5 GB in testing.
 Expected scale: an earlier whole-genome *Z. tritici* build took 29 h with protein validation on
 (pre-2.0.0 code). Without it, each of the 17 evaluation windows (14.9 Mb in all, 38% of the
 genome) built in 2–15 s with < 0.5 GB, but genome-scale cost has not been measured. Allow
@@ -106,7 +105,7 @@ cmpr() {  # cmpr <run> <query gff3> <label> [extra annotation-qc args]
   done
 }
 cmpr R1_helixer $OUT/inputs/helixer.gff3 all_isoforms
-for r in R2_baseline R3_experimental R4_experimental_lr R5_baseline_lr; do
+for r in R2_baseline R3_latest R4_latest_lr R5_baseline_lr; do
   F=$OUT/$r/finalise
   cmpr $r $F/canonical/consensus.canonical_annotated.gff3 canonical --query-transcript-selection canonical
   cmpr $r $F/consensus.gff3 all_isoforms --evidence-attribution $OUT/$r/build/evidence_attribution.tsv
@@ -165,7 +164,7 @@ Annotation-qc's own novel categories (`Novel_no_reference_overlap`,
 `Overlaps_evaluated_reference_opposite_strand`, and `Strand_Mismatch` classes) give the
 reference-based view of the same loci.
 
-## 6. Decision criteria for promoting the experimental configuration
+## 6. Decision criteria for confirming the latest fungal settings
 
 Fixed in advance. Canonical output, **core chromosomes**, R3 compared with R2 (and R4 with R5 for
 the long-read version). Promote only if **all** hold:
@@ -176,18 +175,18 @@ the long-read version). Promote only if **all** hold:
    those gaining one (held-out: 5 lost vs 28 gained).
 3. **Exact intron chains:** R3 ≥ R2.
 4. **Structure:** canonical splits and merges ≤ R2. Full-gene-set splits + merges ≤ 1.2 × R1 (the
-   overlay's isoform rule should remove most of R2's isoform-driven merges).
+   latest settings' isoform rule should remove most of R2's isoform-driven merges).
 5. **Loci:** missed reference genes ≤ R2; total gene count ≤ R2 × 1.02.
 6. **Accessory chromosomes:** exact CDS not below R2 by more than 1% of accessory reference
    genes.
 7. **QC and cost:** finalisation QC passes; wall time ≤ 1.25 × R2; peak RSS within the job limit.
 
-If 1–7 hold, set the four overlay keys in `gmb/configs/fungi.yaml` (and regenerate the golden
-fixture and its tests). If they fail, keep configuration A as the default and record which
-criterion failed.
+If 1–7 hold, `fungi_latest_settings` is confirmed for production (and may later be folded into
+`fungi` itself, with the golden fixture and its tests regenerated). If they fail, record which
+criterion failed and decide whether to revert production runs to `fungi`.
 
-**Long reads** are recommended whenever R4 satisfies 1–7 against R5 *and* R4 ≥ R3 on criteria 1
-and 3. That makes collapsing the long-read track a pipeline requirement, upstream of GMB.
+**Long reads** are confirmed whenever R4 satisfies 1–7 against R5 *and* R4 ≥ R3 on criteria 1
+and 3: per-read long-read alignments then become a standard input to `gmb-run`.
 
 **Not a criterion, but must be reported:** the number of transcript-only antisense coding
 predictions (R2–R5) and their support. A decision on filtering them (e.g. a coding-potential
@@ -195,8 +194,9 @@ gate) is separate and needs its own validation (`../known_issues.md`).
 
 ## 7. Expected outputs to keep
 
-Per run: `finalise/` (handover), `build/{evidence_attribution.tsv,excluded_candidates.tsv,
-resolved_config.yaml,resolved_config_sha256,run_manifest.json,summary.json}`, `preflight/`,
-`build.time`, `gmb_commit.txt`; `cmp/<run>/<view>.<scope>/comparison_summary.{json,tsv}`,
+Per run: `finalise/` (handover), `run_summary.json`, `logs/`,
+`build/{evidence_attribution.tsv,excluded_candidates.tsv,resolved_config.yaml,resolved_config_sha256,
+run_manifest.json,summary.json}`, `preflight/`, `longread_consensus/longread_preparation.json`,
+`<run>.time`, `gmb_commit.txt`; `cmp/<run>/<view>.<scope>/comparison_summary.{json,tsv}`,
 `comparison_details.tsv`, `gene_splits.tsv`, `gene_merges.tsv`. Do not keep `build/` FASTA or
 GFF3 copies: they duplicate `finalise/`.

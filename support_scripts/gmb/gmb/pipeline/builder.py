@@ -136,7 +136,8 @@ def longread_density_warning(lr_exons, genome_dict, config, stats_out=None) -> f
         print(
             f"WARNING: the long-read track has {n_models:,} models ({density:,.0f} per Mb, "
             f"limit {limit:,}); this looks like per-read alignments, not collapsed transcript "
-            f"models. Collapse it with gmb-longread-consensus first (docs/longread_consensus.md)."
+            f"models. Run GMB with gmb-run --long-read-alignments, which collapses them "
+            f"automatically (RUN_FUNGI.md)."
         )
     return density
 

@@ -26,11 +26,12 @@ ARGS=(--genome "$D/genome.fa")
 [[ ",$TRACKS," == *",stringtie,"* ]] && ARGS+=(--stringtie "$D/stringtie.gtf")
 [[ ",$TRACKS," == *",protein,"* ]]   && ARGS+=(--orthodb "$D/orthodb.gtf" --uniprot "$D/genblast.gtf")
 [[ ",$TRACKS," == *",longread,"* ]]  && ARGS+=(--minimap2 "$D/minimap2_consensus.gtf")
-[[ ",$CONFIGS," == *",overlay,"* ]]  && ARGS+=(--config "$OVERLAY")
+PRESET=fungi
+[[ ",$CONFIGS," == *",overlay,"* ]]  && PRESET="$LATEST_PRESET"
 [[ ",$CONFIGS," == *",pv,"* ]]       && ARGS+=(--config "${PV_CONFIG:?pv arm needs PV_CONFIG}")
 rm -rf "$O/build" "$O/fin"
 TIME=(/usr/bin/time -l); [ "$(uname)" = Linux ] && TIME=(/usr/bin/time -v)
-"${TIME[@]}" "$GMB_BIN/gmb-build" --preset fungi "${ARGS[@]}" --gene-prefix ZT \
+"${TIME[@]}" "$GMB_BIN/gmb-build" --preset "$PRESET" "${ARGS[@]}" --gene-prefix ZT \
   --output-dir "$O/build" --no-log-file > "$O/build.log" 2>&1
 "$GMB_BIN/gmb-finalise" --build-dir "$O/build" --genome "$D/genome.fa" --output-dir "$O/fin" \
   > "$O/fin.log" 2>&1

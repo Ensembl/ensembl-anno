@@ -1,5 +1,12 @@
 # Final pre-handover review — evidence integration (fungi)
 
+> **Naming note (2026-10-12).** The overlay this report calls
+> `configs/fungi_evidence_integration.experimental.yaml` ("configuration B", "the overlay") is now
+> the packaged preset **`fungi_latest_settings`** (`gmb/configs/fungi_latest_settings.yaml`,
+> identical settings, byte-identical builds), run with `gmb-run --preset fungi_latest_settings`
+> ([`../../RUN_FUNGI.md`](../../RUN_FUNGI.md)). Long reads no longer need collapsing by hand:
+> `gmb-run --long-read-alignments` does it. The text below records the work as it was done.
+
 Branch `gmb/evidence-tuning`, 2026-10-09. Reviews the four opt-in evidence-integration settings
 and the configurable protein-validation penalty (commit be54b99) before pipeline handover. Fixes
 made during this review are listed in §9; nothing is pushed, merged or tagged.

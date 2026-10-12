@@ -15,5 +15,6 @@ AQC_PY="$(head -1 "$AQC" | sed 's/^#!//')"
 echo "annotation-qc: $AQC"
 [ -x "$AQC_PY" ] && "$AQC_PY" -c "import importlib.metadata as m; print('ensembl-genes:', m.version('ensembl-genes'))" 2>/dev/null || true
 [ -n "${ENSEMBL_GENES_DIR:-}" ] && echo "ensembl_genes_commit: $(git -C "$ENSEMBL_GENES_DIR" rev-parse HEAD)"
-echo "overlay_sha256: $(shasum -a 256 "$OVERLAY" | cut -d' ' -f1)"
+LATEST_FILE="$("$PYTHON" -c "from importlib.resources import files; print(files('gmb.configs').joinpath('fungi_latest_settings.yaml'))")"
+echo "fungi_latest_settings_sha256: $(shasum -a 256 "$LATEST_FILE" | cut -d' ' -f1)"
 echo "windows_sha256: $(shasum -a 256 "$HERE/windows.tsv" | cut -d' ' -f1)"

@@ -638,12 +638,14 @@ def run_preflight(inputs: dict, config, genome_seqs: dict | None = None) -> Pref
                     f"{t.models:,} long-read models ({density:,.0f} per Mb) look like "
                     f"per-read alignments, not collapsed transcript models. GMB scores "
                     f"every model as a candidate, so the build will be impractically slow. "
-                    f"Collapse first (gmb-longread-consensus) or omit the track.",
+                    f"Supply per-read alignments to gmb-run --long-read-alignments, which "
+                    f"collapses them automatically, or omit the track.",
                     t.label,
                 )
                 report.recommendations.append(
                     f"Collapse the long-read track {t.label!r} into transcript models "
-                    f"before building (see docs/longread_consensus.md)."
+                    f"before building: gmb-run --long-read-alignments does it automatically "
+                    f"(RUN_FUNGI.md)."
                 )
         lr_fail = [c for c in report.checks
                    if c.name == "splice_quality" and c.verdict == FAIL

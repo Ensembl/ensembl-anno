@@ -20,7 +20,7 @@ reference genes; accessory 29 vs 27 of 236) while cutting gene merges 47% (465 �
 splits 32% (484 → 327), with 12% less build time. **Action:** the production-scale fungal run
 is the genome-wide validation; tag only after it.
 
-## P1 — Evidence cannot change a backbone model under the fungi preset
+## P1 — Evidence cannot change a backbone model under the historical `fungi` preset
 
 Where Helixer predicts a gene, the selected primary is Helixer's model: a Helixer model with
 positional protein overlap scores 5.1, the best structure supported only by short-read
@@ -29,11 +29,12 @@ Helixer's on every reference metric; protein evidence alone, one short-read trac
 long reads alone change nothing at all. Canonical selection then swaps ~6% of canonical
 transcripts to Scallop+StringTie isoforms because the two assemblers count as two sources,
 which is net harmful (held-out core CDS-exact: Helixer 710, fungi canonical 695).
-**Mitigation:** `configs/fungi_evidence_integration.experimental.yaml`
-(`primary_selection: junction_supported`, `isoform_cds_overlap: drop`, `min_cds_bp: 150`,
-`canonical_selection.prefer_build_primary`): held-out core canonical CDS-exact 733 (754 with
-collapsed long reads), splits/merges at Helixer's level. **Action:** run both configurations
-in the production-scale test; adopt the overlay if the genome-wide result matches.
+**Addressed by** the recommended `fungi_latest_settings` preset (`primary_selection:
+junction_supported`, `isoform_cds_overlap: drop`, `min_cds_bp: 150`,
+`canonical_selection.prefer_build_primary`; formerly the overlay
+`configs/fungi_evidence_integration.experimental.yaml`): held-out core canonical CDS-exact 733
+(754 with collapsed long reads), splits/merges at Helixer's level. **Action:** the first
+production-scale annotations, run with `fungi_latest_settings`, are its genome-wide test.
 
 ## P1 — Alternate isoforms drive most gene splits and merges
 
@@ -55,6 +56,31 @@ change somewhat, unmeasured. `max_transcript_length` is set to `null` in the api
 preset because applying its documented 35 kb would remove 0.2% (*P. falciparum*), 7.8%
 (GCA_000006355.3) and 18.3% (*T. gondii*) of surviving short-read models. **Action:** re-run
 the apicomplexan validation (or explicitly scope the 2.0.0 tag to fungi).
+
+## P2 — Operational limits for production-scale fungal runs
+
+Things that could stop or slow `gmb-run` across many fungal genomes (measured on *Z. tritici*):
+
+- **Gene build time is the bottleneck.** Earlier whole-genome builds took 10.8–12 h (2.3–2.5 GB)
+  without long reads; `fungi_latest_settings` with long reads has not been timed genome-wide.
+  Single-threaded: parallelise across genomes, not within one.
+- **Long-read preparation is cheap but needs transient disk.** 2.05 M reads (796 MB) → 18,651
+  consensus models in 34 s (5 s validation scan + 29 s consensus), peak ~0.53 GB; a reuse check
+  costs one checksum pass (5 s). While consensus runs it writes a per-sequence copy of the input
+  (same size as the input) under `longread_consensus/`, deleted afterwards. Memory scales with
+  the reads on the largest sequence.
+- **Fungal thresholds are *Z. tritici*-derived.** Long-read consensus and the build drop
+  transcripts spanning > 20 kb or with an intron > 3 kb. Fungi with longer genes or introns
+  (some basidiomycetes) would lose genuine models; check `longread_consensus_dropped.tsv`
+  (`oversized_span`, intron reasons) and the build's `chimeras_*` counters on the first genomes.
+- **Input preparation is not automated.** Helixer must be renamed to the genome's sequence names
+  (`tools/remap_helixer.py`; `gmb-run` has no seqname-mapping option), transcript evidence must be
+  stranded upstream, and long-read input with > 5% unstranded records is refused.
+- **Evidence slots.** One long-read track, two short-read tracks and three protein tracks per
+  run; merge additional runs upstream (unique transcript IDs).
+- **Unrecognisable pre-collapsed long reads.** A third-party collapsed GTF supplied as
+  `--long-read-alignments` cannot be recognised and would be collapsed again (most models lost
+  for lack of read support); such files must be given as `--long-read-models`.
 
 ## P2 — Seqname mapping exists only in `gmb-build`
 
@@ -116,14 +142,14 @@ opposite-strand-overlap test nor protein coverage can tell them from the ~15 rea
 would remove ~80% of antisense models and ~65% of the transcript-only models that overlap a
 reference gene) or report them in a separate low-confidence class.
 
-## P2 — Long-read evidence must be collapsed upstream, and is the strongest evidence
+## P2 — Long-read evidence is the strongest evidence; supply it when available
 
-The *Z. tritici* long-read track is per-read (unusable as `--minimap2`), but collapsed with
-`gmb-longread-consensus` (fungal span 20 kb / intron 3 kb) it is the most precise transcript
-evidence available (58.6% of its introns are reference introns vs 43.9–56.5% for the
-short-read tracks) and the only independent one. With it the experimental overlay reaches
-held-out core canonical CDS-exact 754 (Helixer 710). **Action:** collapse the long-read
-track in the production pipeline before GMB.
+Collapsed with `gmb-longread-consensus` (fungal span 20 kb / intron 3 kb), the *Z. tritici*
+per-read track is the most precise transcript evidence available (58.6% of its introns are
+reference introns vs 43.9–56.5% for the short-read tracks) and the only independent one; with it
+`fungi_latest_settings` reaches held-out core canonical CDS-exact 754 (Helixer 710). `gmb-run
+--long-read-alignments` now collapses per-read alignments automatically. **Action:** pass the
+per-read long-read GTF whenever a genome has one.
 
 ## P2 — Short-read tracks are not independent evidence
 
@@ -135,8 +161,9 @@ named sources, so their agreement counts twice. Consider counting roles in the r
 
 ## P2 — Input-side issues GMB does not repair
 
-- **Raw long-read alignments** (2.05 M reads for *Z. tritici*) are not valid `--minimap2`
-  input; preflight warns (`longread_collapsed`). Collapse with `gmb-longread-consensus`.
+- **Raw long-read alignments** (2.05 M reads for *Z. tritici*) are not valid `--minimap2` /
+  `--long-read-models` input: `gmb-run` refuses them there (preflight `longread_collapsed`);
+  pass them as `--long-read-alignments` instead, which collapses them.
 - **Protein IDs reused on one sequence.** The OrthoDB genBlastG GTF repeats 33,056 records
   exactly and reuses 9,480 IDs for distinct alignments; GMB groups by ID, so distant reuse
   fuses into one span (up to 5.69 Mb) that `max_span_bp` then drops. Small effect on support;
@@ -197,6 +224,10 @@ coding-potential support.
 | `isoform_cds_overlap: drop` exclusions not auditable | `build/excluded_candidates.tsv`, `isoform_cds_overlap_excluded` counter | — |
 | a raw per-read long-read track was accepted by `gmb-build` without warning | build-time `WARNING` + `longread_models_per_mb` (preflight already warned) | — |
 | no long-read consensus preset for fungi | `gmb-longread-consensus --preset fungi` | reproduces the evaluated *Z. tritici* consensus exactly |
+| long-read consensus had to be run by hand before GMB | `gmb-run --long-read-alignments` validates, collapses (or reuses) and records provenance automatically; the manual and automatic paths give byte-identical consensus and builds | fixture and whole-genome consensus compared |
+| no single command for the whole workflow | `gmb-run` (wraps `run_gene_model_builder`): long-read consensus, preflight, build, finalise; stage-specific exit codes; `run_summary.json` | — |
+| latest fungal settings existed only as a repository file outside the package | packaged preset `fungi_latest_settings` (layered on `fungi`) | identical builds to `--preset fungi --config <overlay>` |
+| Slurm template called a sibling script by path, which breaks under `sbatch` (job scripts run from a spool copy) | template calls `gmb-run` directly | — |
 | `gmb-preflight` and `gmb-build` default presets differed | one `DEFAULT_PRESET` | — |
 | `gmb-build --list-presets` required `--output-dir` | fixed | — |
 | preflight passed empty/unparseable files, impossible coordinates, exon-less backbones, raw long-read tracks | `file_readable`, `coordinates_valid`, `exon_rows_present`, `backbone_cds_present`, `cds_without_exons`, `longread_collapsed` | real bundle: 36 pass, 0 false alarms |

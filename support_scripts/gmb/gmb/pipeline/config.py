@@ -806,6 +806,25 @@ _DEPRECATED_PRESET_NAMES: dict[str, str] = {
 }
 
 
+#: Presets layered on another preset: GMB loads standard.yaml, then the base
+#: preset, then the named preset's own file. The named file therefore holds only
+#: the settings that differ from its base.
+PRESET_BASES = {
+    "fungi_latest_settings": "fungi",
+}
+
+
+def preset_chain(preset: str) -> list[str]:
+    """Preset files to apply after standard.yaml, base first."""
+    chain = [preset]
+    while chain[0] in PRESET_BASES:
+        base = PRESET_BASES[chain[0]]
+        if base in chain:
+            raise ValueError(f"preset base cycle: {' -> '.join([base, *chain])}")
+        chain.insert(0, base)
+    return chain
+
+
 def list_build_presets() -> list[str]:
     """Return available clade preset names for gmb-build.
 
@@ -1200,10 +1219,12 @@ def load_config(
                 f"Available presets: {available or ['none installed']}.\n"
                 "Use --list-presets to see what is installed."
             )
-        preset_data = _load_bundled_config_yaml(preset)
-        if warn_inert:
-            _warn_inert_keys(preset_data, f"preset '{preset}'")
-        _update_dataclass(cfg, preset_data)
+        # A layered preset (PRESET_BASES) applies its base preset first.
+        for layer in preset_chain(preset):
+            preset_data = _load_bundled_config_yaml(layer)
+            if warn_inert:
+                _warn_inert_keys(preset_data, f"preset '{layer}'")
+            _update_dataclass(cfg, preset_data)
 
     # Layer 3 — user overrides: applied in order (later files win on shared keys).
     paths = [path] if isinstance(path, str) else (path or [])
