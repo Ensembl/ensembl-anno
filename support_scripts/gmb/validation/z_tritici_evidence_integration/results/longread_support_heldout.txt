@@ -1,0 +1,3 @@
+A_helixer    canonical CDS introns   3441  confirmed by long reads   2327 (67.6%)
+E_all        canonical CDS introns   3429  confirmed by long reads   2360 (68.8%)
+U_all        canonical CDS introns   3413  confirmed by long reads   2420 (70.9%)

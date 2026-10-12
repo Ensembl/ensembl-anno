@@ -1,0 +1,31 @@
+== E_all: 372 canonical != build primary of 6089 genes
+verdict                     gain  loss  neither/both  All
+set     tier                                             
+dev     CDS length             0     0            18   18
+        named-source count    11    14           147  172
+heldout CDS length             0     0            14   14
+        named-source count     9    21           138  168
+All                           20    35           317  372
+== U_all: 0 canonical != build primary of 5988 genes
+== E_lr: 602 canonical != build primary of 6126 genes
+verdict                         gain  loss  neither/both  All
+set     tier                                                 
+dev     CDS length                 0     0            19   19
+        evidence-class breadth    31     7           162  200
+        named-source count         2     4            85   91
+heldout CDS length                 0     1            20   21
+        evidence-class breadth    21    11           151  183
+        named-source count         6     8            74   88
+All                               60    31           511  602
+== U_all_lr: 243 canonical != build primary of 6095 genes
+verdict                         gain  loss  neither/both  All
+set     tier                                                 
+dev     evidence-class breadth    12     7           112  131
+heldout evidence-class breadth     9     7            96  112
+All                               21    14           208  243
+== U_all_pv: 14 canonical != build primary of 5988 genes
+verdict                     gain  loss  neither/both  All
+set     tier                                             
+dev     protein validation     0     0             1    1
+heldout protein validation     2     1            10   13
+All                            2     1            11   14

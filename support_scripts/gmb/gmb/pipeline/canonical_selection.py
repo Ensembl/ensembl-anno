@@ -411,8 +411,18 @@ def _rank_key(rec: dict, scored: dict, prefer_build_primary: bool = False) -> tu
 
 def _reason_code(winner_rec, winner_scored, runner_rec, runner_scored,
                  prefer_build_primary: bool = False) -> str:
+    """Reported ``selection_reason``: the deciding tier, except that a winner with no
+    protein-validation support is reported as ``LOW_CONFIDENCE_NO_PROTEIN_SUPPORT``
+    (the deciding tier is then still available from :func:`_deciding_tier`)."""
     if not winner_scored["has_any_protein_support"]:
         return "LOW_CONFIDENCE_NO_PROTEIN_SUPPORT"
+    return _deciding_tier(winner_rec, winner_scored, runner_rec, runner_scored,
+                          prefer_build_primary)
+
+
+def _deciding_tier(winner_rec, winner_scored, runner_rec, runner_scored,
+                   prefer_build_primary: bool = False) -> str:
+    """The first ranking tier that separates the canonical from the runner-up."""
     if runner_rec is None:
         return "ONLY_ISOFORM"
     if winner_scored["has_complete_orf"] != runner_scored["has_complete_orf"]:
@@ -474,6 +484,7 @@ def select_canonical_for_gene(
     runner_scored = scored_by_tid[runner["transcript_id"]] if runner else None
 
     reason = _reason_code(winner, winner_scored, runner, runner_scored, prefer_primary)
+    deciding = _deciding_tier(winner, winner_scored, runner, runner_scored, prefer_primary)
 
     score_gap = (
         winner_scored["total_score"] - runner_scored["total_score"] if runner_scored else None
@@ -501,6 +512,8 @@ def select_canonical_for_gene(
         "runner_up_total_score": runner_scored["total_score"] if runner_scored else None,
         "score_gap": round(score_gap, 4) if score_gap is not None else None,
         "selection_reason": reason,
+        "deciding_tier": deciding,
+        "canonical_is_build_primary": is_build_primary(winner),
         "confidence": confidence,
         "differs_from_highest_gmb_score": winner["transcript_id"] != highest_raw_gmb_tid,
         "highest_gmb_score_transcript_id": highest_raw_gmb_tid,
@@ -580,6 +593,11 @@ def run_canonical_selection(
                 "n_named_sources": winner_scored["n_independent_sources"],
                 "evidence_classes": winner_scored["evidence_classes"],
                 "n_evidence_classes": winner_scored["n_evidence_classes"],
+                # Appended after 2.0.0: selection_reason reports
+                # LOW_CONFIDENCE_NO_PROTEIN_SUPPORT whenever protein validation
+                # is off, which hides the tier that actually decided.
+                "deciding_tier": result["deciding_tier"],
+                "canonical_is_build_primary": result["canonical_is_build_primary"],
             }
         )
         for rank, rec in enumerate(result["_ranked_records"], start=1):
@@ -643,9 +661,14 @@ def run_canonical_selection(
     n_differs = sum(1 for r in gene_results.values() if r["differs_from_highest_gmb_score"])
     reason_counts = defaultdict(int)
     confidence_counts = defaultdict(int)
+    deciding_counts = defaultdict(int)
+    override_counts = defaultdict(int)
     for r in gene_results.values():
         reason_counts[r["selection_reason"]] += 1
         confidence_counts[r["confidence"]] += 1
+        deciding_counts[r["deciding_tier"]] += 1
+        if not r["canonical_is_build_primary"]:
+            override_counts[r["deciding_tier"]] += 1
 
     summary = {
         "n_genes": len(gene_results),
@@ -654,6 +677,11 @@ def run_canonical_selection(
         "n_canonical_differs_from_highest_gmb_score": n_differs,
         "selection_reason_counts": dict(reason_counts),
         "confidence_counts": dict(confidence_counts),
+        "deciding_tier_counts": dict(deciding_counts),
+        # Genes whose canonical is not the build primary, by the tier that decided.
+        "n_canonical_not_build_primary": sum(override_counts.values()),
+        "canonical_not_build_primary_by_tier": dict(override_counts),
+        "prefer_build_primary": bool(getattr(cfg, "prefer_build_primary", False)),
         "unknown_evidence_sources": sorted(all_unknown_sources),
         "config": {
             "protein_validation": vars(cfg.protein_validation),

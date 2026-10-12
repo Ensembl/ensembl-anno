@@ -113,6 +113,34 @@ def _assembled_canonical_splice_fraction(exon_df, scoring_config, genome_dict):
     return (canonical / total) if total else None
 
 
+def longread_density_warning(lr_exons, genome_dict, config, stats_out=None) -> float | None:
+    """Warn when the long-read track looks like per-read alignments, not transcript models.
+
+    Uses the same threshold as preflight's ``longread_collapsed`` check
+    (``preflight.max_longread_models_per_mb``). A per-read track is not refused --
+    the operator may intend it -- but every read becomes a candidate structure, so
+    the build is slow and its alternates are dominated by single reads. Returns the
+    models-per-Mb density, or None when there is no track or no genome length.
+    """
+    if lr_exons is None or lr_exons.empty or not genome_dict:
+        return None
+    genome_mb = sum(len(s) for s in genome_dict.values()) / 1e6
+    if not genome_mb:
+        return None
+    n_models = lr_exons["transcript_id"].nunique()
+    density = n_models / genome_mb
+    if stats_out is not None:
+        stats_out["longread_models_per_mb"] = round(density, 1)
+    limit = config.preflight.max_longread_models_per_mb
+    if density > limit:
+        print(
+            f"WARNING: the long-read track has {n_models:,} models ({density:,.0f} per Mb, "
+            f"limit {limit:,}); this looks like per-read alignments, not collapsed transcript "
+            f"models. Collapse it with gmb-longread-consensus first (docs/longread_consensus.md)."
+        )
+    return density
+
+
 def regenerate_final_fasta(
     gff_rows: list[dict],
     genome_dict: dict[str, str],
@@ -808,6 +836,8 @@ def main() -> None:
     stringtie_exons, stringtie_cds = load_evidence(args.stringtie, "StringTie")
     minimap2_exons, minimap2_cds = load_evidence(args.minimap2, "Minimap2")
 
+    _longread_density = longread_density_warning(minimap2_exons, genome_dict, config)
+
     # scoring.longread_disposition == "reject" excludes the long-read track from
     # candidate structures entirely. This is the disposition preflight recommends
     # for a track that fails its splice-quality check; an operator may also set it
@@ -830,6 +860,8 @@ def main() -> None:
     genblast_exons, genblast_cds = load_evidence(args.genblast, "GenBlast")
 
     stats = {}
+    if _longread_density is not None:
+        stats["longread_models_per_mb"] = round(_longread_density, 1)
 
     # --- Seqname mapping ---
     mapping = build_mapping(
@@ -1121,6 +1153,8 @@ def main() -> None:
     selected_cdna_fa = []
     selected_prot_fa = []
     unstranded_exclusion_rows: list[dict] = []
+    # Structures refused by scoring.isoform_cds_overlap: drop (audit trail).
+    isoform_exclusion_rows: list[dict] = []
 
     gene_counter = 1
     _loci_done = 0
@@ -1149,6 +1183,7 @@ def main() -> None:
             junction_support=junction_support,
             protein_compatibility=protein_compat,
             complete_orf_tids=complete_orf_tids,
+            excluded=isoform_exclusion_rows,
         )
         if not genes:
             continue
@@ -1550,6 +1585,38 @@ def main() -> None:
     # built, so no second pass over the loci is needed here.
     output_mrnas = [r for r in selected_gff_rows if r.get("Feature") == "mRNA"]
 
+    # Reference-free locus context, so transcript-only and antisense coding models
+    # can be assessed separately: does the gene hold a backbone model, and does a
+    # transcript's CDS overlap output CDS on the opposite strand?
+    from gmb.pipeline.canonical_evidence import EVIDENCE_CLASS_BACKBONE, EvidenceRoles
+
+    _roles = EvidenceRoles.from_config(config.scoring)
+    genes_with_backbone = {
+        m["Parent"] for m in output_mrnas
+        if any(_roles.role_of(src) == EVIDENCE_CLASS_BACKBONE
+               for src in str(m.get("Evidence", "")).split(",") if src)
+    }
+    cds_by_strand: dict = defaultdict(list)
+    for r in selected_gff_rows:
+        if r.get("Feature") == "CDS":
+            cds_by_strand[(r["Chromosome"], r["Strand"])].append((r["Start"], r["End"]))
+    cds_index = {}
+    for key, ivs in cds_by_strand.items():
+        ivs.sort()
+        reach, longest = [], 0
+        for _s, e in ivs:
+            longest = max(longest, e)
+            reach.append(longest)
+        cds_index[key] = ([s for s, _e in ivs], reach)
+
+    def _overlaps_cds(chrom, strand, start, end) -> bool:
+        entry = cds_index.get((chrom, strand))
+        if entry is None:
+            return False
+        starts, reach = entry
+        i = int(np.searchsorted(starts, end, side="left"))  # intervals starting before `end`
+        return i > 0 and reach[i - 1] > start
+
     for m in output_mrnas:
         tid = m["ID"]
         gene_id = m["Parent"]
@@ -1624,6 +1691,15 @@ def main() -> None:
         row_dict["introns_without_transcript_support"] = m.get("IntronsWithoutTranscriptSupport")
         row_dict["protein_alignments_compatible"] = m.get("ProteinAlignmentsCompatible")
         row_dict["protein_alignments_incompatible"] = m.get("ProteinAlignmentsIncompatible")
+        # ORF integrity and locus context (appended; reporting only).
+        row_dict["orf_label"] = m.get("orf_label")
+        row_dict["is_partial_5"] = m.get("is_partial_5")
+        row_dict["is_partial_3"] = m.get("is_partial_3")
+        row_dict["internal_stop_count"] = m.get("internal_stop_count")
+        row_dict["gene_has_backbone_model"] = gene_id in genes_with_backbone
+        opposite = "-" if m["Strand"] == "+" else "+"
+        row_dict["opposite_strand_cds_overlap"] = any(
+            _overlaps_cds(m["Chromosome"], opposite, c["Start"], c["End"]) for c in cds_rows)
 
         evidence_rows.append(row_dict)
 
@@ -1632,6 +1708,13 @@ def main() -> None:
         ev_path = os.path.join(args.output_dir, "evidence_attribution.tsv")
         ev_df.to_csv(ev_path, sep="\t", index=False)
         print(f"  Evidence attribution: {ev_path}")
+
+    stats["isoform_cds_overlap_excluded"] = len(isoform_exclusion_rows)
+    if isoform_exclusion_rows:
+        iso_path = os.path.join(args.output_dir, "excluded_candidates.tsv")
+        pd.DataFrame(isoform_exclusion_rows).to_csv(iso_path, sep="\t", index=False)
+        print(f"  Isoform CDS-overlap exclusions: {len(isoform_exclusion_rows)} structure(s) "
+              f"sharing no coding base with the gene they overlap. See {iso_path}")
 
     if unstranded_exclusion_rows:
         excl_df = pd.DataFrame(unstranded_exclusion_rows)

@@ -1,0 +1,20 @@
+U_all promotions: 483  backbone model retained in gene: 483
+verdict                                                    improved  regressed  uncertain  All
+set     support                                                                               
+dev     multi-source                                              9          0         41   50
+        single-source, introns confirmed by another track        38          3        132  173
+        single-source, self-supported only                        5          1         36   42
+heldout multi-source                                              3          0         30   33
+        single-source, introns confirmed by another track        31          4         98  133
+        single-source, self-supported only                        8          1         43   52
+All                                                              94          9        380  483
+U_all_lr promotions: 645  backbone model retained in gene: 645
+verdict                                                    improved  regressed  uncertain  All
+set     support                                                                               
+dev     multi-source                                             24          1         81  106
+        single-source, introns confirmed by another track        35          3        131  169
+        single-source, self-supported only                        4          1         47   52
+heldout multi-source                                             17          1         72   90
+        single-source, introns confirmed by another track        41          4        123  168
+        single-source, self-supported only                        3          0         57   60
+All                                                             124         10        511  645

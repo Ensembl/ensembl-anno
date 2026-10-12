@@ -126,9 +126,20 @@ intergenic gaps with no long intron, so the span rule is the one that catches th
 ### Long-read transcript models — optional
 
 Supply **collapsed consensus models**, not raw read alignments. `gmb-longread-consensus` does
-the collapse if you have alignments. GMB scores every model as a candidate, so a per-read
-track (2.05 M reads for *Z. tritici*) makes a build impractical; preflight warns
-(`longread_collapsed`) above `preflight.max_longread_models_per_mb`.
+the collapse if you have alignments; for fungi use its `fungi` preset, whose span (20 kb) and
+intron (3 kb) limits match the `fungi` build preset:
+
+```bash
+gmb-longread-consensus --input minimap2_annotation.gtf --preset fungi --output-dir longread/
+# -> longread/minimap2_consensus.gtf : pass this file as --minimap2
+```
+
+GMB scores every model as a candidate, so a per-read track (2.05 M reads for *Z. tritici*)
+makes a build impractical and floods the alternates with single reads. Both preflight
+(`longread_collapsed`) and `gmb-build` (a `WARNING` line and `longread_models_per_mb` in
+`summary.json`) warn above `preflight.max_longread_models_per_mb` (2,000 per Mb); neither
+refuses the track. A collapsed *Z. tritici* track has ~500–650 models per Mb of gene-dense
+sequence.
 
 **Strand is taken as given.** GMB uses each transcript's GTF strand; it never re-derives
 strand from reads. Upstream, the Ensembl anno Minimap2 path sets strand from Minimap2's `ts`

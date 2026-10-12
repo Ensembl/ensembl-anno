@@ -60,6 +60,7 @@ and are available from any working directory after `pip install`.
 
 | Preset | Description |
 | :----- | :---------- |
+| `fungi` | compact fungal genomes: span 20 kb and intron 3 kb, matching the `fungi` build preset; default read support; no rescue. Used for the *Z. tritici* evidence-integration evaluation (`release/evidence_integration.md`) |
 | `pfalciparum_pure` | *P. falciparum* thresholds, no short-read rescue |
 | `pfalciparum_assisted` | *P. falciparum* thresholds, short-read rescue enabled |
 

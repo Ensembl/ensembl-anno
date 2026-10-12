@@ -186,7 +186,9 @@ the alternate has fewer, a complete ORF, a CDS of at least
 worse agreement with spliced protein alignments; the backbone model stays as an alternate.
 `isoform_cds_overlap: drop` refuses an "isoform" that shares no coding base with its gene's
 primary (a UTR or read-through overlap reaching a neighbouring ORF), which is what chains
-neighbouring genes together; a backbone model refused this way becomes its own gene.
+neighbouring genes together; a backbone model refused this way becomes its own gene. Every
+refused structure is listed in `build/excluded_candidates.tsv` and counted in `summary.json`
+(`isoform_cds_overlap_excluded`).
 `prefer_build_primary` stops canonical selection from replacing the build's primary because
 two short-read assemblers of the same libraries count as two sources. The three are combined
 in `configs/fungi_evidence_integration.experimental.yaml` together with
@@ -198,7 +200,11 @@ disables it. Before this release it was set to 150 but never applied.
 `policy: penalize` from a model whose `protein_coding_score` is below `min_score`. With the
 fungal weights (`diamond_weight` 0.7, `min_score` 0.7) every model without a DIAMOND hit is
 penalised whatever its Psauron score, and 5.0 exceeds every backbone weight, so in practice
-the setting removes most alternate isoforms.
+the setting removes most alternate isoforms. It therefore interacts with
+`primary_selection: junction_supported`, which promotes only admitted alternates: on held-out
+*Z. tritici* windows, adding protein validation to the experimental overlay lowered canonical
+exact-CDS agreement from 733 to 718 of 1,874 core reference genes. Do not combine them without
+evaluating the combination.
 
 `backbone_intron_rescue` is **applicability-gated**:
 

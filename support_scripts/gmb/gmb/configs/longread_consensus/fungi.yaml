@@ -1,0 +1,33 @@
+# Compact fungal genomes — long-read consensus (pure long-read mode)
+#
+# Span and intron limits mirror the GMB fungi build preset
+# (transcriptomic_filter.max_transcript_length / max_intron_length), so the
+# collapsed track obeys the same chimera rules as the short-read assemblies.
+# Read-support thresholds are the shipped defaults.
+#
+# Used for the Zymoseptoria tritici (GCA_000219625.1) evidence-integration
+# evaluation on 17 windows (docs/release/evidence_integration.md): per-read
+# alignments (50-100 k per Mb in core windows) collapse to ~500-650 consensus
+# models per Mb; on the 9 development windows 95.5% of consensus introns are
+# canonical and 58.6% are reference introns. Validated regionally only; check preflight's
+# splice_quality for any other genome.
+
+# Chimera / mis-alignment screening
+max_span_length: 20000       # Z. tritici reference p99.9 span 12 kb; read-throughs beyond
+max_intron_length: 3000      # 34 of 17,616 Z. tritici reference introns exceed this
+
+# Locus clustering
+min_intergenic_gap: 500
+
+# Consensus grouping
+collapse_terminal_variation_bp: 100
+splice_site_tolerance_bp: 10
+
+# Minimum read support to retain a consensus model
+min_read_support_multi_exon: 2
+min_read_support_single_exon: 4
+
+shortread_rescue:
+  enabled: false
+
+suppress_contained_models: true

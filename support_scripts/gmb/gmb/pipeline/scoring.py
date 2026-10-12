@@ -223,6 +223,7 @@ def select_isoforms(
     junction_support: dict[str, tuple[int, int]] | None = None,
     protein_compatibility: dict[str, tuple[int, int]] | None = None,
     complete_orf_tids: set[str] | None = None,
+    excluded: list[dict] | None = None,
 ) -> list[list[dict]]:
     """Score and select isoforms for a single locus.
 
@@ -261,6 +262,10 @@ def select_isoforms(
         alignments over the candidate's CDS. Same use as *junction_support*.
     complete_orf_tids : set of str or None
         Candidates whose ORF has both an ATG start and a stop codon.
+    excluded : list or None
+        If given, a record is appended for every retained structure discarded by
+        ``scoring.isoform_cds_overlap: drop`` (it would have joined a gene without
+        sharing coding sequence with that gene's primary).
 
     Returns
     -------
@@ -597,17 +602,28 @@ def select_isoforms(
         r["score"] = s["score"]
         # Try to assign to an existing gene sub-cluster
         found = -1
-        coding_conflict = False
+        conflicting_primary = None
         for i, g_isoforms in enumerate(genes):
             if is_same_gene(r, g_isoforms[0]):
                 if cds_mode != "off" and not shares_coding_base(r, g_isoforms[0]):
-                    coding_conflict = True
+                    conflicting_primary = conflicting_primary or g_isoforms[0]
                     continue
                 found = i
                 break
 
         if found == -1:
-            if coding_conflict and cds_mode == "drop" and not r.get("has_backbone"):
+            if conflicting_primary is not None and cds_mode == "drop" and not r.get("has_backbone"):
+                if excluded is not None:
+                    excluded.append({
+                        "candidate_transcript_id": r["id"],
+                        "evidence_sources": r.get("combined_evidence", r.get("source", "")),
+                        "chrom": r["chrom"], "strand": r["strand"],
+                        "start": int(r["start"]), "end": int(r["end"]),
+                        "cds_bp": r.get("candidate_cds_bp", 0),
+                        "gmb_score": s["score"],
+                        "would_join_primary": conflicting_primary["id"],
+                        "exclusion_reason": "isoform_cds_overlap_no_shared_coding_base",
+                    })
                 continue
             r["is_primary"] = True
             genes.append([r])

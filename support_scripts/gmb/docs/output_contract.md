@@ -48,6 +48,7 @@ Ship these alongside the handover — they explain *why* each model was chosen.
 | `evidence_attribution.tsv` | per-transcript evidence sources, protein support, selection reason, rescue flag | **yes** |
 | `protein_validation.tsv` | DIAMOND/Psauron per-model scores | yes |
 | `collapsed_duplicate_transcripts.tsv` | which duplicate structures were collapsed | yes |
+| `excluded_candidates.tsv` | structures refused by `scoring.isoform_cds_overlap: drop` | yes, when present |
 | `resolved_config.yaml` + `resolved_config_sha256` | the exact configuration used | **yes** |
 | `run_manifest.json` / `.tsv` | full provenance (see `reproducibility.md`) | **yes** |
 | `summary.json` / `summary.tsv` | build-stage counts | yes |
@@ -76,8 +77,16 @@ One row per emitted transcript. The audit trail for every selection decision.
 | `utr_*_supported` / `_action` / `_reason` | UTR retention decisions |
 | `introns_without_transcript_support` | introns that no loaded transcriptomic model (short or long read, including filtered read-through chimeras) observes exactly |
 | `protein_alignments_compatible`, `protein_alignments_incompatible` | spliced protein alignments whose introns agree / disagree with the CDS where they overlap it (unspliced overlaps count as neither) |
+| `orf_label`, `is_partial_5`, `is_partial_3`, `internal_stop_count` | ORF integrity of the selected model (also in `protein_validation.tsv` when that runs) |
+| `gene_has_backbone_model` | the gene holds at least one backbone-derived transcript; `False` = a transcript-only locus |
+| `opposite_strand_cds_overlap` | the CDS overlaps an output CDS on the other strand (reference-free antisense flag) |
 
-The last three columns were appended after 2.0.0; earlier columns are unchanged.
+The last nine columns were appended after 2.0.0; earlier columns are unchanged. Together they
+identify transcript-only loci (`gene_has_backbone_model = False`) and antisense coding
+predictions (`… and opposite_strand_cds_overlap = True`) without a reference, for separate
+assessment. For `introns_without_transcript_support`, a transcript-derived model's own introns
+count as observed, so the value is 0 for every assembled model; it is informative for backbone
+models.
 
 `selection_reason` values, highest ranking tier first:
 
@@ -134,6 +143,7 @@ in the release notes.
 | `protein_validation.tsv` | `protein_validation.enabled` | `gene_id`, `transcript_id`, `candidate_transcript_id`, `protein_sha256`, `diamond_hit`, `diamond_pident`, `diamond_qcov`, `diamond_scov` (0–100), `diamond_bitscore`, `diamond_evalue`, `psauron_score` (0–1), `protein_length`, `orf_label`, `is_partial_5`, `is_partial_3`, `internal_stop_count`, `protein_coding_score` (0–1), `gmb_score`, `evidence_sources`, `validation_status`, `validation_reason`, `protein_validation_source`, `protein_validation_reused_from`, `diamond_version`, `psauron_version`, `diamond_db` |
 | `collapsed_duplicate_transcripts.tsv` | any exact duplicate collapsed | `gene_id`, `retained_transcript_id`, `removed_transcript_id`, `structure_signature`, `duplicate_classification`, `retained_id_reason`, `evidence_merged`, `gmb_score_before`, `gmb_score_recalculated` |
 | `unstranded_exclusions.tsv` | any locus with unresolved strand | `gene_id`, `candidate_transcript_id`, `chrom`, `strand`, `evidence_sources`, `rejection_reason` |
+| `excluded_candidates.tsv` | `scoring.isoform_cds_overlap: drop` refused ≥ 1 structure | `candidate_transcript_id`, `evidence_sources`, `chrom`, `strand`, `start`, `end` (0-based half-open), `cds_bp`, `gmb_score`, `would_join_primary` (candidate ID of the primary it shares no coding base with), `exclusion_reason` |
 | `subset_regions.tsv` | `--seqname` / `--region` / `--regions-file` / `--sample-loci` | `# seed` line, then `seqname`, `start`, `end` |
 | `summary.json` / `summary.tsv` | always | run counters (see below) |
 
@@ -145,7 +155,20 @@ minor release, existing ones are not renamed. Notable counters: `total_loci` (ge
 `candidates_split_across_loci` (0 under `transcript_linked`), `chimeras_large_intron`,
 `chimeras_long_span`, `single_exon_removed` (transcriptomic filter),
 `genes_with_detached_isoforms` / `detached_isoforms_removed` (isoforms that no longer overlap
-their gene after validation), `validation_*`, `dedup_*`, `duplicate_collapse_*`.
+their gene after validation), `validation_*`, `dedup_*`, `duplicate_collapse_*`,
+`candidates_with_unobserved_introns`, `isoform_cds_overlap_excluded`,
+`longread_models_per_mb` (when a long-read track is supplied).
+
+### `finalise/canonical/` tables
+
+`canonical_transcripts.tsv` has one row per gene. `selection_reason` is the reported reason
+code; it is `LOW_CONFIDENCE_NO_PROTEIN_SUPPORT` for every gene whose canonical has no
+protein-validation result, i.e. for every gene when protein validation is off. Two columns
+appended after 2.0.0 always state what actually decided: `deciding_tier` (the first ranking tier
+separating the canonical from the runner-up, e.g. `BEST_EVIDENCE_CLASS_BREADTH`,
+`BUILD_PRIMARY`, `BEST_MULTI_SOURCE_SUPPORT`, `ONLY_ISOFORM`) and `canonical_is_build_primary`.
+`canonical_selection_summary.json` adds `deciding_tier_counts`,
+`n_canonical_not_build_primary` and `canonical_not_build_primary_by_tier`.
 
 ---
 

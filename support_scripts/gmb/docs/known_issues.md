@@ -92,7 +92,9 @@ models against a repeat annotation.
 ## P2 — Selection-affecting fixed values and unimplemented modes
 
 - The protein-validation penalty is now `protein_validation.penalty` (default 5.0, unchanged
-  behaviour). With the fungal weights (`diamond_weight` 0.7, `min_score` 0.7) every model
+  behaviour). Combined with the experimental overlay it costs accuracy (held-out core
+  canonical exact CDS 733 → 718): the penalty pushes transcript alternates below
+  `min_alternate_score`, so the junction rule has nothing to promote. With the fungal weights (`diamond_weight` 0.7, `min_score` 0.7) every model
   without a DIAMOND hit is penalised whatever its Psauron score (186 of 399 transcripts in one
   window against UniProt eukaryota), and 5.0 exceeds every backbone weight: enabling it
   removes most alternates and changes no primary (dev core: transcripts 3,960 → 2,650,
@@ -155,6 +157,11 @@ coding-potential support.
 
 ## P3 — Interface and developer notes
 
+- Protein-alignment redundancy collapse breaks ties by input order (unstable sort), so
+  `ProteinEvidence` attribution can depend on row order or on ID namespacing of reused
+  genBlastG IDs; on *Z. tritici* windows this changed attribution of 1–26 transcripts per window
+  and never a selected structure. Deterministic for identical input files.
+
 - Canonical selection takes ORF completeness from `protein_validation.tsv`, so without
   protein validation the complete-ORF tier ties every isoform; its `protein_alignment`
   evidence class is never counted (protein tracks are reported in
@@ -174,7 +181,7 @@ coding-potential support.
 
 ---
 
-## Fixed in 2.0.0
+## Fixed (2.0.0 and the evidence-integration branch)
 
 | issue | fix | evidence |
 |---|---|---|
@@ -185,6 +192,11 @@ coding-potential support.
 | `scoring.min_cds_bp` (150) never applied (read a field nothing set) | applied from the candidate CDS; shipped value 0 keeps validated output; 150 in the experimental fungal overlay | dev windows: 150 removes 46 core / 36 accessory genes, nearly all novel; no reference CDS < 150 bp |
 | hard-coded −5.0 protein-validation penalty | `protein_validation.penalty` | — |
 | second, discarded `select_isoforms` pass | removed | — |
+| `python -m gmb.cli.finalise` exited 0 without running (no `__main__` guard) | guard added; every CLI module tested under `python -m` | — |
+| canonical `selection_reason` hid the deciding tier when protein validation was off | `deciding_tier`, `canonical_is_build_primary` columns; override counts in the summary | — |
+| `isoform_cds_overlap: drop` exclusions not auditable | `build/excluded_candidates.tsv`, `isoform_cds_overlap_excluded` counter | — |
+| a raw per-read long-read track was accepted by `gmb-build` without warning | build-time `WARNING` + `longread_models_per_mb` (preflight already warned) | — |
+| no long-read consensus preset for fungi | `gmb-longread-consensus --preset fungi` | reproduces the evaluated *Z. tritici* consensus exactly |
 | `gmb-preflight` and `gmb-build` default presets differed | one `DEFAULT_PRESET` | — |
 | `gmb-build --list-presets` required `--output-dir` | fixed | — |
 | preflight passed empty/unparseable files, impossible coordinates, exon-less backbones, raw long-read tracks | `file_readable`, `coordinates_valid`, `exon_rows_present`, `backbone_cds_present`, `cds_without_exons`, `longread_collapsed` | real bundle: 36 pass, 0 false alarms |

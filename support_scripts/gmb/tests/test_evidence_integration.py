@@ -143,6 +143,22 @@ class TestJunctionSupportedPrimary:
         short = [(800, 950)]
         assert _select(cds={"hx": HX_CDS, "sc": short, "st": short})[0][0]["id"] == "hx"
 
+    def test_opposite_strand_transcript_never_replaces_backbone(self):
+        cfg = load_config(None, "fungi")
+        cfg.scoring.primary_selection = "junction_supported"
+        locus = pd.concat([
+            _exons("hx", "Helixer", HX_EXONS),
+            _exons("sc", "Scallop", SR_EXONS, strand="-"),
+            _exons("st", "StringTie", SR_EXONS, strand="-"),
+        ], ignore_index=True)
+        genes = select_isoforms(
+            locus, cfg, set(), candidate_cds={"hx": HX_CDS, "sc": SR_CDS, "st": SR_CDS},
+            junction_support={"hx": (2, 2), "sc": (2, 0), "st": (2, 0)},
+            complete_orf_tids={"hx", "sc", "st"})
+        hx_gene = next(g for g in genes if any(m["id"] == "hx" for m in g))
+        assert hx_gene[0]["id"] == "hx"
+        assert all(m["strand"] == "+" for m in hx_gene)
+
     def test_no_promotion_when_cds_is_a_different_coding_locus(self):
         # Regression: a read-through alternate admitted through its span had its
         # CDS beyond the backbone's. Promoting it lost the backbone model.
@@ -180,6 +196,27 @@ class TestIsoformCdsOverlap:
 
     def test_drop_discards_structure_without_shared_coding_sequence(self):
         assert [[m["id"] for m in g] for g in _select_iso("drop")] == [["hx"]]
+
+    def test_drop_records_every_excluded_structure(self):
+        cfg = load_config(None, "fungi")
+        cfg.scoring.isoform_cds_overlap = "drop"
+        locus = pd.concat([
+            _exons("hx", "Helixer", HX_EXONS),
+            _exons("sc", "Scallop", READTHROUGH_EXONS),
+            _exons("st", "StringTie", READTHROUGH_EXONS),
+        ], ignore_index=True)
+        excluded = []
+        select_isoforms(locus, cfg, set(), excluded=excluded,
+                        candidate_cds={"hx": HX_CDS, "sc": READTHROUGH_CDS, "st": READTHROUGH_CDS})
+        assert len(excluded) == 1
+        assert excluded[0]["would_join_primary"] == "hx"
+        assert excluded[0]["exclusion_reason"] == "isoform_cds_overlap_no_shared_coding_base"
+        assert excluded[0]["evidence_sources"] == "Scallop,StringTie"
+        excluded_off = []
+        cfg.scoring.isoform_cds_overlap = "off"
+        select_isoforms(locus, cfg, set(), excluded=excluded_off,
+                        candidate_cds={"hx": HX_CDS, "sc": READTHROUGH_CDS, "st": READTHROUGH_CDS})
+        assert excluded_off == []
 
     def test_new_gene_gives_it_its_own_gene(self):
         assert sorted(m["id"] for g in _select_iso("new_gene") for m in g) == ["hx", "sc"]
@@ -229,6 +266,28 @@ class TestPreferBuildPrimary:
         cfg.prefer_build_primary = True
         result = select_canonical_for_gene("G1", self.RECORDS, cfg, "Helixer")
         assert result["canonical_transcript_id"] == "G1.t1"
+
+    def test_deciding_tier_reported_even_without_protein_validation(self):
+        cfg = load_config(None, "fungi").canonical_selection
+        default = select_canonical_for_gene("G1", self.RECORDS, cfg, "Helixer")
+        assert default["selection_reason"] == "LOW_CONFIDENCE_NO_PROTEIN_SUPPORT"
+        assert default["deciding_tier"] == "BEST_MULTI_SOURCE_SUPPORT"
+        assert default["canonical_is_build_primary"] is False
+        cfg.prefer_build_primary = True
+        kept = select_canonical_for_gene("G1", self.RECORDS, cfg, "Helixer")
+        assert kept["selection_reason"] == "LOW_CONFIDENCE_NO_PROTEIN_SUPPORT"
+        assert kept["deciding_tier"] == "BUILD_PRIMARY"
+        assert kept["canonical_is_build_primary"] is True
+
+    def test_evidence_class_breadth_still_outranks_build_primary(self):
+        # Documented order: a long-read + short-read isoform (2 classes) beats a
+        # backbone-only primary (1 class) even with prefer_build_primary.
+        cfg = load_config(None, "fungi").canonical_selection
+        cfg.prefer_build_primary = True
+        records = [_crec("G1.t1", "Helixer", 5.1), _crec("G1.t2", "Minimap2,StringTie", 4.5)]
+        result = select_canonical_for_gene("G1", records, cfg, "Helixer")
+        assert result["canonical_transcript_id"] == "G1.t2"
+        assert result["deciding_tier"] == "BEST_EVIDENCE_CLASS_BREADTH"
 
     def test_absorbed_t1_of_another_gene_is_not_this_genes_primary(self):
         cfg = load_config(None, "fungi").canonical_selection
@@ -330,3 +389,66 @@ def test_fixture_junction_supported_reorders_but_keeps_transcripts(tmp_path):
     assert len(jp) == len(base)
     assert jp["gene_id"].nunique() == base["gene_id"].nunique()
     assert _structures(jp) == _structures(base)
+
+
+@pytest.mark.integration
+def test_fixture_overlay_reports_locus_context_and_exclusions(tmp_path):
+    overlay = (GMB_DIR / "configs" / "fungi_evidence_integration.experimental.yaml").read_text()
+    att = _build(tmp_path / "overlay", overlay)
+    # Locus context is consistent with the evidence actually recorded.
+    has_bb = att.groupby("gene_id")["evidence_sources"].apply(
+        lambda s: s.str.contains("Helixer").any())
+    assert (att["gene_has_backbone_model"] == att["gene_id"].map(has_bb)).all()
+    assert att["opposite_strand_cds_overlap"].isin([True, False]).all()
+    assert att["orf_label"].notna().all()
+    assert (att["internal_stop_count"] == 0).all()
+    # Every drop is auditable and counted.
+    import json
+    summary = json.loads((tmp_path / "overlay" / "summary.json").read_text())["summary"]
+    n = summary["isoform_cds_overlap_excluded"]
+    sidecar = tmp_path / "overlay" / "excluded_candidates.tsv"
+    assert n > 0  # the fixture contains read-through "isoforms" of neighbouring ORFs
+    excl = pd.read_csv(sidecar, sep="\t")
+    assert len(excl) == n
+    assert not excl["evidence_sources"].str.contains("Helixer").any()
+    assert (att["cds_bp"] >= 150).all()
+
+
+# ---------------------------------------------------------------------------
+# Long-read handling
+# ---------------------------------------------------------------------------
+
+
+def test_fungi_longread_consensus_preset_mirrors_build_limits():
+    from gmb.pipeline.longread.config import list_presets, load_longread_consensus_config
+
+    assert "fungi" in list_presets()
+    lr = load_longread_consensus_config(preset="fungi")
+    build = load_config(None, "fungi").transcriptomic_filter
+    assert lr.max_span_length == build.max_transcript_length == 20000
+    assert lr.max_intron_length == build.max_intron_length == 3000
+
+
+def test_build_warns_on_per_read_longread_track(capsys):
+    from gmb.pipeline.builder import longread_density_warning
+
+    cfg = load_config(None, "fungi")
+    genome = {"1": "A" * 1_000_000}
+    reads = pd.concat([_exons(f"r{i}", "Minimap2", [(i, i + 100)]) for i in range(2500)])
+    assert longread_density_warning(reads, genome, cfg) == pytest.approx(2500)
+    assert "looks like per-read alignments" in capsys.readouterr().out
+    collapsed = reads[reads.transcript_id.isin([f"r{i}" for i in range(600)])]
+    assert longread_density_warning(collapsed, genome, cfg) == pytest.approx(600)
+    assert "per-read" not in capsys.readouterr().out
+    assert longread_density_warning(None, genome, cfg) is None
+
+
+@pytest.mark.parametrize("module", [
+    "build", "preflight", "finalise", "canonical_selection", "longread_consensus",
+    "interpro_review", "interpro_resolve"])
+def test_every_cli_module_runs_with_python_dash_m(module):
+    # A CLI module without a __main__ guard exits 0 under `python -m` and does nothing.
+    result = subprocess.run([sys.executable, "-m", f"gmb.cli.{module}", "--help"],
+                            capture_output=True, text=True, cwd=str(GMB_DIR))
+    assert result.returncode == 0, result.stderr[-1000:]
+    assert "usage" in result.stdout.lower()

@@ -1,0 +1,14 @@
+## held-out core
+A_helixer:consensus    CDS introns query  3441 shared  1969 P 0.572 R 0.661 | exon introns query  3881 P 0.515 R 0.659
+E_all:canonical        CDS introns query  3385 shared  1947 P 0.575 R 0.654 | exon introns query  4059 P 0.492 R 0.659
+U_all:canonical        CDS introns query  3413 shared  2027 P 0.594 R 0.680 | exon introns query  4011 P 0.515 R 0.682
+E_lr:canonical         CDS introns query  3318 shared  1989 P 0.599 R 0.668 | exon introns query  4041 P 0.509 R 0.679
+U_all_lr:canonical     CDS introns query  3342 shared  2065 P 0.618 R 0.693 | exon introns query  3904 P 0.541 R 0.697
+
+## dev core
+A_helixer:consensus    CDS introns query  3168 shared  1775 P 0.560 R 0.625 | exon introns query  3594 P 0.502 R 0.624
+E_all:canonical        CDS introns query  3126 shared  1750 P 0.560 R 0.616 | exon introns query  3776 P 0.477 R 0.623
+U_all:canonical        CDS introns query  3113 shared  1846 P 0.593 R 0.650 | exon introns query  3712 P 0.511 R 0.656
+E_lr:canonical         CDS introns query  3077 shared  1794 P 0.583 R 0.631 | exon introns query  3791 P 0.491 R 0.644
+U_all_lr:canonical     CDS introns query  3057 shared  1874 P 0.613 R 0.659 | exon introns query  3662 P 0.527 R 0.668
+

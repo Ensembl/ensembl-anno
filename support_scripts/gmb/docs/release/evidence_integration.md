@@ -1,10 +1,13 @@
 # Evidence integration — *Zymoseptoria tritici* (GCA_000219625.1)
 
 Investigation and tuning, branch `gmb/evidence-tuning` (from `feature/gene_model_builder`
-e005a86), 2026-10-09. Nothing is committed. **No whole-genome GMB build was run.** The
+e005a86; committed as be54b99), 2026-10-09; corrected in the final handover review
+([`handover_review.md`](handover_review.md)). **No whole-genome GMB build was run.** The
 reference is a benchmark, not truth: it has one isoform per gene and its own errors (see
-`z_tritici_validation.md`). Scripts, configurations and per-window results:
-`diagnostics/gmb_evidence_tuning_20261009/` (alongside this repository).
+`z_tritici_validation.md`). Every before/after figure in §E is reproduced from the original
+input data by [`../../validation/z_tritici_evidence_integration/`](../../validation/z_tritici_evidence_integration/);
+the diagnosis scripts of §A–C are in its `diagnosis/` folder. §A–C record the experiments as
+run during tuning; §E carries the reproduced numbers.
 
 **Question.** Given substantial protein and transcriptomic evidence, why does GMB add so little
 beyond Helixer, and which demonstrated changes let that evidence contribute without
@@ -236,7 +239,7 @@ fixture passes unchanged. The four settings are combined in
 | `protein_validation.penalty` (default 5.0) | `scoring.py`, `config.py`, `standard.yaml` | was hard-coded | `TestProteinValidationPenalty` |
 | attribution columns `introns_without_transcript_support`, `protein_alignments_compatible`, `protein_alignments_incompatible`; `selection_reason=transcript_junction_support` | `builder.py`, `tests/test_release_prep_regressions.py` | auditability | pinned column list (appended) |
 
-Tests: 889 passed, 3 skipped (was 862 / 3). Compatibility: `evidence_attribution.tsv` gains
+Tests at be54b99: 889 passed, 3 skipped (was 862 / 3); after the handover review: 903 / 3. Compatibility: `evidence_attribution.tsv` gains
 three trailing columns; `standard.yaml` shows `min_cds_bp: 0` instead of the never-applied
 150; new keys appear in `resolved_config.yaml`. Documentation: `configuration.md`,
 `output_contract.md`, `canonical_selection.md` (tier list corrected and extended),
@@ -282,28 +285,55 @@ updated 0.594 / 0.680; updated + long reads **0.618 / 0.693**.
 | Helixer alone | 719 | 557 | 44 | 69 / 18 | 0.343 |
 | GMB original | 706 | 553 | 36 | 89 / 18 | 0.323 |
 | GMB updated | 750 | 599 | 36 | 68 / 18 | 0.346 |
-| GMB updated + long reads | 773 | 631 | 24 | 69 / 18 | 0.352 |
+| GMB updated + long reads | 772 | 630 | 24 | 69 / 18 | 0.352 |
 
 Accessory dev canonical CDS-exact: Helixer 25, original 26, updated 28, updated + long reads 27.
+(The tuning-time run gave 773 / 631 for updated + long reads. The reproduction gives 772 / 630
+after a window-subsetting artefact in the OrthoDB inputs was corrected: two loci in window d9
+changed primary. See `handover_review.md` §5.)
 
 ### What changed, gene by gene (held-out canonical)
 
-| transition | gained exact | lost exact | partial → intron chain | missed → found |
-|---|---|---|---|---|
-| Helixer → GMB original | 11 | 23 | 1 | 26 |
-| Helixer → GMB updated | 31 | 5 | 15 | 27 |
-| Helixer → GMB updated + long reads | 62 | 14 | 21 | 27 |
-| GMB original → GMB updated | 48 | 10 | 17 | 5 |
+Corrected in the handover review: an earlier version of these two tables pooled core and
+accessory windows under a core heading (e.g. "31 gained / 5 lost", which is 28 / 5 core plus
+3 / 0 accessory). Core and accessory are now separate, and each row reconciles with the
+change in exact CDS above.
 
-| coding models vs Helixer (held-out canonical) | changed | improved | regressed | uncertain | new loci (no reference CDS overlap) |
+| core (R = 1,874) | gained exact | lost exact | net (= Δ exact CDS) | partial → intron chain | missed → found |
 |---|---|---|---|---|---|
-| GMB original | 103 | 10 | 16 | 77 | 248 (236) |
-| GMB updated | 166 | 44 | 6 | 116 | 216 (207) |
-| GMB updated + long reads | 323 | 80 | 19 | 224 | 257 (243) |
+| Helixer → GMB original | 5 | 20 | −15 (710 → 695) | 1 | 15 (2 others newly missed) |
+| Helixer → GMB updated | 28 | 5 | +23 (710 → 733) | 15 | 15 |
+| Helixer → GMB updated + long reads | 58 | 14 | +44 (710 → 754) | 21 | 16 |
+| GMB original → GMB updated | 45 | 7 | +38 (695 → 733) | 17 | 3 |
 
-"Uncertain" = changed but no closer to or further from the reference. On aggregate these
-raise intron precision and recall (above), so on balance they are structural improvements,
-but individually they are unverified.
+| accessory (R = 175) | gained exact | lost exact | net |
+|---|---|---|---|
+| Helixer → GMB original | 6 | 3 | +3 (16 → 19) |
+| Helixer → GMB updated | 3 | 0 | +3 (16 → 19) |
+| Helixer → GMB updated + long reads | 4 | 0 | +4 (16 → 20) |
+
+"Gained exact": a reference gene whose canonical CDS was not coordinate-exact before and is
+after; "lost" the reverse. A gene moving between partial and intron-chain-exact changes
+neither count.
+
+| coding models vs Helixer (held-out core, canonical) | changed | improved | regressed | uncertain | new loci (no reference CDS overlap) |
+|---|---|---|---|---|---|
+| GMB original | 49 | 5 | 11 | 33 | 177 (172) |
+| GMB updated | 139 | 42 | 5 | 92 | 159 (155) |
+| GMB updated + long reads | 274 | 77 | 17 | 180 | 192 (183) |
+
+"Changed": canonical CDS differs from every Helixer CDS it overlaps on the same strand;
+"improved / regressed": the canonical is closer to / further from the reference than the
+Helixer model it overlaps (ranks: exact CDS > exact intron chain > CDS overlap); "uncertain":
+neither. On aggregate these raise intron precision and recall (above), so on balance they are
+structural improvements, but individually they are unverified.
+
+**Independent of the reference.** Collapsed long reads were not used by Helixer, A or B, so
+the share of their canonical CDS introns observed in the long-read track is an independent
+quality measure (held-out core): Helixer 67.6%, A 68.8%, B **70.9%**
+(`validation/z_tritici_evidence_integration/results/longread_support_heldout.txt`). The two
+transcript technologies sample the same transcriptome, so this is independent data, not
+independent biology.
 
 ### Updated implementation: evidence ablation (canonical, core)
 
@@ -313,7 +343,7 @@ but individually they are unverified.
 | + short reads | 721 | 711 |
 | + short + long reads | 745 | 725 |
 | + short reads + protein | 750 | 733 |
-| all | 773 | 754 |
+| all | 772 | 754 |
 
 A transcript structure needs a second independent agreeing source, or protein support,
 before it can matter. The gains come from short reads + protein, and from long reads +
@@ -323,7 +353,7 @@ short reads.
 
 * Generalises: every direction measured on dev holds on held-out (canonical CDS-exact,
   intron chain, splits/merges, missed). Held-out gains are smaller than dev without long
-  reads (+23 vs +31 over Helixer), similar with them (+44 vs +54).
+  reads (+23 vs +31 over Helixer), similar with them (+44 vs +53).
 * Trade-offs: canonical F1 without long reads is level with Helixer (0.335 vs 0.336). The
   exact-CDS gain is offset by ~140 extra genes, mostly transcript-only antisense/intergenic
   models present in both GMB versions. All-isoform CDS-exact is unchanged (750 vs 751): the

@@ -1,0 +1,192 @@
+## held-out core, canonical: A_helixer -> E_all (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   0       0       20
+ic           0   0       0        3
+missed       1   0       0       14
+partial      4   1       2        0
+
+## held-out core, canonical: A_helixer -> U_all (rows: before, columns: after)
+sB       exact  ic  partial
+sA                         
+exact        0   1        4
+missed       1   0       14
+partial     27  15        0
+Empty DataFrame
+
+## held-out core, canonical: E_all -> U_all (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   1       0        6
+missed       0   0       0        3
+partial     45  17       1        0
+                w  start_A  ...  best_cds_match_transcript_id_A       sA
+
+## held-out core, canonical: A_helixer -> U_all_lr (rows: before, columns: after)
+sB       exact  ic  partial
+sA                         
+exact        0   2       12
+missed       2   1       13
+partial     56  21        0
+Empty DataFrame
+
+## held-out core, canonical: E_lr -> U_all_lr (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   2       0        6
+partial     43  17       1        0
+                 w  start_A  ...  best_cds_match_transcript_id_A       sA
+gene_id                      ...                                         
+
+## held-out core, canonical: U_all -> U_all_lr (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   1       0       15
+ic           1   0       0        2
+missed       0   1       0        2
+partial     36   9       2        0
+
+## held-out accessory, canonical: A_helixer -> E_all (rows: before, columns: after)
+sB       exact  missed  partial
+sA                             
+exact        0       0        3
+missed       1       0       10
+partial      5       1        0
+                 w  start_A  ...  best_cds_match_transcript_id_A       sA
+
+## held-out accessory, canonical: A_helixer -> U_all (rows: before, columns: after)
+sB       exact  partial
+sA                     
+missed       1       11
+partial      2        0
+Empty DataFrame
+Columns: [w, start_A, end_A, strand_A, best_cds_match_transcript_id_A, sA]
+
+## held-out accessory, canonical: E_all -> U_all (rows: before, columns: after)
+sB       exact  partial
+sA                     
+exact        0        3
+missed       0        2
+partial      3        0
+Empty DataFrame
+
+## held-out accessory, canonical: A_helixer -> U_all_lr (rows: before, columns: after)
+sB       exact  partial
+sA                     
+missed       1       10
+partial      3        0
+Empty DataFrame
+Columns: [w, start_A, end_A, strand_A, best_cds_match_transcript_id_A, sA]
+
+## held-out accessory, canonical: E_lr -> U_all_lr (rows: before, columns: after)
+sB       exact  partial
+sA                     
+exact        0        3
+missed       0        2
+partial      4        0
+Empty DataFrame
+
+## held-out accessory, canonical: U_all -> U_all_lr (rows: before, columns: after)
+sB       exact  missed
+sA                    
+partial      1       1
+                w  start_A  ...  best_cds_match_transcript_id_A       sA
+gene_id                     ...                                         
+Mycgr3G97740  h16   312549  ...                     ZT_00183.t1  partial
+
+## dev core, canonical: A_helixer -> E_all (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   1       0       15
+ic           0   0       0        1
+missed       0   0       0        9
+partial      3   3       1        0
+
+## dev core, canonical: A_helixer -> U_all (rows: before, columns: after)
+sB       exact  ic  partial
+sA                         
+exact        0   1        2
+ic           0   0        1
+missed       0   0        8
+partial     34  14        0
+
+## dev core, canonical: E_all -> U_all (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   2       0        3
+ic           1   0       0        1
+missed       0   1       0        0
+partial     48  10       1        0
+
+## dev core, canonical: A_helixer -> U_all_lr (rows: before, columns: after)
+sB       exact  ic  partial
+sA                         
+exact        0   1        7
+missed       2   0       18
+partial     59  22        0
+Empty DataFrame
+
+## dev core, canonical: E_lr -> U_all_lr (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   1       0        1
+missed       1   0       0        1
+partial     35  11       2        0
+                w  start_A  ...  best_cds_match_transcript_id_A       sA
+
+## dev core, canonical: U_all -> U_all_lr (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   1       0       10
+ic           4   0       0        0
+missed       2   0       0       12
+partial     27  12       2        0
+
+## dev accessory, canonical: A_helixer -> E_all (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   0       0        1
+missed       0   1       0        7
+partial      2   1       1        0
+                w  start_A  ...  best_cds_match_transcript_id_A       sA
+
+## dev accessory, canonical: A_helixer -> U_all (rows: before, columns: after)
+sB       exact  ic  partial
+sA                         
+missed       0   1        6
+partial      3   1        0
+Empty DataFrame
+Columns: [w, start_A, end_A, strand_A, best_cds_match_transcript_id_A, sA]
+
+## dev accessory, canonical: E_all -> U_all (rows: before, columns: after)
+sB       exact  missed  partial
+sA                             
+exact        0       0        1
+missed       0       0        1
+partial      3       1        0
+                w  start_A  ...  best_cds_match_transcript_id_A       sA
+
+## dev accessory, canonical: A_helixer -> U_all_lr (rows: before, columns: after)
+sB       exact  ic  missed  partial
+sA                                 
+exact        0   0       0        1
+ic           0   0       0        1
+missed       0   1       0        7
+partial      3   1       1        0
+
+## dev accessory, canonical: E_lr -> U_all_lr (rows: before, columns: after)
+sB       exact  missed  partial
+sA                             
+exact        0       0        1
+missed       0       0        2
+partial      4       1        0
+                w  start_A  ...  best_cds_match_transcript_id_A       sA
+
+## dev accessory, canonical: U_all -> U_all_lr (rows: before, columns: after)
+sB       missed  partial
+sA                      
+exact         0        1
+ic            0        1
+missed        0        2
+partial       2        0
+

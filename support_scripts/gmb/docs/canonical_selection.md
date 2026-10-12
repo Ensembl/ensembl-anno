@@ -60,6 +60,26 @@ primary whenever the earlier tiers tie, which they do when protein validation is
 *Z. tritici* that changed 199 of ~3,100 canonical transcripts in nine windows and lost more
 reference-exact models than it gained (`release/evidence_integration.md`).
 
+**What can still override the build primary when `prefer_build_primary` is on.** Only the
+tiers above it: an isoform with a complete ORF where the primary's is partial, no internal stop
+where the primary has one (both only when protein validation ran, see tier 1), a better
+protein-validation result, or more evidence *classes*. In practice the last means a long-read +
+short-read isoform against a backbone-only or short-read-only primary. On the 17
+*Z. tritici* evaluation windows the experimental configuration overrode no primary without long
+reads, and 243 of 6,095 with collapsed long reads, all by evidence-class breadth (21
+reference-exact canonicals gained, 14 lost). With protein validation on, 14 of 5,988 were
+overridden, all by the protein-validation tier.
+
+**Reading the result.** `selection_reason` reports `LOW_CONFIDENCE_NO_PROTEIN_SUPPORT` for any
+canonical without a protein-validation result, which hides the tier that decided. Use
+`deciding_tier` and `canonical_is_build_primary` in `canonical_transcripts.tsv`, and
+`canonical_not_build_primary_by_tier` in `canonical_selection_summary.json`.
+
+**Configuration.** `gmb-finalise` uses the build's `resolved_config.yaml`, so a build made with
+the experimental overlay is finalised with `prefer_build_primary: true` automatically. The
+standalone `gmb-canonical-selection` command takes its own `--preset` / `--config`; pass the
+same overlay there.
+
 The `canonical_total_score` column in `canonical_transcripts.tsv` is the
 continuous weighted score. It reflects *how much better* the canonical is
 relative to alternatives — it is **not** what picked it (the priority order

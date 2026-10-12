@@ -1,0 +1,14 @@
+date: 2026-10-09T16:56:57Z
+gmb_commit: be54b99abaf714997062a2913cba92142f64fa1c (+uncommitted changes)
+gmb_branch: gmb/evidence-tuning
+python: 3.11.17
+gene-model-builder: 2.0.0
+pandas: 2.3.3
+pyranges: 0.1.4
+numpy: 2.4.6
+pyyaml: 6.0.3
+annotation-qc: /opt/homebrew/Caskroom/miniforge/base/envs/ensembl-genes-aqc/bin/annotation-qc
+ensembl-genes: 0.1.0
+ensembl_genes_commit: 3a4941e3c7cac8f68dc135cef2e23e6d64eaeb56
+overlay_sha256: 3888af2a6bc4864b43fdecabb5315268d5b9e420e7a76315d3bc310ae234b5bd
+windows_sha256: 56cd6fbae8990eea543c076779438f63a324932d68fdd241b9c1c82e8a133085

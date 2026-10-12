@@ -1,0 +1,18 @@
+arm	tracks	configs	description
+A_helixer	-	-	raw Helixer, no GMB
+B_hx	helixer	-	fungi preset, Helixer only
+C_hx_prot	helixer,protein	-	+ protein alignments
+D1_hx_scallop	helixer,scallop	-	+ Scallop
+D2_hx_stringtie	helixer,stringtie	-	+ StringTie
+D_hx_sr	helixer,scallop,stringtie	-	+ both short-read tracks
+D3_hx_lr	helixer,longread	-	+ collapsed long reads only
+E_all	helixer,scallop,stringtie,protein	-	baseline: fungi preset, all evidence as delivered
+E_lr	helixer,scallop,stringtie,protein,longread	-	baseline + collapsed long reads
+U_B_hx	helixer	overlay	overlay, Helixer only
+U_C_hx_prot	helixer,protein	overlay	overlay + protein
+U_D_hx_sr	helixer,scallop,stringtie	overlay	overlay + short reads
+U_D3_hx_lr	helixer,longread	overlay	overlay + long reads only
+U_D_hx_sr_lr	helixer,scallop,stringtie,longread	overlay	overlay + short + long reads, no protein
+U_all	helixer,scallop,stringtie,protein	overlay	experimental: fungi + overlay, all evidence as delivered
+U_all_lr	helixer,scallop,stringtie,protein,longread	overlay	experimental + collapsed long reads
+U_all_pv	helixer,scallop,stringtie,protein	overlay,pv	experimental + protein validation (only with PV_CONFIG)

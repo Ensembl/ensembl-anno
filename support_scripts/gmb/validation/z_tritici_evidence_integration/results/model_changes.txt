@@ -1,0 +1,10 @@
+## held-out core
+E_all {'changed': 49, 'changed_improved': 5, 'changed_regressed': 11, 'changed_uncertain': 33, 'new_locus': 177, 'new_locus_rank0': 172, 'new_locus_rank1': 4, 'new_locus_rank3': 1, 'unchanged': 2294}
+U_all {'changed': 139, 'changed_improved': 42, 'changed_regressed': 5, 'changed_uncertain': 92, 'new_locus': 159, 'new_locus_rank0': 155, 'new_locus_rank1': 3, 'new_locus_rank3': 1, 'unchanged': 2198}
+E_lr {'changed': 166, 'changed_improved': 35, 'changed_regressed': 18, 'changed_uncertain': 113, 'new_locus': 221, 'new_locus_rank0': 212, 'new_locus_rank1': 7, 'new_locus_rank2': 1, 'new_locus_rank3': 1, 'unchanged': 2163}
+U_all_lr {'changed': 274, 'changed_improved': 77, 'changed_regressed': 17, 'changed_uncertain': 180, 'new_locus': 192, 'new_locus_rank0': 183, 'new_locus_rank1': 6, 'new_locus_rank2': 1, 'new_locus_rank3': 2, 'unchanged': 2064}
+## held-out accessory
+E_all {'changed': 54, 'changed_improved': 5, 'changed_regressed': 5, 'changed_uncertain': 44, 'new_locus': 71, 'new_locus_rank0': 64, 'new_locus_rank1': 6, 'new_locus_rank3': 1, 'unchanged': 351}
+U_all {'changed': 27, 'changed_improved': 2, 'changed_regressed': 1, 'changed_uncertain': 24, 'new_locus': 57, 'new_locus_rank0': 52, 'new_locus_rank1': 4, 'new_locus_rank3': 1, 'unchanged': 382}
+E_lr {'changed': 58, 'changed_improved': 5, 'changed_regressed': 6, 'changed_uncertain': 47, 'new_locus': 77, 'new_locus_rank0': 70, 'new_locus_rank1': 6, 'new_locus_rank3': 1, 'unchanged': 316}
+U_all_lr {'changed': 49, 'changed_improved': 3, 'changed_regressed': 2, 'changed_uncertain': 44, 'new_locus': 65, 'new_locus_rank0': 60, 'new_locus_rank1': 4, 'new_locus_rank3': 1, 'unchanged': 361}

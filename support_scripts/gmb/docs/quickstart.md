@@ -41,6 +41,16 @@ Long-read evidence is optional. A reference annotation is **never** an input.
 
 Details and evidence: `presets.md`.
 
+For fungi there are two supported configurations: the `fungi` preset as is (A, the validated
+baseline) and the same preset plus `--config configs/fungi_evidence_integration.experimental.yaml`
+(B, experimental evidence integration, pending the production-scale test). Pass the same
+`--config` to `gmb-preflight` and `gmb-build`; `gmb-finalise` picks it up from the build. See
+`../HANDOVER.md` §3.
+
+Long reads must be collapsed before use:
+`gmb-longread-consensus --input reads.gtf --preset fungi --output-dir lr/`, then
+`--minimap2 lr/minimap2_consensus.gtf`.
+
 ## 4. Run
 
 ```bash

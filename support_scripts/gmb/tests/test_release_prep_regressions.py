@@ -904,6 +904,13 @@ EVIDENCE_ATTRIBUTION_COLUMNS = [
     "introns_without_transcript_support",
     "protein_alignments_compatible",
     "protein_alignments_incompatible",
+    # ORF integrity and reference-free locus context, appended after 2.0.0
+    "orf_label",
+    "is_partial_5",
+    "is_partial_3",
+    "internal_stop_count",
+    "gene_has_backbone_model",
+    "opposite_strand_cds_overlap",
 ]
 
 

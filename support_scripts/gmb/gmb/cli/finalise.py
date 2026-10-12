@@ -10,3 +10,8 @@ from __future__ import annotations
 from gmb.pipeline.finalise import main
 
 __all__ = ["main"]
+
+
+if __name__ == "__main__":
+    # `python -m gmb.cli.finalise` used to import main and exit 0 without running.
+    raise SystemExit(main())

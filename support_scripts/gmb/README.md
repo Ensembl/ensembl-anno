@@ -76,6 +76,12 @@ gmb-build --preset fungi --genome $G --helixer helixer.gff3 \
 gmb-finalise --build-dir out/build --genome $G --output-dir out/finalise
 ```
 
+For the experimental evidence-integrated configuration add
+`--config configs/fungi_evidence_integration.experimental.yaml` to preflight and build; to use
+the long reads, collapse them first (`gmb-longread-consensus --input
+${EV}_minimap2_annotation.gtf --preset fungi --output-dir lr/`) and add
+`--minimap2 lr/minimap2_consensus.gtf`. Both are described in [HANDOVER.md](HANDOVER.md).
+
 The `genblast_annotation.gtf` from Ensembl anno is the genBlastG alignment of **UniProt**
 proteins; pass it as `--uniprot` to match the validated baseline (labels only affect
 attribution). Do not pass the raw per-read `minimap2_annotation.gtf` (2 M reads for this
