@@ -174,7 +174,7 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
         region_fasta_out.write(f">{region_name}\n{seq}\n")
     region_results_file = Path(f"{region_file}.rm.gtf")
     output_file = Path(f"{region_file}.out")
-    masked_file = Path(f"{region_file}.masked")
+    _masked_file = Path(f"{region_file}.masked")
     tbl_file = Path(f"{region_file}.tbl")
     log_file = Path(f"{region_file}.log")
     cat_file = Path(f"{region_file}.cat")
@@ -191,7 +191,7 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     cat_file.unlink(missing_ok=True)
 
 
-def slice_output_to_masked_fasta(
+def slice_output_to_masked_fasta(# pylint: disable=too-many-locals
     output_dir: Path,
     output_fasta: str = "genome.masked.fa",
 ) -> None:
@@ -277,13 +277,7 @@ def slice_output_to_masked_fasta(
 
             output.write("\n")
 
-
-import re
-from pathlib import Path
-from collections import defaultdict
-
-
-def slice_output_to_repeatmasker_out(
+def slice_output_to_repeatmasker_out(# pylint: disable=too-many-locals, too-many-branches,too-many-statements
     output_dir: Path,
     output_file: str = "annotation.rm.tsv",
     provenance_file: str = "annotation.provenance.tsv",
@@ -396,9 +390,8 @@ def slice_output_to_repeatmasker_out(
                 # Check for missing slices between intervals
                 if start > previous_end + 1:
                     raise ValueError(
-                        f"Missing RepeatMasker slice in "
-                        f"{seq_region}: "
-                        f"{previous_end + 1}-{start - 1}"
+                        f"Missing RepeatMasker slice in " \
+                        f"{seq_region}: " f"{previous_end + 1}-{start - 1}"
                     )
 
                 offset = start - 1
@@ -446,11 +439,8 @@ def slice_output_to_repeatmasker_out(
                         # Validate coordinates against slice length
                         slice_length = end - start + 1
 
-                        if (
-                            q_begin_local < 1
-                            or q_end_local < q_begin_local
-                            or q_end_local > slice_length
-                        ):
+                        if q_begin_local < 1 or q_end_local < q_begin_local \
+                        or q_end_local > slice_length:
                             raise ValueError(
                                 f"Invalid repeat coordinates in "
                                 f"{input_file.name}, "
@@ -492,9 +482,8 @@ def slice_output_to_repeatmasker_out(
 
                             # Write provenance once per new ID
                             provenance.write(
-                                f"{repeat_counter}\t"
-                                f"{original_repeat_id}\t"
-                                f"{input_file.name}\n"
+                                f"{repeat_counter}\t" f"{original_repeat_id}\t" \
+                                    f"{input_file.name}\n"
                             )
 
                             repeat_counter += 1
