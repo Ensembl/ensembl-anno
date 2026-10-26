@@ -1,3 +1,4 @@
+#pylint: disable=line-too-long
 # See the NOTICE file distributed with this work for additional information #pylint: disable=missing-module-docstring
 # regarding copyright ownership.
 #
@@ -191,7 +192,7 @@ def _multiprocess_repeatmasker(  # pylint: disable=too-many-locals
     cat_file.unlink(missing_ok=True)
 
 
-def slice_output_to_masked_fasta(# pylint: disable=too-many-locals
+def slice_output_to_masked_fasta(  # pylint: disable=too-many-locals
     output_dir: Path,
     output_fasta: str = "genome.masked.fa",
 ) -> None:
@@ -277,7 +278,8 @@ def slice_output_to_masked_fasta(# pylint: disable=too-many-locals
 
             output.write("\n")
 
-def slice_output_to_repeatmasker_out(# pylint: disable=too-many-locals, too-many-branches,too-many-statements
+
+def slice_output_to_repeatmasker_out(  # pylint: disable=too-many-locals, too-many-branches,too-many-statements
     output_dir: Path,
     output_file: str = "annotation.rm.tsv",
     provenance_file: str = "annotation.provenance.tsv",
@@ -390,8 +392,7 @@ def slice_output_to_repeatmasker_out(# pylint: disable=too-many-locals, too-many
                 # Check for missing slices between intervals
                 if start > previous_end + 1:
                     raise ValueError(
-                        f"Missing RepeatMasker slice in " \
-                        f"{seq_region}: " f"{previous_end + 1}-{start - 1}"
+                        f"Missing RepeatMasker slice in " f"{seq_region}: " f"{previous_end + 1}-{start - 1}"
                     )
 
                 offset = start - 1
@@ -439,8 +440,7 @@ def slice_output_to_repeatmasker_out(# pylint: disable=too-many-locals, too-many
                         # Validate coordinates against slice length
                         slice_length = end - start + 1
 
-                        if q_begin_local < 1 or q_end_local < q_begin_local \
-                        or q_end_local > slice_length:
+                        if q_begin_local < 1 or q_end_local < q_begin_local or q_end_local > slice_length:
                             raise ValueError(
                                 f"Invalid repeat coordinates in "
                                 f"{input_file.name}, "
@@ -482,8 +482,7 @@ def slice_output_to_repeatmasker_out(# pylint: disable=too-many-locals, too-many
 
                             # Write provenance once per new ID
                             provenance.write(
-                                f"{repeat_counter}\t" f"{original_repeat_id}\t" \
-                                    f"{input_file.name}\n"
+                                f"{repeat_counter}\t" f"{original_repeat_id}\t" f"{input_file.name}\n"
                             )
 
                             repeat_counter += 1
