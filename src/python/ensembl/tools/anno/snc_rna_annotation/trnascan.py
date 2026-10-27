@@ -1,3 +1,4 @@
+# pylint: disable=line-too-long
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
@@ -66,9 +67,7 @@ def run_trnascan(  # pylint:disable=too-many-arguments,too-many-positional-argum
         :param num_threads: int, number of threads.
         :type num_threads: int, default 1
         :param bedtools_path: Bedtools executable path.
-        # pylint: disable=line-too-long
         :type bedtools_path: str, default '/hps/software/users/ensembl/ensw/C8-MAR21-sandybridge/linuxbrew/bin/bedtools'
-        # pylint: enable=line-too-long
         :return: None
         :rtype: None
     """
