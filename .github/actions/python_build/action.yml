@@ -37,10 +37,10 @@ runs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        pip install bin/src/python/ensembl/tools/anno/nextflow_utils/requirements.txt
 
         if [ -n "${{ inputs.tags }}" ]; then
           pip install ".${{ inputs.tags }}"
-        else
-          pip install bin/src/python/ensembl/tools/anno/nextflow_utils/requirements.txt
+
         fi
       shell: bash
