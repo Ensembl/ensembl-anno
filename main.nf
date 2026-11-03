@@ -1,6 +1,7 @@
 #!/usr/bin/env nextflow
 
 include { ANNOTATION } from './workflows/annotation.nf'
+include { MAIN_PIPELINE } from './workflows/main_pipeline.nf'
 
 nextflow.enable.dsl = 2
 
@@ -66,7 +67,15 @@ def generate_long_reads_ch(long_read_dir){
 
 workflow {
 
-    // Set up reads channels for the transcriptomics pipeline
+    // Initialise a fasta channel (containing the unsliced fasta)
+    fasta_ch = channel.fromPath(params.fasta)
+
+    if (params.pipeline == 'main'){
+        igmt_fasta_ch = channel.fromPath(params.igmt_fasta)
+        MAIN_PIPELINE(fasta_ch, igmt_fasta_ch)
+    } else {
+
+        // Set up reads channels for the transcriptomics pipeline
     // First short reads:
     short_read_ch = channel.empty()
     if (params.short_read_dir != null){
@@ -80,8 +89,7 @@ workflow {
         long_read_ch = generate_long_reads_ch(params.long_read_dir)
     }
 
-    // Initialise a fasta channel (containing the unsliced fasta)
-    fasta_ch = channel.fromPath(params.fasta)
+    
 
     // Set up a channel containing protein fastas
     orthodb_ch = channel.fromPath(params.orthodb).map{
@@ -156,4 +164,8 @@ workflow {
                 rfam_cm_db_ch,
                 rfam_seeds_file_ch,
                 genblast_alignscore)
+        
+    }
+
+    
 }

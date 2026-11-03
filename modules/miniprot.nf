@@ -15,10 +15,7 @@ process MINIPROT {
     script:
     """
     /homes/ereboperezsilva/.local/bin/miniprot \
-        -t ${params.n_threads} \
-        -N 1 \
-        --outs=1.0 \
-        --gff \
+        ${args} \
         ${miniprot_index} \
         ${protein_file} > ${protein_source}.miniprot.gff
 
