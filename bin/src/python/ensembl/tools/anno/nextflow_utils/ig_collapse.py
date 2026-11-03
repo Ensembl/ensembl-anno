@@ -20,7 +20,6 @@ def read_in_miniprot_gff(miniprot_gff_path):
     miniprot_gtf['identity'] = [[x.split('=')[1] for x in y.split(';') if 'Identity' in x] for y in miniprot_gtf['attributes']]
     miniprot_gtf['identity'] = pd.to_numeric(miniprot_gtf['identity'].explode())
     miniprot_gtf = miniprot_gtf.reset_index(drop=True)
-    print(miniprot_gtf)
     return miniprot_gtf
 
 
@@ -51,6 +50,7 @@ def does_alignment_overlap_cluster(row, cluster_info):
 
 
 def update_cluster_info(row, cluster_info):
+
 
     # Expand cluster interval if required:
     if row['start'] < cluster_info['start']:
@@ -125,7 +125,7 @@ def merge_overlapping_clusters(cluster_dict):
 def make_clusters(alignment_df):
 
     cluster_dict = {}
-    cluster_id = 1
+    next_id = 1
 
     for index, row in alignment_df.iterrows():
         for (cluster_id, cluster_info) in cluster_dict.items():
@@ -134,17 +134,16 @@ def make_clusters(alignment_df):
             # and break out of the for loop so that no alignment is recorded in more than one cluster:
             if does_alignment_overlap_cluster(row, cluster_info):
                 cluster_dict[cluster_id] = update_cluster_info(row, cluster_info)
-                cluster_id += 1
                 break
         else:
             # If there are no overlaps, add the alignment as a new cluster to the dictionary:
-            cluster_dict[cluster_id] = {
+            cluster_dict[next_id] = {
                 'chr': row['chr'],
                 'start': row['start'],
                 'end': row['end'],
-                'df': pd.concat([row])
+                'df': row.to_frame().T.reset_index(drop=True)
             }
-            cluster_id += 1
+            next_id += 1
 
     # The for loops above could generate a list of clusters where some clusters overlap
     # merge_overlapping_clusters consolidates overlapping clusters into one:
@@ -157,10 +156,12 @@ def select_top_alignment_per_cluster(cluster_list):
 
     for cluster in cluster_list:
         alignment_df = cluster['df']
+        print(alignment_df)
+        alignment_df['identity'] = pd.to_numeric(alignment_df['identity'])
         alignment_df = alignment_df.loc[alignment_df['identity'].idxmax()]
-        top_alignment_dfs.append(alignment_df)
+        top_alignment_dfs.append(alignment_df.to_frame().T.reset_index(drop=True))
 
-    top_alignment_df = pd.concat(top_alignment_dfs)
+    top_alignment_df = pd.concat(top_alignment_dfs).reset_index(drop=True)
     return top_alignment_df 
 
 
