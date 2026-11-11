@@ -39,6 +39,7 @@ jobs:
 
       - name: Run pylint
         run: |
+          export PYTHONPATH='.'
           pylint --rcfile pyproject.toml bin/src/python/ensembl/tools/anno
           pylint --rcfile pyproject.toml tests
 
