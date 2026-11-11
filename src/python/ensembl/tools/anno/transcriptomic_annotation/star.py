@@ -225,7 +225,8 @@ def run_star(  # pylint:disable=too-many-branches, too-many-arguments, too-many-
             )
             continue
 
-        read_files_in = ",".join(str(fastq_file) for fastq_file in paired_files)
+        # paired_files must be ordered [R1, R2]
+        read_files_in = [str(fastq_file) for fastq_file in paired_files]
 
         logging.info("Processing %s", list(paired_files))
         star_command = [
@@ -243,7 +244,7 @@ def run_star(  # pylint:disable=too-many-branches, too-many-arguments, too-many-
             "--genomeDir",
             str(star_dir),
             "--readFilesIn",
-            read_files_in,
+            *read_files_in,
             "--outFileNamePrefix",
             f"{star_dir}/",
             "--outTmpDir",
@@ -284,34 +285,60 @@ def run_star(  # pylint:disable=too-many-branches, too-many-arguments, too-many-
 
 def _create_paired_paths(fastq_file_paths: List[Path]) -> List[List[Path]]:
     """
-    Create list of paired transcriptomic fastq files
+    Group paired FASTQs in deterministic R1, R2 order.
 
     Args:
-        fastq_file_paths (List): List of transcriptomic file paths.
+        fastq_file_paths (List): List of transcriptomic file paths in order R1, R2.
 
     Returns:
         List[List[Path]]: List of paired transcriptomic files
     """
-    path_dict: Dict[str, List[Path]] = {}
-    final_list: List[List[Path]] = []
+
+    pairs = {}
+
     for fastq_file in fastq_file_paths:
-        paired_name = re.search(r"(.+)_\d+\.(fastq|fq)", str(fastq_file))
-        if not paired_name:
-            logging.exception(
-                "Could not find _1 or _2 at the end of the prefix \
-                for file. Assuming file is not paired: %s",
-                str(fastq_file),
+        match = re.fullmatch(
+            r"(?P<sample>.+)_(?P<mate>[12])\.(?:fastq|fq)(?:\.gz)?",
+            fastq_file.name,
+        )
+
+        if not match:
+            raise ValueError(
+                f"Unexpected FASTQ filename: {fastq_file}. "
+                "Expected _1.fastq or _2.fastq "
+                "(also supports .fq and .gz)."
             )
-            final_list.append([fastq_file])
-            continue
-        run_accession = paired_name.group(1)
-        if run_accession in path_dict:
-            path_dict[run_accession].append(fastq_file)
-        else:
-            path_dict[run_accession] = [fastq_file]
-    for pair in path_dict:  # pylint:disable=consider-using-dict-items
-        final_list.append(path_dict[pair])
-    return final_list
+
+        # Include parent directory to avoid combining
+        # identically named samples from different directories.
+        key = (fastq_file.parent, match.group("sample"))
+        mate = int(match.group("mate"))
+
+        pair = pairs.setdefault(key, {})
+
+        if mate in pair:
+            raise ValueError(
+                f"Duplicate R{mate} FASTQ for {key}: "
+                f"{pair[mate]} and {fastq_file}"
+            )
+
+        pair[mate] = fastq_file
+
+    result = []
+
+    for key in sorted(pairs, key=lambda k: (str(k[0]), k[1])):
+        pair = pairs[key]
+
+        if set(pair) != {1, 2}:
+            raise ValueError(
+                f"Incomplete paired-end FASTQs for {key}: "
+                f"found mates {sorted(pair)}"
+            )
+
+        result.append([pair[1], pair[2]])
+
+    return result
+
 
 
 # pylint:disable=pointless-string-statement
