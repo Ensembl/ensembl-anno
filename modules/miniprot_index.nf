@@ -1,5 +1,5 @@
 process MINIPROT_INDEX {
-    label 'process_medium'
+    label 'process_high_memory'
 
     publishDir "${params.outdir}/miniprot_index",
         mode: 'copy'

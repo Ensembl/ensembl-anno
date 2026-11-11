@@ -15,7 +15,7 @@ process MINIPROT {
     script:
     """
     /homes/ereboperezsilva/.local/bin/miniprot \
-        ${args} \
+        ${task.ext.args} \
         ${miniprot_index} \
         ${protein_file} > ${protein_source}.miniprot.gff
 

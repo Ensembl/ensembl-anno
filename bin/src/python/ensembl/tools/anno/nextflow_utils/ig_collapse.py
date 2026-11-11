@@ -3,45 +3,84 @@ import pandas as pd
 
 
 def read_in_miniprot_gff(miniprot_gff_path):
+    """
+    Reads in a miniprot gff and extracts relevant fields from the attributes column as columns
+    """
 
     # Read in gtf as a pandas dataframe and set column names:
-    miniprot_gtf = pd.read_csv(miniprot_gff_path, sep='\t', comment='#', header=None)
-    miniprot_gtf.columns = ['chr', 'source', 'feature_type', 'start', 'end', 'score', \
-                        'strand', 'frame', 'attributes']
+    miniprot_gtf = pd.read_csv(miniprot_gff_path, sep="\t", comment="#", header=None)
+    miniprot_gtf.columns = [
+        "chr",
+        "source",
+        "feature_type",
+        "start",
+        "end",
+        "score",
+        "strand",
+        "frame",
+        "attributes",
+    ]
 
     # Miniprot records as CDS and mRNA record for each alignment. Just keep the mRNA record as it
     # is easier to handle:
-    miniprot_gtf = miniprot_gtf[miniprot_gtf['feature_type']=='mRNA']
+    miniprot_gtf = miniprot_gtf[miniprot_gtf["feature_type"] == "mRNA"]
 
     # Extract rank, target name and % identity from the attributes field:
-    miniprot_gtf['rank'] = [[x for x in y.split(';') if 'Rank' in x][0] for y in miniprot_gtf['attributes']]
-    miniprot_gtf['target'] = [[x.split('|')[1] for x in y.split(';') if 'Target' in x] for y in miniprot_gtf['attributes']]
-    miniprot_gtf['target'] = miniprot_gtf['target'].explode()
-    miniprot_gtf['identity'] = [[x.split('=')[1] for x in y.split(';') if 'Identity' in x] for y in miniprot_gtf['attributes']]
-    miniprot_gtf['identity'] = pd.to_numeric(miniprot_gtf['identity'].explode())
+    miniprot_gtf["rank"] = [[x for x in y.split(";") if "Rank" in x][0] for y in miniprot_gtf["attributes"]]
+    miniprot_gtf["target"] = [
+        [x.split("|")[1] for x in y.split(";") if "Target" in x] for y in miniprot_gtf["attributes"]
+    ]
+    miniprot_gtf["target"] = miniprot_gtf["target"].explode()
+    miniprot_gtf["identity"] = [
+        [x.split("=")[1] for x in y.split(";") if "Identity" in x] for y in miniprot_gtf["attributes"]
+    ]
+    miniprot_gtf["identity"] = pd.to_numeric(miniprot_gtf["identity"].explode())
+    miniprot_gtf["length"] = miniprot_gtf["end"] - miniprot_gtf["start"]
     miniprot_gtf = miniprot_gtf.reset_index(drop=True)
     return miniprot_gtf
 
 
 def pre_filter_alignments(alignment_df):
+    """
+    Filter alignments based on rank, and a graduating identity filter based on length
+    """
 
     # Only keep Rank=1 alignments:
-    alignment_df = alignment_df[alignment_df['rank']=='Rank=1']
+    alignment_df = alignment_df[alignment_df["rank"] == "Rank=1"]
     alignment_df = alignment_df.reset_index(drop=True)
+
+    # Remove short alignments if they aren't perfect hits
+    alignment_df = alignment_df.drop(
+        alignment_df[(alignment_df["length"] < 30) & (alignment_df["identity"] < 0.99)].index
+    ).reset_index(drop=True)
+
+    # Require >0.8 identity for medium length alignments
+    alignment_df = alignment_df.drop(
+        alignment_df[(alignment_df["length"] < 60) & (alignment_df["identity"] < 0.8)].index
+    ).reset_index(drop=True)
+
+    # Require a minimum identity of 0.6
+    alignment_df = alignment_df.drop(alignment_df[(alignment_df["identity"] < 0.6)].index).reset_index(
+        drop=True
+    )
+
     return alignment_df
 
 
 def does_alignment_overlap_cluster(row, cluster_info):
+    """
+    Check whether an alignment overlaps the start and end coordinates of a cluster
+    """
 
     # Back out straight away if the chromosomes don't match
-    if row['chr'] != cluster_info['chr']:
+    if row["chr"] != cluster_info["chr"]:
         return False
 
     # Extract coordinates to establish if there is an overlap:
-    alignment_start = row['start']
-    alignment_end = row['end']
-    cluster_start = cluster_info['start']
-    cluster_end = cluster_info['end']
+    alignment_start = row["start"]
+    alignment_end = row["end"]
+    cluster_start = cluster_info["start"]
+    cluster_end = cluster_info["end"]
 
     # If there is an overlap, this statement will be true:
     if (alignment_start <= cluster_end) and (cluster_start <= alignment_end):
@@ -50,36 +89,48 @@ def does_alignment_overlap_cluster(row, cluster_info):
 
 
 def update_cluster_info(row, cluster_info):
-
+    """
+    Update cluster start and/or end coordinates to include overlapping alignment, if required.
+    """
 
     # Expand cluster interval if required:
-    if row['start'] < cluster_info['start']:
-        cluster_info['start'] = row['start']
-    if row['end'] > cluster_info['end']:
-        cluster_info['end'] = row['end']
+    if row["start"] < cluster_info["start"]:
+        cluster_info["start"] = row["start"]
+    if row["end"] > cluster_info["end"]:
+        cluster_info["end"] = row["end"]
 
     # Add the alignment record to the cluster specific dataframe:
-    cluster_info['df'] = pd.concat([cluster_info['df'], row.to_frame().T]).reset_index(drop=True)
+    cluster_info["df"] = pd.concat([cluster_info["df"], row.to_frame().T]).reset_index(drop=True)
 
     return cluster_info
 
 
 def merge_adjacent_clusters(cluster_info_dict, adjacent_cluster_info_dict):
+    """
+    Merge two clusters, updating the end coordinate if necessary and concatenating the dataframes
+    of alignments
+    """
 
     # cluster_info_dict is guaranteed to have a larger start coordinate than adjacent cluster_info_dict, so
     # no need to change the start coordinate.
     # Update the end coordinate if required:
-    if cluster_info_dict['end'] > adjacent_cluster_info_dict['end']:
-        adjacent_cluster_info_dict['end'] = cluster_info_dict['end']
+    if cluster_info_dict["end"] > adjacent_cluster_info_dict["end"]:
+        adjacent_cluster_info_dict["end"] = cluster_info_dict["end"]
 
     # Combine the two cluster dataframes (containing miniprot alignment records)
-    adjacent_cluster_info_dict['df'] = pd.concat(
-        [adjacent_cluster_info_dict['df'], cluster_info_dict['df']]
-        ).reset_index(drop=True)
+    adjacent_cluster_info_dict["df"] = pd.concat(
+        [adjacent_cluster_info_dict["df"], cluster_info_dict["df"]]
+    ).reset_index(drop=True)
     return adjacent_cluster_info_dict
 
 
 def merge_overlapping_clusters(cluster_dict):
+    """
+    Determine whether there are overlapping clusters in a dictionary of clusters, and if so,
+    merge the overlapping clusters.
+
+    Return a list of merged clusters.
+    """
 
     # Sort cluster dictionaries by chromosome and start coordinate
     sorted_clusters = sorted(cluster_dict.items(), key=lambda tup: (tup[1]["chr"], tup[1]["start"]))
@@ -87,13 +138,12 @@ def merge_overlapping_clusters(cluster_dict):
     merged_clusters = []
 
     for cluster in sorted_clusters:
-
         cluster_info_dict = cluster[1]
-        
+
         # If this is the first cluster, add it to the merged cluster list
-        if len(merged_clusters)==0:
+        if len(merged_clusters) == 0:
             merged_clusters.append(cluster_info_dict)
-            continue       
+            continue
 
         # Pull the last cluster out of the list of merged_clusters.
         # This will be the cluster we will see if we can merge with.
@@ -101,17 +151,17 @@ def merge_overlapping_clusters(cluster_dict):
         adjacent_cluster_info_dict = merged_clusters[-1]
 
         # If the chromosomes don't match, we can't merge, so we just add the cluster as is to merged_clusters
-        if adjacent_cluster_info_dict['chr'] != cluster_info_dict['chr']:
+        if adjacent_cluster_info_dict["chr"] != cluster_info_dict["chr"]:
             merged_clusters.append(cluster_info_dict)
             continue
 
         # At this point, we know the chromosomes match, so we want to see if the intervals overlap.
         # Because we have sorted the cluster list by start coordinate, we know the start coordinate of
         # the current cluster comes after the start coordinate of the last merged cluster. Therefore,
-        # the only way there can be an overlap with the last cluster in merged_clusters is if the start 
-        # coordinate of the current cluster comes before the end coordinate of the last cluster in merged 
+        # the only way there can be an overlap with the last cluster in merged_clusters is if the start
+        # coordinate of the current cluster comes before the end coordinate of the last cluster in merged
         # clusters:
-        if cluster_info_dict['start'] <= adjacent_cluster_info_dict['end']:
+        if cluster_info_dict["start"] <= adjacent_cluster_info_dict["end"]:
             updated_cluster_info_dict = merge_adjacent_clusters(cluster_info_dict, adjacent_cluster_info_dict)
             merged_clusters[-1] = updated_cluster_info_dict
             continue
@@ -123,13 +173,16 @@ def merge_overlapping_clusters(cluster_dict):
 
 
 def make_clusters(alignment_df):
+    """
+    Takes a dataframe of alignments as input and returns a list of 'clusters', where each cluster
+    represents a group of overlapping alignments
+    """
 
     cluster_dict = {}
     next_id = 1
 
     for index, row in alignment_df.iterrows():
-        for (cluster_id, cluster_info) in cluster_dict.items():
-
+        for cluster_id, cluster_info in cluster_dict.items():
             # If the alignment overlaps a cluster, update the cluster dictionary to reflect this
             # and break out of the for loop so that no alignment is recorded in more than one cluster:
             if does_alignment_overlap_cluster(row, cluster_info):
@@ -138,10 +191,10 @@ def make_clusters(alignment_df):
         else:
             # If there are no overlaps, add the alignment as a new cluster to the dictionary:
             cluster_dict[next_id] = {
-                'chr': row['chr'],
-                'start': row['start'],
-                'end': row['end'],
-                'df': row.to_frame().T.reset_index(drop=True)
+                "chr": row["chr"],
+                "start": row["start"],
+                "end": row["end"],
+                "df": row.to_frame().T.reset_index(drop=True),
             }
             next_id += 1
 
@@ -152,26 +205,37 @@ def make_clusters(alignment_df):
 
 
 def select_top_alignment_per_cluster(cluster_list):
+    """
+    Find the alignment with the highest identity in each cluster
+    """
+
     top_alignment_dfs = []
 
     for cluster in cluster_list:
-        alignment_df = cluster['df']
+        alignment_df = cluster["df"]
         print(alignment_df)
-        alignment_df['identity'] = pd.to_numeric(alignment_df['identity'])
-        alignment_df = alignment_df.loc[alignment_df['identity'].idxmax()]
+        alignment_df["identity"] = pd.to_numeric(alignment_df["identity"])
+        alignment_df = alignment_df.loc[alignment_df["identity"].idxmax()]
         top_alignment_dfs.append(alignment_df.to_frame().T.reset_index(drop=True))
 
     top_alignment_df = pd.concat(top_alignment_dfs).reset_index(drop=True)
-    return top_alignment_df 
+    return top_alignment_df
 
 
 def write_alignments_to_gtf(top_alignment_df, collapsed_gtf_path):
-    gtf = top_alignment_df[['chr', 'source', 'feature_type', 'start', 'end', 'score', \
-                            'strand', 'frame', 'attributes']]
-    gtf.to_csv(collapsed_gtf_path, index=False, header=False, sep='\t')
+    """
+    Write alignment dataframe to gtf/gff2
+    """
+    gtf = top_alignment_df[
+        ["chr", "source", "feature_type", "start", "end", "score", "strand", "frame", "attributes"]
+    ]
+    gtf.to_csv(collapsed_gtf_path, index=False, header=False, sep="\t")
 
 
 def collapse_alignments(miniprot_gff_path, collapsed_gtf_path):
+    """
+    Orchestrate clustering and collapse of miniprot alignments
+    """
 
     # Read in gtf
     miniprot = read_in_miniprot_gff(miniprot_gff_path)
@@ -190,8 +254,10 @@ def collapse_alignments(miniprot_gff_path, collapsed_gtf_path):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Arguments for script to cluster and collapse miniprot IGMT alignments")
-    parser.add_argument("--miniprot_gff", nargs="+", help="Path to miniprot gtf containing IGMT alignments")
+    parser = argparse.ArgumentParser(
+        description="Arguments for script to cluster and collapse miniprot IGMT alignments"
+    )
+    parser.add_argument("--miniprot_gff", help="Path to miniprot gtf containing IGMT alignments")
     parser.add_argument("--collapsed_gtf", help="Path to output gtf")
     args = parser.parse_args()
     return args
@@ -199,4 +265,4 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    collapse_alignments(args.miniprot_gtf, args.collapsed_gtf)
+    collapse_alignments(args.miniprot_gff, args.collapsed_gtf)

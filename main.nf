@@ -71,7 +71,9 @@ workflow {
     fasta_ch = channel.fromPath(params.fasta)
 
     if (params.pipeline == 'main'){
-        igmt_fasta_ch = channel.fromPath(params.igmt_fasta)
+        igmt_fasta_ch = channel.fromPath(params.igmt_fasta).map{
+            it -> tuple('imgt', it)
+        }
         MAIN_PIPELINE(fasta_ch, igmt_fasta_ch)
     } else {
 
