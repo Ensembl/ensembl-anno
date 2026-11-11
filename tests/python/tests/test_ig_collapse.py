@@ -44,12 +44,12 @@ class TestIGCollapse:
                 "strand": ["+", "+", "+"],
                 "frame": [".", ".", "."],
                 "attributes": [
-                    "ID=MP000001;Rank=1;Identity=0.6625;Positive=0.6667;\
-                        Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
-                    "ID=MP000002;Rank=1;Identity=0.6349;Positive=0.6512;\
-                        Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
-                    "ID=MP000003;Rank=1;Identity=0.6521;Positive=0.6562;\
-                        Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
+                    "ID=MP000001;Rank=1;Identity=0.6625;Positive=0.6667;" \
+                        "Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
+                    "ID=MP000002;Rank=1;Identity=0.6349;Positive=0.6512;" \
+                        "Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
+                    "ID=MP000003;Rank=1;Identity=0.6521;Positive=0.6562;" \
+                        "Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
                 ],
                 "rank": ["Rank=1", "Rank=1", "Rank=1"],
                 "target": ["M99641_IGHV", "X60503_IGHV", "HM855463_IGHV"],
@@ -140,7 +140,6 @@ class TestIGCollapse:
         pd.testing.assert_frame_equal(output_dict["df"], expected_output_dict["df"], check_dtype=False)
         assert output_dict["end"] == 30
 
-        return None
 
     def test_merge_overlapping_clusters(self):
         """
@@ -269,11 +268,9 @@ class TestIGCollapse:
         expected_df = pd.DataFrame(
             {"chr": [1, 2, 3], "start": [5, 10, 1], "end": [12, 20, 10], "identity": [0.5, 0.8, 0.9]}
         )
-        pd.testing.assert_frame_equal(actual_df, expected_df, check_dtype=False)
         actual_df = select_top_alignment_per_cluster(clusters)
-
-        return None
-
+        pd.testing.assert_frame_equal(actual_df, expected_df, check_dtype=False)
+        
     def test_write_alignments_to_gtf(self):
         """
         Tests for write_alignments_to_gtf
@@ -293,12 +290,12 @@ class TestIGCollapse:
                 "strand": ["+", "+", "+"],
                 "frame": [".", ".", "."],
                 "attributes": [
-                    "ID=MP000001;Rank=1;Identity=0.5625;Positive=0.6667;\
-                        Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
-                    "ID=MP000002;Rank=1;Identity=0.5349;Positive=0.6512;\
-                        Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
-                    "ID=MP000003;Rank=1;Identity=0.5521;Positive=0.6562;\
-                        Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
+                    "ID=MP000001;Rank=1;Identity=0.5625;Positive=0.6667;" \
+                        "Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
+                    "ID=MP000002;Rank=1;Identity=0.5349;Positive=0.6512;" \
+                        "Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
+                    "ID=MP000003;Rank=1;Identity=0.5521;Positive=0.6562;" \
+                        "Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
                 ],
                 "rank": ["Rank=1", "Rank=1", "Rank=1"],
                 "target": ["M99641_IGHV", "X60503_IGHV", "HM855463_IGHV"],
