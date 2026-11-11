@@ -102,7 +102,6 @@ class TestIGCollapse:
         """
         Tests for update_cluster_info()
         """
-        # pylint: disable=unused-argument
         test_df = pd.DataFrame({"start": [10], "end": [20], "other_info": ["hello"]})
         cluster_info = {
             "start": 15,
@@ -111,7 +110,7 @@ class TestIGCollapse:
         }
         expected_out_df = pd.DataFrame({"start": [15, 10], "end": [25, 20], "other_info": ["world", "hello"]})
 
-        for index, row in test_df.iterrows():
+        for _index, row in test_df.iterrows():
             output_cluster_info = update_cluster_info(row, cluster_info)
 
         pd.testing.assert_frame_equal(output_cluster_info["df"], expected_out_df, check_dtype=False)
