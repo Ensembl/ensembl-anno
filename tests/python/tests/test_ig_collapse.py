@@ -44,9 +44,12 @@ class TestIGCollapse:
                 "strand": ["+", "+", "+"],
                 "frame": [".", ".", "."],
                 "attributes": [
-                    "ID=MP000001;Rank=1;Identity=0.6625;Positive=0.6667;Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
-                    "ID=MP000002;Rank=1;Identity=0.6349;Positive=0.6512;Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
-                    "ID=MP000003;Rank=1;Identity=0.6521;Positive=0.6562;Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
+                    "ID=MP000001;Rank=1;Identity=0.6625;Positive=0.6667;\
+                        Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
+                    "ID=MP000002;Rank=1;Identity=0.6349;Positive=0.6512;\
+                        Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
+                    "ID=MP000003;Rank=1;Identity=0.6521;Positive=0.6562;\
+                        Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
                 ],
                 "rank": ["Rank=1", "Rank=1", "Rank=1"],
                 "target": ["M99641_IGHV", "X60503_IGHV", "HM855463_IGHV"],
@@ -110,9 +113,9 @@ class TestIGCollapse:
         for index, row in test_df.iterrows():
             output_cluster_info = update_cluster_info(row, cluster_info)
 
+        pd.testing.assert_frame_equal(output_cluster_info["df"], expected_out_df, check_dtype=False)
         assert output_cluster_info["start"] == 10
         assert output_cluster_info["end"] == 25
-        pd.testing.assert_frame_equal(output_cluster_info["df"], expected_out_df, check_dtype=False)
 
     def test_merge_adjacent_clusters(self):
         """
@@ -134,8 +137,8 @@ class TestIGCollapse:
             "df": pd.DataFrame({"start": [15, 17], "end": [25, 30], "other_info": ["hello", "world"]}),
         }
         output_dict = merge_adjacent_clusters(cluster_info_dict, adjacent_cluster_info_dict)
-        assert output_dict["end"] == 30
         pd.testing.assert_frame_equal(output_dict["df"], expected_output_dict["df"], check_dtype=False)
+        assert output_dict["end"] == 30
 
         return None
 
@@ -182,15 +185,15 @@ class TestIGCollapse:
 
         assert len(merged_output) == len(expected_merged_output)
 
+        pd.testing.assert_frame_equal(merged_output[0]["df"], merged_output[0]["df"], check_dtype=False)
         assert merged_output[0]["chr"] == expected_merged_output[0]["chr"]
         assert merged_output[0]["start"] == expected_merged_output[0]["start"]
         assert merged_output[0]["end"] == expected_merged_output[0]["end"]
-        pd.testing.assert_frame_equal(merged_output[0]["df"], merged_output[0]["df"], check_dtype=False)
 
+        pd.testing.assert_frame_equal(merged_output[1]["df"], merged_output[1]["df"], check_dtype=False)
         assert merged_output[1]["chr"] == expected_merged_output[1]["chr"]
         assert merged_output[1]["start"] == expected_merged_output[1]["start"]
         assert merged_output[1]["end"] == expected_merged_output[1]["end"]
-        pd.testing.assert_frame_equal(merged_output[1]["df"], merged_output[1]["df"], check_dtype=False)
 
     def test_make_clusters(self):
         """
@@ -218,23 +221,23 @@ class TestIGCollapse:
         actual_clusters = make_clusters(alignment)
         print(actual_clusters)
 
+        pd.testing.assert_frame_equal(actual_clusters[0]["df"], expected_clusters[0]["df"], check_dtype=False)
         assert len(actual_clusters) == len(expected_clusters)
         assert actual_clusters[0]["chr"] == expected_clusters[0]["chr"]
         assert actual_clusters[0]["start"] == expected_clusters[0]["start"]
         assert actual_clusters[0]["end"] == expected_clusters[0]["end"]
-        pd.testing.assert_frame_equal(actual_clusters[0]["df"], expected_clusters[0]["df"], check_dtype=False)
 
+        pd.testing.assert_frame_equal(actual_clusters[1]["df"], expected_clusters[1]["df"], check_dtype=False)
         assert len(actual_clusters) == len(expected_clusters)
         assert actual_clusters[1]["chr"] == expected_clusters[1]["chr"]
         assert actual_clusters[1]["start"] == expected_clusters[1]["start"]
         assert actual_clusters[1]["end"] == expected_clusters[1]["end"]
-        pd.testing.assert_frame_equal(actual_clusters[1]["df"], expected_clusters[1]["df"], check_dtype=False)
 
+        pd.testing.assert_frame_equal(actual_clusters[2]["df"], expected_clusters[2]["df"], check_dtype=False)
         assert len(actual_clusters) == len(expected_clusters)
         assert actual_clusters[2]["chr"] == expected_clusters[2]["chr"]
         assert actual_clusters[2]["start"] == expected_clusters[2]["start"]
         assert actual_clusters[2]["end"] == expected_clusters[2]["end"]
-        pd.testing.assert_frame_equal(actual_clusters[2]["df"], expected_clusters[2]["df"], check_dtype=False)
 
     def test_select_top_alignment_per_cluster(self):
         """
@@ -266,8 +269,8 @@ class TestIGCollapse:
         expected_df = pd.DataFrame(
             {"chr": [1, 2, 3], "start": [5, 10, 1], "end": [12, 20, 10], "identity": [0.5, 0.8, 0.9]}
         )
-        actual_df = select_top_alignment_per_cluster(clusters)
         pd.testing.assert_frame_equal(actual_df, expected_df, check_dtype=False)
+        actual_df = select_top_alignment_per_cluster(clusters)
 
         return None
 
@@ -290,9 +293,12 @@ class TestIGCollapse:
                 "strand": ["+", "+", "+"],
                 "frame": [".", ".", "."],
                 "attributes": [
-                    "ID=MP000001;Rank=1;Identity=0.5625;Positive=0.6667;Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
-                    "ID=MP000002;Rank=1;Identity=0.5349;Positive=0.6512;Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
-                    "ID=MP000003;Rank=1;Identity=0.5521;Positive=0.6562;Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
+                    "ID=MP000001;Rank=1;Identity=0.5625;Positive=0.6667;\
+                        Frameshift=2;StopCodon=1;Target=IG_V_gene|M99641_IGHV|IMGT 4 98",
+                    "ID=MP000002;Rank=1;Identity=0.5349;Positive=0.6512;\
+                        Frameshift=1;StopCodon=1;Target=IG_V_gene|X60503_IGHV|IMGT 4 88",
+                    "ID=MP000003;Rank=1;Identity=0.5521;Positive=0.6562;\
+                        Frameshift=2;StopCodon=1;Target=IG_V_gene|HM855463_IGHV|IMGT 4 98",
                 ],
                 "rank": ["Rank=1", "Rank=1", "Rank=1"],
                 "target": ["M99641_IGHV", "X60503_IGHV", "HM855463_IGHV"],
