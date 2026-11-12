@@ -39,24 +39,71 @@ from dataclasses import dataclass, field
 
 from gmb.pipeline.star_junctions import JunctionIndex
 
-CANONICAL_MOTIFS = {"+": {("GT", "AG"), ("GC", "AG"), ("AT", "AC")},
-                    "-": {("CT", "AC"), ("CT", "GC"), ("GT", "AT")}}
+CANONICAL_MOTIFS = {
+    "+": {("GT", "AG"), ("GC", "AG"), ("AT", "AC")},
+    "-": {("CT", "AC"), ("CT", "GC"), ("GT", "AT")},
+}
 
 INTRON_COLUMNS = [
-    "model_id", "source", "gene_id", "chrom", "strand", "intron_number", "intron_start", "intron_end",
-    "length", "genome_motif", "status", "evidence_class", "unique_reads", "multi_reads",
-    "n_libraries", "n_libraries_any", "n_groups", "n_studies", "library_fraction", "group_fraction",
-    "max_overhang", "star_strand", "star_motif", "donor_usage", "acceptor_usage",
-    "n_alternative_junctions", "best_alternative", "best_alternative_side",
-    "best_alternative_unique_reads", "best_alternative_n_libraries", "best_alternative_n_groups",
-    "site_conflict", "reasons",
+    "model_id",
+    "source",
+    "gene_id",
+    "chrom",
+    "strand",
+    "intron_number",
+    "intron_start",
+    "intron_end",
+    "length",
+    "genome_motif",
+    "status",
+    "evidence_class",
+    "unique_reads",
+    "multi_reads",
+    "n_libraries",
+    "n_libraries_any",
+    "n_groups",
+    "n_studies",
+    "library_fraction",
+    "group_fraction",
+    "max_overhang",
+    "star_strand",
+    "star_motif",
+    "donor_usage",
+    "acceptor_usage",
+    "n_alternative_junctions",
+    "best_alternative",
+    "best_alternative_side",
+    "best_alternative_unique_reads",
+    "best_alternative_n_libraries",
+    "best_alternative_n_groups",
+    "site_conflict",
+    "reasons",
 ]
 MODEL_COLUMNS = [
-    "model_id", "source", "gene_id", "chrom", "strand", "start", "end", "n_cds_segments",
-    "n_cds_introns", "n_supported", "n_multimap_only", "n_contradicted", "n_unknown",
-    "n_unobservable", "n_minor_site", "min_unique_reads", "min_n_libraries", "min_n_groups",
-    "libraries_supporting_all_introns", "groups_supporting_all_introns",
-    "observed_junctions_in_span", "model_class", "unsupported_introns", "contradicted_introns",
+    "model_id",
+    "source",
+    "gene_id",
+    "chrom",
+    "strand",
+    "start",
+    "end",
+    "n_cds_segments",
+    "n_cds_introns",
+    "n_supported",
+    "n_multimap_only",
+    "n_contradicted",
+    "n_unknown",
+    "n_unobservable",
+    "n_minor_site",
+    "min_unique_reads",
+    "min_n_libraries",
+    "min_n_groups",
+    "libraries_supporting_all_introns",
+    "groups_supporting_all_introns",
+    "observed_junctions_in_span",
+    "model_class",
+    "unsupported_introns",
+    "contradicted_introns",
     "extra",
 ]
 
@@ -83,7 +130,7 @@ def genome_motif(seq: str | None, start0: int, end: int, strand: str) -> str:
     """Donor/acceptor dinucleotides read on *strand*, e.g. ``GT/AG``; ``""`` if unknown."""
     if not seq or end - start0 < 4 or end > len(seq):
         return ""
-    a, b = seq[start0:start0 + 2].upper(), seq[end - 2:end].upper()
+    a, b = seq[start0 : start0 + 2].upper(), seq[end - 2 : end].upper()
     if strand == "-":
         comp = str.maketrans("ACGTN", "TGCAN")
         a, b = b.translate(comp)[::-1], a.translate(comp)[::-1]
@@ -118,11 +165,25 @@ class JunctionAnnotator:
         ix = self.index
         length = end - start0
         motif = genome_motif(self.genome.get(chrom), start0, end, strand)
-        row = {"intron_start": start0 + 1, "intron_end": end, "length": length,
-               "genome_motif": motif, "unique_reads": 0, "multi_reads": 0, "n_libraries": 0,
-               "n_libraries_any": 0, "n_groups": 0, "n_studies": 0, "max_overhang": "",
-               "star_strand": "", "star_motif": "", "donor_usage": None, "acceptor_usage": None,
-               "site_conflict": "", "reasons": []}
+        row = {
+            "intron_start": start0 + 1,
+            "intron_end": end,
+            "length": length,
+            "genome_motif": motif,
+            "unique_reads": 0,
+            "multi_reads": 0,
+            "n_libraries": 0,
+            "n_libraries_any": 0,
+            "n_groups": 0,
+            "n_studies": 0,
+            "max_overhang": "",
+            "star_strand": "",
+            "star_motif": "",
+            "donor_usage": None,
+            "acceptor_usage": None,
+            "site_conflict": "",
+            "reasons": [],
+        }
         j = ix.find(chrom, start0, end)
         sup = ix.support(j) if j is not None else None
         same_strand = sup is not None and (sup.strand == strand or sup.strand == ".")
@@ -135,39 +196,58 @@ class JunctionAnnotator:
             total = my_reads + sum(o.unique_reads for o in obs)
             row[f"{side}_usage"] = (my_reads / total) if total else None
             for o in obs:
-                if best is None or (o.unique_reads, -o.start0) > (best[0].unique_reads, -best[0].start0):
+                if best is None or (o.unique_reads, -o.start0) > (
+                    best[0].unique_reads,
+                    -best[0].start0,
+                ):
                     best = (o, side)
         n_alt = len(set(partners["donor"]) | set(partners["acceptor"]))
         row["n_alternative_junctions"] = n_alt
         if best:
             o, side = best
-            row.update(best_alternative=f"{o.start1}-{o.end}", best_alternative_side=side,
-                       best_alternative_unique_reads=o.unique_reads,
-                       best_alternative_n_libraries=o.n_libraries,
-                       best_alternative_n_groups=o.n_groups)
+            row.update(
+                best_alternative=f"{o.start1}-{o.end}",
+                best_alternative_side=side,
+                best_alternative_unique_reads=o.unique_reads,
+                best_alternative_n_libraries=o.n_libraries,
+                best_alternative_n_groups=o.n_groups,
+            )
         if sup is not None:
             row.update(star_strand=sup.strand, star_motif=sup.motif, max_overhang=sup.max_overhang)
         if same_strand:
-            row.update(unique_reads=sup.unique_reads, multi_reads=sup.multi_reads,
-                       n_libraries=sup.n_libraries, n_libraries_any=sup.n_libraries_any,
-                       n_groups=sup.n_groups, n_studies=sup.n_studies)
+            row.update(
+                unique_reads=sup.unique_reads,
+                multi_reads=sup.multi_reads,
+                n_libraries=sup.n_libraries,
+                n_libraries_any=sup.n_libraries_any,
+                n_groups=sup.n_groups,
+                n_studies=sup.n_studies,
+            )
             if sup.unique_reads > 0:
                 status, cls = "SUPPORTED", "supported"
                 if best and best[0].unique_reads > sup.unique_reads:
                     row["site_conflict"] = "minor_site"
-                    row["reasons"].append(f"a junction sharing the {best[1]} has more unique reads")
+                    row["reasons"].append(
+                        f"a junction sharing the {best[1]} has more unique reads"
+                    )
             else:
                 status, cls = "MULTIMAP_ONLY", "weak"
                 row["reasons"].append("only multimapping reads")
             if sup.strand == ".":
                 row["reasons"].append("STAR strand undefined (non-canonical motif)")
         else:
-            status, cls = self._absent(chrom, strand, start0, end, length, motif, best, sup, span, row)
+            status, cls = self._absent(
+                chrom, strand, start0, end, length, motif, best, sup, span, row
+            )
         row["status"], row["evidence_class"] = status, cls
         row["library_fraction"] = row["n_libraries"] / self.n_lib
         row["group_fraction"] = row["n_groups"] / self.n_grp
-        if length > 0 and ix.max_intron_any is not None and length > ix.max_intron_any \
-                and status not in ("UNOBSERVABLE_LONG",):
+        if (
+            length > 0
+            and ix.max_intron_any is not None
+            and length > ix.max_intron_any
+            and status not in ("UNOBSERVABLE_LONG",)
+        ):
             row["reasons"].append("longer than the aligner maximum")
         row["reasons"] = "; ".join(row["reasons"])
         return row
@@ -179,30 +259,44 @@ class JunctionAnnotator:
         # junction longer than every library's maximum is never penalised.
         ix = self.index
         if sup is not None:
-            row["reasons"].append(f"observed only with STAR strand {sup.strand} (motif {sup.motif})")
+            row["reasons"].append(
+                f"observed only with STAR strand {sup.strand} (motif {sup.motif})"
+            )
             return "OPPOSITE_STRAND", "contradicted"
         if ix.max_intron_any is not None and length > ix.max_intron_any:
-            row["reasons"].append(f"{length} bp > aligner max_intron {ix.max_intron_any}: absence "
-                                  "carries no information")
+            row["reasons"].append(
+                f"{length} bp > aligner max_intron {ix.max_intron_any}: absence "
+                "carries no information"
+            )
             return "UNOBSERVABLE_LONG", "unobservable"
         if ix.min_intron_all is not None and length < ix.min_intron_all:
             row["reasons"].append(f"{length} bp < aligner min_intron {ix.min_intron_all}")
             return "UNOBSERVABLE_SHORT", "unobservable"
         noncanonical = ix.noncanonical_filtered_all and _is_canonical(motif) is False
         if best is not None:
-            row["reasons"].append(f"{best[1]} shared with observed junction {best[0].start1}-{best[0].end}")
+            row["reasons"].append(
+                f"{best[1]} shared with observed junction {best[0].start1}-{best[0].end}"
+            )
             if noncanonical:
                 row["reasons"].append(f"own motif {motif} is non-canonical")
             row["site_conflict"] = "alternative_dominant"
             return "ALTERNATIVE_SITE_OBSERVED", "contradicted"
         if noncanonical:
-            row["reasons"].append(f"non-canonical motif {motif}; aligner filtered non-canonical junctions")
+            row["reasons"].append(
+                f"non-canonical motif {motif}; aligner filtered non-canonical junctions"
+            )
             return "UNOBSERVABLE_NONCANONICAL", "unobservable"
         lo, hi = span if span else (start0, end)
-        local = [j for j in ix.overlapping(chrom, lo, hi)
-                 if ix.j_unique[j] > 0 and ix.j_strand[j] in ((1,) if strand == "+" else (2,) if strand == "-" else (1, 2))]
+        local = [
+            j
+            for j in ix.overlapping(chrom, lo, hi)
+            if ix.j_unique[j] > 0
+            and ix.j_strand[j] in ((1,) if strand == "+" else (2,) if strand == "-" else (1, 2))
+        ]
         if local:
-            row["reasons"].append(f"{len(local)} other junction(s) observed within the model; none shares a site")
+            row["reasons"].append(
+                f"{len(local)} other junction(s) observed within the model; none shares a site"
+            )
             return "UNOBSERVED_EXPRESSED_LOCUS", "unknown"
         row["reasons"].append("no junction observed within the model on this strand")
         return "UNOBSERVED_NO_LOCAL_EVIDENCE", "unknown"
@@ -217,22 +311,35 @@ class JunctionAnnotator:
         rows = []
         for k, (s, e) in enumerate(ints, start=1):
             r = self.intron(m.chrom, m.strand, s, e, span=(lo, hi))
-            r.update(model_id=m.model_id, source=m.source, gene_id=m.gene_id, chrom=m.chrom,
-                     strand=m.strand, intron_number=k)
+            r.update(
+                model_id=m.model_id,
+                source=m.source,
+                gene_id=m.gene_id,
+                chrom=m.chrom,
+                strand=m.strand,
+                intron_number=k,
+            )
             rows.append(r)
         ix = self.index
         cls = [r["evidence_class"] for r in rows]
         sup_rows = [r for r in rows if r["evidence_class"] == "supported"]
         libs = groups = None
         if rows and len(sup_rows) == len(rows):
-            sets = [ix.supporting_libraries(ix.find(m.chrom, r["intron_start"] - 1, r["intron_end"]))
-                    for r in rows]
+            sets = [
+                ix.supporting_libraries(ix.find(m.chrom, r["intron_start"] - 1, r["intron_end"]))
+                for r in rows
+            ]
             common = set.intersection(*sets)
             libs = len(common)
             groups = len({int(ix.lib_group_code[x]) for x in common})
-        observed_in_span = sum(1 for j in ix.overlapping(m.chrom, lo, hi)
-                               if ix.j_unique[j] > 0 and STAR_STRAND_OK(ix.j_strand[j], m.strand)
-                               and ix.j_start[j] >= lo and ix.j_end[j] <= hi)
+        observed_in_span = sum(
+            1
+            for j in ix.overlapping(m.chrom, lo, hi)
+            if ix.j_unique[j] > 0
+            and STAR_STRAND_OK(ix.j_strand[j], m.strand)
+            and ix.j_start[j] >= lo
+            and ix.j_end[j] <= hi
+        )
         if not rows:
             label = "no_cds_introns"
         elif "contradicted" in cls:
@@ -244,30 +351,53 @@ class JunctionAnnotator:
         else:
             label = "no_junction_evidence"
         summary = {
-            "model_id": m.model_id, "source": m.source, "gene_id": m.gene_id, "chrom": m.chrom,
-            "strand": m.strand, "start": lo + 1, "end": hi, "n_cds_segments": len(segs),
-            "n_cds_introns": len(rows), "n_supported": len(sup_rows),
-            "n_multimap_only": cls.count("weak"), "n_contradicted": cls.count("contradicted"),
-            "n_unknown": cls.count("unknown"), "n_unobservable": cls.count("unobservable"),
+            "model_id": m.model_id,
+            "source": m.source,
+            "gene_id": m.gene_id,
+            "chrom": m.chrom,
+            "strand": m.strand,
+            "start": lo + 1,
+            "end": hi,
+            "n_cds_segments": len(segs),
+            "n_cds_introns": len(rows),
+            "n_supported": len(sup_rows),
+            "n_multimap_only": cls.count("weak"),
+            "n_contradicted": cls.count("contradicted"),
+            "n_unknown": cls.count("unknown"),
+            "n_unobservable": cls.count("unobservable"),
             "n_minor_site": sum(1 for r in rows if r["site_conflict"] == "minor_site"),
             "min_unique_reads": min((r["unique_reads"] for r in rows), default=""),
             "min_n_libraries": min((r["n_libraries"] for r in rows), default=""),
             "min_n_groups": min((r["n_groups"] for r in rows), default=""),
             "libraries_supporting_all_introns": "" if libs is None else libs,
             "groups_supporting_all_introns": "" if groups is None else groups,
-            "observed_junctions_in_span": observed_in_span, "model_class": label,
-            "unsupported_introns": ",".join(f"{r['intron_start']}-{r['intron_end']}:{r['status']}"
-                                            for r in rows if r["evidence_class"] != "supported"),
-            "contradicted_introns": ",".join(f"{r['intron_start']}-{r['intron_end']}"
-                                             for r in rows if r["evidence_class"] == "contradicted"),
+            "observed_junctions_in_span": observed_in_span,
+            "model_class": label,
+            "unsupported_introns": ",".join(
+                f"{r['intron_start']}-{r['intron_end']}:{r['status']}"
+                for r in rows
+                if r["evidence_class"] != "supported"
+            ),
+            "contradicted_introns": ",".join(
+                f"{r['intron_start']}-{r['intron_end']}"
+                for r in rows
+                if r["evidence_class"] == "contradicted"
+            ),
             "extra": ";".join(f"{k}={v}" for k, v in sorted(m.extra.items())),
         }
         return rows, summary
 
     def annotate(self, models) -> tuple[list[dict], list[dict]]:
         intron_rows, model_rows = [], []
-        for m in sorted(models, key=lambda x: (x.chrom, min((s for s, _ in x.segments), default=0),
-                                                x.source, x.model_id)):
+        for m in sorted(
+            models,
+            key=lambda x: (
+                x.chrom,
+                min((s for s, _ in x.segments), default=0),
+                x.source,
+                x.model_id,
+            ),
+        ):
             r, s = self.model(m)
             intron_rows.extend(r)
             model_rows.append(s)
@@ -306,7 +436,9 @@ def read_models(path: str, source: str | None = None, feature: str = "CDS") -> l
             if len(p) != 9:
                 continue
             if gff3:
-                a = dict(kv.split("=", 1) for kv in p[8].strip().strip(";").split(";") if "=" in kv)
+                a = dict(
+                    kv.split("=", 1) for kv in p[8].strip().strip(";").split(";") if "=" in kv
+                )
                 if p[2] in ("mRNA", "transcript"):
                     tx_gene[a.get("ID", "")] = a.get("Parent", "")
                     continue
@@ -324,9 +456,17 @@ def read_models(path: str, source: str | None = None, feature: str = "CDS") -> l
                     continue
                 segs.setdefault(t, []).append((int(p[3]) - 1, int(p[4])))
                 meta.setdefault(t, (p[0], p[6], source or p[1]))
-    return [ModelSpec(model_id=t, source=meta[t][2], chrom=meta[t][0], strand=meta[t][1],
-                      segments=sorted(s), gene_id=tx_gene.get(t, ""))
-            for t, s in segs.items()]
+    return [
+        ModelSpec(
+            model_id=t,
+            source=meta[t][2],
+            chrom=meta[t][0],
+            strand=meta[t][1],
+            segments=sorted(s),
+            gene_id=tx_gene.get(t, ""),
+        )
+        for t, s in segs.items()
+    ]
 
 
 def write_diagnostics(out_dir: str, prefix: str, annotator: JunctionAnnotator, models) -> dict:
@@ -341,8 +481,12 @@ def write_diagnostics(out_dir: str, prefix: str, annotator: JunctionAnnotator, m
     by_status: dict = {}
     for r in introns:
         by_status[r["status"]] = by_status.get(r["status"], 0) + 1
-    return {"models": len(summaries), "introns": len(introns),
-            "model_class": dict(sorted(counts.items())), "intron_status": dict(sorted(by_status.items()))}
+    return {
+        "models": len(summaries),
+        "introns": len(introns),
+        "model_class": dict(sorted(counts.items())),
+        "intron_status": dict(sorted(by_status.items())),
+    }
 
 
 def write_library_table(path: str, index: JunctionIndex) -> None:
@@ -365,7 +509,9 @@ class BuildJunctionDiagnostics:
 
         self.t = {}
         t0 = time.perf_counter()
-        self.index = JunctionIndex.from_manifest(manifest, roles, {k: len(v) for k, v in genome.items()})
+        self.index = JunctionIndex.from_manifest(
+            manifest, roles, {k: len(v) for k, v in genome.items()}
+        )
         self.t["load_index_s"] = round(time.perf_counter() - t0, 3)
         self.annotator = JunctionAnnotator(self.index, genome)
         self.out = os.path.join(output_dir, "junction_evidence")
@@ -373,24 +519,39 @@ class BuildJunctionDiagnostics:
         write_library_table(os.path.join(self.out, "libraries.tsv"), self.index)
         self.reports = {}
         idx = self.index.stats
-        print(f"  STAR junctions: {idx['libraries_loaded']}/{idx['libraries_selected']} libraries "
-              f"(roles {','.join(roles)}), {idx['junctions']:,} junctions, "
-              f"{idx['groups']} groups, {self.t['load_index_s']} s; diagnostics only")
+        print(
+            f"  STAR junctions: {idx['libraries_loaded']}/{idx['libraries_selected']} libraries "
+            f"(roles {','.join(roles)}), {idx['junctions']:,} junctions, "
+            f"{idx['groups']} groups, {self.t['load_index_s']} s; diagnostics only"
+        )
         if idx["libraries_loaded"] < idx["libraries_selected"]:
-            print(f"  WARNING: junction libraries not loaded: {idx['libraries_by_status']} "
-                  f"(see {self.out}/libraries.tsv)")
+            print(
+                f"  WARNING: junction libraries not loaded: {idx['libraries_by_status']} "
+                f"(see {self.out}/libraries.tsv)"
+            )
 
     def candidates(self, candidate_exons, candidate_cds: dict) -> None:
         import time
 
         t0 = time.perf_counter()
         meta = candidate_exons.drop_duplicates("transcript_id")[
-            ["transcript_id", "Chromosome", "Strand", "Source", "gene_id"]]
-        models = [ModelSpec(model_id=str(t), source=str(src), chrom=str(c), strand=str(s),
-                            segments=list(candidate_cds[t]), gene_id=str(g))
-                  for t, c, s, src, g in meta.itertuples(index=False, name=None)
-                  if candidate_cds.get(t)]
-        self.reports["candidates"] = write_diagnostics(self.out, "candidates", self.annotator, models)
+            ["transcript_id", "Chromosome", "Strand", "Source", "gene_id"]
+        ]
+        models = [
+            ModelSpec(
+                model_id=str(t),
+                source=str(src),
+                chrom=str(c),
+                strand=str(s),
+                segments=list(candidate_cds[t]),
+                gene_id=str(g),
+            )
+            for t, c, s, src, g in meta.itertuples(index=False, name=None)
+            if candidate_cds.get(t)
+        ]
+        self.reports["candidates"] = write_diagnostics(
+            self.out, "candidates", self.annotator, models
+        )
         self.t["candidates_s"] = round(time.perf_counter() - t0, 3)
 
     def selected(self, gff3_path: str, output_mrnas: list) -> None:
@@ -401,8 +562,10 @@ class BuildJunctionDiagnostics:
         info = {m["ID"]: m for m in output_mrnas}
         for m in models:
             row = info.get(m.model_id, {})
-            m.extra = {"candidate_transcript_id": row.get("candidate_transcript_id", ""),
-                       "evidence": row.get("Evidence", "")}
+            m.extra = {
+                "candidate_transcript_id": row.get("candidate_transcript_id", ""),
+                "evidence": row.get("Evidence", ""),
+            }
         self.reports["selected"] = write_diagnostics(self.out, "selected", self.annotator, models)
         self.t["selected_s"] = round(time.perf_counter() - t0, 3)
 
@@ -414,10 +577,15 @@ class BuildJunctionDiagnostics:
         rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         from gmb.cli.junction_evidence import junction_caveats
 
-        summary = {"index": self.index.stats, "timing": self.t, "reports": self.reports,
-                   "process_peak_rss_mb_at_finish": round(rss / (1 << 20) if sys.platform == "darwin"
-                                                          else rss / 1024, 1),
-                   "notes": junction_caveats(self.index)}
+        summary = {
+            "index": self.index.stats,
+            "timing": self.t,
+            "reports": self.reports,
+            "process_peak_rss_mb_at_finish": round(
+                rss / (1 << 20) if sys.platform == "darwin" else rss / 1024, 1
+            ),
+            "notes": junction_caveats(self.index),
+        }
         with open(os.path.join(self.out, "junction_evidence_summary.json"), "w") as fh:
             json.dump(summary, fh, indent=2, sort_keys=True)
         print(f"  Junction diagnostics: {self.out}")

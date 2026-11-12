@@ -47,7 +47,15 @@ from dataclasses import dataclass, field
 import numpy as np
 
 STAR_STRAND = {0: ".", 1: "+", 2: "-"}
-STAR_MOTIF = {0: "non-canonical", 1: "GT/AG", 2: "CT/AC", 3: "GC/AG", 4: "CT/GC", 5: "AT/AC", 6: "GT/AT"}
+STAR_MOTIF = {
+    0: "non-canonical",
+    1: "GT/AG",
+    2: "CT/AC",
+    3: "GC/AG",
+    4: "CT/GC",
+    5: "AT/AC",
+    6: "GT/AT",
+}
 # Library load outcomes. Only LOADED libraries contribute evidence.
 LOADED = "LOADED"
 FAILED_EMPTY = "FAILED_EMPTY"
@@ -87,15 +95,27 @@ class Library:
 
     def as_row(self) -> dict:
         return {
-            "library_id": self.library_id, "role": self.role, "status": self.status,
-            "n_junctions": self.n_junctions, "n_rows_unknown_seqid": self.n_rows_unknown_seqid,
-            "study": self.study, "strain": self.strain, "condition": self.condition,
-            "group": self.group, "sample_id": self.sample_id, "count_unit": self.count_unit,
+            "library_id": self.library_id,
+            "role": self.role,
+            "status": self.status,
+            "n_junctions": self.n_junctions,
+            "n_rows_unknown_seqid": self.n_rows_unknown_seqid,
+            "study": self.study,
+            "strain": self.strain,
+            "condition": self.condition,
+            "group": self.group,
+            "sample_id": self.sample_id,
+            "count_unit": self.count_unit,
             "max_intron": "" if self.max_intron is None else self.max_intron,
             "min_intron": "" if self.min_intron is None else self.min_intron,
-            "noncanonical_filtered": "" if self.noncanonical_filtered is None
-            else str(self.noncanonical_filtered).lower(),
-            "path": self.path, "sha256": self.sha256, "message": self.message,
+            "noncanonical_filtered": (
+                ""
+                if self.noncanonical_filtered is None
+                else str(self.noncanonical_filtered).lower()
+            ),
+            "path": self.path,
+            "sha256": self.sha256,
+            "message": self.message,
         }
 
 
@@ -106,7 +126,9 @@ def _opt_int(value: str, column: str, row: int) -> int | None:
     try:
         out = int(value)
     except ValueError:
-        raise JunctionManifestError(f"manifest row {row}: {column}={value!r} is not an integer") from None
+        raise JunctionManifestError(
+            f"manifest row {row}: {column}={value!r} is not an integer"
+        ) from None
     if out < 0:
         raise JunctionManifestError(f"manifest row {row}: {column} must be >= 0")
     return out
@@ -134,17 +156,22 @@ def read_manifest(path: str, roles=("construction",)) -> list[Library]:
         raise JunctionManifestError("no junction library roles selected")
     base = os.path.dirname(os.path.abspath(path))
     with open(path, newline="") as fh:
-        rows = [r for r in csv.DictReader((l for l in fh if not l.startswith("#")), delimiter="\t")]
+        rows = [
+            r for r in csv.DictReader((l for l in fh if not l.startswith("#")), delimiter="\t")
+        ]
     if not rows:
         raise JunctionManifestError(f"junction manifest has no libraries: {path}")
     cols = set(rows[0])
     missing = {"library_id", "path"} - cols
     if missing:
-        raise JunctionManifestError(f"junction manifest lacks required column(s): {sorted(missing)}")
+        raise JunctionManifestError(
+            f"junction manifest lacks required column(s): {sorted(missing)}"
+        )
     if "role" not in cols and "all" not in roles:
         raise JunctionManifestError(
             "junction manifest has no 'role' column; add one (e.g. construction/holdout) or "
-            "select every library explicitly with roles=all")
+            "select every library explicitly with roles=all"
+        )
     libs, seen = [], set()
     for i, r in enumerate(rows, start=2):
         lid = (r.get("library_id") or "").strip()
@@ -154,19 +181,29 @@ def read_manifest(path: str, roles=("construction",)) -> list[Library]:
         if lid in seen:
             raise JunctionManifestError(f"manifest row {i}: duplicate library_id {lid!r}")
         seen.add(lid)
+
         def get(k, row=r):
             return (row.get(k) or "").strip()
 
         study, strain, condition = get("study"), get("strain"), get("condition")
-        group = get("group") or ("|".join((study, strain, condition))
-                                 if (study or strain or condition) else lid)
+        group = get("group") or (
+            "|".join((study, strain, condition)) if (study or strain or condition) else lid
+        )
         lib = Library(
-            library_id=lid, path=p if os.path.isabs(p) else os.path.join(base, p),
-            role=get("role"), sample_id=get("sample_id"), study=study or group, strain=strain,
-            condition=condition, group=group, count_unit=get("count_unit") or "unknown",
+            library_id=lid,
+            path=p if os.path.isabs(p) else os.path.join(base, p),
+            role=get("role"),
+            sample_id=get("sample_id"),
+            study=study or group,
+            strain=strain,
+            condition=condition,
+            group=group,
+            count_unit=get("count_unit") or "unknown",
             max_intron=_opt_int(r.get("max_intron"), "max_intron", i),
             min_intron=_opt_int(r.get("min_intron"), "min_intron", i),
-            noncanonical_filtered=_opt_bool(r.get("noncanonical_filtered"), "noncanonical_filtered", i),
+            noncanonical_filtered=_opt_bool(
+                r.get("noncanonical_filtered"), "noncanonical_filtered", i
+            ),
         )
         if "all" not in roles and lib.role not in roles:
             lib.status = NOT_SELECTED
@@ -197,11 +234,18 @@ def parse_sj_file(path: str, seq_lengths: dict | None = None):
     """
     import pandas as pd
 
-    empty = pd.DataFrame(columns=["chrom", "start0", "end", "strand", "motif", "unique", "multi", "overhang"])
+    empty = pd.DataFrame(
+        columns=["chrom", "start0", "end", "strand", "motif", "unique", "multi", "overhang"]
+    )
     if not os.path.exists(path):
         return MISSING_FILE, "file not found", empty, 0
     if os.path.getsize(path) == 0:
-        return FAILED_EMPTY, "zero-byte file: failed or missing aligner output (not zero junctions)", empty, 0
+        return (
+            FAILED_EMPTY,
+            "zero-byte file: failed or missing aligner output (not zero junctions)",
+            empty,
+            0,
+        )
     with open(path, "rb") as fh:
         magic = fh.read(2)
     compression = "gzip" if magic == b"\x1f\x8b" else None
@@ -241,31 +285,60 @@ def parse_sj_file(path: str, seq_lengths: dict | None = None):
         return MALFORMED, "unparseable rows", empty, 0
     df.columns = _SJ_COLUMNS
     num = {c: df[c] for c in _SJ_COLUMNS[1:]}
-    bad = ((num["s1"] < 1) | (num["e1"] < num["s1"]) | ~num["strand"].isin(list(STAR_STRAND))
-           | ~num["motif"].isin(list(STAR_MOTIF)) | (num["unique"] < 0) | (num["multi"] < 0)
-           | (num["overhang"] < 0))
+    bad = (
+        (num["s1"] < 1)
+        | (num["e1"] < num["s1"])
+        | ~num["strand"].isin(list(STAR_STRAND))
+        | ~num["motif"].isin(list(STAR_MOTIF))
+        | (num["unique"] < 0)
+        | (num["multi"] < 0)
+        | (num["overhang"] < 0)
+    )
     if bad.any():
         return MALFORMED, f"line {int(bad.idxmax()) + 1}: value out of range", empty, 0
-    out = pd.DataFrame({"chrom": df["chrom"], "start0": num["s1"] - 1, "end": num["e1"],
-                        "strand": num["strand"].astype("int8"), "motif": num["motif"].astype("int8"),
-                        "unique": num["unique"], "multi": num["multi"],
-                        "overhang": num["overhang"].astype("int32")})
+    out = pd.DataFrame(
+        {
+            "chrom": df["chrom"],
+            "start0": num["s1"] - 1,
+            "end": num["e1"],
+            "strand": num["strand"].astype("int8"),
+            "motif": num["motif"].astype("int8"),
+            "unique": num["unique"],
+            "multi": num["multi"],
+            "overhang": num["overhang"].astype("int32"),
+        }
+    )
     dup = out.duplicated(["chrom", "start0", "end"])
     if dup.any():
         r = out.loc[dup.idxmax()]
-        return MALFORMED, f"line {int(dup.idxmax()) + 1}: duplicate junction {r.chrom}:{r.start0 + 1}-{r.end}", empty, 0
+        return (
+            MALFORMED,
+            f"line {int(dup.idxmax()) + 1}: duplicate junction {r.chrom}:{r.start0 + 1}-{r.end}",
+            empty,
+            0,
+        )
     unknown = 0
     if seq_lengths is not None:
         known = out["chrom"].isin(set(seq_lengths))
         unknown = int((~known).sum())
         out = out[known]
         if out.empty and unknown:
-            return NO_KNOWN_SEQIDS, f"none of {unknown} junction rows is on a genome sequence", empty, unknown
+            return (
+                NO_KNOWN_SEQIDS,
+                f"none of {unknown} junction rows is on a genome sequence",
+                empty,
+                unknown,
+            )
         lens = out["chrom"].map(seq_lengths)
         beyond = out["end"] > lens
         if beyond.any():
             r = out[beyond].iloc[0]
-            return MALFORMED, f"intron {r.chrom}:{r.start0 + 1}-{r.end} beyond sequence end", empty, 0
+            return (
+                MALFORMED,
+                f"intron {r.chrom}:{r.start0 + 1}-{r.end} beyond sequence end",
+                empty,
+                0,
+            )
     return LOADED, "", out.reset_index(drop=True), unknown
 
 
@@ -281,8 +354,8 @@ class JunctionSupport:
     motif: str
     unique_reads: int
     multi_reads: int
-    n_libraries: int          # libraries with >= 1 unique read
-    n_libraries_any: int      # libraries with >= 1 unique or multimapping read
+    n_libraries: int  # libraries with >= 1 unique read
+    n_libraries_any: int  # libraries with >= 1 unique or multimapping read
     n_groups: int
     n_studies: int
     max_overhang: int
@@ -307,14 +380,22 @@ class JunctionIndex:
 
     # ---------------------------------------------------------------- build
     @classmethod
-    def from_manifest(cls, manifest: str, roles=("construction",), seq_lengths: dict | None = None,
-                      checksum: bool = True) -> JunctionIndex:
+    def from_manifest(
+        cls,
+        manifest: str,
+        roles=("construction",),
+        seq_lengths: dict | None = None,
+        checksum: bool = True,
+    ) -> JunctionIndex:
         t0 = time.perf_counter()
         libs = read_manifest(manifest, roles)
         idx = cls(libraries=libs)
         idx._load([lib for lib in libs if lib.status != NOT_SELECTED], seq_lengths, checksum)
-        idx.stats.update(manifest=os.path.abspath(manifest), roles=list(roles),
-                         load_seconds=round(time.perf_counter() - t0, 3))
+        idx.stats.update(
+            manifest=os.path.abspath(manifest),
+            roles=list(roles),
+            load_seconds=round(time.perf_counter() - t0, 3),
+        )
         return idx
 
     def _load(self, libs, seq_lengths, checksum):
@@ -330,14 +411,23 @@ class JunctionIndex:
                 if checksum:
                     lib.sha256 = _sha256(lib.path)
                 local, names = pd.factorize(frame["chrom"])
-                glob = np.asarray([chrom_code.setdefault(c, len(chrom_code)) for c in names],
-                                  dtype=np.int32)
+                glob = np.asarray(
+                    [chrom_code.setdefault(c, len(chrom_code)) for c in names], dtype=np.int32
+                )
                 n = len(frame)
-                parts.append((glob[local] if n else np.zeros(0, np.int32), frame["start0"].to_numpy(np.int64),
-                              frame["end"].to_numpy(np.int64), frame["strand"].to_numpy(np.int8),
-                              frame["motif"].to_numpy(np.int8), frame["unique"].to_numpy(np.int64),
-                              frame["multi"].to_numpy(np.int64), frame["overhang"].to_numpy(np.int32),
-                              np.full(n, len(loaded), dtype=np.int32)))
+                parts.append(
+                    (
+                        glob[local] if n else np.zeros(0, np.int32),
+                        frame["start0"].to_numpy(np.int64),
+                        frame["end"].to_numpy(np.int64),
+                        frame["strand"].to_numpy(np.int8),
+                        frame["motif"].to_numpy(np.int8),
+                        frame["unique"].to_numpy(np.int64),
+                        frame["multi"].to_numpy(np.int64),
+                        frame["overhang"].to_numpy(np.int32),
+                        np.full(n, len(loaded), dtype=np.int32),
+                    )
+                )
                 loaded.append(lib)
             lib.load_seconds = round(time.perf_counter() - t, 4)
         self.loaded = loaded
@@ -346,14 +436,29 @@ class JunctionIndex:
         remap = np.zeros(max(1, len(chrom_code)), dtype=np.int32)
         for name, code in chrom_code.items():
             remap[code] = self.chroms.index(name)
-        cat = [np.concatenate([p[i] for p in parts]) if parts else np.zeros(0, dt)
-               for i, dt in enumerate((np.int32, np.int64, np.int64, np.int8, np.int8, np.int64,
-                                       np.int64, np.int32, np.int32))]
+        cat = [
+            np.concatenate([p[i] for p in parts]) if parts else np.zeros(0, dt)
+            for i, dt in enumerate(
+                (
+                    np.int32,
+                    np.int64,
+                    np.int64,
+                    np.int8,
+                    np.int8,
+                    np.int64,
+                    np.int64,
+                    np.int32,
+                    np.int32,
+                )
+            )
+        ]
         ch, s0, en, st, mo, un, mu, ov, li = cat
         ch = remap[ch] if len(ch) else ch
         del parts, cat
         order = np.lexsort((li, en, s0, ch))  # junction key, then library
-        ch, s0, en, st, mo, un, mu, ov, li = (a[order] for a in (ch, s0, en, st, mo, un, mu, ov, li))
+        ch, s0, en, st, mo, un, mu, ov, li = (
+            a[order] for a in (ch, s0, en, st, mo, un, mu, ov, li)
+        )
         del order
         first = np.ones(len(ch), dtype=bool)
         if len(ch) > 1:
@@ -368,7 +473,11 @@ class JunctionIndex:
         del s0, en
         incons = np.zeros(J, dtype=bool)
         if J:
-            np.logical_or.at(incons, jid_of_obs, (st != self.j_strand[jid_of_obs]) | (mo != self.j_motif[jid_of_obs]))
+            np.logical_or.at(
+                incons,
+                jid_of_obs,
+                (st != self.j_strand[jid_of_obs]) | (mo != self.j_motif[jid_of_obs]),
+            )
         inconsistent = int(incons.sum())
         starts = self.lib_ptr[:-1]
         if J:
@@ -384,8 +493,12 @@ class JunctionIndex:
             supported = np.zeros(0, dtype=bool)
         group_codes = {g: i for i, g in enumerate(sorted({lib.group for lib in loaded}))}
         study_codes = {s: i for i, s in enumerate(sorted({lib.study for lib in loaded}))}
-        self.lib_group_code = np.asarray([group_codes[lib.group] for lib in loaded], dtype=np.int64)
-        self.lib_study_code = np.asarray([study_codes[lib.study] for lib in loaded], dtype=np.int64)
+        self.lib_group_code = np.asarray(
+            [group_codes[lib.group] for lib in loaded], dtype=np.int64
+        )
+        self.lib_study_code = np.asarray(
+            [study_codes[lib.study] for lib in loaded], dtype=np.int64
+        )
         self.n_groups_total, self.n_studies_total = len(group_codes), len(study_codes)
 
         def _distinct(codes, width):
@@ -397,8 +510,13 @@ class JunctionIndex:
 
         self.j_ngroup = _distinct(self.lib_group_code, max(1, len(group_codes)))
         self.j_nstudy = _distinct(self.lib_study_code, max(1, len(study_codes)))
-        keys = list(zip((self.chroms[c] for c in self.j_chrom.tolist()), self.j_start.tolist(),
-                        self.j_end.tolist()))
+        keys = list(
+            zip(
+                (self.chroms[c] for c in self.j_chrom.tolist()),
+                self.j_start.tolist(),
+                self.j_end.tolist(),
+            )
+        )
         del st, mo, ch
         strand = self.j_strand
         # Exact lookup and splice-site maps. A site key is (chrom, strand, position);
@@ -426,19 +544,43 @@ class JunctionIndex:
         self.min_intron_all = None if (not loaded or any(v is None for v in mn)) else min(mn)
         self.noncanonical_filtered_all = bool(loaded) and all(v is True for v in nc)
         self.stats.update(
-            libraries_in_manifest=len(self.libraries), libraries_selected=len(libs),
+            libraries_in_manifest=len(self.libraries),
+            libraries_selected=len(libs),
             libraries_loaded=len(loaded),
             libraries_by_status=_count(lib.status for lib in self.libraries),
-            junctions=J, observations=n_obs, groups=self.n_groups_total,
-            studies=self.n_studies_total, junctions_inconsistent_strand_or_motif=inconsistent,
+            junctions=J,
+            observations=n_obs,
+            groups=self.n_groups_total,
+            studies=self.n_studies_total,
+            junctions_inconsistent_strand_or_motif=inconsistent,
             count_units=sorted({lib.count_unit for lib in loaded}),
-            max_intron_any_library=self.max_intron_any, min_intron_all_libraries=self.min_intron_all,
+            max_intron_any_library=self.max_intron_any,
+            min_intron_all_libraries=self.min_intron_all,
             noncanonical_filtered_all_libraries=self.noncanonical_filtered_all,
-            approx_index_bytes=int(sum(a.nbytes for a in (
-                self.lib_ptr, self.lib_idx, self.lib_unique, self.lib_multi, self.lib_overhang,
-                self.j_chrom, self.j_start, self.j_end, self.j_strand, self.j_motif, self.j_unique,
-                self.j_multi, self.j_overhang, self.j_nlib, self.j_nlib_any, self.j_ngroup,
-                self.j_nstudy))),
+            approx_index_bytes=int(
+                sum(
+                    a.nbytes
+                    for a in (
+                        self.lib_ptr,
+                        self.lib_idx,
+                        self.lib_unique,
+                        self.lib_multi,
+                        self.lib_overhang,
+                        self.j_chrom,
+                        self.j_start,
+                        self.j_end,
+                        self.j_strand,
+                        self.j_motif,
+                        self.j_unique,
+                        self.j_multi,
+                        self.j_overhang,
+                        self.j_nlib,
+                        self.j_nlib_any,
+                        self.j_ngroup,
+                        self.j_nstudy,
+                    )
+                )
+            ),
         )
 
     # -------------------------------------------------------------- queries
@@ -447,12 +589,20 @@ class JunctionIndex:
 
     def support(self, j: int) -> JunctionSupport:
         return JunctionSupport(
-            jid=int(j), chrom=self.chroms[int(self.j_chrom[j])], start0=int(self.j_start[j]),
-            end=int(self.j_end[j]), strand=STAR_STRAND[int(self.j_strand[j])],
-            motif=STAR_MOTIF[int(self.j_motif[j])], unique_reads=int(self.j_unique[j]),
-            multi_reads=int(self.j_multi[j]), n_libraries=int(self.j_nlib[j]),
-            n_libraries_any=int(self.j_nlib_any[j]), n_groups=int(self.j_ngroup[j]),
-            n_studies=int(self.j_nstudy[j]), max_overhang=int(self.j_overhang[j]))
+            jid=int(j),
+            chrom=self.chroms[int(self.j_chrom[j])],
+            start0=int(self.j_start[j]),
+            end=int(self.j_end[j]),
+            strand=STAR_STRAND[int(self.j_strand[j])],
+            motif=STAR_MOTIF[int(self.j_motif[j])],
+            unique_reads=int(self.j_unique[j]),
+            multi_reads=int(self.j_multi[j]),
+            n_libraries=int(self.j_nlib[j]),
+            n_libraries_any=int(self.j_nlib_any[j]),
+            n_groups=int(self.j_ngroup[j]),
+            n_studies=int(self.j_nstudy[j]),
+            max_overhang=int(self.j_overhang[j]),
+        )
 
     def find(self, chrom: str, start0: int, end: int) -> int | None:
         """Junction id with exactly these half-open intron coordinates (any strand)."""
@@ -474,7 +624,11 @@ class JunctionIndex:
             if strand in ("+", "-"):
                 # Unstranded junctions are stored in + orientation (donor = start), so
                 # a minus-strand query reads them with donor and acceptor swapped.
-                flat = table if strand == "+" else (self._acceptor if side == "donor" else self._donor)
+                flat = (
+                    table
+                    if strand == "+"
+                    else (self._acceptor if side == "donor" else self._donor)
+                )
                 ids += flat.get((chrom, ".", pos), ())
             out[side] = sorted(j for j in set(ids) if j != me)
         return out
@@ -492,8 +646,14 @@ class JunctionIndex:
     def library_counts(self, j: int) -> list[tuple[str, int, int]]:
         """(library_id, unique, multi) for every library observing junction *j*."""
         a, b = int(self.lib_ptr[j]), int(self.lib_ptr[j + 1])
-        return [(self.loaded[int(self.lib_idx[x])].library_id, int(self.lib_unique[x]),
-                 int(self.lib_multi[x])) for x in range(a, b)]
+        return [
+            (
+                self.loaded[int(self.lib_idx[x])].library_id,
+                int(self.lib_unique[x]),
+                int(self.lib_multi[x]),
+            )
+            for x in range(a, b)
+        ]
 
     def supporting_libraries(self, j: int) -> set[int]:
         a, b = int(self.lib_ptr[j]), int(self.lib_ptr[j + 1])
@@ -522,32 +682,72 @@ def preflight_checks(manifest: str, roles, seq_lengths: dict | None) -> list[tup
     st = idx.stats
     out = []
     if st["libraries_selected"] == 0:
-        return [("star_junction_manifest", "FAIL",
-                 f"no library has role(s) {','.join(roles)}", {"by_status": st["libraries_by_status"]})]
+        return [
+            (
+                "star_junction_manifest",
+                "FAIL",
+                f"no library has role(s) {','.join(roles)}",
+                {"by_status": st["libraries_by_status"]},
+            )
+        ]
     bad = [lib for lib in idx.libraries if lib.status not in (LOADED, NOT_SELECTED)]
     if not st["libraries_loaded"]:
-        out.append(("star_junction_libraries", "FAIL",
-                    f"none of {st['libraries_selected']} selected libraries loaded",
-                    {"by_status": st["libraries_by_status"]}))
+        out.append(
+            (
+                "star_junction_libraries",
+                "FAIL",
+                f"none of {st['libraries_selected']} selected libraries loaded",
+                {"by_status": st["libraries_by_status"]},
+            )
+        )
     elif bad:
-        out.append(("star_junction_libraries", "WARN",
-                    f"{len(bad)} selected librar(ies) not loaded and ignored: "
-                    + ", ".join(f"{lib.library_id} {lib.status}" for lib in bad[:5]),
-                    {"by_status": st["libraries_by_status"]}))
+        out.append(
+            (
+                "star_junction_libraries",
+                "WARN",
+                f"{len(bad)} selected librar(ies) not loaded and ignored: "
+                + ", ".join(f"{lib.library_id} {lib.status}" for lib in bad[:5]),
+                {"by_status": st["libraries_by_status"]},
+            )
+        )
     else:
-        out.append(("star_junction_libraries", "PASS",
-                     f"{st['libraries_loaded']} librar(ies), {st['junctions']:,} junctions, "
-                     f"{st['groups']} group(s), {st['studies']} stud(ies); "
-                     f"{st['libraries_by_status'].get(NOT_SELECTED, 0)} not selected", {}))
+        out.append(
+            (
+                "star_junction_libraries",
+                "PASS",
+                f"{st['libraries_loaded']} librar(ies), {st['junctions']:,} junctions, "
+                f"{st['groups']} group(s), {st['studies']} stud(ies); "
+                f"{st['libraries_by_status'].get(NOT_SELECTED, 0)} not selected",
+                {},
+            )
+        )
     unknown = sum(lib.n_rows_unknown_seqid for lib in idx.loaded)
     if unknown:
-        out.append(("star_junction_seqids", "WARN",
-                    f"{unknown:,} junction row(s) on sequences absent from the genome were skipped", {}))
+        out.append(
+            (
+                "star_junction_seqids",
+                "WARN",
+                f"{unknown:,} junction row(s) on sequences absent from the genome were skipped",
+                {},
+            )
+        )
     if st["count_units"] != ["fragment"]:
-        out.append(("star_junction_count_unit", "WARN",
-                    f"count unit(s) {st['count_units']}: read counts are not fragment counts", {}))
+        out.append(
+            (
+                "star_junction_count_unit",
+                "WARN",
+                f"count unit(s) {st['count_units']}: read counts are not fragment counts",
+                {},
+            )
+        )
     if st["max_intron_any_library"] is None:
-        out.append(("star_junction_limits", "WARN",
-                    "max_intron not given for every library: absence of long introns cannot be "
-                    "interpreted", {}))
+        out.append(
+            (
+                "star_junction_limits",
+                "WARN",
+                "max_intron not given for every library: absence of long introns cannot be "
+                "interpreted",
+                {},
+            )
+        )
     return out

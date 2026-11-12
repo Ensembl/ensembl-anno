@@ -36,11 +36,17 @@ from gmb.pipeline.star_junctions import JunctionIndex, JunctionManifestError
 def add_junction_args(parser: argparse.ArgumentParser) -> None:
     """The junction-input options shared by gmb-build, gmb-preflight and this tool."""
     g = parser.add_argument_group("STAR junction evidence (optional, diagnostics only)")
-    g.add_argument("--star-junctions", metavar="MANIFEST",
-                   help="TSV manifest of per-library STAR SJ.out.tab files (docs/star_junctions.md)")
-    g.add_argument("--star-junction-roles", default="construction",
-                   help="comma-separated manifest roles to load (default: construction; "
-                        "'all' loads every library)")
+    g.add_argument(
+        "--star-junctions",
+        metavar="MANIFEST",
+        help="TSV manifest of per-library STAR SJ.out.tab files (docs/star_junctions.md)",
+    )
+    g.add_argument(
+        "--star-junction-roles",
+        default="construction",
+        help="comma-separated manifest roles to load (default: construction; "
+        "'all' loads every library)",
+    )
 
 
 def roles_of(value: str) -> tuple[str, ...]:
@@ -64,10 +70,19 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="gmb-junction-evidence", description=__doc__.split("\n\n")[0])
     add_junction_args(p)
     p.add_argument("--genome", help="genome FASTA (enables motif and non-canonical checks)")
-    p.add_argument("--annotation", action="append", default=[], metavar="LABEL=PATH",
-                   help="annotation to report (GFF3 or GTF); repeatable")
-    p.add_argument("--feature", default="CDS", choices=("CDS", "exon"),
-                   help="which segments define a model's introns (default CDS)")
+    p.add_argument(
+        "--annotation",
+        action="append",
+        default=[],
+        metavar="LABEL=PATH",
+        help="annotation to report (GFF3 or GTF); repeatable",
+    )
+    p.add_argument(
+        "--feature",
+        default="CDS",
+        choices=("CDS", "exon"),
+        help="which segments define a model's introns (default CDS)",
+    )
     p.add_argument("--output-dir", required=True)
     args = p.parse_args(argv)
     if not args.star_junctions:
@@ -77,8 +92,10 @@ def main(argv=None) -> int:
     t_genome = time.perf_counter() - t0
     try:
         index = JunctionIndex.from_manifest(
-            args.star_junctions, roles_of(args.star_junction_roles),
-            {k: len(v) for k, v in genome.items()} if genome else None)
+            args.star_junctions,
+            roles_of(args.star_junction_roles),
+            {k: len(v) for k, v in genome.items()} if genome else None,
+        )
     except JunctionManifestError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -96,14 +113,19 @@ def main(argv=None) -> int:
         info.update(path=os.path.abspath(path), seconds=round(time.perf_counter() - t, 3))
         reports[label] = info
     summary = {
-        "index": index.stats, "feature": args.feature, "genome_seconds": round(t_genome, 3),
-        "annotations": reports, "peak_rss_mb": peak_rss_mb(),
+        "index": index.stats,
+        "feature": args.feature,
+        "genome_seconds": round(t_genome, 3),
+        "annotations": reports,
+        "peak_rss_mb": peak_rss_mb(),
         "notes": junction_caveats(index),
     }
     with open(os.path.join(args.output_dir, "junction_evidence_summary.json"), "w") as fh:
         json.dump(summary, fh, indent=2, sort_keys=True)
-    print(f"{index.stats['libraries_loaded']} libraries, {index.stats['junctions']:,} junctions; "
-          f"wrote {args.output_dir}")
+    print(
+        f"{index.stats['libraries_loaded']} libraries, {index.stats['junctions']:,} junctions; "
+        f"wrote {args.output_dir}"
+    )
     return 0
 
 
