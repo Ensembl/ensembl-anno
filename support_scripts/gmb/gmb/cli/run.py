@@ -75,6 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="consensus preset (advanced; default follows --preset: fungi)",
     )
     i.add_argument("--longread-consensus-config", help="consensus YAML (advanced)")
+    from gmb.cli.junction_evidence import add_junction_args
+
+    add_junction_args(p)
     o = p.add_argument_group("output")
     o.add_argument(
         "--output-dir", required=True, help="run directory; the handover is <output-dir>/finalise/"
@@ -153,6 +156,8 @@ def main(argv=None) -> int:
             ),
             longread_consensus_preset=args.longread_consensus_preset,
             longread_consensus_config=args.longread_consensus_config,
+            star_junctions=args.star_junctions,
+            star_junction_roles=args.star_junction_roles,
             preset=args.preset,
             config=[os.path.abspath(c) for c in args.config],
             output_dir=out,

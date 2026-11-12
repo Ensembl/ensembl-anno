@@ -1,0 +1,9 @@
+# Test fixture: real Z. tritici STAR junctions (EBI FTP, 2025-10 batch), chr 1:1-500,000 plus
+# a few chr 2 rows (absent from the fixture genome). SRR6941156 is the real zero-byte file.
+library_id	path	role	sample_id	study	strain	condition	count_unit	max_intron	min_intron	noncanonical_filtered
+SRR17893325	SRR17893325.sj.tab	construction	SAMN25686266	PRJNA803733	IPO323	IPO323_FLUX	mate	1000	21	true
+SRR22570518	SRR22570518.sj.tab	construction	SAMN31760600	PRJNA902413	Zt09	RNA-seq, eaf3	mate	1000	21	true
+SRR18918656	SRR18918656.sj.tab	construction	SAMN27771272	PRJNA759417	IPO323	IPO323_18Wax	mate	1000	21	true
+SRR22428702	SRR22428702.sj.tab	holdout	SAMN31892549	PRJNA906097	IPO323	Galactose	mate	1000	21	true
+SRR31679459	SRR31679459.sj.tab	holdout	SAMN45698264	PRJNA1196913		ETH04_IPO323_S30C	mate	1000	21	true
+SRR6941156	SRR6941156.sj.tab	excluded	SAMN08777973	PRJNA441174	IPO-90006	cad 7 vir 5 - redo	mate	1000	21	true

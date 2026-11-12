@@ -80,6 +80,7 @@ Ship these alongside the handover — they explain *why* each model was chosen.
 | `resolved_config.yaml` + `resolved_config_sha256` | the exact configuration used | **yes** |
 | `run_manifest.json` / `.tsv` | full provenance (see `reproducibility.md`) | **yes** |
 | `summary.json` / `summary.tsv` | build-stage counts | yes |
+| `junction_evidence/` | per-intron/per-model STAR junction diagnostics, only with `--star-junctions` ([star_junctions.md](star_junctions.md)) | optional |
 | `gmb.log` | full build log | optional, large |
 | `consensus.gff3`, `cdna.fa`, `cds.fa`, `prot.fa` | **pre-finalisation copies** | **no — use `finalise/`** |
 

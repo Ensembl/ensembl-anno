@@ -938,6 +938,9 @@ def test_python_api_signature_is_stable():
         "longread_consensus_preset": None,
         "longread_consensus_config": None,
         "log": print,
+        # appended for optional STAR junction diagnostics (no effect on selection)
+        "star_junctions": None,
+        "star_junction_roles": "construction",
     }
     import dataclasses
 

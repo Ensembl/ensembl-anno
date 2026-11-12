@@ -71,6 +71,10 @@ def build_parser() -> argparse.ArgumentParser:
     inputs.add_argument("--uniprot", help="UniProt protein-to-genome GTF")
     inputs.add_argument("--genblast", help="GenBlast protein-to-genome GTF")
 
+    from gmb.cli.junction_evidence import add_junction_args
+
+    add_junction_args(p)
+
     out = p.add_argument_group("Output")
     out.add_argument("--output-dir", help="Directory for preflight_report.{json,txt}")
     out.add_argument("--json", action="store_true",
@@ -147,6 +151,15 @@ def main(argv=None) -> int:
 
     report = run_preflight(
         {"genome": args.genome, "tracks": _tracks_from_args(args)}, config)
+    if getattr(args, "star_junctions", None) and report.genome:
+        from gmb.cli.junction_evidence import roles_of
+        from gmb.pipeline.star_junctions import preflight_checks
+        from gmb.preflight.checks import CheckResult, load_genome_lengths
+
+        lengths = {k: len(v) for k, v in load_genome_lengths(args.genome).items()}
+        for name, verdict, message, detail in preflight_checks(
+                args.star_junctions, roles_of(args.star_junction_roles), lengths):
+            report.checks.append(CheckResult(name, verdict, message, args.star_junctions, detail))
 
     if args.json:
         print(json.dumps(report.to_dict(), indent=1))

@@ -156,6 +156,8 @@ def run_gene_model_builder(
     longread_consensus_preset: str | None = None,
     longread_consensus_config: str | None = None,
     log=print,
+    star_junctions: str | None = None,
+    star_junction_roles: str = "construction",
 ) -> GmbResult:
     """Run preflight, build and finalise, and return the handover paths.
 
@@ -179,6 +181,10 @@ def run_gene_model_builder(
         per-read alignments (preflight ``longread_collapsed``) stops the run when
         preflight runs. Long reads are optional: with none supplied there is no
         special case and the long-read guard cannot fire.
+    star_junctions : str or None
+        Optional STAR junction manifest (``docs/star_junctions.md``), passed to
+        preflight and build with ``star_junction_roles``. Diagnostics only: the
+        build writes ``build/junction_evidence/`` and selects exactly as without it.
     long_read_alignments : str or None
         Per-read long-read alignments (GTF, one transcript per read, strand set
         upstream). Collapsed into consensus models by ``gmb-longread-consensus``
@@ -302,6 +308,9 @@ def run_gene_model_builder(
     evidence += _flags_for(short_read, _SHORT_READ_FLAGS, "short-read")
     evidence += _flags_for(long_read_tracks, _LONG_READ_FLAGS, "long-read")
     evidence += _flags_for(protein_alignment, _PROTEIN_FLAGS, "protein-alignment")
+    if star_junctions:
+        evidence += ["--star-junctions", os.path.abspath(star_junctions),
+                     "--star-junction-roles", star_junction_roles]
 
     # ---- preflight --------------------------------------------------------
     if run_preflight:

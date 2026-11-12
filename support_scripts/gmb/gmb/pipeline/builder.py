@@ -675,6 +675,9 @@ def parse_args():
     )
 
     add_subset_args(parser)
+    from gmb.cli.junction_evidence import add_junction_args
+
+    add_junction_args(parser)
 
     args = parser.parse_args()
     if not args.output_dir and not args.list_presets:
@@ -1110,6 +1113,16 @@ def main() -> None:
     junction_support = unsupported_intron_counts(
         candidate_exons, observed_introns(tx_exons))
     protein_compat = protein_compatibility_counts(candidate_exons, candidate_cds, prot_exons_filt)
+    # Optional STAR junction diagnostics (--star-junctions). Read-only: nothing
+    # computed here reaches selection, so outputs are identical with or without it.
+    junction_diag = None
+    if getattr(args, "star_junctions", None):
+        from gmb.cli.junction_evidence import roles_of
+        from gmb.pipeline.junction_diagnostics import BuildJunctionDiagnostics
+
+        junction_diag = BuildJunctionDiagnostics(
+            args.star_junctions, roles_of(args.star_junction_roles), genome_dict, args.output_dir)
+        junction_diag.candidates(candidate_exons, candidate_cds)
     complete_orf_tids = {
         tid for tid, ann in annotations.items()
         if ann and ann.get("cds") and ann.get("protein")
@@ -1709,6 +1722,10 @@ def main() -> None:
         ev_path = os.path.join(args.output_dir, "evidence_attribution.tsv")
         ev_df.to_csv(ev_path, sep="\t", index=False)
         print(f"  Evidence attribution: {ev_path}")
+
+    if junction_diag is not None:
+        junction_diag.selected(gff3_path, output_mrnas)
+        junction_diag.finish()
 
     stats["isoform_cds_overlap_excluded"] = len(isoform_exclusion_rows)
     if isoform_exclusion_rows:

@@ -19,6 +19,7 @@ which `gmb-run` does automatically (below).
 | long-read transcript models, already collapsed | optional | GTF | `long_read_transcriptomic` | `gmb-run --long-read-models`; `gmb-build --minimap2` |
 | protein-to-genome alignments | recommended | GTF | `protein_alignment` | `--orthodb`, `--uniprot`, `--genblast` |
 | DIAMOND protein DB | optional | `.dmnd` | `protein_validation` | config only |
+| per-library STAR junctions (`SJ.out.tab`) + manifest | optional | TSV manifest | diagnostics only (no effect on selection) | `--star-junctions`, `--star-junction-roles` ([star_junctions.md](star_junctions.md)) |
 | reference annotation | **never a production input** | GFF3 | evaluation only | `annotation-qc pairwise-compare --reference` (ensembl-genes) |
 | seqname map | **never a production input** | TSV | evaluation only | `annotation-qc pairwise-compare --seqname-map` |
 
