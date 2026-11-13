@@ -224,6 +224,7 @@ def select_isoforms(
     protein_compatibility: dict[str, tuple[int, int]] | None = None,
     complete_orf_tids: set[str] | None = None,
     excluded: list[dict] | None = None,
+    evidence_scorer=None,
 ) -> list[list[dict]]:
     """Score and select isoforms for a single locus.
 
@@ -266,6 +267,9 @@ def select_isoforms(
         If given, a record is appended for every retained structure discarded by
         ``scoring.isoform_cds_overlap: drop`` (it would have joined a gene without
         sharing coding sequence with that gene's primary).
+    evidence_scorer : gmb.pipeline.evidence_features.EvidenceScorer or None
+        Required by, and used only with, ``scoring.primary_selection:
+        evidence_score``.
 
     Returns
     -------
@@ -645,11 +649,22 @@ def select_isoforms(
             m["protein_alignments_compatible"], m["protein_alignments_incompatible"] = (
                 compat.get(m["id"], (0, 0)))
 
-    if getattr(scfg, "primary_selection", "score") == "junction_supported":
+    primary_mode = getattr(scfg, "primary_selection", "score")
+    if primary_mode in ("junction_supported", "evidence_score"):
         complete = complete_orf_tids or set()
         frac = getattr(scfg, "junction_primary_min_cds_fraction", 0.9)
         for g in genes:
             _promote_junction_supported(g, complete, frac)
+
+    if primary_mode == "evidence_score":
+        if evidence_scorer is None:
+            raise ValueError(
+                "scoring.primary_selection: evidence_score needs STAR junction evidence "
+                "(gmb-build --star-junctions MANIFEST); it never falls back to another policy")
+        _promote_evidence_supported(
+            genes, locus_df, models, merged, candidates, cds_map, complete_orf_tids or set(),
+            evidence_scorer, scfg, is_same_gene, shares_coding_base, cds_mode, junctions, compat,
+            config.protein_validation)
 
     # Sort genes by start coordinate
     genes.sort(key=lambda g: min(m["start"] for m in g))
@@ -710,3 +725,221 @@ def _promote_junction_supported(gene: list[dict], complete_orf_tids: set, min_cd
     best["selection_reason"] = "transcript_junction_support"
     primary["is_primary"] = False
     gene.insert(0, best)
+
+
+def _merged_key(m: dict) -> str:
+    """The structure key select_isoforms merges identical models under."""
+    if m["intron_chain"] == "single-exon":
+        return f"{m['chrom']}:{m['strand']}:{m['start']}-{m['end']}"
+    return f"{m['chrom']}:{m['strand']}:{m['intron_chain']}"
+
+
+def _promote_evidence_supported(genes, locus_df, models, merged, candidates, cds_map,
+                                complete_orf_tids, scorer, scfg, is_same_gene,
+                                shares_coding_base, cds_mode, junctions, compat, val_cfg=None):
+    """``primary_selection: evidence_score``: re-choose each gene's primary (in place).
+
+    The candidate pool of a gene is every CDS structure of the locus (whether or not
+    GMB retained it as an isoform) that shares at least ``same_coding_locus_fraction``
+    of its CDS with the current primary in both directions, has at least
+    ``min_candidate_cds_bp`` of CDS and passes the structural validity floor, and is
+    not used by any other gene of the locus. The P4d rule
+    (:func:`gmb.pipeline.evidence_features.decide_primary`) decides. A replaced
+    primary is kept as an alternate only if it passes the normal isoform admission
+    rules against the new primary; gene grouping is otherwise unchanged. Every gene
+    gets an ``evidence_selection`` record on its primary.
+    """
+    from gmb.pipeline.evidence_features import (
+        POLICY_VERSION,
+        decide_primary,
+        decision_concerns,
+        fmt_cds,
+        same_coding_locus,
+    )
+
+    params = scorer.params
+    min_bp = max(params.min_candidate_cds_bp, getattr(scfg, "min_cds_bp", 0) or 0)
+
+    # CDS structures of every candidate transcript in the locus, in locus order.
+    order = locus_df.drop_duplicates("transcript_id")[
+        ["transcript_id", "Source", "Chromosome", "Strand"]]
+    structs: dict = {}
+    tid_key: dict = {}
+    for tid, src, chrom, strand in order.itertuples(index=False):
+        cds = cds_map.get(tid)
+        if not cds or strand not in ("+", "-"):
+            continue
+        key = (str(chrom), str(strand), tuple(sorted((int(a), int(b)) for a, b in cds)))
+        st = structs.setdefault(key, {"tids": [], "sources": set(), "complete": False})
+        st["tids"].append(tid)
+        st["sources"].add(str(src))
+        st["complete"] |= tid in complete_orf_tids
+        tid_key[tid] = key
+    models_by_id = {m["id"]: m for m in models}
+
+    def valid(key):
+        cds = key[2]
+        if sum(b - a for a, b in cds) < min_bp:
+            return False
+        if val_cfg is not None and val_cfg.enabled and val_cfg.policy == "drop":
+            for t in structs[key]["tids"]:
+                sc = models_by_id.get(t, {}).get("protein_coding_score")
+                if sc is not None and sc < val_cfg.min_score:
+                    return False
+        return True
+
+    def evaluate(key):
+        st = structs[key]
+        return scorer.evaluate(key[0], key[1], key[2], st["sources"], st["complete"])
+
+    # The GFF3 validation limits the build applies later (merged exon length and,
+    # when enabled, transcript span): a transcript that would be dropped there
+    # cannot become a primary.
+    max_exon, max_span = getattr(scorer, "structural_limits", None) or (None, None)
+
+    def fits(tid):
+        m = models_by_id.get(tid)
+        if m is None:
+            return False
+        if max_exon is None and max_span is None:
+            return True
+        ivs = sorted(zip(m["df"]["Start"].astype(int), m["df"]["End"].astype(int)))
+        union = []
+        for a, b in ivs:
+            if union and a <= union[-1][1]:
+                union[-1][1] = max(union[-1][1], b)
+            else:
+                union.append([a, b])
+        if max_exon is not None and max(b - a for a, b in union) > max_exon:
+            return False
+        return max_span is None or union[-1][1] - union[0][0] <= max_span
+
+    def representative(key, gene):
+        """The transcript that carries a chosen CDS: prefer what GMB already kept."""
+        tids = [t for t in structs[key]["tids"] if fits(t)]
+        for m in gene:
+            if m["id"] in tids:
+                return m, "retained_isoform"
+        for s in candidates:
+            if s["rep"]["id"] in tids:
+                return s["rep"], "admitted_structure"
+        for s in merged.values():
+            if s["rep"]["id"] in tids:
+                return s["rep"], "scored_structure"
+        m = models_by_id[tids[0]]
+        s = merged[_merged_key(m)]
+        r = dict(s["rep"])
+        for k in ("id", "source", "df", "start", "end", "exon_count", "intron_chain",
+                  "protein_coding_score"):
+            if k in m:
+                r[k] = m[k]
+        r["candidate_cds"] = sorted(cds_map.get(m["id"]) or [])
+        r["candidate_cds_bp"] = sum(b - a for a, b in r["candidate_cds"])
+        r.setdefault("longread_structural_role",
+                     "primary" if s.get("is_longread_only") else "not_longread")
+        return r, "member_transcript"
+
+    def net(tid):
+        c = compat.get(tid)
+        return None if c is None else c[0] - c[1]
+
+    used: dict = {}
+    for gi, g in enumerate(genes):
+        for m in g:
+            k = tid_key.get(m["id"])
+            if k is not None:
+                used.setdefault(k, set()).add(gi)
+
+    for gi, g in enumerate(genes):
+        primary = g[0]
+        pk = tid_key.get(primary["id"])
+        base = {"policy_version": POLICY_VERSION, "chrom": primary["chrom"], "strand": primary["strand"],
+                "old_candidate": primary["id"]}
+        if pk is None:
+            primary["evidence_selection"] = dict(base, outcome="no_cds_primary")
+            continue
+        P = evaluate(pk)
+        pool, n_other_gene, n_invalid_transcript = [], 0, 0
+        for k in structs:
+            if k == pk or k[0] != pk[0] or k[1] != pk[1]:
+                continue
+            if not same_coding_locus(P.cds, k[2], params.same_coding_locus_fraction):
+                continue
+            if used.get(k, set()) - {gi}:
+                n_other_gene += 1
+                continue
+            if not valid(k):
+                continue
+            if not any(fits(t) for t in structs[k]["tids"]):
+                n_invalid_transcript += 1
+                continue
+            pool.append(evaluate(k))
+        d = decide_primary(P, pool, params)
+        rec = dict(base, outcome=d.outcome, protected_backbone=d.outcome == "protected_backbone",
+                   old_structure=fmt_cds(P.cds), old_sources=",".join(sorted(P.sources)),
+                   n_pool=d.n_pool, n_excluded_other_gene=n_other_gene,
+                   n_excluded_invalid_transcript=n_invalid_transcript,
+                   n_excluded_stop_or_frame=d.n_excluded_stop_or_frame,
+                   n_excluded_partial_orf=d.n_excluded_partial_orf,
+                   n_excluded_supported_intron=d.n_excluded_supported_intron,
+                   n_eligible=d.n_eligible, margin=params.replacement_margin,
+                   protected_introns=fmt_cds(sorted(P.strongly_supported_introns(
+                       params.keep_supported_intron_J))),
+                   **{f"old_{k}": v for k, v in P.components().items()})
+        alt = d.best_alternative
+        if alt is not None:
+            rec.update(best_alternative=fmt_cds(alt.cds),
+                       best_alternative_delta_total=round(alt.total - P.total, 4),
+                       best_alternative_delta_evidence=round(alt.evidence - P.evidence, 4))
+        if not d.replaced:
+            primary["evidence_selection"] = rec
+            continue
+        new_m, tier = representative(d.chosen.key, g)
+        old_chain, new_chain = set(P.chain), set(d.chosen.chain)
+        kept, dropped = [], []
+        for m in [x for x in g if x is not new_m]:
+            if m["intron_chain"] == new_m["intron_chain"]:
+                reason = "same_intron_chain_as_new_primary"
+            elif len(kept) + 1 >= scfg.max_isoforms_per_locus:
+                reason = "max_isoforms_per_locus"
+            elif not is_same_gene(m, new_m):
+                reason = "not_same_gene_as_new_primary"
+            elif cds_mode != "off" and not shares_coding_base(m, new_m):
+                reason = "no_shared_coding_base"
+            elif (m.get("score") or 0.0) < scfg.min_alternate_score:
+                reason = "below_min_alternate_score"
+            else:
+                reason = None
+            if reason:
+                dropped.append(f"{m['id']}:{reason}")
+            else:
+                kept.append(m)
+        for m in kept:
+            m["is_primary"] = False
+        new_m["is_primary"] = True
+        new_m["selection_reason"] = "evidence_score"
+        if "n_introns" not in new_m:
+            new_m["n_introns"], new_m["introns_without_transcript_support"] = junctions.get(
+                new_m["id"], (new_m["exon_count"] - 1, None))
+        if "protein_alignments_compatible" not in new_m:
+            new_m["protein_alignments_compatible"], new_m["protein_alignments_incompatible"] = (
+                compat.get(new_m["id"], (0, 0)))
+        g[:] = [new_m, *kept]
+        concerns = decision_concerns(d, net(primary["id"]), net(new_m["id"]))
+        if tier != "retained_isoform":
+            concerns.append("new_primary_was_not_a_retained_isoform")
+        if not any(m is primary for m in kept):
+            concerns.append("old_primary_not_kept_as_isoform")
+        rec.update(new_candidate=new_m["id"], new_structure=fmt_cds(d.chosen.cds),
+                   new_sources=",".join(sorted(d.chosen.sources)), representative=tier,
+                   delta_total=round(d.chosen.total - P.total, 4),
+                   delta_evidence=round(d.chosen.evidence - P.evidence, 4),
+                   gained_introns=fmt_cds(sorted(new_chain - old_chain)),
+                   lost_introns=fmt_cds(sorted(old_chain - new_chain)),
+                   old_cds_bp=P.cds_bp, new_cds_bp=d.chosen.cds_bp,
+                   old_protein_net=net(primary["id"]), new_protein_net=net(new_m["id"]),
+                   isoforms_dropped=";".join(dropped), concerns=";".join(concerns),
+                   **{f"new_{k}": v for k, v in d.chosen.components().items()})
+        new_m["evidence_selection"] = rec
+        primary.pop("evidence_selection", None)
+        used.setdefault(d.chosen.key, set()).add(gi)

@@ -504,12 +504,15 @@ class BuildJunctionDiagnostics:
     candidate and every selected transcript, write ``<output-dir>/junction_evidence/``.
     It never returns anything the builder uses for selection."""
 
-    def __init__(self, manifest: str, roles, genome: dict, output_dir: str):
+    def __init__(self, manifest: str, roles, genome: dict, output_dir: str, index=None):
         import time
 
         self.t = {}
         t0 = time.perf_counter()
-        self.index = JunctionIndex.from_manifest(
+        # An index already loaded for evidence-score selection (same manifest and
+        # roles) is reused instead of reading the files twice.
+        self.used_for_selection = index is not None
+        self.index = index if index is not None else JunctionIndex.from_manifest(
             manifest, roles, {k: len(v) for k, v in genome.items()}
         )
         self.t["load_index_s"] = round(time.perf_counter() - t0, 3)
@@ -522,7 +525,8 @@ class BuildJunctionDiagnostics:
         print(
             f"  STAR junctions: {idx['libraries_loaded']}/{idx['libraries_selected']} libraries "
             f"(roles {','.join(roles)}), {idx['junctions']:,} junctions, "
-            f"{idx['groups']} groups, {self.t['load_index_s']} s; diagnostics only"
+            f"{idx['groups']} groups, {self.t['load_index_s']} s; "
+            + ("shared with evidence-score selection" if self.used_for_selection else "diagnostics only")
         )
         if idx["libraries_loaded"] < idx["libraries_selected"]:
             print(
@@ -584,7 +588,7 @@ class BuildJunctionDiagnostics:
             "process_peak_rss_mb_at_finish": round(
                 rss / (1 << 20) if sys.platform == "darwin" else rss / 1024, 1
             ),
-            "notes": junction_caveats(self.index),
+            "notes": junction_caveats(self.index, self.used_for_selection),
         }
         with open(os.path.join(self.out, "junction_evidence_summary.json"), "w") as fh:
             json.dump(summary, fh, indent=2, sort_keys=True)

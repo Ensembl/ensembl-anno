@@ -35,7 +35,9 @@ from gmb.pipeline.star_junctions import JunctionIndex, JunctionManifestError
 
 def add_junction_args(parser: argparse.ArgumentParser) -> None:
     """The junction-input options shared by gmb-build, gmb-preflight and this tool."""
-    g = parser.add_argument_group("STAR junction evidence (optional, diagnostics only)")
+    g = parser.add_argument_group(
+        "STAR junction evidence (optional; diagnostics, and the evidence for "
+        "scoring.primary_selection: evidence_score)")
     g.add_argument(
         "--star-junctions",
         metavar="MANIFEST",
@@ -129,9 +131,12 @@ def main(argv=None) -> int:
     return 0
 
 
-def junction_caveats(index: JunctionIndex) -> list[str]:
+def junction_caveats(index: JunctionIndex, used_for_selection: bool = False) -> list[str]:
     units = index.stats.get("count_units", [])
     return [
+        "These junctions (construction libraries) also chose primaries under "
+        "primary_selection: evidence_score; see evidence_selection.tsv."
+        if used_for_selection else
         "Diagnostics only: no model was selected or changed using these junctions.",
         f"Read counts are in library count units {units}; 'mate' units can count one fragment twice.",
         "STAR column 6 (annotated) is ignored: in two-pass mode it is not independent evidence.",

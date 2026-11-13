@@ -164,7 +164,8 @@ All default **off**. Enable one at a time, for a reason visible in preflight out
 | `longread_disposition` | `primary_structural` \| `support_only` \| `reject` | `primary_structural` |
 | `backbone_intron_rescue` | `off` \| `on` \| `auto` | `"off"` |
 | `locus_clustering` | `exon_overlap` \| `transcript_linked` | `exon_overlap` (fungi: `transcript_linked`) |
-| `primary_selection` | `score` \| `junction_supported` | `score` |
+| `primary_selection` | `score` \| `junction_supported` \| `evidence_score` | `score` |
+| `evidence_score.*` | P4d parameters ([evidence_selection.md](evidence_selection.md)) | frozen Phase 1.5 values |
 | `isoform_cds_overlap` | `off` \| `drop` \| `new_gene` | `"off"` |
 | `canonical_selection.prefer_build_primary` | bool | `false` |
 
@@ -186,6 +187,12 @@ backbone primary only where the backbone has introns that no transcriptomic mode
 the alternate has fewer, a complete ORF, a CDS of at least
 `junction_primary_min_cds_fraction` (0.9) of the backbone's, a shared coding locus, and no
 worse agreement with spliced protein alignments; the backbone model stays as an alternate.
+`evidence_score` (opt-in; no preset enables it) runs `junction_supported` first and then lets
+quantitative STAR junction, per-intron protein and ORF evidence replace a gene's primary by
+another candidate of the same coding locus, under the burden-of-proof rule in
+[evidence_selection.md](evidence_selection.md). It needs `--star-junctions` restricted to
+`construction` libraries and stops otherwise; its parameters (`scoring.evidence_score`) are
+written to `resolved_config.yaml` only when it is selected.
 `isoform_cds_overlap: drop` refuses an "isoform" that shares no coding base with its gene's
 primary (a UTR or read-through overlap reaching a neighbouring ORF), which is what chains
 neighbouring genes together; a backbone model refused this way becomes its own gene. Every

@@ -151,8 +151,28 @@ scoring:
   #                         ORF, a CDS >= junction_primary_min_cds_fraction of the
   #                         backbone's and no worse spliced-protein compatibility.
   #                         Experimental: see docs/release/evidence_integration.md.
+  #   evidence_score     -- as junction_supported, then each gene's primary may be
+  #                         replaced by a same-coding-locus candidate with better
+  #                         quantitative junction/protein/ORF evidence (rule P4d).
+  #                         Opt-in only; needs --star-junctions with construction
+  #                         libraries. See docs/evidence_selection.md.
   primary_selection: score
   junction_primary_min_cds_fraction: 0.9
+  # Parameters of primary_selection: evidence_score (read only in that mode, and
+  # written to resolved_config.yaml only then). Values frozen in Phase 1.5.
+  evidence_score:
+    breadth_saturation_groups: 5.0     # junction breadth f(g) = min(1, g / 5) condition groups
+    unobserved_expressed_weight: 0.5   # unobserved intron: -0.5 x median breadth of own introns
+    protein_intron_weight: 0.5         # per-intron spliced-protein agreement in [-0.5, 0.5]
+    noncanonical_penalty: 0.5
+    partial_orf_penalty: 1.0
+    internal_stop_penalty: 5.0
+    backbone_prior: 1.0                # priors protect a primary, never cause a switch
+    transcript_class_prior: 0.25       # StringTie/Scallop/long reads: one class
+    replacement_margin: 0.5            # total AND prior-free evidence must improve by this
+    keep_supported_intron_J: 0.6       # never drop a primary intron with junction term >= this
+    same_coding_locus_fraction: 0.5    # candidate pool: reciprocal shared-CDS fraction
+    min_candidate_cds_bp: 150
   # Must an alternate share >= 1 coding base with its gene's primary?
   #   off      -- no: structural test only (validated baseline)
   #   drop     -- discard a structure that would join without shared coding

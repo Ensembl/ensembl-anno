@@ -94,6 +94,19 @@ class ProteinIntronIndex:
                 yield rows[i]
             i += 1
 
+    def intron_agreement(self, chrom, strand, start, end) -> tuple[int, int]:
+        """(agree, conflict): spliced alignments overlapping the intron [start, end)
+        that contain exactly this intron, or a different intron overlapping it.
+        Alignments without an intron there are uninformative and not counted.
+        Used by ``primary_selection: evidence_score`` only."""
+        agree = conflict = 0
+        for _p_start, _p_end, p_introns in self.overlapping(chrom, strand, start, end):
+            if (start, end) in p_introns:
+                agree += 1
+            elif any(b > a and a < end and b > start for a, b in p_introns):
+                conflict += 1
+        return agree, conflict
+
 
 def protein_compatibility(cds, chrom, strand, index: ProteinIntronIndex) -> tuple[int, int]:
     """(compatible, incompatible) spliced protein alignments over one CDS."""
@@ -122,11 +135,16 @@ def protein_compatibility_counts(
     candidate_exons: pd.DataFrame,
     candidate_cds: dict[str, list],
     protein_exons: pd.DataFrame,
+    index: ProteinIntronIndex | None = None,
 ) -> dict[str, tuple[int, int]]:
-    """``{transcript_id: (compatible, incompatible)}`` for candidates with a CDS."""
+    """``{transcript_id: (compatible, incompatible)}`` for candidates with a CDS.
+
+    *index* may be a prebuilt :class:`ProteinIntronIndex` of *protein_exons*, so a
+    caller that also needs the index builds it once."""
     if protein_exons is None or protein_exons.empty or candidate_exons.empty:
         return {}
-    index = ProteinIntronIndex(protein_exons)
+    if index is None:
+        index = ProteinIntronIndex(protein_exons)
     out = {}
     for tid, chrom, strand, _exons in _transcripts(candidate_exons):
         cds = candidate_cds.get(tid)

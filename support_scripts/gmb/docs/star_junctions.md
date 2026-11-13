@@ -128,3 +128,9 @@ contradiction.**
   and evaluate them with `--star-junction-roles holdout` in a separate run.
 * **Missing evidence is not negative evidence.** An unexpressed gene, an intron beyond the aligner limit
   or a filtered motif leaves no junction.
+
+## Use in selection
+
+With `scoring.primary_selection: evidence_score` the same index (construction libraries only)
+also chooses primaries; see [evidence_selection.md](evidence_selection.md). Every other mode
+uses junctions for diagnostics only.

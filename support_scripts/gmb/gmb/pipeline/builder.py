@@ -597,6 +597,122 @@ def _write_resolved_config(cfg, output_dir: str) -> None:
         fh.write(digest + "\n")
 
 
+def _require_evidence_selection_inputs(args) -> None:
+    """primary_selection: evidence_score needs construction-only STAR junctions.
+
+    Checked before any work is done; there is no fallback to another policy."""
+    from gmb.cli.junction_evidence import roles_of
+    from gmb.pipeline.evidence_features import SELECTION_JUNCTION_ROLE
+
+    manifest = getattr(args, "star_junctions", None)
+    if not manifest:
+        raise SystemExit(
+            "ERROR: scoring.primary_selection: evidence_score requires STAR junction evidence: "
+            "pass --star-junctions MANIFEST (docs/star_junctions.md). It never falls back to "
+            "another selection policy.")
+    if not os.path.exists(manifest):
+        raise SystemExit(f"ERROR: --star-junctions manifest not found: {manifest}")
+    roles = roles_of(getattr(args, "star_junction_roles", ""))
+    if roles != (SELECTION_JUNCTION_ROLE,):
+        raise SystemExit(
+            f"ERROR: scoring.primary_selection: evidence_score uses '{SELECTION_JUNCTION_ROLE}' "
+            f"junction libraries only; --star-junction-roles {','.join(roles) or '(empty)'} would "
+            "let held-out or auxiliary libraries influence selection.")
+
+
+def _build_evidence_scorer(args, config, genome_dict, candidate_exons, prot_exons_filt):
+    """Load the construction-only junction index and the protein-intron index."""
+    import time as _t
+
+    from gmb.pipeline.canonical_evidence import (
+        EVIDENCE_CLASS_BACKBONE,
+        EVIDENCE_CLASS_LONG_READ,
+        EVIDENCE_CLASS_SHORT_READ,
+        EvidenceRoles,
+    )
+    from gmb.pipeline.evidence_features import (
+        SELECTION_JUNCTION_ROLE,
+        EvidenceParams,
+        EvidenceScorer,
+        EvidenceSelectionError,
+    )
+    from gmb.pipeline.junction_support import ProteinIntronIndex
+    from gmb.pipeline.star_junctions import JunctionIndex, JunctionManifestError
+
+    t0 = _t.perf_counter()
+    try:
+        index = JunctionIndex.from_manifest(
+            args.star_junctions, (SELECTION_JUNCTION_ROLE,),
+            {k: len(v) for k, v in genome_dict.items()})
+    except JunctionManifestError as exc:
+        raise SystemExit(f"ERROR: evidence_score selection: {exc}") from None
+    t_index = _t.perf_counter() - t0
+    t0 = _t.perf_counter()
+    prot_index = None if prot_exons_filt.empty else ProteinIntronIndex(prot_exons_filt)
+    t_prot = _t.perf_counter() - t0
+    roles = EvidenceRoles.from_config(config.scoring)
+    sources = {str(s) for s in candidate_exons["Source"].unique()}
+    backbone = {s for s in sources if roles.role_of(s) == EVIDENCE_CLASS_BACKBONE}
+    transcript = {s for s in sources
+                  if roles.role_of(s) in (EVIDENCE_CLASS_SHORT_READ, EVIDENCE_CLASS_LONG_READ)}
+    try:
+        scorer = EvidenceScorer(index, genome_dict, prot_index,
+                                EvidenceParams.from_config(config.scoring.evidence_score),
+                                backbone, transcript)
+    except EvidenceSelectionError as exc:
+        raise SystemExit(f"ERROR: {exc}") from None
+    scorer.load_seconds = {"junction_index_s": round(t_index, 3),
+                           "protein_intron_index_s": round(t_prot, 3)}
+    st = index.stats
+    print(f"  Evidence-score selection: {st['libraries_loaded']} construction junction "
+          f"libraries, {st['junctions']:,} junctions, {st['groups']} groups "
+          f"({t_index:.1f} s); backbone {sorted(backbone)}, transcript class {sorted(transcript)}")
+    return scorer, prot_index
+
+
+def _write_evidence_selection(args, config, scorer, rows) -> dict:
+    """Write evidence_selection.tsv (one row per gene) and its provenance summary."""
+    import hashlib
+    import json
+
+    from gmb.pipeline.evidence_features import POLICY_VERSION
+
+    path = os.path.join(args.output_dir, "evidence_selection.tsv")
+    df = pd.DataFrame(rows)
+    df.to_csv(path, sep="\t", index=False)
+    outcomes = df["outcome"].value_counts().sort_index().to_dict() if len(df) else {}
+    with open(args.star_junctions, "rb") as fh:
+        manifest_sha = hashlib.sha256(fh.read()).hexdigest()
+    summary = {
+        "policy": "evidence_score", "policy_version": POLICY_VERSION,
+        "parameters": scorer.params.as_dict(),
+        "junction_manifest": os.path.abspath(args.star_junctions),
+        "junction_manifest_sha256": manifest_sha,
+        "junction_roles": scorer.index.stats.get("roles"),
+        "junction_libraries": [{"library_id": lib.library_id, "role": lib.role,
+                                "group": lib.group, "sha256": lib.sha256}
+                               for lib in scorer.index.loaded],
+        "junction_index": {k: scorer.index.stats.get(k) for k in (
+            "libraries_loaded", "junctions", "groups", "studies", "count_units",
+            "max_intron_any_library", "min_intron_all_libraries")},
+        "backbone_sources": sorted(scorer.backbone_sources),
+        "transcript_class_sources": sorted(scorer.transcript_sources),
+        "genes": len(df), "outcomes": outcomes,
+        "structures_scored": scorer.n_scored,
+        "timing": dict(getattr(scorer, "load_seconds", {}),
+                       features_s=round(scorer.seconds, 3)),
+        "limitations": [
+            "candidate transcript assemblies (StringTie/Scallop) may include reads from "
+            "held-out libraries; only the junction index is construction-only",
+        ],
+    }
+    with open(os.path.join(args.output_dir, "evidence_selection_summary.json"), "w") as fh:
+        json.dump(summary, fh, indent=2, sort_keys=True, default=str)
+    print(f"  Evidence-score selection: {outcomes.get('replaced', 0)} primary(ies) replaced "
+          f"of {len(df)} gene(s); see {path}")
+    return {"outcomes": outcomes, "structures_scored": scorer.n_scored}
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_setup_args = parser.add_argument_group("Setup")
@@ -823,6 +939,8 @@ def main() -> None:
     # matches on this label) applies correctly regardless of --helixer vs
     # --tiberius.
     config.scoring.backbone_label = backbone_label
+    if getattr(config.scoring, "primary_selection", "score") == "evidence_score":
+        _require_evidence_selection_inputs(args)
 
     # Write the fully-resolved configuration so runs are reproducible.
     _write_resolved_config(config, args.output_dir)
@@ -1112,7 +1230,16 @@ def main() -> None:
     # chimeras removed above -- their individual splices are still observed.
     junction_support = unsupported_intron_counts(
         candidate_exons, observed_introns(tx_exons))
-    protein_compat = protein_compatibility_counts(candidate_exons, candidate_cds, prot_exons_filt)
+    # Evidence-score primary selection (opt-in): one construction-only junction index
+    # and one protein-intron index, shared with the diagnostics and the protein
+    # compatibility counts below. Nothing here runs for any other policy.
+    evidence_scorer = None
+    protein_intron_index = None
+    if getattr(config.scoring, "primary_selection", "score") == "evidence_score":
+        evidence_scorer, protein_intron_index = _build_evidence_scorer(
+            args, config, genome_dict, candidate_exons, prot_exons_filt)
+    protein_compat = protein_compatibility_counts(
+        candidate_exons, candidate_cds, prot_exons_filt, index=protein_intron_index)
     # Optional STAR junction diagnostics (--star-junctions). Read-only: nothing
     # computed here reaches selection, so outputs are identical with or without it.
     junction_diag = None
@@ -1121,7 +1248,8 @@ def main() -> None:
         from gmb.pipeline.junction_diagnostics import BuildJunctionDiagnostics
 
         junction_diag = BuildJunctionDiagnostics(
-            args.star_junctions, roles_of(args.star_junction_roles), genome_dict, args.output_dir)
+            args.star_junctions, roles_of(args.star_junction_roles), genome_dict, args.output_dir,
+            index=evidence_scorer.index if evidence_scorer is not None else None)
         junction_diag.candidates(candidate_exons, candidate_cds)
     complete_orf_tids = {
         tid for tid, ann in annotations.items()
@@ -1149,6 +1277,13 @@ def main() -> None:
     print("Computing guardrails...")
     runtime_params = compute_percentile_guardrails(cluster_df, config, protein_supported_tids)
     stats["effective_max_exon_len_bp"] = runtime_params["effective_max_exon_len_bp"]
+    if evidence_scorer is not None:
+        # The GFF3 validation limits applied later, so evidence-score selection never
+        # promotes a transcript that validation would drop.
+        evidence_scorer.structural_limits = (
+            runtime_params["effective_max_exon_len_bp"],
+            runtime_params["effective_max_transcript_span_bp"]
+            if getattr(config.validation, "max_transcript_span_mode", "off") != "off" else None)
     stats["effective_max_transcript_span_bp"] = runtime_params["effective_max_transcript_span_bp"]
 
     # Progress is reported because this loop dominates runtime and used to print
@@ -1169,6 +1304,8 @@ def main() -> None:
     unstranded_exclusion_rows: list[dict] = []
     # Structures refused by scoring.isoform_cds_overlap: drop (audit trail).
     isoform_exclusion_rows: list[dict] = []
+    # One decision row per gene under primary_selection: evidence_score.
+    evidence_selection_rows: list[dict] = []
 
     gene_counter = 1
     _loci_done = 0
@@ -1198,6 +1335,7 @@ def main() -> None:
             protein_compatibility=protein_compat,
             complete_orf_tids=complete_orf_tids,
             excluded=isoform_exclusion_rows,
+            evidence_scorer=evidence_scorer,
         )
         if not genes:
             continue
@@ -1224,6 +1362,11 @@ def main() -> None:
                     )
                 gene_counter += 1
                 continue
+
+            if evidence_scorer is not None and gene_models[0].get("evidence_selection"):
+                evidence_selection_rows.append(
+                    {"gene_id": gene_id, "primary_transcript_id": f"{gene_id}.t1",
+                     **gene_models[0]["evidence_selection"]})
 
             # Collect all mRNA rows first so we can recompute gene span from children
             gene_mrna_rows = []
@@ -1726,6 +1869,10 @@ def main() -> None:
     if junction_diag is not None:
         junction_diag.selected(gff3_path, output_mrnas)
         junction_diag.finish()
+
+    if evidence_scorer is not None:
+        stats["evidence_selection"] = _write_evidence_selection(
+            args, config, evidence_scorer, evidence_selection_rows)
 
     stats["isoform_cds_overlap_excluded"] = len(isoform_exclusion_rows)
     if isoform_exclusion_rows:

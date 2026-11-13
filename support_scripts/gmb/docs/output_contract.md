@@ -81,6 +81,7 @@ Ship these alongside the handover — they explain *why* each model was chosen.
 | `run_manifest.json` / `.tsv` | full provenance (see `reproducibility.md`) | **yes** |
 | `summary.json` / `summary.tsv` | build-stage counts | yes |
 | `junction_evidence/` | per-intron/per-model STAR junction diagnostics, only with `--star-junctions` ([star_junctions.md](star_junctions.md)) | optional |
+| `evidence_selection.tsv`, `evidence_selection_summary.json` | one primary-selection decision per gene, and its provenance (parameters, junction manifest and library checksums), only with `primary_selection: evidence_score` ([evidence_selection.md](evidence_selection.md)) | optional |
 | `gmb.log` | full build log | optional, large |
 | `consensus.gff3`, `cdna.fa`, `cds.fa`, `prot.fa` | **pre-finalisation copies** | **no — use `finalise/`** |
 
@@ -129,6 +130,7 @@ models.
 | `longread_only_locus` / `single_exon_longread` | only long-read evidence at this locus |
 | `best_single_source` | tier 0, no structural corroboration |
 | `transcript_junction_support` | promoted over a backbone primary by `scoring.primary_selection: junction_supported` |
+| `evidence_score` | chosen as primary by `scoring.primary_selection: evidence_score` (decision in `evidence_selection.tsv`) |
 
 > A transcript may carry `backbone_intron_rescue=True` and still report a *different*
 > `selection_reason`: tiers are ordered, so a higher tier names the winner. Both fields are

@@ -111,6 +111,36 @@ def _tracks_from_args(args) -> list:
     return [{"label": label, "path": path} for label, path in pairs if path]
 
 
+def _evidence_score_check(args) -> tuple:
+    """primary_selection: evidence_score needs construction-only STAR junctions that all load."""
+    from gmb.cli.junction_evidence import roles_of
+    from gmb.pipeline.evidence_features import SELECTION_JUNCTION_ROLE
+
+    name = "evidence_score_inputs"
+    manifest = getattr(args, "star_junctions", None)
+    if not manifest:
+        return (name, FAIL, "scoring.primary_selection: evidence_score requires "
+                "--star-junctions MANIFEST; the build would stop", "", {})
+    roles = roles_of(getattr(args, "star_junction_roles", ""))
+    if roles != (SELECTION_JUNCTION_ROLE,):
+        return (name, FAIL, f"evidence_score uses '{SELECTION_JUNCTION_ROLE}' junction libraries "
+                f"only; --star-junction-roles {','.join(roles)} is refused", manifest, {})
+    from gmb.pipeline.star_junctions import JunctionIndex, JunctionManifestError
+
+    try:
+        libs = [lib for lib in JunctionIndex.from_manifest(
+            manifest, roles, None, checksum=False).libraries
+            if lib.role == SELECTION_JUNCTION_ROLE]
+    except JunctionManifestError as exc:
+        return (name, FAIL, f"junction manifest unusable: {exc}", manifest, {})
+    failed = [f"{lib.library_id}:{lib.status}" for lib in libs if lib.status != "LOADED"]
+    if not libs or failed:
+        return (name, FAIL, "evidence_score needs every construction junction library to load; "
+                f"failed: {failed[:5] or 'none selected'}", manifest, {"failed": failed})
+    return (name, "PASS", f"evidence_score selection will use {len(libs)} construction "
+            "junction libraries", manifest, {})
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -160,6 +190,10 @@ def main(argv=None) -> int:
         for name, verdict, message, detail in preflight_checks(
                 args.star_junctions, roles_of(args.star_junction_roles), lengths):
             report.checks.append(CheckResult(name, verdict, message, args.star_junctions, detail))
+    if getattr(config.scoring, "primary_selection", "score") == "evidence_score":
+        from gmb.preflight.checks import CheckResult
+
+        report.checks.append(CheckResult(*_evidence_score_check(args)))
 
     if args.json:
         print(json.dumps(report.to_dict(), indent=1))

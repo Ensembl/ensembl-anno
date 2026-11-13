@@ -136,6 +136,31 @@ def _read_json(path: str):
         return None
 
 
+def _require_evidence_score_inputs(overlays, preset, star_junctions, star_junction_roles) -> None:
+    """Refuse an evidence_score run without construction-only junctions before any stage.
+
+    A configuration that cannot be loaded is left to the stages to report, exactly
+    as before; only a loadable evidence_score configuration is checked here."""
+    try:
+        from gmb.pipeline.config import load_config
+
+        mode = load_config(overlays or None, preset, warn_inert=False).scoring.primary_selection
+    except Exception:  # reported by preflight/build as before
+        return
+    if mode != "evidence_score":
+        return
+    from gmb.pipeline.evidence_features import SELECTION_JUNCTION_ROLE
+
+    roles = tuple(r.strip() for r in (star_junction_roles or "").split(",") if r.strip())
+    if not star_junctions:
+        raise ValueError("scoring.primary_selection: evidence_score requires star_junctions "
+                         "(a STAR junction manifest); it never falls back to another policy")
+    if roles != (SELECTION_JUNCTION_ROLE,):
+        raise ValueError(f"scoring.primary_selection: evidence_score uses "
+                         f"'{SELECTION_JUNCTION_ROLE}' junction libraries only; "
+                         f"star_junction_roles={star_junction_roles!r} is refused")
+
+
 def run_gene_model_builder(
     genome: str,
     backbone: str | None = None,
@@ -183,7 +208,9 @@ def run_gene_model_builder(
         special case and the long-read guard cannot fire.
     star_junctions : str or None
         Optional STAR junction manifest (``docs/star_junctions.md``), passed to
-        preflight and build with ``star_junction_roles``. Diagnostics only: the
+        preflight and build with ``star_junction_roles``. Required (with roles
+        exactly ``construction``) when the configuration selects
+        ``scoring.primary_selection: evidence_score``; otherwise diagnostics only: the
         build writes ``build/junction_evidence/`` and selects exactly as without it.
     long_read_alignments : str or None
         Per-read long-read alignments (GTF, one transcript per read, strand set
@@ -308,6 +335,7 @@ def run_gene_model_builder(
     evidence += _flags_for(short_read, _SHORT_READ_FLAGS, "short-read")
     evidence += _flags_for(long_read_tracks, _LONG_READ_FLAGS, "long-read")
     evidence += _flags_for(protein_alignment, _PROTEIN_FLAGS, "protein-alignment")
+    _require_evidence_score_inputs(overlays, preset, star_junctions, star_junction_roles)
     if star_junctions:
         evidence += ["--star-junctions", os.path.abspath(star_junctions),
                      "--star-junction-roles", star_junction_roles]

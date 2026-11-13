@@ -86,7 +86,7 @@ LOCUS_CLUSTERING_MODES = ("exon_overlap", "transcript_linked")
 ISOFORM_CDS_OVERLAP_MODES = ("off", "drop", "new_gene")
 
 #: Accepted values of ``scoring.primary_selection`` (see ScoringConfig).
-PRIMARY_SELECTION_MODES = ("score", "junction_supported")
+PRIMARY_SELECTION_MODES = ("score", "junction_supported", "evidence_score")
 
 # ---------------------------------------------------------------------------
 # Dataclasses
@@ -187,6 +187,58 @@ class ScoringWeights:
     protein_alignment: float = 1.0
     # Weight for a source that resolves to no configured role.
     unknown: float = 1.0
+
+
+@dataclass
+class EvidenceScoreConfig:
+    """Parameters of ``scoring.primary_selection: evidence_score`` (the P4d rule).
+
+    Read only when that mode is selected; see gmb.pipeline.evidence_features and
+    docs/evidence_selection.md. Defaults are the values frozen in the Phase 1.5
+    experiment and must not be tuned on held-out data.
+    """
+
+    # Junction breadth f(g) = min(1, g / breadth_saturation_groups) over condition groups.
+    breadth_saturation_groups: float = 5.0
+    # Penalty for an unobserved intron = weight x median breadth of the model's own
+    # supported introns (0 when it has none, so unexpressed genes are never penalised).
+    unobserved_expressed_weight: float = 0.5
+    # Per-intron spliced-protein agreement, in [-w, +w].
+    protein_intron_weight: float = 0.5
+    noncanonical_penalty: float = 0.5
+    partial_orf_penalty: float = 1.0
+    internal_stop_penalty: float = 5.0
+    # Bounded source priors. They protect a primary but can never cause a switch.
+    backbone_prior: float = 1.0
+    transcript_class_prior: float = 0.25
+    # Both total and prior-free evidence must improve by at least this much.
+    replacement_margin: float = 0.5
+    # A replacement may not drop a primary intron whose junction term reaches this.
+    keep_supported_intron_J: float = 0.6
+    # Candidate pool: reciprocal shared-CDS fraction with the primary, and CDS floor.
+    same_coding_locus_fraction: float = 0.5
+    min_candidate_cds_bp: int = 150
+
+
+def validate_evidence_score(ecfg) -> None:
+    """Raise ValueError for an unusable scoring.evidence_score section."""
+    def num(name, lo=0.0, hi=None, strict=False):
+        v = getattr(ecfg, name)
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"scoring.evidence_score.{name} must be a number, got {v!r}.")
+        if (v <= lo if strict else v < lo) or (hi is not None and v > hi):
+            bound = f"> {lo}" if strict else f">= {lo}"
+            raise ValueError(f"scoring.evidence_score.{name} must be {bound}"
+                             + (f" and <= {hi}" if hi is not None else "") + f", got {v!r}.")
+
+    num("breadth_saturation_groups", strict=True)
+    for name in ("unobserved_expressed_weight", "protein_intron_weight", "noncanonical_penalty",
+                 "partial_orf_penalty", "internal_stop_penalty", "backbone_prior",
+                 "transcript_class_prior", "min_candidate_cds_bp"):
+        num(name)
+    num("replacement_margin", strict=True)
+    num("keep_supported_intron_J", hi=1.0)
+    num("same_coding_locus_fraction", strict=True, hi=1.0)
 
 
 @dataclass
@@ -292,8 +344,17 @@ class ScoringConfig:
     #                           junction_primary_min_cds_fraction of the backbone's,
     #                           and no worse spliced-protein compatibility. The
     #                           backbone model is kept as an alternate.
+    #   "evidence_score"     -- as "junction_supported", then each gene's primary may be
+    #                           replaced by a same-coding-locus candidate whose
+    #                           quantitative junction/protein/ORF evidence is better
+    #                           (the P4d rule; parameters in `evidence_score`).
+    #                           Requires a STAR junction manifest restricted to
+    #                           construction libraries (--star-junctions).
     primary_selection: str = "score"
     junction_primary_min_cds_fraction: float = 0.9
+    # Read only with primary_selection: evidence_score. Not written to
+    # resolved_config.yaml otherwise, so existing runs are byte-identical.
+    evidence_score: EvidenceScoreConfig = field(default_factory=EvidenceScoreConfig)
     # Whether an alternate must share >= 1 coding base with its gene's primary.
     #   "off"      -- structural test only (shared intron or span overlap >
     #                 same_gene_overlap_threshold): validated baseline.
@@ -1136,6 +1197,9 @@ def validate_selection_policy(cfg) -> list:
     if not 0.0 <= frac <= 10.0:
         raise ValueError(
             f"scoring.junction_primary_min_cds_fraction must be in [0, 10], got {frac!r}.")
+    ecfg = getattr(scfg, "evidence_score", None)
+    if ecfg is not None:
+        validate_evidence_score(ecfg)
     return warnings_out
 
 
@@ -1255,4 +1319,10 @@ def dump_config(cfg: "PipelineConfig") -> dict:
     """
     from dataclasses import asdict
 
-    return asdict(cfg)
+    data = asdict(cfg)
+    # The evidence_score section is written only where it is used, so the
+    # resolved configuration of every existing run is unchanged.
+    scoring = data.get("scoring")
+    if isinstance(scoring, dict) and scoring.get("primary_selection") != "evidence_score":
+        scoring.pop("evidence_score", None)
+    return data
