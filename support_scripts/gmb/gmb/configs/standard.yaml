@@ -173,6 +173,10 @@ scoring:
     keep_supported_intron_J: 0.6       # never drop a primary intron with junction term >= this
     same_coding_locus_fraction: 0.5    # candidate pool: reciprocal shared-CDS fraction
     min_candidate_cds_bp: 150
+    # Opt-in: also offer evidence-filtered secondary ORFs of transcript models to the
+    # candidate pools of existing genes (docs/evidence_selection.md). Off in every preset.
+    # Protein alignments must exclude the target species' own proteins.
+    secondary_orfs: false
   # Must an alternate share >= 1 coding base with its gene's primary?
   #   off      -- no: structural test only (validated baseline)
   #   drop     -- discard a structure that would join without shared coding

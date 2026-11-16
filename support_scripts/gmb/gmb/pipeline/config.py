@@ -218,6 +218,10 @@ class EvidenceScoreConfig:
     # Candidate pool: reciprocal shared-CDS fraction with the primary, and CDS floor.
     same_coding_locus_fraction: float = 0.5
     min_candidate_cds_bp: int = 150
+    # Opt-in: add evidence-filtered secondary ORFs of transcript models to the candidate
+    # pools of existing genes (gmb.pipeline.secondary_orfs). Requires construction STAR
+    # junctions; protein alignments must exclude the target species' own proteins.
+    secondary_orfs: bool = False
 
 
 def validate_evidence_score(ecfg) -> None:
@@ -239,6 +243,11 @@ def validate_evidence_score(ecfg) -> None:
     num("replacement_margin", strict=True)
     num("keep_supported_intron_J", hi=1.0)
     num("same_coding_locus_fraction", strict=True, hi=1.0)
+    if not isinstance(getattr(ecfg, "secondary_orfs", False), bool):
+        raise ValueError(
+            "scoring.evidence_score.secondary_orfs must be true or false, "
+            f"got {ecfg.secondary_orfs!r}."
+        )
 
 
 @dataclass
@@ -1200,6 +1209,11 @@ def validate_selection_policy(cfg) -> list:
     ecfg = getattr(scfg, "evidence_score", None)
     if ecfg is not None:
         validate_evidence_score(ecfg)
+        if getattr(ecfg, "secondary_orfs", False) and primary_mode != "evidence_score":
+            raise ValueError(
+                "scoring.evidence_score.secondary_orfs requires scoring.primary_selection: "
+                f"evidence_score (got {primary_mode!r}); it is never used by another policy."
+            )
     return warnings_out
 
 
@@ -1325,4 +1339,8 @@ def dump_config(cfg: "PipelineConfig") -> dict:
     scoring = data.get("scoring")
     if isinstance(scoring, dict) and scoring.get("primary_selection") != "evidence_score":
         scoring.pop("evidence_score", None)
+    # Likewise the opt-in secondary-ORF switch appears only when it is on.
+    es = scoring.get("evidence_score") if isinstance(scoring, dict) else None
+    if isinstance(es, dict) and not es.get("secondary_orfs"):
+        es.pop("secondary_orfs", None)
     return data

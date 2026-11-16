@@ -27,7 +27,7 @@ import argparse
 import json
 import os
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import TYPE_CHECKING
 
 import yaml
@@ -713,6 +713,230 @@ def _write_evidence_selection(args, config, scorer, rows) -> dict:
     return {"outcomes": outcomes, "structures_scored": scorer.n_scored}
 
 
+def _transcript_class_sources(config, candidate_exons) -> set:
+    """Source labels in the short- and long-read transcript-evidence classes."""
+    from gmb.pipeline.canonical_evidence import (
+        EVIDENCE_CLASS_LONG_READ,
+        EVIDENCE_CLASS_SHORT_READ,
+        EvidenceRoles,
+    )
+
+    roles = EvidenceRoles.from_config(config.scoring)
+    return {
+        str(s)
+        for s in candidate_exons["Source"].unique()
+        if roles.role_of(str(s)) in (EVIDENCE_CLASS_SHORT_READ, EVIDENCE_CLASS_LONG_READ)
+    }
+
+
+def _secondary_orfs_enabled(config) -> bool:
+    return getattr(config.scoring, "primary_selection", "score") == "evidence_score" and bool(
+        getattr(getattr(config.scoring, "evidence_score", None), "secondary_orfs", False)
+    )
+
+
+def _discover_secondary_orfs(config, candidate_exons, annotations, genome_dict):
+    """Secondary-ORF discovery (scoring.evidence_score.secondary_orfs), after ORF annotation."""
+    import time as _t
+
+    from gmb.pipeline.secondary_orfs import discover
+
+    t0 = _t.perf_counter()
+    order = candidate_exons.drop_duplicates("transcript_id")[
+        ["transcript_id", "Source", "Chromosome", "Strand"]
+    ]
+    transcripts = [(t, str(s), str(c), str(st)) for t, s, c, st in order.itertuples(index=False)]
+    meta = {t: (c, st) for t, _s, c, st in transcripts}
+    existing = {
+        (meta[t][0], meta[t][1], tuple(sorted((int(a), int(b)) for a, b in ann["cds"])))
+        for t, ann in annotations.items()
+        if ann and ann.get("cds") and t in meta
+    }
+    ecfg = config.scoring.evidence_score
+    min_bp = max(
+        int(ecfg.min_candidate_cds_bp), int(getattr(config.scoring, "min_cds_bp", 0) or 0)
+    )
+    sources = _transcript_class_sources(config, candidate_exons)
+    found, stats = discover(
+        annotations, transcripts, genome_dict, sources, config.orf.min_codons, min_bp, existing
+    )
+    stats["discovery_seconds"] = round(_t.perf_counter() - t0, 3)
+    stats["min_cds_bp"] = min_bp
+    stats["transcript_sources"] = ",".join(sorted(sources))
+    print(
+        f"  Secondary ORFs: {stats['unique_structures']:,} new CDS structure(s) from "
+        f"{stats['transcripts_scanned']:,} transcript model(s) ({stats['discovery_seconds']:.1f} s)"
+    )
+    return found, stats
+
+
+def _admit_secondary_orfs(
+    config,
+    found,
+    stats,
+    cluster_df,
+    candidate_cds,
+    scorer,
+    prot_exons,
+    protein_intron_index,
+    tx_exons,
+    annotations,
+    junction_support,
+    protein_compat,
+    genome_dict,
+) -> dict:
+    """A_ev admission; returns {locus: [SecondaryOrf]} and registers admitted transcripts."""
+    import time as _t
+
+    from gmb.pipeline.secondary_orfs import ProteinCoverage, admit, build_transcript
+
+    t0 = _t.perf_counter()
+    tx_loci: dict = defaultdict(set)
+    for tid, cid in (
+        cluster_df[["transcript_id", "Cluster"]].drop_duplicates().itertuples(index=False)
+    ):
+        tx_loci[tid].add(cid)
+    meta = cluster_df.drop_duplicates("transcript_id").set_index("transcript_id")[
+        ["Chromosome", "Strand"]
+    ]
+    locus_structures: dict = defaultdict(set)
+    for tid, cds in candidate_cds.items():
+        if cds and tid in tx_loci:
+            key = (
+                str(meta.at[tid, "Chromosome"]),
+                str(meta.at[tid, "Strand"]),
+                tuple(sorted((int(a), int(b)) for a, b in cds)),
+            )
+            for li in tx_loci[tid]:
+                locus_structures[li].add(key)
+    stats.update(
+        admit(
+            found,
+            tx_loci,
+            locus_structures,
+            scorer.index,
+            ProteinCoverage(prot_exons),
+            scorer.params.same_coding_locus_fraction,
+        )
+    )
+    by_locus: dict = defaultdict(list)
+    admitted = [c for c in found.values() if c.status == "admitted"]
+    for c in admitted:
+        build_transcript(c, genome_dict, config.orf.min_codons)
+        annotations[c.cid] = c.annotation
+        for li in sorted(c.loci):
+            by_locus[li].append(c)
+    if admitted:
+        gdf = pd.concat([c.model["df"] for c in admitted], ignore_index=True)
+        junction_support.update(unsupported_intron_counts(gdf, observed_introns(tx_exons)))
+        protein_compat.update(
+            protein_compatibility_counts(
+                gdf, {c.cid: list(c.cds) for c in admitted}, prot_exons, index=protein_intron_index
+            )
+        )
+    stats["admission_seconds"] = round(_t.perf_counter() - t0, 3)
+    print(
+        f"  Secondary ORFs: {stats.get('admitted', 0):,} admitted (A_ev) of "
+        f"{len(found) - stats.get('no_shared_coding_locus', 0):,} sharing a coding locus with an "
+        f"existing candidate ({stats['admission_seconds']:.1f} s)"
+    )
+    return by_locus
+
+
+def _write_secondary_orfs(args, found, stats, gene_of_primary, evidence_rows, gff_rows) -> dict:
+    """secondary_orfs.tsv (one row per generated structure) and its summary."""
+    import json
+
+    from gmb.pipeline.evidence_features import shared_cds_bp
+    from gmb.pipeline.secondary_orfs import PROTEIN_COVER_MIN, attribution_rows
+
+    for c in found.values():
+        for e in c.pool_entries:
+            e["gene_id"] = gene_of_primary.get(e["primary"], "")
+    # Final CDS of every output gene (after validation and deduplication), for the
+    # abandoned-sequence report. Evaluation only: never used by selection.
+    gene_of_tx = {r["ID"]: r["Parent"] for r in gff_rows if r.get("Feature") == "mRNA"}
+    cds_by_gene: dict = defaultdict(list)
+    for r in gff_rows:
+        if r.get("Feature") == "CDS" and r.get("Parent") in gene_of_tx:
+            cds_by_gene[gene_of_tx[r["Parent"]]].append(
+                (r["Chromosome"], r["Strand"], int(r["Start"]), int(r["End"]))
+            )
+
+    def parse(text):
+        return (
+            [(int(a) - 1, int(b)) for a, b in (x.split("-") for x in text.split(","))]
+            if text
+            else []
+        )
+
+    abandoned = {}
+    for r in evidence_rows:
+        if r.get("new_candidate_origin") != "secondary_orf":
+            continue
+        old, new = parse(r["old_structure"]), parse(r["new_structure"])
+        rest = []
+        for a, b in old:
+            pieces = [(a, b)]
+            for x, y in new:
+                pieces = [
+                    q for p, e in pieces for q in ((p, min(e, x)), (max(p, y), e)) if q[1] > q[0]
+                ]
+            rest += pieces
+        others = [
+            (s, e)
+            for g, segs in cds_by_gene.items()
+            if g != r["gene_id"]
+            for ch, st, s, e in segs
+            if ch == r["chrom"] and st == r["strand"]
+        ]
+        covered = shared_cds_bp(rest, others) if rest else 0
+        abandoned[r["new_candidate"]] = (sum(b - a for a, b in rest), covered)
+    rows = attribution_rows(found)
+    for row in rows:
+        ab = abandoned.get(row["candidate_id"])
+        row["abandoned_old_cds_bp"] = ab[0] if ab else None
+        row["abandoned_bp_in_other_genes"] = ab[1] if ab else None
+    path = os.path.join(args.output_dir, "secondary_orfs.tsv")
+    pd.DataFrame(rows).to_csv(path, sep="\t", index=False)
+    status = dict(sorted(Counter(c.status for c in found.values()).items()))
+    summary = {
+        "generator": "secondary_orfs (A_ev, frozen Phase 3A)",
+        "discovery": {k: v for k, v in stats.items() if k not in status},
+        "structures_by_status": status,
+        "admitted_by": dict(
+            sorted(Counter(c.admitted_by for c in found.values() if c.admitted_by).items())
+        ),
+        "eligible_structures": sum(1 for c in found.values() if c.pool_entries),
+        "eligible_gene_pools": sum(len(c.pool_entries) for c in found.values()),
+        "selected_as_primary": sum(
+            1 for c in found.values() if any(e["selected"] for e in c.pool_entries)
+        ),
+        "abandoned_old_cds_bp": sum(a for a, _ in abandoned.values()),
+        "abandoned_bp_in_other_genes": sum(b for _, b in abandoned.values()),
+        "rules": {
+            "protein_cover_min": PROTEIN_COVER_MIN,
+            "junction_clause": "spliced and every CDS intron observed in construction junctions",
+            "orf": "complete ATG..stop, upstream or downstream of the transcript's own ORF",
+        },
+        "input_requirements": [
+            "protein alignments must exclude the target species' own proteins (protein-set "
+            "preparation; GMB does not filter them)",
+            "construction-only STAR junction manifest (--star-junctions)",
+        ],
+    }
+    with open(os.path.join(args.output_dir, "secondary_orfs_summary.json"), "w") as fh:
+        json.dump(summary, fh, indent=2, sort_keys=True, default=str)
+    print(
+        f"  Secondary ORFs: {summary['selected_as_primary']} selected as primary, "
+        f"{summary['eligible_structures']} eligible; see {path}"
+    )
+    return {
+        k: summary[k]
+        for k in ("structures_by_status", "eligible_structures", "selected_as_primary")
+    }
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_setup_args = parser.add_argument_group("Setup")
@@ -1128,6 +1352,14 @@ def main() -> None:
     annotations = annotate_all_transcripts(
         candidate_exons, genome_dict, candidate_cds, min_codons=config.orf.min_codons
     )
+    # Opt-in secondary-ORF generation (scoring.evidence_score.secondary_orfs): discovery
+    # only; admission and selection follow once the evidence indices and loci exist.
+    secondary_orfs = secondary_orf_stats = None
+    secondary_orf_gene_of: dict = {}
+    if _secondary_orfs_enabled(config):
+        secondary_orfs, secondary_orf_stats = _discover_secondary_orfs(
+            config, candidate_exons, annotations, genome_dict
+        )
 
     validation_scores = {}
     validation_details = {}
@@ -1273,6 +1505,23 @@ def main() -> None:
             f"than one locus and are scored as fragments; "
             f"scoring.locus_clustering=transcript_linked keeps them whole"
         )
+    secondary_orfs_by_locus: dict = {}
+    if secondary_orfs is not None:
+        secondary_orfs_by_locus = _admit_secondary_orfs(
+            config,
+            secondary_orfs,
+            secondary_orf_stats,
+            cluster_df,
+            candidate_cds,
+            evidence_scorer,
+            prot_exons_filt,
+            protein_intron_index,
+            tx_exons,
+            annotations,
+            junction_support,
+            protein_compat,
+            genome_dict,
+        )
 
     print("Computing guardrails...")
     runtime_params = compute_percentile_guardrails(cluster_df, config, protein_supported_tids)
@@ -1336,6 +1585,7 @@ def main() -> None:
             complete_orf_tids=complete_orf_tids,
             excluded=isoform_exclusion_rows,
             evidence_scorer=evidence_scorer,
+            secondary_orfs=secondary_orfs_by_locus.get(_cid),
         )
         if not genes:
             continue
@@ -1367,6 +1617,10 @@ def main() -> None:
                 evidence_selection_rows.append(
                     {"gene_id": gene_id, "primary_transcript_id": f"{gene_id}.t1",
                      **gene_models[0]["evidence_selection"]})
+                if secondary_orfs is not None:
+                    secondary_orf_gene_of[
+                        gene_models[0]["evidence_selection"].get("old_candidate")
+                    ] = gene_id
 
             # Collect all mRNA rows first so we can recompute gene span from children
             gene_mrna_rows = []
@@ -1475,6 +1729,9 @@ def main() -> None:
                     "ProteinAlignmentsIncompatible": model.get(
                         "protein_alignments_incompatible"),
                 }
+                if model.get("candidate_origin"):
+                    mrna_row["CandidateOrigin"] = model["candidate_origin"]
+                    mrna_row["SecondaryOrfParents"] = model.get("secondary_orf_parents", "")
 
                 # Attach here (not re-looked-up later) because `annotations`
                 # and `validation_details` are keyed by the original
@@ -1718,6 +1975,13 @@ def main() -> None:
                     and r["CollapsedFrom"] != ""
                 ):
                     attr += f";CollapsedFrom={r['CollapsedFrom']}"
+                if (
+                    "CandidateOrigin" in r
+                    and pd.notna(r["CandidateOrigin"])
+                    and r["CandidateOrigin"] != ""
+                ):
+                    attr += f";CandidateOrigin={r['CandidateOrigin']}"
+                    attr += f";SecondaryOrfParents={r['SecondaryOrfParents']}"
                 fh.write(
                     f"{r['Chromosome']}\t{r['Source']}\t{r['Feature']}\t{r['Start']}\t{r['End']}\t{r['Score']}\t{r['Strand']}\t{r['Frame']}\t{attr}\n"
                 )
@@ -1873,6 +2137,15 @@ def main() -> None:
     if evidence_scorer is not None:
         stats["evidence_selection"] = _write_evidence_selection(
             args, config, evidence_scorer, evidence_selection_rows)
+    if secondary_orfs is not None:
+        stats["secondary_orfs"] = _write_secondary_orfs(
+            args,
+            secondary_orfs,
+            secondary_orf_stats,
+            secondary_orf_gene_of,
+            evidence_selection_rows,
+            selected_gff_rows,
+        )
 
     stats["isoform_cds_overlap_excluded"] = len(isoform_exclusion_rows)
     if isoform_exclusion_rows:

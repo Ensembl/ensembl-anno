@@ -156,6 +156,69 @@ The primary B is replaced by the best eligible candidate X only if all of the fo
 A changed build primary is not necessarily the finalised canonical transcript: `gmb-finalise`
 canonical selection runs afterwards and is unchanged.
 
+## Secondary-ORF candidates (`evidence_score.secondary_orfs`, opt-in)
+
+GMB annotates one ORF per transcript, its longest. A read-through StringTie, Scallop or
+long-read model that spans two genes therefore never offers the second gene's correctly
+spliced ORF as a candidate. With
+
+```yaml
+scoring:
+  primary_selection: evidence_score
+  evidence_score:
+    secondary_orfs: true
+```
+
+GMB also generates those ORFs (`gmb.pipeline.secondary_orfs`) and offers them to the P4d
+candidate pool of the **existing** gene they share a coding locus with. No preset enables it,
+and it is refused with any other `primary_selection`. The rules were frozen in the Phase 3A
+experiment (A_ev) and are not parameters:
+
+* **Discovery** (after ORF annotation). Transcript-evidence models only, the same sources as
+  the transcript-class prior. Every complete, maximal ATG..stop ORF of at least
+  `orf.min_codons` codons and `max(min_candidate_cds_bp, scoring.min_cds_bp)` bp, lying wholly
+  upstream or downstream of the transcript's own ORF on the cDNA. ORFs overlapping the own ORF
+  in another frame are not generated. The projected CDS must re-read identically from the
+  genome, start with ATG, end with a stop, contain no internal stop and keep a continuous
+  frame. Structures are deduplicated across parent transcripts (all parents are kept); a
+  structure that already is a candidate's CDS is not generated.
+* **Admission (A_ev).** Only structures sharing a coding locus with an existing candidate of
+  their locus are evaluated, since no other structure can enter a gene's pool. A structure is
+  admitted when at least 50% of its CDS is covered by same-strand protein-alignment exons, or
+  when it is spliced and every CDS intron is a construction junction.
+* **Selection.** Admitted structures never enter clustering, gene grouping or isoform
+  admission. In a gene's pool they follow the existing candidates, under the pool's own rules
+  (shared coding locus, CDS floor, not another gene's structure, GFF3 limits), and the
+  unchanged P4d rule decides. No new genes are created, and a generated structure that is not
+  chosen as primary is never kept as an isoform.
+* **Representation.** A chosen secondary ORF becomes the gene's primary transcript with exons
+  equal to its CDS segments: no UTR of the read-through parent is carried into a neighbouring
+  locus. It keeps its parents' transcript evidence class (`Evidence=StringTie,...`) and is
+  marked `CandidateOrigin=secondary_orf;SecondaryOrfParents=<input transcript IDs>`. Its
+  junction and protein compatibility counts are computed as for any candidate.
+
+**Input requirement.** The protein clause uses the protein alignments as supplied. Prepare the
+protein set **without the target species' own proteins**, otherwise the species' annotation
+is aligned back to itself and counted as independent support. GMB cannot recognise them. The
+requirement is restated in `secondary_orfs_summary.json`.
+
+**Outputs.**
+* `secondary_orfs.tsv`: one row per generated structure. Columns: `candidate_id`, CDS,
+  `status` (`admitted`, `not_admitted`, `no_shared_coding_locus`), `admitted_by`,
+  `protein_cover`, `protein_alignments`, `introns_junction_supported`, `parents`,
+  `parent_sources`, `relations`, `loci`, `eligible_genes` / `eligible_primaries`, the P4d
+  outcome at each of those genes, `selected` / `selected_gene`, and, for a selected structure,
+  `abandoned_old_cds_bp` (coding bases of the replaced primary outside the new CDS) and
+  `abandoned_bp_in_other_genes` (of those, the bases still coded by another output gene).
+  The abandoned columns are reported for evaluation only; they never affect selection.
+* `secondary_orfs_summary.json`: discovery counters, structures by status, admission clauses,
+  eligible and selected counts, abandoned totals and timing.
+* `evidence_selection.tsv`: a replacement by a secondary ORF has
+  `new_candidate_origin=secondary_orf` and `representative=secondary_orf`.
+
+With the switch off (the default) nothing above runs, and every output, including
+`resolved_config.yaml`, is identical to a build without the key.
+
 ## Limitations
 
 * **Assemblies are not construction-only.** The StringTie and Scallop candidate tracks are

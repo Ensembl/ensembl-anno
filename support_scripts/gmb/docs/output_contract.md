@@ -82,6 +82,7 @@ Ship these alongside the handover — they explain *why* each model was chosen.
 | `summary.json` / `summary.tsv` | build-stage counts | yes |
 | `junction_evidence/` | per-intron/per-model STAR junction diagnostics, only with `--star-junctions` ([star_junctions.md](star_junctions.md)) | optional |
 | `evidence_selection.tsv`, `evidence_selection_summary.json` | one primary-selection decision per gene, and its provenance (parameters, junction manifest and library checksums), only with `primary_selection: evidence_score` ([evidence_selection.md](evidence_selection.md)) | optional |
+| `secondary_orfs.tsv`, `secondary_orfs_summary.json` | every generated secondary-ORF structure with provenance, admission evidence, eligibility, selection and abandoned coding sequence, only with `scoring.evidence_score.secondary_orfs: true` ([evidence_selection.md](evidence_selection.md)) | optional |
 | `gmb.log` | full build log | optional, large |
 | `consensus.gff3`, `cdna.fa`, `cds.fa`, `prot.fa` | **pre-finalisation copies** | **no — use `finalise/`** |
 
@@ -154,7 +155,10 @@ in the release notes.
 - `CDS` column 8 is the GFF3 phase (0/1/2), computed in transcript orientation.
 - mRNA attributes: `Evidence` (comma-separated structural sources that produced the
   structure), `ProteinEvidence` (supporting protein-alignment tracks; attribution only) and,
-  where a duplicate was collapsed into it, `CollapsedFrom`.
+  where a duplicate was collapsed into it, `CollapsedFrom`. A primary chosen from a generated
+  secondary ORF (`scoring.evidence_score.secondary_orfs`) also carries
+  `CandidateOrigin=secondary_orf` and `SecondaryOrfParents` (its input transcript IDs); its
+  `Evidence` is the parents' transcript class and its exons are its CDS segments (no UTR).
 - Transcripts whose strand could not be resolved are never written; they are listed in
   `build/unstranded_exclusions.tsv`.
 

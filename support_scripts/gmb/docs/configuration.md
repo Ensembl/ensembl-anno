@@ -166,6 +166,7 @@ All default **off**. Enable one at a time, for a reason visible in preflight out
 | `locus_clustering` | `exon_overlap` \| `transcript_linked` | `exon_overlap` (fungi: `transcript_linked`) |
 | `primary_selection` | `score` \| `junction_supported` \| `evidence_score` | `score` |
 | `evidence_score.*` | P4d parameters ([evidence_selection.md](evidence_selection.md)) | frozen Phase 1.5 values |
+| `evidence_score.secondary_orfs` | bool: offer evidence-filtered secondary ORFs to existing genes' P4d pools ([evidence_selection.md](evidence_selection.md#secondary-orf-candidates-evidence_scoresecondary_orfs-opt-in)); needs `evidence_score` and target-species-free protein alignments | `false` |
 | `isoform_cds_overlap` | `off` \| `drop` \| `new_gene` | `"off"` |
 | `canonical_selection.prefer_build_primary` | bool | `false` |
 

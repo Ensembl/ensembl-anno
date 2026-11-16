@@ -225,6 +225,7 @@ def select_isoforms(
     complete_orf_tids: set[str] | None = None,
     excluded: list[dict] | None = None,
     evidence_scorer=None,
+    secondary_orfs: list | None = None,
 ) -> list[list[dict]]:
     """Score and select isoforms for a single locus.
 
@@ -270,6 +271,11 @@ def select_isoforms(
     evidence_scorer : gmb.pipeline.evidence_features.EvidenceScorer or None
         Required by, and used only with, ``scoring.primary_selection:
         evidence_score``.
+    secondary_orfs : list or None
+        Admitted :class:`gmb.pipeline.secondary_orfs.SecondaryOrf` structures whose
+        parent transcript is in this locus (``scoring.evidence_score.secondary_orfs``).
+        They join only the evidence-score candidate pools of the existing genes and
+        never take part in gene grouping or isoform admission.
 
     Returns
     -------
@@ -662,9 +668,23 @@ def select_isoforms(
                 "scoring.primary_selection: evidence_score needs STAR junction evidence "
                 "(gmb-build --star-junctions MANIFEST); it never falls back to another policy")
         _promote_evidence_supported(
-            genes, locus_df, models, merged, candidates, cds_map, complete_orf_tids or set(),
-            evidence_scorer, scfg, is_same_gene, shares_coding_base, cds_mode, junctions, compat,
-            config.protein_validation)
+            genes,
+            locus_df,
+            models,
+            merged,
+            candidates,
+            cds_map,
+            complete_orf_tids or set(),
+            evidence_scorer,
+            scfg,
+            is_same_gene,
+            shares_coding_base,
+            cds_mode,
+            junctions,
+            compat,
+            config.protein_validation,
+            secondary_orfs=secondary_orfs,
+        )
 
     # Sort genes by start coordinate
     genes.sort(key=lambda g: min(m["start"] for m in g))
@@ -734,16 +754,33 @@ def _merged_key(m: dict) -> str:
     return f"{m['chrom']}:{m['strand']}:{m['intron_chain']}"
 
 
-def _promote_evidence_supported(genes, locus_df, models, merged, candidates, cds_map,
-                                complete_orf_tids, scorer, scfg, is_same_gene,
-                                shares_coding_base, cds_mode, junctions, compat, val_cfg=None):
+def _promote_evidence_supported(
+    genes,
+    locus_df,
+    models,
+    merged,
+    candidates,
+    cds_map,
+    complete_orf_tids,
+    scorer,
+    scfg,
+    is_same_gene,
+    shares_coding_base,
+    cds_mode,
+    junctions,
+    compat,
+    val_cfg=None,
+    secondary_orfs=None,
+):
     """``primary_selection: evidence_score``: re-choose each gene's primary (in place).
 
     The candidate pool of a gene is every CDS structure of the locus (whether or not
     GMB retained it as an isoform) that shares at least ``same_coding_locus_fraction``
     of its CDS with the current primary in both directions, has at least
     ``min_candidate_cds_bp`` of CDS and passes the structural validity floor, and is
-    not used by any other gene of the locus. The P4d rule
+    not used by any other gene of the locus. Admitted secondary-ORF structures of the
+    locus (*secondary_orfs*) follow the existing structures in the pool order, under the
+    same rules. The P4d rule
     (:func:`gmb.pipeline.evidence_features.decide_primary`) decides. A replaced
     primary is kept as an alternate only if it passes the normal isoform admission
     rules against the new primary; gene grouping is otherwise unchanged. Every gene
@@ -776,6 +813,13 @@ def _promote_evidence_supported(genes, locus_df, models, merged, candidates, cds
         st["complete"] |= tid in complete_orf_tids
         tid_key[tid] = key
     models_by_id = {m["id"]: m for m in models}
+    generated: dict = {}
+    for c in secondary_orfs or ():
+        if c.key in structs:  # discovery never emits an existing structure
+            continue
+        structs[c.key] = {"tids": [c.cid], "sources": set(c.sources), "complete": True}
+        models_by_id[c.cid] = c.model
+        generated[c.key] = c
 
     def valid(key):
         cds = key[2]
@@ -816,6 +860,8 @@ def _promote_evidence_supported(genes, locus_df, models, merged, candidates, cds
 
     def representative(key, gene):
         """The transcript that carries a chosen CDS: prefer what GMB already kept."""
+        if key in generated:
+            return dict(generated[key].model), "secondary_orf"
         tids = [t for t in structs[key]["tids"] if fits(t)]
         for m in gene:
             if m["id"] in tids:
@@ -875,6 +921,19 @@ def _promote_evidence_supported(genes, locus_df, models, merged, candidates, cds
                 continue
             pool.append(evaluate(k))
         d = decide_primary(P, pool, params)
+        for ev in pool:
+            c = generated.get(ev.key)
+            if c is not None:
+                c.pool_entries.append(
+                    {
+                        "primary": primary["id"],
+                        "outcome": d.outcome,
+                        "selected": d.chosen is ev,
+                        "best_alternative": d.best_alternative is ev,
+                        "delta_total": round(ev.total - P.total, 4),
+                        "delta_evidence": round(ev.evidence - P.evidence, 4),
+                    }
+                )
         rec = dict(base, outcome=d.outcome, protected_backbone=d.outcome == "protected_backbone",
                    old_structure=fmt_cds(P.cds), old_sources=",".join(sorted(P.sources)),
                    n_pool=d.n_pool, n_excluded_other_gene=n_other_gene,
@@ -930,6 +989,8 @@ def _promote_evidence_supported(genes, locus_df, models, merged, candidates, cds
             concerns.append("new_primary_was_not_a_retained_isoform")
         if not any(m is primary for m in kept):
             concerns.append("old_primary_not_kept_as_isoform")
+        if d.chosen.key in generated:
+            rec["new_candidate_origin"] = generated[d.chosen.key].model["candidate_origin"]
         rec.update(new_candidate=new_m["id"], new_structure=fmt_cds(d.chosen.cds),
                    new_sources=",".join(sorted(d.chosen.sources)), representative=tier,
                    delta_total=round(d.chosen.total - P.total, 4),

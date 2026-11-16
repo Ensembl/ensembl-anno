@@ -261,6 +261,34 @@ def find_best_orf(cdna_seq, min_codons=100):
     return None
 
 
+def find_complete_orfs(cdna_seq, min_codons=100, min_bp=0):
+    """All complete, maximal ATG-to-stop ORFs of a cDNA sequence.
+
+    One ORF per in-frame stop codon: the most upstream ATG after the previous
+    in-frame stop (the same maximal ORF :func:`find_best_orf` would take for that
+    stop). Lengths count codons including the stop, as in :func:`find_best_orf`.
+
+    Returns
+    -------
+    list of (cds_start, cds_end, frame)
+        0-based half-open cDNA coordinates (``cds_end`` includes the stop codon),
+        ordered by frame and then position.
+    """
+    out = []
+    n = len(cdna_seq)
+    for frame in range(3):
+        atg = None
+        for i in range(frame, n - 2, 3):
+            codon = cdna_seq[i : i + 3]
+            if codon in STOP_CODONS:
+                if atg is not None and (i + 3 - atg) // 3 >= min_codons and i + 3 - atg >= min_bp:
+                    out.append((atg, i + 3, frame))
+                atg = None
+            elif codon == START_CODON and atg is None:
+                atg = i
+    return out
+
+
 def translate(cds_seq):
     """Translate a CDS nucleotide sequence to protein.
 
