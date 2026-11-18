@@ -49,7 +49,8 @@ promotion included. Then, for each gene of the locus:
    * shares at least `same_coding_locus_fraction` of its CDS with the current primary, in both
      directions, on the same strand;
    * has at least `min_candidate_cds_bp` of CDS (and at least `scoring.min_cds_bp`), and passes
-     protein validation when its `drop` policy is on;
+     protein validation when its `drop` policy is on (every carrying transcript must pass, see
+     [protein_qc.md](protein_qc.md); in-build validation is not recommended for fungi);
    * is carried by a transcript that would pass the build's GFF3 validation limits (merged exon
      length and, if enabled, transcript span);
    * is not used by any other gene of the locus (primary or isoform), so no CDS is duplicated

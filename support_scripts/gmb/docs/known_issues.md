@@ -125,6 +125,14 @@ models against a repeat annotation.
   window against UniProt eukaryota), and 5.0 exceeds every backbone weight: enabling it
   removes most alternates and changes no primary (dev core: transcripts 3,960 → 2,650,
   CDS-exact 719 → 719, missed 35 → 41). Revisit `min_score`/weights before enabling it.
+  Full *U. maydis* genome with P4d and secondary ORFs: exact reference CDS 5,148 → 5,080
+  (+33 / −101), transcripts 12,631 → 7,892, 86% of transcripts penalised. Not recommended for
+  fungi; use `gmb-protein-qc` for post-build protein QC ([protein_qc.md](protein_qc.md)).
+- In-build validation, open (opt-in only): generated secondary ORFs are never validated (they
+  carry `protein_coding_score: None`, D2); under `policy: drop` evidence-score promotion rejects a
+  CDS structure if any carrying transcript is below `min_score`, counting unscored carriers as
+  0.0 (D3). Fixed: merged exon structures no longer take a later member's
+  `protein_coding_score` (D1).
 - `validation.max_exon_len_reference: reference` is accepted but falls back to
   `candidates_supported` with a warning.
 
@@ -193,7 +201,8 @@ coding-potential support.
   protein validation the complete-ORF tier ties every isoform; its `protein_alignment`
   evidence class is never counted (protein tracks are reported in
   `protein_alignment_sources`, not `evidence_sources`), so every gene is labelled
-  `LOW_CONFIDENCE_NO_PROTEIN_SUPPORT` when protein validation is off.
+  `LOW_CONFIDENCE_NO_PROTEIN_SUPPORT` when protein validation is off. `gmb-protein-qc` output
+  is deliberately not read here; see [protein_qc.md](protein_qc.md).
 - Scores take 22 distinct values on *Z. tritici* (64% of candidates at exactly 3.0 or 5.1);
   24% of multi-isoform genes have an alternate tied with the primary, broken by input order.
 

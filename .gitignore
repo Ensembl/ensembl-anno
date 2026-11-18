@@ -26,3 +26,5 @@ downloads/
 
 #IDEA
 .vscode/
+# setuptools build output from installing/building the GMB package (docs/build/ is tracked)
+support_scripts/gmb/build/

@@ -308,6 +308,9 @@ def batch_score_proteins(
             "diamond_bitscore": None,
             "diamond_evalue": None,
             "psauron_score": None,
+            # psauron's own call at its built-in threshold (True/False/None);
+            # reported by gmb-protein-qc, not used by any GMB decision.
+            "psauron_is_protein": None,
             "protein_length": len(seq) if seq else 0,
             "validation_status": status,
             "validation_reason": reason,
@@ -495,6 +498,7 @@ def batch_score_proteins(
             )
 
         psauron_scores = {}
+        psauron_calls = {}
         malformed_rows = 0
         for row in reader:
             qseqid = row.get("description")
@@ -506,6 +510,9 @@ def batch_score_proteins(
                 psauron_scores[qseqid] = float(score_str)
             except ValueError:
                 malformed_rows += 1
+                continue
+            call = str(row.get("psauron_is_protein") or "").strip().lower()
+            psauron_calls[qseqid] = {"true": True, "false": False}.get(call)
         if malformed_rows:
             print(
                 f"WARNING: {malformed_rows} psauron output row(s) were malformed "
@@ -548,6 +555,7 @@ def batch_score_proteins(
                 detail.update(diamond_detail_by_sid[sid])
             if has_psauron:
                 detail["psauron_score"] = psauron_scores[sid]
+                detail["psauron_is_protein"] = psauron_calls.get(sid)
             # Every transcript sharing this sequence gets the *same* result;
             # copied per key so a later per-transcript annotation (e.g. the
             # final transcript ID) cannot leak across transcripts. Exactly

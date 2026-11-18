@@ -62,6 +62,7 @@ organism, so they are reported rather than failed on.
 | source composition | which evidence produced the selected models |
 | merge / split indicators | one GMB gene spanning several reference genes, or vice versa |
 | protein support distribution | strong / positional-only / none |
+| coding potential and homology of final proteins | `gmb-protein-qc` (PSAURON, DIAMOND); report only, see [protein_qc.md](protein_qc.md) |
 
 ---
 

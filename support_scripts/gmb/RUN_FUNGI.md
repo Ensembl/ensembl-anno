@@ -166,6 +166,19 @@ Both must be `True`. The preflight verdict may be `WARN`; that is normal (on *Z.
 example, a few unstranded short-read rows and very long protein alignments are reported and
 handled). Biological accuracy is assessed afterwards by the annotation lead, not here.
 
+Optional protein QC (DIAMOND and PSAURON on the final proteins; changes nothing):
+
+```bash
+gmb-protein-qc --proteins <output-dir>/finalise/prot.fa \
+  --gff3 <output-dir>/finalise/canonical/consensus.canonical_annotated.gff3 \
+  --build-dir <output-dir>/build --diamond-db <proteins_without_this_species>.dmnd \
+  --diamond-path <diamond> --psauron-path <psauron> --psauron-cpu \
+  --output-dir <output-dir>/protein_qc
+```
+
+Do not enable `protein_validation` in the build for fungi; see
+[docs/protein_qc.md](docs/protein_qc.md).
+
 ## 6. If it fails
 
 `gmb-run` stops at the first failing stage, explains why in its last lines and in

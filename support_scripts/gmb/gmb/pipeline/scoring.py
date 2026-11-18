@@ -368,9 +368,9 @@ def select_isoforms(
             s["protein_support"] = True
             if not s["rep"]["protein_support"]:
                 s["rep"] = m
-        # Propagate validation score if available
-        if "protein_coding_score" in m:
-            s["rep"]["protein_coding_score"] = m["protein_coding_score"]
+        # Each model keeps its own protein_coding_score (from locus_df): a
+        # merged structure is judged on its representative's own protein,
+        # never on whichever member happened to be merged last.
 
     # Score each merged structure
     for _key, s in merged.items():

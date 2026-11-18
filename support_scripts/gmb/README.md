@@ -186,6 +186,7 @@ they generally need their own environments.
 | `gmb-build` | integrate evidence and select gene models | advanced |
 | `gmb-finalise` | regenerate FASTA, QC, canonical, handover | advanced |
 | `gmb-longread-consensus` | collapse per-read long-read alignments into models (run by `gmb-run`) | expert / debugging ([longread_consensus.md](docs/longread_consensus.md)) |
+| `gmb-protein-qc` | DIAMOND/PSAURON QC of the final proteins; changes nothing ([protein_qc.md](docs/protein_qc.md)) | optional QC |
 | `gmb-canonical-selection`, `gmb-interpro-*` | specialised tools (also run by `gmb-finalise`) | no |
 | `gmb-compare` | **removed** — prints where reference comparison moved (`ensembl-genes` `annotation-qc`) | no |
 
@@ -263,7 +264,8 @@ Consult when you need the detail.
 
 Specialised: [longread_consensus.md](docs/longread_consensus.md),
 [canonical_selection.md](docs/canonical_selection.md),
-[interpro_resolver.md](docs/interpro_resolver.md).
+[interpro_resolver.md](docs/interpro_resolver.md),
+[protein_qc.md](docs/protein_qc.md) (in-build validation vs post-build protein QC).
 
 Examples: `examples/submit_gmb.slurm` (Slurm), `examples/run_gene_model_builder.sh`
 (environment-variable wrapper), `examples/run_gene_model_builder.py` (Python API).

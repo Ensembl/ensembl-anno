@@ -216,6 +216,11 @@ the setting removes most alternate isoforms. It therefore interacts with
 exact-CDS agreement from 733 to 718 of 1,874 core reference genes. Do not combine them without
 evaluating the combination.
 
+In-build protein validation is **not recommended for fungi**: on the full *U. maydis* genome it
+lowered exact reference CDS agreement with P4d and secondary ORFs (5,148 → 5,080) and removed 37%
+of transcripts. To score final proteins without affecting selection, run `gmb-protein-qc` after
+the build; see [protein_qc.md](protein_qc.md), which also lists the known limitations.
+
 `backbone_intron_rescue` is **applicability-gated**:
 
 - `off` — never fires.

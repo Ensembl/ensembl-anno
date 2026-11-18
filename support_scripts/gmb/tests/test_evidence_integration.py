@@ -339,6 +339,33 @@ class TestProteinValidationPenalty:
             load_config([str(p)], "fungi")
 
 
+def _merged_pair(sc_score, st_score):
+    """Scallop 'sc' and StringTie 'st' share one exon structure, so they merge
+    and 'sc' (first seen) represents it. Validation on, penalize policy."""
+    cfg = load_config(None, "fungi")
+    cfg.protein_validation.enabled = True
+    cfg.protein_validation.policy = "penalize"
+    exons = [(100, 300), (420, 700), (800, 1000)]
+    locus = pd.concat([
+        _exons("sc", "Scallop", exons).assign(protein_coding_score=sc_score),
+        _exons("st", "StringTie", exons).assign(protein_coding_score=st_score),
+    ], ignore_index=True)
+    return {m["id"]: m for g in select_isoforms(locus, cfg, set()) for m in g}
+
+
+class TestMergedStructureKeepsOwnValidationScore:
+    """D1: the merge loop used to copy each later member's protein_coding_score
+    onto the representative, so a structure was judged on another model's protein."""
+
+    @pytest.mark.parametrize("own,other", [(0.9, 0.1), (0.1, 0.9)])
+    def test_representative_keeps_its_own_score(self, own, other):
+        assert _merged_pair(own, other)["sc"]["protein_coding_score"] == pytest.approx(own)
+
+    def test_structure_score_independent_of_other_members(self):
+        assert _merged_pair(0.9, 0.1)["sc"]["score"] == pytest.approx(
+            _merged_pair(0.9, 0.9)["sc"]["score"])
+
+
 def test_invalid_primary_selection_rejected(tmp_path):
     p = tmp_path / "bad.yaml"
     p.write_text("scoring:\n  primary_selection: best\n")
@@ -444,7 +471,7 @@ def test_build_warns_on_per_read_longread_track(capsys):
 
 @pytest.mark.parametrize("module", [
     "build", "preflight", "finalise", "canonical_selection", "longread_consensus",
-    "interpro_review", "interpro_resolve"])
+    "interpro_review", "interpro_resolve", "protein_qc"])
 def test_every_cli_module_runs_with_python_dash_m(module):
     # A CLI module without a __main__ guard exits 0 under `python -m` and does nothing.
     result = subprocess.run([sys.executable, "-m", f"gmb.cli.{module}", "--help"],
