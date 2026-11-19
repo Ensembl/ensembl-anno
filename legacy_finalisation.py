@@ -11,6 +11,7 @@ import subprocess
 from multiprocessing.pool import AsyncResult
 from pathlib import Path
 from typing import Any, cast
+import warnings
 
 from src.python.ensembl.tools.anno.utils._utils import (
     check_file,
@@ -1052,7 +1053,8 @@ def multiprocess_diamond(
         raise FileNotFoundError(f"Diamond produced no output file: " f"{diamond_output_file}")
 
     if diamond_output_file.stat().st_size == 0:
-        raise RuntimeError(f"Diamond output file is empty: " f"{diamond_output_file}")
+        warnings.warn(f"Diamond output file is empty: " f"{diamond_output_file}")
+        logging.info(f"Diamond output file is empty: " f"{diamond_output_file}")
 
     logging.info(
         "Diamond completed successfully: %s",
