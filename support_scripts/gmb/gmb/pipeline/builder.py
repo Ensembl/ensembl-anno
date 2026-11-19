@@ -735,6 +735,69 @@ def _secondary_orfs_enabled(config) -> bool:
     )
 
 
+def _filtered_transcript_orfs_enabled(config) -> bool:
+    return _secondary_orfs_enabled(config) and bool(
+        getattr(config.scoring.evidence_score, "filtered_transcript_orfs", False)
+    )
+
+
+def _discover_filtered_transcript_orfs(
+    config, removed_df, cds_df, candidate_exons, annotations, genome_dict, secondary_orfs
+):
+    """Units of filter-removed transcript models (evidence_score.filtered_transcript_orfs)."""
+    import time as _t
+
+    from gmb.pipeline.filtered_transcript_orfs import discover_removed
+    from gmb.pipeline.secondary_orfs import discover
+
+    t0 = _t.perf_counter()
+    meta = candidate_exons.drop_duplicates("transcript_id").set_index("transcript_id")[
+        ["Chromosome", "Strand"]
+    ]
+    existing = {
+        (
+            str(meta.at[t, "Chromosome"]),
+            str(meta.at[t, "Strand"]),
+            tuple(sorted((int(a), int(b)) for a, b in ann["cds"])),
+        )
+        for t, ann in annotations.items()
+        if ann and ann.get("cds") and t in meta.index
+    }
+    existing |= set(secondary_orfs)
+    removed_ann = (
+        annotate_all_transcripts(removed_df, genome_dict, cds_df, min_codons=config.orf.min_codons)
+        if removed_df is not None and not removed_df.empty
+        else {}
+    )
+    ecfg = config.scoring.evidence_score
+    min_bp = max(
+        int(ecfg.min_candidate_cds_bp), int(getattr(config.scoring, "min_cds_bp", 0) or 0)
+    )
+    sources = _transcript_class_sources(config, candidate_exons)
+    if removed_df is not None and not removed_df.empty:
+        sources |= _transcript_class_sources(config, removed_df)
+    tcfg = config.transcriptomic_filter
+    units, stats = discover_removed(
+        removed_df,
+        removed_ann,
+        genome_dict,
+        sources,
+        config.orf.min_codons,
+        min_bp,
+        existing,
+        tcfg.max_intron_length,
+        tcfg.max_transcript_length,
+        discover,
+    )
+    stats["discovery_seconds"] = round(_t.perf_counter() - t0, 3)
+    print(
+        f"  Filtered-transcript ORFs: {stats.get('units', 0):,} unit(s) from "
+        f"{stats.get('removed_models', 0):,} filter-removed transcript model(s) "
+        f"({stats['discovery_seconds']:.1f} s)"
+    )
+    return units, stats
+
+
 def _discover_secondary_orfs(config, candidate_exons, annotations, genome_dict):
     """Secondary-ORF discovery (scoring.evidence_score.secondary_orfs), after ORF annotation."""
     import time as _t
@@ -784,6 +847,8 @@ def _admit_secondary_orfs(
     junction_support,
     protein_compat,
     genome_dict,
+    filtered_units=None,
+    filtered_stats=None,
 ) -> dict:
     """A_ev admission; returns {locus: [SecondaryOrf]} and registers admitted transcripts."""
     import time as _t
@@ -809,20 +874,44 @@ def _admit_secondary_orfs(
             )
             for li in tx_loci[tid]:
                 locus_structures[li].add(key)
+    coverage = ProteinCoverage(prot_exons)
     stats.update(
         admit(
             found,
             tx_loci,
             locus_structures,
             scorer.index,
-            ProteinCoverage(prot_exons),
+            coverage,
             scorer.params.same_coding_locus_fraction,
         )
     )
+    if filtered_units is not None:
+        # Opt-in (filtered_transcript_orfs): units of filter-removed models are admitted by the
+        # same rule after locus assignment, then join the generated set after every
+        # secondary ORF of a kept model (so existing pools and ties are ordered as before).
+        from gmb.pipeline.filtered_transcript_orfs import admit_removed
+
+        filtered_stats.update(
+            {
+                f"status_{k}": v
+                for k, v in admit_removed(
+                    filtered_units,
+                    locus_structures,
+                    scorer.index,
+                    coverage,
+                    scorer.params.same_coding_locus_fraction,
+                ).items()
+            }
+        )
+        found.update(filtered_units)
     by_locus: dict = defaultdict(list)
     admitted = [c for c in found.values() if c.status == "admitted"]
     for c in admitted:
         build_transcript(c, genome_dict, config.orf.min_codons)
+        if filtered_units is not None and c.key in filtered_units:
+            from gmb.pipeline.filtered_transcript_orfs import ORIGIN as _FT_ORIGIN
+
+            c.model["candidate_origin"] = _FT_ORIGIN
         annotations[c.cid] = c.annotation
         for li in sorted(c.loci):
             by_locus[li].append(c)
@@ -841,6 +930,25 @@ def _admit_secondary_orfs(
         f"existing candidate ({stats['admission_seconds']:.1f} s)"
     )
     return by_locus
+
+
+def _filtered_summary(found, fstats) -> dict:
+    """Summary block for units of filter-removed models (only when that option is on)."""
+    from gmb.pipeline.filtered_transcript_orfs import MAX_ADMITTED_PER_LOCUS
+
+    units = [c for c in found.values() if c.cid.rsplit(".", 1)[-1].startswith(("ftorf", "ftown"))]
+    return {
+        "discovery": {k: v for k, v in fstats.items() if not k.startswith("status_")},
+        "admission": {k[7:]: v for k, v in fstats.items() if k.startswith("status_")},
+        "structures_by_status": dict(sorted(Counter(c.status for c in units).items())),
+        "eligible_structures": sum(1 for c in units if c.pool_entries),
+        "selected_as_primary": sum(1 for c in units if any(e["selected"] for e in c.pool_entries)),
+        "parent_filter_reasons": dict(
+            sorted(Counter(p.get("filter_reason", "") for c in units for p in c.parents).items())
+        ),
+        "origin": "filtered_transcript_orf",
+        "max_admitted_per_locus": MAX_ADMITTED_PER_LOCUS,
+    }
 
 
 def _write_secondary_orfs(args, found, stats, gene_of_primary, evidence_rows, gff_rows) -> dict:
@@ -872,7 +980,7 @@ def _write_secondary_orfs(args, found, stats, gene_of_primary, evidence_rows, gf
 
     abandoned = {}
     for r in evidence_rows:
-        if r.get("new_candidate_origin") != "secondary_orf":
+        if r.get("new_candidate_origin") not in ("secondary_orf", "filtered_transcript_orf"):
             continue
         old, new = parse(r["old_structure"]), parse(r["new_structure"])
         rest = []
@@ -902,12 +1010,23 @@ def _write_secondary_orfs(args, found, stats, gene_of_primary, evidence_rows, gf
     status = dict(sorted(Counter(c.status for c in found.values()).items()))
     summary = {
         "generator": "secondary_orfs (A_ev, frozen Phase 3A)",
-        "discovery": {k: v for k, v in stats.items() if k not in status},
+        "discovery": {
+            k: v for k, v in stats.items() if k not in status and k != "filtered_transcript_orfs"
+        },
         "structures_by_status": status,
         "admitted_by": dict(
             sorted(Counter(c.admitted_by for c in found.values() if c.admitted_by).items())
         ),
         "eligible_structures": sum(1 for c in found.values() if c.pool_entries),
+        **(
+            {
+                "filtered_transcript_orfs": _filtered_summary(
+                    found, stats["filtered_transcript_orfs"]
+                )
+            }
+            if "filtered_transcript_orfs" in stats
+            else {}
+        ),
         "eligible_gene_pools": sum(len(c.pool_entries) for c in found.values()),
         "selected_as_primary": sum(
             1 for c in found.values() if any(e["selected"] for e in c.pool_entries)
@@ -1250,6 +1369,11 @@ def main() -> None:
     ]
     tx_exons = pd.concat(tx_frames, ignore_index=True) if tx_frames else pd.DataFrame()
     tx_exons_filtered = filter_chimeras(tx_exons, config, stats)
+    tx_removed = None
+    if _filtered_transcript_orfs_enabled(config):
+        from gmb.pipeline.filtered_transcript_orfs import removed_transcripts
+
+        tx_removed = removed_transcripts(tx_exons, tx_exons_filtered)
 
     if config.transcript_splitting.split_enabled:
         tx_exons_filtered = split_mega_transcripts(tx_exons_filtered, config, stats)
@@ -1303,6 +1427,8 @@ def main() -> None:
         }
         print(f"  Subsetting to {len(subset_regions)} region(s)...")
         tx_exons_filtered = subset_df_by_regions(tx_exons_filtered, subset_regions)
+        if tx_removed is not None and not tx_removed.empty:
+            tx_removed = subset_df_by_regions(tx_removed, subset_regions)
         h_exons_filt = subset_df_by_regions(h_exons_filt, subset_regions)
         h_cds_filt = subset_df_by_regions(h_cds_filt, subset_regions)
         prot_exons_filt = subset_df_by_regions(prot_exons_filt, subset_regions)
@@ -1360,6 +1486,18 @@ def main() -> None:
         secondary_orfs, secondary_orf_stats = _discover_secondary_orfs(
             config, candidate_exons, annotations, genome_dict
         )
+    filtered_units = filtered_stats = None
+    if tx_removed is not None:
+        filtered_units, filtered_stats = _discover_filtered_transcript_orfs(
+            config,
+            tx_removed,
+            candidate_cds,
+            candidate_exons,
+            annotations,
+            genome_dict,
+            secondary_orfs,
+        )
+        secondary_orf_stats["filtered_transcript_orfs"] = filtered_stats
 
     validation_scores = {}
     validation_details = {}
@@ -1521,6 +1659,8 @@ def main() -> None:
             junction_support,
             protein_compat,
             genome_dict,
+            filtered_units=filtered_units,
+            filtered_stats=filtered_stats,
         )
 
     print("Computing guardrails...")

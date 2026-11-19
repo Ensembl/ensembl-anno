@@ -222,6 +222,11 @@ class EvidenceScoreConfig:
     # pools of existing genes (gmb.pipeline.secondary_orfs). Requires construction STAR
     # junctions; protein alignments must exclude the target species' own proteins.
     secondary_orfs: bool = False
+    # EXPERIMENTAL opt-in (GMB Phase 4 proof of concept): also take complete ORFs of the
+    # transcript models removed by the transcriptomic filter (read-through assemblies) as
+    # secondary-ORF candidates, under the same admission and selection rules
+    # (gmb.pipeline.filtered_transcript_orfs). Requires secondary_orfs: true.
+    filtered_transcript_orfs: bool = False
 
 
 def validate_evidence_score(ecfg) -> None:
@@ -247,6 +252,18 @@ def validate_evidence_score(ecfg) -> None:
         raise ValueError(
             "scoring.evidence_score.secondary_orfs must be true or false, "
             f"got {ecfg.secondary_orfs!r}."
+        )
+    if not isinstance(getattr(ecfg, "filtered_transcript_orfs", False), bool):
+        raise ValueError(
+            "scoring.evidence_score.filtered_transcript_orfs must be true or false, "
+            f"got {ecfg.filtered_transcript_orfs!r}."
+        )
+    if getattr(ecfg, "filtered_transcript_orfs", False) and not getattr(
+        ecfg, "secondary_orfs", False
+    ):
+        raise ValueError(
+            "scoring.evidence_score.filtered_transcript_orfs requires "
+            "scoring.evidence_score.secondary_orfs: true."
         )
 
 
@@ -1343,4 +1360,6 @@ def dump_config(cfg: "PipelineConfig") -> dict:
     es = scoring.get("evidence_score") if isinstance(scoring, dict) else None
     if isinstance(es, dict) and not es.get("secondary_orfs"):
         es.pop("secondary_orfs", None)
+    if isinstance(es, dict) and not es.get("filtered_transcript_orfs"):
+        es.pop("filtered_transcript_orfs", None)
     return data

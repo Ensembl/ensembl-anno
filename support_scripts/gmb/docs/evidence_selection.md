@@ -220,6 +220,58 @@ requirement is restated in `secondary_orfs_summary.json`.
 With the switch off (the default) nothing above runs, and every output, including
 `resolved_config.yaml`, is identical to a build without the key.
 
+### Units of filter-removed transcripts (`evidence_score.filtered_transcript_orfs`, experimental)
+
+The transcriptomic filter removes transcript models with an intron longer than
+`transcriptomic_filter.max_intron_length` or a span longer than `max_transcript_length` (fungi:
+3 kb and 20 kb). Most removed models are read-through assemblies joining adjacent genes. Their
+coding units never reach secondary-ORF discovery, which scans only the surviving models. This
+experimental switch, a GMB Phase 4 proof of concept, recovers them:
+
+```yaml
+scoring:
+  primary_selection: evidence_score
+  evidence_score:
+    secondary_orfs: true            # required
+    filtered_transcript_orfs: true
+```
+
+* **Units.** Each removed model is annotated like any candidate and scanned with the same
+  frozen discovery rule. Its own complete GMB ORF is a unit too, since GMB never saw it. A unit
+  is only a CDS; no read-through exon or UTR re-enters clustering.
+* **Safeguards.** Each one is a `status` in `secondary_orfs.tsv`:
+  * The unit must be a complete, genome-validated ORF.
+  * It must itself pass the filter its parent failed (`exceeds_filter`).
+  * It must not equal an existing candidate or a secondary ORF of a kept model (counted, not
+    generated).
+  * It must share a coding locus with existing CDS structures of exactly one locus. Two or more
+    loci are rejected as a possible fusion (`multi_locus`). With no existing structure it is
+    `no_shared_coding_locus`: **no new gene is ever created**.
+  * It must pass the unchanged A_ev admission (protein cover or junction-observed introns).
+  * At most 10 admitted units per locus; the units carried by the most removed models are kept
+    (`locus_cap`).
+* **Selection** is unchanged: an admitted unit joins the existing gene's P4d pool after every
+  other candidate and becomes primary only by the frozen P4d rule. P4d never replaces a
+  protected backbone primary, so most units can only replace transcript-derived or contradicted
+  primaries.
+* **Outputs.**
+  * Units appear in `secondary_orfs.tsv` with `relations` `removed_own`, `removed_upstream` or
+    `removed_downstream`, and candidate IDs `<parent>.ftorfN` / `<parent>.ftownN`.
+  * `secondary_orfs_summary.json` gains a `filtered_transcript_orfs` block: discovery,
+    admission, status counts, selected count and parent filter reasons.
+  * A chosen unit is marked `CandidateOrigin=filtered_transcript_orf`. The same value appears as
+    `new_candidate_origin` in `evidence_selection.tsv`.
+* **Evaluation status.** Rules were frozen on the Z. tritici development windows and U. maydis
+  chromosome 1, where the result was neutral: +1/−1 and 0 exact reference CDS. Data held out
+  from development, run once:
+  * *A. fumigatus* pilot: +28/−0;
+  * *U. maydis* outside chromosome 1: +16/−0;
+  * Z. tritici held-out windows: +2/−0;
+  * *B. cinerea*: +5/−1, where few models are filter-removed.
+
+  Details are in the Phase 4 workspace report (`PHASE4_RECONSTRUCTION_DESIGN.md`). Not for
+  production use without further validation.
+
 ## Limitations
 
 * **Assemblies are not construction-only.** The StringTie and Scallop candidate tracks are

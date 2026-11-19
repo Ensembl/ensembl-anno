@@ -167,6 +167,7 @@ All default **off**. Enable one at a time, for a reason visible in preflight out
 | `primary_selection` | `score` \| `junction_supported` \| `evidence_score` | `score` |
 | `evidence_score.*` | P4d parameters ([evidence_selection.md](evidence_selection.md)) | frozen Phase 1.5 values |
 | `evidence_score.secondary_orfs` | bool: offer evidence-filtered secondary ORFs to existing genes' P4d pools ([evidence_selection.md](evidence_selection.md#secondary-orf-candidates-evidence_scoresecondary_orfs-opt-in)); needs `evidence_score` and target-species-free protein alignments | `false` |
+| `evidence_score.filtered_transcript_orfs` | bool, **experimental**: also offer complete ORFs of transcript models removed by the transcriptomic filter (read-throughs), under the same admission and selection ([evidence_selection.md](evidence_selection.md#units-of-filter-removed-transcripts-evidence_scorefiltered_transcript_orfs-experimental)); needs `secondary_orfs: true` | `false` |
 | `isoform_cds_overlap` | `off` \| `drop` \| `new_gene` | `"off"` |
 | `canonical_selection.prefer_build_primary` | bool | `false` |
 
