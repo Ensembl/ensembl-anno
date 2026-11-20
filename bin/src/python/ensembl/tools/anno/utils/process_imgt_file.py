@@ -4,13 +4,22 @@ Script to generate clade specific IMGT sequence fasta files
 
 import argparse
 import os
+from pathlib import Path
+from typing import Dict
 import pandas as pd
 
 
-def process_current_record(current_record, imgt_gca_clade, output_dir):
+def process_current_record(current_record: Dict, imgt_gca_clade: pd.DataFrame, output_dir: Path) -> None:
     """
     Finds the clade for the current record, then writes the record to the sequence file for that
     clade.
+    Args:
+        current_record: Dict,
+        imgt_gca_clade: pd.DataFrame,
+        output_dir:Path
+
+    Return:
+        None
     """
 
     name = current_record["name"]
@@ -30,10 +39,17 @@ def process_current_record(current_record, imgt_gca_clade, output_dir):
     return None
 
 
-def process_imgt_sequences(imgt_sequences, imgt_gca_clade_map, output_dir):
+def process_imgt_sequences(imgt_sequences: Path, imgt_gca_clade_map: Dict, output_dir: Path) -> None:
     """
     Iterate over the IMGT sequences. Based on the name of each sequence, map the sequence to a
     clade. Write the sequence to its clade file.
+    Args:
+        imgt_sequences: Path
+        imgt_gca_clade_map: Dict
+        output_dir: Path
+
+    Return:
+        None
     """
 
     imgt_gca_clade = pd.read_csv(imgt_gca_clade_map)

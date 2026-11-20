@@ -1,10 +1,17 @@
 import argparse
 import pandas as pd
+from pathlib import Path
+from typing import Dict, List
 
 
-def read_in_miniprot_gff(miniprot_gff_path):
+def read_in_miniprot_gff(miniprot_gff_path: Path) -> pd.DataFrame:
     """
     Reads in a miniprot gff and extracts relevant fields from the attributes column as columns
+    Args:
+        miniprot_gff_path: Path
+
+    Return
+        pd.DataFrame
     """
 
     # Read in gtf as a pandas dataframe and set column names:
@@ -40,9 +47,14 @@ def read_in_miniprot_gff(miniprot_gff_path):
     return miniprot_gtf
 
 
-def pre_filter_alignments(alignment_df):
+def pre_filter_alignments(alignment_df: pd.DataFrame) -> pd.DataFrame:
     """
     Filter alignments based on rank, and a graduating identity filter based on length
+    Args:
+        alignment_df: pd.DataFrame
+
+    Return:
+        pd.DataFrame
     """
 
     # Only keep Rank=1 alignments:
@@ -67,9 +79,15 @@ def pre_filter_alignments(alignment_df):
     return alignment_df
 
 
-def does_alignment_overlap_cluster(row, cluster_info):
+def does_alignment_overlap_cluster(row: pd.Series, cluster_info: Dict) -> bool:
     """
     Check whether an alignment overlaps the start and end coordinates of a cluster
+    Args:
+        row: pd.Series
+        cluster_info: Dict
+
+    Return:
+        bool
     """
 
     # Back out straight away if the chromosomes don't match
@@ -88,9 +106,15 @@ def does_alignment_overlap_cluster(row, cluster_info):
     return False
 
 
-def update_cluster_info(row, cluster_info):
+def update_cluster_info(row: pd.Series, cluster_info: Dict) -> Dict:
     """
     Update cluster start and/or end coordinates to include overlapping alignment, if required.
+    Args:
+        row: pd.Series
+        cluster_info: Dict
+
+    Return:
+        Dict
     """
 
     # Expand cluster interval if required:
@@ -105,10 +129,16 @@ def update_cluster_info(row, cluster_info):
     return cluster_info
 
 
-def merge_adjacent_clusters(cluster_info_dict, adjacent_cluster_info_dict):
+def merge_adjacent_clusters(cluster_info_dict: Dict, adjacent_cluster_info_dict: Dict) -> Dict:
     """
     Merge two clusters, updating the end coordinate if necessary and concatenating the dataframes
     of alignments
+    Args:
+        cluster_info_dict: Dict
+        adjacent_cluster_info_dict: Dict
+
+    Return:
+        Dict
     """
 
     # cluster_info_dict is guaranteed to have a larger start coordinate than adjacent cluster_info_dict, so
@@ -124,12 +154,17 @@ def merge_adjacent_clusters(cluster_info_dict, adjacent_cluster_info_dict):
     return adjacent_cluster_info_dict
 
 
-def merge_overlapping_clusters(cluster_dict):
+def merge_overlapping_clusters(cluster_dict: Dict) -> List:
     """
     Determine whether there are overlapping clusters in a dictionary of clusters, and if so,
     merge the overlapping clusters.
 
     Return a list of merged clusters.
+    Args:
+        cluster_dict: Dict
+
+    Return:
+        List
     """
 
     # Sort cluster dictionaries by chromosome and start coordinate
@@ -172,10 +207,15 @@ def merge_overlapping_clusters(cluster_dict):
     return merged_clusters
 
 
-def make_clusters(alignment_df):
+def make_clusters(alignment_df: pd.DataFrame) -> List:
     """
     Takes a dataframe of alignments as input and returns a list of 'clusters', where each cluster
     represents a group of overlapping alignments
+    Args:
+        alignment_df: pd.DataFrame
+
+    Return:
+        List
     """
 
     cluster_dict = {}
@@ -204,9 +244,14 @@ def make_clusters(alignment_df):
     return merged_clusters
 
 
-def select_top_alignment_per_cluster(cluster_list):
+def select_top_alignment_per_cluster(cluster_list: List) -> pd.DataFrame:
     """
     Find the alignment with the highest identity in each cluster
+    Args:
+        cluster_list: List
+
+    Return:
+        pd.DataFrame
     """
 
     top_alignment_dfs = []
@@ -222,9 +267,16 @@ def select_top_alignment_per_cluster(cluster_list):
     return top_alignment_df
 
 
-def write_alignments_to_gtf(top_alignment_df, collapsed_gtf_path):
+def write_alignments_to_gtf(top_alignment_df: pd.DataFrame, collapsed_gtf_path: Path) -> None:
     """
     Write alignment dataframe to gtf/gff2
+    Args:
+        top_alignment_df: pd.DataFrame
+        collapsed_gtf_path: Path
+
+    Return:
+        None
+
     """
     gtf = top_alignment_df[
         ["chr", "source", "feature_type", "start", "end", "score", "strand", "frame", "attributes"]
@@ -232,9 +284,15 @@ def write_alignments_to_gtf(top_alignment_df, collapsed_gtf_path):
     gtf.to_csv(collapsed_gtf_path, index=False, header=False, sep="\t")
 
 
-def collapse_alignments(miniprot_gff_path, collapsed_gtf_path):
+def collapse_alignments(miniprot_gff_path: Path, collapsed_gtf_path: Path):
     """
     Orchestrate clustering and collapse of miniprot alignments
+    Args:
+       miniprot_gff_path: Path
+       collapsed_gtf_path: Path
+
+    Return:
+        None
     """
 
     # Read in gtf
