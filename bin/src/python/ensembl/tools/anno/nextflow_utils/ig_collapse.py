@@ -1,7 +1,7 @@
 import argparse
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any
 
 
 def read_in_miniprot_gff(miniprot_gff_path: Path) -> pd.DataFrame:
@@ -10,7 +10,7 @@ def read_in_miniprot_gff(miniprot_gff_path: Path) -> pd.DataFrame:
     Args:
         miniprot_gff_path: Path
 
-    Return
+    Return:
         pd.DataFrame
     """
 
@@ -170,7 +170,7 @@ def merge_overlapping_clusters(cluster_dict: Dict) -> List:
     # Sort cluster dictionaries by chromosome and start coordinate
     sorted_clusters = sorted(cluster_dict.items(), key=lambda tup: (tup[1]["chr"], tup[1]["start"]))
 
-    merged_clusters = []
+    merged_clusters: list[Dict] = []
 
     for cluster in sorted_clusters:
         cluster_info_dict = cluster[1]
@@ -218,7 +218,7 @@ def make_clusters(alignment_df: pd.DataFrame) -> List:
         List
     """
 
-    cluster_dict = {}
+    cluster_dict: dict[int, dict] = {}
     next_id = 1
 
     for index, row in alignment_df.iterrows():
