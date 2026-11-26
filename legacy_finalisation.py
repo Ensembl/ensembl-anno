@@ -1089,9 +1089,12 @@ def update_gtf_genes(
     for gene_id in parsed_gtf_genes:
         transcript_ids = parsed_gtf_genes[gene_id].keys()
         for transcript_id in transcript_ids:
-            # if transcript_id not in combined_results:
-            # ANNA skip/delete this transcript TEMPORARY FIX FOR 3BP CDS
-            #    continue
+            if transcript_id not in combined_results:
+                logging.warning(
+                    "No combined validation results for %s; skipping transcript",
+                    transcript_id,
+                )
+                continue
             transcript_line = parsed_gtf_genes[gene_id][transcript_id]["transcript"]
             single_cds_exon_transcript = 0
             translation_match = re.search(r'; translation_coords "([^"]+)";', transcript_line)
