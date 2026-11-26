@@ -1,3 +1,4 @@
+# pylint: disable=line-too-long
 # See the NOTICE file distributed with this work for additional information
 # regarding copyright ownership.
 #
